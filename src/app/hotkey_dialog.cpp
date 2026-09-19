@@ -286,9 +286,9 @@ bool hotkeyEventHandler(const SDL_Event* event, void* user) {
         }
     }
 
-    if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN && event->button.button == SDL_BUTTON_RIGHT) {
+    if (event->type == SDL_EVENT_MOUSE_BUTTON_UP && event->button.button == SDL_BUTTON_RIGHT) {
         if (state.editing >= 0) {
-            // [RE 0x411122] 0x205：捕获中恢复原值（word_48BB8C）并取消捕获
+            // [RE 0x411122] WM_RBUTTONUP(0x205)：捕获中恢复原值（word_48BB8C）并取消捕获
             state.working[state.editing] = state.savedValue;
             state.editing = -1;
             redrawHotkeys(state);

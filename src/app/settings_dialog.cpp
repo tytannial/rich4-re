@@ -360,8 +360,8 @@ bool settingsEventHandler(const SDL_Event* event, void* user) {
         return true;
     }
 
-    if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN && event->button.button == SDL_BUTTON_RIGHT) {
-        // [RE 0x4103A3] WM_RBUTTONUP：取消（postModalExit(0)）
+    if (event->type == SDL_EVENT_MOUSE_BUTTON_UP && event->button.button == SDL_BUTTON_RIGHT) {
+        // [RE 0x4103A3] WM_RBUTTONUP(0x205)：取消（postModalExit(0)）
         restoreMusic(state);
         state.app->events().requestExit(0);
         return true;

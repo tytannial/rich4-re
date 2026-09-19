@@ -103,18 +103,19 @@ void Application::pumpEvents() {
         }
         // [PORT Win32:GetCursorPos] 鼠标事件坐标转换（定义见 transformMouseEvent）
         transformMouseEvent(event);
+        // [PORT Win32:SetWindowsHookExA(WH_KEYBOARD)] 原版全局键盘钩子 fn(0x401010)
+        // **先于**窗口过程无条件运行（钩子 return 0 不吞消息，故两者都处理原始按键）;
+        // 迁移: 每事件先执行钩子动作（含取消键抬起→合成右键），再交给窗口过程
+        // （定义见 Application::handleKeyboardHook）
+        handleKeyboardHook(event);
         // [RE 0x4019DD] wndProc
         // 依据: 0x4019DD 窗口过程; WM_DESTROY(2) 走 sub_401815+PostQuitMessage,
         // 默认分支转发给 dword_48A010[nIDEvent]（模态栈顶），无处理器时 DefWindowProcA
         const bool consumed = m_events.dispatch(event);
         if (!consumed) {
             defaultEvent(event);
-            // [RE 0x401010] 全局键盘钩子行为（fn 在窗口过程之外直接动作）
-            handleKeyboardHook(event);
         }
-        // [PORT Win32:SetWindowsHookExA(WH_KEYBOARD)] fn(0x401010)（定义见 include/game/platform/input.h）
-        // 原版全局键盘钩子先于窗口过程处理按键（读 word_497168 键位表）;
-        // SDL 侧直接对所有事件做键位映射
+        // [RE 0x401010] 钩子累积 word_46CB07 键位状态（定义见 handleKeyboardHook 依赖）
         m_input.handleEvent(event);
     }
 }
@@ -167,7 +168,7 @@ void Application::handleKeyboardHook(const SDL_Event& event) {
     // 依据: fn(0x401010) 读 word_497168 键位表：
     //   word_497168/6A/6C/6E（游標上/右/下/左移）→ SetCursorPos(±10)
     //   word_497170（確定執行）→ PostMessageA(WM_LBUTTONDOWN/UP)（word_46CB09 去重）
-    //   word_497172（取消指令）→ PostMessageA(WM_RBUTTONUP)（合成右键按下，模态按右键机制处理）
+    //   word_497172（取消指令）→ 抬起时 PostMessageA(WM_RBUTTONUP)（合成右键抬起，模态按右键机制处理）
     // 迁移: SetCursorPos/PostMessageA → SDL_WarpMouseInWindow/SDL_PushEvent（逻辑像素 ±10）
     if (event.type != SDL_EVENT_KEY_DOWN && event.type != SDL_EVENT_KEY_UP) {
         return;
@@ -220,10 +221,10 @@ void Application::handleKeyboardHook(const SDL_Event& event) {
         }
         return;
     }
-    // 索引 5：取消指令 → 合成右键按下（对应原版 WM_RBUTTONUP）
-    if (down && vk == (bind[5] & 0xFF)) {
+    // 索引 5：取消指令 → 抬起时合成右键抬起（原版 lParam<0 → PostMessage WM_RBUTTONUP）
+    if (!down && vk == (bind[5] & 0xFF)) {
         RICH4_LOGI("keyboard hook: cancel (RE 0x401010)");
-        pushMouseButton(SDL_EVENT_MOUSE_BUTTON_DOWN, SDL_BUTTON_RIGHT);
+        pushMouseButton(SDL_EVENT_MOUSE_BUTTON_UP, SDL_BUTTON_RIGHT);
     }
 }
 

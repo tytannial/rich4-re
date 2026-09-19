@@ -282,11 +282,12 @@ bool dateDialogEventHandler(const SDL_Event* event, void* user) {
             }
             return true;
         }
-        if (event->button.button == SDL_BUTTON_RIGHT) {
-            // [RE 0x410AC3] WM_RBUTTONUP(0x205)：取消（postModalExit(-1)）
-            state.app->events().requestExit(0);
-            return true;
-        }
+    }
+
+    if (event->type == SDL_EVENT_MOUSE_BUTTON_UP && event->button.button == SDL_BUTTON_RIGHT) {
+        // [RE 0x410AC3] WM_RBUTTONUP(0x205)：取消（postModalExit(-1)）
+        state.app->events().requestExit(0);
+        return true;
     }
 
     if (event->type == SDL_EVENT_MOUSE_BUTTON_UP && event->button.button == SDL_BUTTON_LEFT) {

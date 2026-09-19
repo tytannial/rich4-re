@@ -106,7 +106,7 @@ void redrawLoadDialog(LoadDialogState& state) {
 // [RE 0x40363A] loadDialogWndProc
 // 依据: 0x40363A 反编译; WM_MOUSEMOVE 列表区域 (0x82..0x240, 0x19..0x1C7) 计算槽索引
 //       v4 = (y-24)/72 并画高亮; WM_LBUTTONDOWN 有效槽 postModalExit(slot);
-//       WM_RBUTTONDOWN(0x204) postModalExit(-1); WM_USER+1 重置高亮
+//       WM_RBUTTONUP(0x205) postModalExit(-1); WM_USER+1 重置高亮
 bool loadDialogEventHandler(const SDL_Event* event, void* user) {
     auto& state = *static_cast<LoadDialogState*>(user);
 
@@ -135,21 +135,20 @@ bool loadDialogEventHandler(const SDL_Event* event, void* user) {
         return true;
     }
 
-    if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
-        if (event->button.button == SDL_BUTTON_LEFT) {
-            // [RE 0x40363A] 有效存档 → postModalExit(槽索引)
-            if (state.hoverIndex >= 0 && state.slots[state.hoverIndex].valid) {
-                state.app->audio().playEffect(2); // [RE 0x403909] unk_48232A 选槽音效
-                state.app->events().requestExit(state.hoverIndex);
-            }
-            return true;
+    if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN && event->button.button == SDL_BUTTON_LEFT) {
+        // [RE 0x40363A] WM_LBUTTONDOWN(0x201): 有效存档 → postModalExit(槽索引)
+        if (state.hoverIndex >= 0 && state.slots[state.hoverIndex].valid) {
+            state.app->audio().playEffect(2); // [RE 0x403909] unk_48232A 选槽音效
+            state.app->events().requestExit(state.hoverIndex);
         }
-        if (event->button.button == SDL_BUTTON_RIGHT) {
-            // [RE 0x40363A] WM_RBUTTONDOWN(0x204): 取消（postModalExit(-1)）
-            state.app->audio().playEffect(4); // [RE 0x403936] unk_482332 取消音效
-            state.app->events().requestExit(-1);
-            return true;
-        }
+        return true;
+    }
+
+    if (event->type == SDL_EVENT_MOUSE_BUTTON_UP && event->button.button == SDL_BUTTON_RIGHT) {
+        // [RE 0x40363A] WM_RBUTTONUP(0x205): 取消（postModalExit(-1)）
+        state.app->audio().playEffect(4); // [RE 0x403936] unk_482332 取消音效
+        state.app->events().requestExit(-1);
+        return true;
     }
 
     return false;

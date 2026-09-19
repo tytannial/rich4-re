@@ -355,17 +355,18 @@ bool helpEventHandler(const SDL_Event* event, void* user) {
         return true;
     }
 
+    if (event->type == SDL_EVENT_MOUSE_BUTTON_UP && event->button.button == SDL_BUTTON_RIGHT) {
+        // [RE 0x44E40B] WM_RBUTTONUP(0x205)：退出（postModalExit(0)）
+        state.app->events().requestExit(0);
+        return true;
+    }
+
     if (event->type != SDL_EVENT_MOUSE_BUTTON_DOWN) {
         return false;
     }
     const int rx = static_cast<int>(event->button.x) - state.originX;
     const int ry = static_cast<int>(event->button.y) - state.originY;
 
-    if (event->button.button == SDL_BUTTON_RIGHT) {
-        // [RE 0x44E40B] WM_RBUTTONDOWN：退出
-        state.app->events().requestExit(0);
-        return true;
-    }
     if (event->button.button != SDL_BUTTON_LEFT) {
         return true;
     }
