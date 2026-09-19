@@ -1,5 +1,6 @@
 #include "game/render/cursor.h"
 
+#include "game/render/blit.h"
 #include "game/render/surface.h"
 
 #include <SDL3/SDL.h>
@@ -70,58 +71,45 @@ void Cursor::compose(Surface& dst, int x, int y) {
         return;
     }
 
-    // [RE 0x401E59] 依据: 光标位置 = (x - offsetX, y - offsetY)，裁剪到 640x480;
-    // 先 sub_451A97 保存背景，再 sub_4562A5 绘制光标
-    int dx = x - frame->offsetX;
-    int dy = y - frame->offsetY;
-    int w = kSize;
-    int h = kSize;
-    int sx = 0;
-    int sy = 0;
-    if (dx < 0) {
-        sx = -dx;
-        w += dx;
-        dx = 0;
+    // [RE 0x401E59] 依据: 光标位置 = (x - offsetX, y - offsetY);
+    // 背景保存区域固定 32x32（原版 v2=v3=32），裁剪到屏幕;
+    // 光标帧由 sub_4562A5→sub_455C52 按帧自身尺寸（如 23x23）blit
+    int saveX = x - frame->offsetX;
+    int saveY = y - frame->offsetY;
+    int saveW = kSize;
+    int saveH = kSize;
+    if (saveX < 0) {
+        saveW += saveX;
+        saveX = 0;
     }
-    if (dy < 0) {
-        sy = -dy;
-        h += dy;
-        dy = 0;
+    if (saveY < 0) {
+        saveH += saveY;
+        saveY = 0;
     }
-    if (dx + w > dst.width()) {
-        w = dst.width() - dx;
+    if (saveX + saveW > dst.width()) {
+        saveW = dst.width() - saveX;
     }
-    if (dy + h > dst.height()) {
-        h = dst.height() - dy;
+    if (saveY + saveH > dst.height()) {
+        saveH = dst.height() - saveY;
     }
-    if (w <= 0 || h <= 0) {
+    if (saveW <= 0 || saveH <= 0) {
         m_visible = false;
         return;
     }
 
-    m_saveX = dx;
-    m_saveY = dy;
-    m_saveW = w;
-    m_saveH = h;
-    for (int row = 0; row < h; ++row) {
-        const uint16_t* s = dst.pixels() + static_cast<size_t>(dy + row) * dst.width() + dx;
+    m_saveX = saveX;
+    m_saveY = saveY;
+    m_saveW = saveW;
+    m_saveH = saveH;
+    for (int row = 0; row < saveH; ++row) {
+        const uint16_t* s = dst.pixels() + static_cast<size_t>(saveY + row) * dst.width() + saveX;
         uint16_t* d = m_saved.data() + static_cast<size_t>(row) * kSize;
-        for (int col = 0; col < w; ++col) {
+        for (int col = 0; col < saveW; ++col) {
             d[col] = s[col];
         }
     }
 
-    const uint16_t* src = frame->pixels + static_cast<size_t>(sy) * frame->width + sx;
-    for (int row = 0; row < h; ++row) {
-        uint16_t* d = dst.pixels() + static_cast<size_t>(dy + row) * dst.width() + dx;
-        for (int col = 0; col < w; ++col) {
-            const uint16_t p = src[col];
-            if (p) {
-                d[col] = p;
-            }
-        }
-        src += frame->width;
-    }
+    blitElement(dst, *frame, x, y, false);
     m_visible = true;
     m_posX = x;
     m_posY = y;

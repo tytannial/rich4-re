@@ -68,8 +68,17 @@ const char* const kMusicNames[8] = {
     "5.椰林風情畫", "6.浪漫月世界", "7.熱情的夏天", "8.漫步星空下",
 };
 
-// [RE 0x474B2C] 底部按钮（原始設定 / 取消 / 確定）
+// [RE 0x474B2C] 键位页画布（帧 1）的页标签（原始設定 / 取消 / 確定）
 const char* const kPageLabels[3] = {"原始設定", "取 消", "確 定"};
+
+// [RE 0x463590/463599/4635A2] off_474A54 索引 12-14：页按钮文本（帧 page+10 画布）
+// 位置 word_474B38[3*j] (j=12..14) = (108,31)/(108,85)/(108,136)
+const char* const kPageButtonText[3] = {"日期更改", "熱鍵設定", "遊戲說明"};
+struct PageButtonPos {
+    int x;
+    int y;
+};
+constexpr PageButtonPos kPageButtonPos[3] = {{108, 31}, {108, 85}, {108, 136}};
 
 // [RE 0x474C92] word_474C92 单选 y 位置
 constexpr int kRadioY[3] = {218, 250, 281};
@@ -151,7 +160,7 @@ void redrawSettings(SettingsState& state) {
     for (int i = 0; i <= state.settings[0] && i < 4; ++i) {
         blitElement(surface, ui.frame(kSliderFrame), ox + 81 + i * 16, oy + 17, false);
     }
-    // 自动存档复选：帧 10 在 (98,50)
+    // [RE 0x40FD49] 動畫過程开关（settings[1]）：帧 9 在 (98,50)
     if (state.settings[1]) {
         blitElement(surface, ui.frame(kCheckFrame), ox + 98, oy + 50, false);
     }
@@ -163,7 +172,7 @@ void redrawSettings(SettingsState& state) {
     for (int i = 0; i < state.settings[3] && i < 4; ++i) {
         blitElement(surface, ui.frame(kSliderFrame), ox + 89 + i * 16, oy + 113, false);
     }
-    // 复选 settings[4]：帧 10 在 (98,146)
+    // [RE 0x40FD49] 自動存檔开关（settings[4]）：帧 9 在 (98,146)
     if (state.settings[4]) {
         blitElement(surface, ui.frame(kCheckFrame), ox + 98, oy + 146, false);
     }
@@ -192,13 +201,35 @@ void redrawSettings(SettingsState& state) {
                       kLabelPos[i].align);
     }
 
-    // 底部按钮文本（帧 0 背景自带按钮图形；帧 3/4 为按下效果，交互时叠加）
-    text.setFont(12, 0x101010, 0, kTextStyleBold, 1);
-    text.drawText(surface, kPageLabels[1], ox + 194 + 31, oy + 314 + 15, 5);
-    text.drawText(surface, kPageLabels[2], ox + 266 + 31, oy + 314 + 15, 5);
-    // 页标题
-    text.setFont(15, 0x101010, 0, kTextStyleBold, 1);
-    text.drawText(surface, kPageLabels[0], ox + 173, oy + 18, 5);
+    // [RE 0x4103A3] 页按钮悬停高亮：帧 6（101x36，dword_48BB60+84）
+    // 原版: case 3/4/5 点击时 sub_456418(帧 6) 画到控件位置
+    if (state.hoverControl >= 3 && state.hoverControl <= 5 && ui.frameCount() > 6) {
+        const ControlRect& r = kControls[state.hoverControl];
+        blitElement(surface, ui.frame(6), ox + r.left, oy + r.top, false);
+    }
+
+    // [RE 0x411B53] 页按钮文本（字号 20）：画在帧 (page+10) 画布上，帧 10 位于 (168,2)
+    // 原版: setTextFont(20, 0x101010, 0x101010, 2, 1) + drawText(帧(page+10), 索引 3*page+12..14)
+    text.setFont(20, 0x101010, 0x101010, kTextStyleBold, 1);
+    for (int i = 0; i < 3; ++i) {
+        text.drawText(surface, kPageButtonText[i], ox + 168 + kPageButtonPos[i].x,
+                      oy + 2 + kPageButtonPos[i].y, 2);
+    }
+
+    // [RE 0x4103A3] 取消/確定悬停按下效果：帧 3/4（62x30）
+    // 原版: case 7/8 点击时 sub_456418(帧 dword_474D74-4) 画到按钮位置
+    if (ui.frameCount() > 4) {
+        if (state.hoverControl == 7) {
+            blitElement(surface, ui.frame(3), ox + 194, oy + 314, false);
+        } else if (state.hoverControl == 8) {
+            blitElement(surface, ui.frame(4), ox + 266, oy + 314, false);
+        }
+    }
+
+    // [RE 0x411B53] 取消/確定文本（字号 20，位置 word_474B74/B7A = (224,328)/(296,328)）
+    // 原版: drawText(帧0, off_474A7C/A80, 224/296, 328, 2)；帧 0 背景自带按钮图形
+    text.drawText(surface, kPageLabels[1], ox + 224, oy + 328, 2);
+    text.drawText(surface, kPageLabels[2], ox + 296, oy + 328, 2);
 }
 
 // 控件操作（对应 0x4103A3 的 switch (dword_474D74)）
@@ -230,7 +261,7 @@ void applyControl(SettingsState& state, int control, int rx, int ry) {
             RICH4_LOGI("settings saved (RE 0x411F80)");
             state.app->events().requestExit(1);
             break;
-        case 9: // byte_48BB49 ^= 1（自动存档）
+        case 9: // byte_48BB49 ^= 1（動畫過程开关）
             state.settings[1] ^= 1;
             break;
         case 10: // byte_48BB4A toggle 0/4（音乐静音）
@@ -239,13 +270,20 @@ void applyControl(SettingsState& state, int control, int rx, int ry) {
         case 11: // byte_48BB4B toggle 0/4（音效静音）
             state.settings[3] = state.settings[3] ? 0 : 4;
             break;
-        case 12: // byte_48BB4C ^= 1
+        case 12: // byte_48BB4C ^= 1（自動存檔开关）
             state.settings[4] ^= 1;
             break;
         case 13:
         case 14:
         case 15: // byte_48BB4D = i - 13（单选）
             state.settings[5] = static_cast<uint8_t>(control - 13);
+            break;
+        case 3:
+        case 4:
+        case 5:
+            // [RE 0x4103A3] case 3/4/5 → funcs_410935[control-3]
+            // TODO(RE 0x4119E3/0x411A86/0x411A96): 日期更改/熱鍵設定/遊戲說明 子界面
+            RICH4_LOGW("TODO: settings page %d (RE 0x4119E3/0x411A86/0x411A96)", control - 3);
             break;
         default:
             break;
@@ -275,7 +313,9 @@ bool settingsEventHandler(const SDL_Event* event, void* user) {
         }
         const int hit = hitTest(rx, ry);
         if (hit != state.hoverControl) {
+            // [RE 0x4103A3] 悬停变化：重绘高亮（帧 6 页按钮 / 帧 3-4 按钮）
             state.hoverControl = hit;
+            redrawSettings(state);
         }
         return true;
     }

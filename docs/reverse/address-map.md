@@ -12,7 +12,7 @@
 | `0x4018E7` | runModal | `src/app/event_stack.cpp:53` | 0x4018E7 反编译; dword_48A010[++nIDEvent]=handler; PostMessage(0x401) 通知进入; 局部消息泵直到 WM_USER+2(0x402); 返回 Msg.lParam; --nIDEvent（迁移: Win32 局部消息泵 → SDL 事件循环（Application::pumpEvents/renderFrame）; 0x401/0x402 消息 → handler(nullptr) / EventStack::requestExit） |
 | `0x401966` | postModalExit | `src/app/event_stack.cpp:41` | PostMessageA(hWnd, 0x402, 0, lParam) —— 请求退出当前模态并回传结果 |
 | `0x401981` | enterGameLoop | `include/game/app/game_loop.h:7` | 0x401981 压入 sub_417E26（游戏内事件处理器）并 PostMessage(0x401)； a1 != 0 时调 sub_454D91(0)（迁移: 模态栈 + 消息泵 → runModal（EventStack）） |
-| `0x4019DD` | wndProc | `src/application.cpp:89` | 0x4019DD 窗口过程; WM_DESTROY(2) 走 sub_401815+PostQuitMessage, 默认分支转发给 dword_48A010[nIDEvent]（模态栈顶），无处理器时 DefWindowProcA |
+| `0x4019DD` | wndProc | `src/application.cpp:90` | 0x4019DD 窗口过程; WM_DESTROY(2) 走 sub_401815+PostQuitMessage, 默认分支转发给 dword_48A010[nIDEvent]（模态栈顶），无处理器时 DefWindowProcA |
 | `0x401B9C` | WinMain | `src/application.cpp:12` | 0x401B9C 反编译; RegisterClassA("Rich4") + CreateWindowExA(0, "Rich4", "Rich4", 0x80000000=WS_POPUP, 屏幕宽高) + sub_4015D6() + ShowWindow(5)（迁移: Win32 窗口类/全屏窗口 → SDL_CreateWindow（窗口化，现代化目标）; 显示模式由 0x4015D6 的 SetDisplayMode(640,480,16) 决定 → 逻辑分辨率 640x480） |
 | `0x401E59` | 保存背景并绘制当前光标帧 | `include/game/render/cursor.h:32` | 0x401E59 计算 (x-offsetX, y-offsetY)，裁剪到 640x480，先 sub_451A97 保存背景再 sub_4562A5 绘制光标; dword_48A168 记录绘制位置 |
 | `0x401F98` | fptc | `include/game/render/cursor.h:37` | 0x401F98 中 word_48A176/word_48A174 控制帧间隔, word_48A172 递增回绕; GetCursorPos 与 dword_48A168/164 比较，变化或换帧时重绘（迁移: GetCursorPos（屏幕坐标）→ 由调用方传入 640x480 逻辑坐标） |
@@ -25,9 +25,9 @@
 | `0x403D74` | loadDialog | `include/game/app/load_dialog.h:7` | 0x403D74 反编译; sub_450441(data.mkf, 520) 界面资源 + (data.mkf, 2) 头像资源; 扫描 SAVE0.DAT..SAVE5.DAT 绘制槽位; runModal(sub_40363A) 事件处理 返回选中槽索引（0-5）；取消（右键）或无效返回 -1 |
 | `0x406DE7` | newGameInit | `src/app/new_game.cpp:37` | 0x406DE7 反编译; JUMP.MKF 地图预览; runModal(sub_404E44) 选图/选人; 确认后 dword_499114 = dword_46CB3C + 2 等玩家初始化 差异: 选图/选人界面（0x404E44）暂未实现，自动使用默认地图/玩家配置 |
 | `0x407AD2` | loadMap | `src/app/new_game.cpp:73` | 0x407AD2 反编译; sub_4502FE("MAP.MKF") + sub_450441(handle, 2*(4*mode+map)) 取 GND 地图数据（dword_47493C）; MAPDAT.MKF 提供玩家初始位置（可选） 差异: 玩家/物件初始化（sub_40E033/sub_40B93B/sub_40A4E1）待后续实现 |
-| `0x40FD49` | 滑块单位帧与复选标记帧。 | `src/app/settings_dialog.cpp:77` | 元素偏移 = 12 + 12*i；dword_48BB60+72 → 帧 5（15x16 滑块单位）; dword_48BB60+120 → 帧 9（16x16 复选标记） |
-| `0x4103A3` | settingsWndProc | `src/app/settings_dialog.cpp:255` | 0x4103A3 反编译; WM_MOUSEMOVE(515) 查找控件矩形 dword_474B92 并处理; WM_LBUTTONDOWN(513) 分发控件操作; WM_USER+1 重置悬停并复制设置 |
-| `0x411B53` | settingsDialog | `src/app/settings_dialog.cpp:311` | 0x411B53 反编译; dword_48BB58 = page; sub_450441(data.mkf, 3); 对话框居中 (320 - 帧0宽/2, 240 - 帧0高/2); runModal(sub_4103A3) |
+| `0x40FD49` | 滑块单位帧与复选标记帧。 | `src/app/settings_dialog.cpp:86` | 元素偏移 = 12 + 12*i；dword_48BB60+72 → 帧 5（15x16 滑块单位）; dword_48BB60+120 → 帧 9（16x16 复选标记） |
+| `0x4103A3` | settingsWndProc | `src/app/settings_dialog.cpp:293` | 0x4103A3 反编译; WM_MOUSEMOVE(515) 查找控件矩形 dword_474B92 并处理; WM_LBUTTONDOWN(513) 分发控件操作; WM_USER+1 重置悬停并复制设置 |
+| `0x411B53` | settingsDialog | `src/app/settings_dialog.cpp:351` | 0x411B53 反编译; dword_48BB58 = page; sub_450441(data.mkf, 3); 对话框居中 (320 - 帧0宽/2, 240 - 帧0高/2); runModal(sub_4103A3) |
 | `0x415872` | playIntro | `src/app/new_game.cpp:114` | 0x415872 反编译; JUMP.MKF 45/46 资源 + sub_451677 播放 AVI （AIRPLANE.AVI 或 off_4750E8[地图索引]） 差异: AVI 播放依赖 MCI，SDL 侧暂无替代（跳过） |
 | `0x417E26` | gameEventHandler（骨架） | `src/app/game_loop.cpp:14` | 0x417E26 反编译; WM_PAINT 绘制面板（sub_415D31/415E70/415F69/416E6D/4166F8/4169BC）, WM_MOUSEMOVE 地图坐标换算（×761856>>16 ≈ 11.625，限幅 220..2084）与小地图拖拽, WM_LBUTTONDOWN 地图点击/玩家移动, WM_USER+1 绘制玩家信息面板 差异: 面板绘制与地图交互在后续阶段接入；当前仅保留事件骨架 |
 | `0x4190CF` | loadPanelUi | `src/app/new_game.cpp:97` | 0x4190CF 反编译; panel.mkf 索引 0-8（dword_48BE0C/0x475118/0x48BE10/...）; sub_451A5A(200,200) 与地图尺寸离屏缓冲 差异: 面板资源与离屏缓冲在游戏内 UI 阶段接入 |
@@ -69,7 +69,7 @@
 |--------------|----------|----------|
 | Win32:UnhookWindowsHookEx 键盘钩子卸载 | `src/app/game_shutdown.cpp:27` | 0x401815 UnhookWindowsHookEx(hhk)；SDL 侧无全局钩子，无需对应 |
 | DDraw:Release 主表面(0x48A0DC)/后台表面(0x48A0E0)/lpDD 释放 | `src/app/game_shutdown.cpp:30` | SDL3 纹理由 Renderer 析构统一释放（Application::shutdown） |
-| Win32:GetCursorPos | `src/application.cpp:114` | 原版全屏 640x480，鼠标屏幕坐标即游戏坐标； SDL 窗口可缩放 + letterbox 逻辑呈现，需把窗口坐标换算为 640x480 逻辑坐标 |
+| Win32:GetCursorPos | `src/application.cpp:115` | 原版全屏 640x480，鼠标屏幕坐标即游戏坐标； SDL 窗口可缩放 + letterbox 逻辑呈现，需把窗口坐标换算为 640x480 逻辑坐标 |
 | DDraw:BltFast 后台表面 → 主表面 | `src/render/surface.cpp:14` | 0x401543 BltFast(dword_48A0DC, ..., dword_48A0E0) 把绘制结果送上屏幕 → SDL_UpdateTexture + SDL_RenderTexture；像素格式 RGB555 与原版资源一致 （SDL3 命名为 SDL_PIXELFORMAT_XRGB1555，bit10-14=R / bit5-9=G / bit0-4=B） |
 | WINMM:DirectSoundCreate/mciSendStringA 音频输出 | `include/game/platform/audio.h:8` | 0x4015D6 中 sub_453B55 初始化 DirectSound；0x4019DD 用 mciSendStringA 控制 vfw/mid/cdtrack 音轨（"pause vfw"/"resume mid"/"play cdtrack notify"） → SDL3 SDL_AudioStream 播放 WAV；MCI/MIDI/CD 音轨迁移待办 简单音频层：打开 22050Hz / 8bit / mono 输出流，播放 WAV(MKF 中 RIFF 资源)。 |
 | Win32:SetWindowsHookExA(WH_KEYBOARD) 键盘输入 | `include/game/platform/input.h:11` | 0x4015D6 安装全局键盘钩子 fn(0x401010)，读取 word_497168 键位表实现 快捷键（见 docs/formats/cfg.md）→ SDL_EVENT_KEY_DOWN 在事件循环中分发 对应 RICH4.CFG 的 28 个功能键位，索引语义见 docs/formats/cfg.md。 |

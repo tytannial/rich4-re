@@ -20,7 +20,8 @@ bool Application::init(const std::string& gameDir) {
         RICH4_LOGE("SDL_Init failed: %s", SDL_GetError());
         return false;
     }
-    if (!m_window.create("Rich4", 960, 720)) {
+    // 窗口默认 2x 整数倍缩放（1280x960），避免非整数缩放的像素不均匀（贴图错位感）
+    if (!m_window.create("Rich4", 1280, 960)) {
         return false;
     }
     if (!m_renderer.create(m_window.handle(), 640, 480)) {
