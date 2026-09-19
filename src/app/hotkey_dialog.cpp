@@ -109,10 +109,10 @@ void pressDown(Surface& surface, int x, int y, int w, int h) {
     for (int row = h - 2; row >= 0; --row) {
         uint16_t* dst = p + static_cast<size_t>(y + row + 1) * Surface::kWidth + (x + 1);
         const uint16_t* src = p + static_cast<size_t>(y + row) * Surface::kWidth + x;
-        std::memmove(dst, src, static_cast<size_t>(w - 1) * sizeof(uint16_t));
+        std::memmove(dst, src, static_cast<size_t>(w - 2) * sizeof(uint16_t));
     }
-    scaleSurfaceChannels(surface, x, y, w, 1, kChannelHalf); // 顶边阴影
-    scaleSurfaceChannels(surface, x, y, 1, h, kChannelHalf); // 左边阴影
+    scaleSurfaceChannels(surface, x, y, w, 1, kChannelHalf);         // 顶边
+    scaleSurfaceChannels(surface, x, y + 1, 1, h - 1, kChannelHalf); // 左边
 }
 
 void redrawHotkeys(HotkeyDialogState& state) {
@@ -147,10 +147,6 @@ void redrawHotkeys(HotkeyDialogState& state) {
         if (i == state.editing && state.blink) {
             surface.fillRect(x - 26, y - 7, 53, 13, rgb888To555(0xF0F0F0));
         }
-        // [RE 0x451B9E] 按住列表项：内容下沉 + 左上阴影（LBUTTONDOWN→UP 期间）
-        if (i == state.pressed) {
-            pressDown(surface, x - 26, y - 7, 53, 13);
-        }
         char buf[32] = {};
         const uint16_t value = state.working[i];
         const uint8_t mod = static_cast<uint8_t>(value >> 8);
@@ -168,6 +164,10 @@ void redrawHotkeys(HotkeyDialogState& state) {
             text.setFont(12, color, 0x101010, kTextStyleShadow, 0);
             text.drawText(surface, buf, x, y, 2);
         }
+        // [RE 0x451B9E] 按住列表项（行矩形 55×16）：整体下沉（含已绘数值）+ 顶/左阴影
+        if (i == state.pressed) {
+            pressDown(surface, x - 27, y - 8, 55, 16);
+        }
     }
 
     // 按钮文本（原版 sub_411B53 画到帧 1 画布：(52/165/278, 296)）
@@ -176,10 +176,10 @@ void redrawHotkeys(HotkeyDialogState& state) {
     text.drawText(surface, "取 消", ox + 165, oy + 296, 2);
     text.drawText(surface, "確 定", ox + 278, oy + 296, 2);
 
-    // [RE 0x451B9E] 按住按钮（原始設定/取消/確定）：内容下沉 + 左上阴影
+    // [RE 0x451B9E] 按住按钮（原始設定/取消/確定，矩形 70×30）：内容下沉 + 顶/左阴影
     if (state.pressed >= 100 && state.pressed <= 102) {
         static const int kBtnRect[3][4] = {
-            {17, 281, 71, 31}, {130, 281, 71, 31}, {242, 281, 71, 31}};
+            {17, 281, 70, 30}, {130, 281, 70, 30}, {242, 281, 70, 30}};
         const int bi = state.pressed - 100;
         pressDown(surface, ox + kBtnRect[bi][0], oy + kBtnRect[bi][1], kBtnRect[bi][2],
                   kBtnRect[bi][3]);
