@@ -9,7 +9,7 @@
 | 调用者 | `0x458CED`（CRT 启动，传入 `GetModuleHandleA(0)`、`lpCmdLine`、`nShowCmd=10`） |
 | 被调用 | `0x4015D6` 初始化, `0x451677` 播放 START.AVI, `0x4029FD` 主菜单, `0x406DE7` 新游戏, `0x4190CF` 读档流程, `0x401981` 进入游戏, `0x401815` 清理 |
 | 重写符号 | `src/application.cpp` `Application::init/run` |
-| 状态 | 未开始 |
+| 状态 | 已实现（主循环/场景分发/取消回主菜单，游戏内菜单路径待后续） |
 
 ## 功能
 
@@ -73,8 +73,13 @@ WORD word_4991B6;       // 新游戏模式（case 4 设置）
 - `[PORT]` 窗口激活：`WM_ACTIVATEAPP` → `SDL_EVENT_WINDOW_FOCUS_GAINED/LOST`
 - `START.AVI` 播放依赖 VFW/MCI（`mciSendStringA "play vfw"`），
   现代化方案待定（FFmpeg 或跳过），需单独设计并在映射表登记
-- 主循环各分支函数（`sub_406DE7`/`sub_4190CF`/`sub_407AD2` 等）尚未逆向，
-  重写时先保留调度骨架，函数体标注 `TODO(RE 0xXXXXXX)`
+- **主循环（`Application::run`）**：`while` 循环对应原版 `LABEL_5`——
+  每次回主菜单前重置 `word_4991B6/4991B8`、`byte_46CAFC`；
+  `case 0/4` 新游戏取消（`newGameInit` 返回 0）时 `continue` 回主菜单
+  （原版 `if (!newGameInit(...)) continue`），修复了此前"取消即退出程序"的问题
+- 游戏内菜单事件（`byte_46CAF8`：重新开始/读档/回主菜单）与
+  `byte_46CAF9` 退出路径在游戏内菜单阶段接入；"重新开始"走 `LABEL_6`
+  不经重置，`byte_46CAFC` 保持 1 以保留选人配置
 
 ## 验证方式
 

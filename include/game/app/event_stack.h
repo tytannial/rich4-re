@@ -9,6 +9,11 @@ namespace rich4 {
 
 class Application;
 
+// [RE SetTimer/WM_TIMER] 模态定时器事件类型
+// 依据: 0x404E44 用 SetTimer 100ms/50ms 驱动选人界面动画（WM_TIMER 消息）
+// 迁移: SDL3 无内置定时器事件，用 SDL_EVENT_USER 合成
+constexpr uint32_t kModalTimerEvent = SDL_EVENT_USER;
+
 // 模态事件处理器栈。
 // [RE 0x48A010] dword_48A010
 // 依据: 0x48A010 为 20 项函数指针数组; 0x4019DD 窗口过程把消息转发给
@@ -35,6 +40,13 @@ public:
     int exitResult() const { return m_exitResult; }
     void clearExit();
 
+    // [RE SetTimer(hWnd, g_modalDepth, ms)] 模态定时器（WM_TIMER 迁移）
+    // 依据: 0x404E44 用 SetTimer(hWnd, g_modalDepth, 100/50ms) 驱动选人界面动画;
+    //       0x404E44 WM_TIMER 分支按 wParam == g_modalDepth 过滤
+    // 迁移: Win32 定时器 → runModal 循环按 SDL_GetTicks 间隔合成 SDL_EVENT_TIMER 派发
+    void setTimer(uint32_t ms) { m_timerMs = ms; }
+    uint32_t timerInterval() const { return m_timerMs; }
+
 private:
     struct Frame {
         Handler handler = nullptr;
@@ -48,9 +60,11 @@ private:
     int m_depth = 0;
     bool m_exitRequested = false;
     int m_exitResult = 0;
+    uint32_t m_timerMs = 0;
 };
 
 // [RE 0x4018E7] runModal（定义见 src/app/event_stack.cpp）
-int runModal(Application& app, EventStack::Handler handler, void* user);
+// tickMs > 0 时按该间隔向栈顶处理器派发 SDL_EVENT_TIMER（原版 SetTimer/WM_TIMER）
+int runModal(Application& app, EventStack::Handler handler, void* user, uint32_t tickMs = 0);
 
 } // namespace rich4

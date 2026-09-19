@@ -38,9 +38,19 @@ public:
     bool isSprite() const { return m_isSprite; }
     const std::vector<uint8_t>& data() const { return m_data; }
 
+    // SPR 调色板（256 x RGB555，位于 data_offset 处）；非 SPR 返回 nullptr
+    const uint16_t* palette() const { return m_palette; }
+    // 帧像素起始（SPR 为 8bit 索引；SMP 为 16bit，见 frame().pixels）
+    const uint8_t* frameBytes(int index) const { return m_frameBytes[static_cast<size_t>(index)]; }
+    // 帧像素字节数（SPR = w*h；SMP = w*h*2，即原版帧头 size 字段）
+    uint32_t frameByteSize(int index) const { return m_frameSizes[static_cast<size_t>(index)]; }
+
 private:
     std::vector<uint8_t> m_data;
     std::vector<UiFrameView> m_frames;
+    std::vector<const uint8_t*> m_frameBytes;
+    std::vector<uint32_t> m_frameSizes;
+    const uint16_t* m_palette = nullptr;
     bool m_isSprite = false;
 };
 

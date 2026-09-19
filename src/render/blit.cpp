@@ -1,5 +1,7 @@
 #include "game/render/blit.h"
 
+#include <cstring>
+
 #include "game/render/surface.h"
 #include "game/render/ui_image.h"
 
@@ -149,6 +151,128 @@ void drawRectBorder(Surface& dst, int x, int y, int w, int h, uint16_t color) {
     for (int row = 1; row < h - 1; ++row) {
         dst.fillRect(x, y + row, 1, 1, color);
         dst.fillRect(x + w - 1, y + row, 1, 1, color);
+    }
+}
+
+bool blitSpriteFrame(Surface& dst, const UiImage& spr, int frame, int x, int y) {
+    // [RE 0x45663E] 依据: 8bit 索引像素经调色板取色, 0 透明, 裁剪到目标尺寸
+    if (!spr.isSprite() || frame < 0 || frame >= spr.frameCount()) {
+        return false;
+    }
+    const uint16_t* palette = spr.palette();
+    const uint8_t* src = spr.frameBytes(frame);
+    if (!palette || !src) {
+        return false;
+    }
+    const UiFrameView& f = spr.frame(frame);
+    int dx = x - f.offsetX;
+    int dy = y - f.offsetY;
+    int sx = 0;
+    int sy = 0;
+    int w = f.width;
+    int h = f.height;
+    if (dx < 0) {
+        sx = -dx;
+        w -= sx;
+        dx = 0;
+    }
+    if (dy < 0) {
+        sy = -dy;
+        h -= sy;
+        dy = 0;
+    }
+    if (dx + w > dst.width()) {
+        w = dst.width() - dx;
+    }
+    if (dy + h > dst.height()) {
+        h = dst.height() - dy;
+    }
+    if (w <= 0 || h <= 0) {
+        return false;
+    }
+    const uint8_t* s = src + static_cast<size_t>(sy) * f.width + sx;
+    uint16_t* d = dst.pixels() + static_cast<size_t>(dy) * dst.width() + dx;
+    for (int row = 0; row < h; ++row) {
+        for (int col = 0; col < w; ++col) {
+            const uint8_t index = s[col];
+            if (index) {
+                d[col] = palette[index];
+            }
+        }
+        s += f.width;
+        d += dst.width();
+    }
+    return true;
+}
+
+void convertImageChannels(uint16_t* dst, const uint16_t* src, size_t pixelCount,
+                          const uint8_t table[32]) {
+    // [RE 0x4552B7 → 0x455337] 依据: 每像素 R/G/B 各 5bit 查表后重组 RGB555
+    for (size_t i = 0; i < pixelCount; ++i) {
+        const uint16_t p = src[i];
+        const uint16_t r = table[(p >> 10) & 0x1Fu];
+        const uint16_t g = table[(p >> 5) & 0x1Fu];
+        const uint16_t b = table[p & 0x1Fu];
+        dst[i] = static_cast<uint16_t>((r << 10) | (g << 5) | b);
+    }
+}
+
+void scaleSurfaceChannels(Surface& dst, int x, int y, int w, int h, const uint8_t table[32]) {
+    // [RE 0x4552E7] 依据: 对元素区域逐像素做分量缩放（调用方保证区域合法）
+    if (x < 0) {
+        w += x;
+        x = 0;
+    }
+    if (y < 0) {
+        h += y;
+        y = 0;
+    }
+    if (x + w > dst.width()) {
+        w = dst.width() - x;
+    }
+    if (y + h > dst.height()) {
+        h = dst.height() - y;
+    }
+    if (w <= 0 || h <= 0) {
+        return;
+    }
+    for (int row = 0; row < h; ++row) {
+        uint16_t* line = dst.pixels() + static_cast<size_t>(y + row) * dst.width() + x;
+        convertImageChannels(line, line, static_cast<size_t>(w), table);
+    }
+}
+
+void grayscaleImage(uint16_t* pixels, size_t pixelCount) {
+    // [RE 0x4553DA → 0x455442] 依据: gray = (R+G+B+16)>>2, 重组 R=G=B=gray; 0 保持
+    for (size_t i = 0; i < pixelCount; ++i) {
+        const uint16_t p = pixels[i];
+        if (p == 0) {
+            continue;
+        }
+        const uint16_t r = (p >> 10) & 0x1Fu;
+        const uint16_t g = (p >> 5) & 0x1Fu;
+        const uint16_t b = p & 0x1Fu;
+        const uint16_t gray = static_cast<uint16_t>((r + g + b + 16) >> 2);
+        pixels[i] = static_cast<uint16_t>((gray << 10) | (gray << 5) | gray);
+    }
+}
+
+void blitScrolledMap(Surface& dst, const uint8_t* src, int offset) {
+    // [RE 0x456180] 依据: 每行 1280 字节按 offset(&~3) 环绕拷贝
+    constexpr int kRowBytes = Surface::kWidth * 2;
+    int off = (offset & ~3) % kRowBytes;
+    if (off < 0) {
+        off += kRowBytes;
+    }
+    const int firstLen = kRowBytes - off;
+    uint8_t* d = reinterpret_cast<uint8_t*>(dst.pixels());
+    for (int row = 0; row < Surface::kHeight; ++row) {
+        std::memcpy(d, src + off, static_cast<size_t>(firstLen));
+        if (off > 0) {
+            std::memcpy(d + firstLen, src, static_cast<size_t>(off));
+        }
+        d += kRowBytes;
+        src += kRowBytes;
     }
 }
 

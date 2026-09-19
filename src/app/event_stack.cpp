@@ -49,22 +49,38 @@ void EventStack::clearExit() {
     m_exitResult = 0;
 }
 
-int runModal(Application& app, EventStack::Handler handler, void* user) {
+int runModal(Application& app, EventStack::Handler handler, void* user, uint32_t tickMs) {
     // [RE 0x4018E7] runModal
     // 依据: 0x4018E7 反编译; dword_48A010[++nIDEvent]=handler; PostMessage(0x401) 通知进入;
     //       局部消息泵直到 WM_USER+2(0x402); 返回 Msg.lParam; --nIDEvent
     // 迁移: Win32 局部消息泵 → SDL 事件循环（Application::pumpEvents/renderFrame）;
-    //       0x401/0x402 消息 → handler(nullptr) / EventStack::requestExit
+    //       0x401/0x402 消息 → handler(nullptr) / EventStack::requestExit;
+    //       SetTimer/WM_TIMER → 循环内按 tickMs 合成 SDL_EVENT_TIMER（选人界面动画用）
     app.events().push(handler, user);
     app.events().clearExit();
+    app.events().setTimer(tickMs);
     if (handler) {
         // 对应 PostMessage(hWnd, 0x401, 0, lParam)：通知栈顶处理器模态进入/重绘
+        // （处理器可在此时通过 setTimer 调整间隔，如选人界面状态切换 100ms→50ms）
         handler(nullptr, user);
     }
+    uint64_t nextTick = SDL_GetTicks() + app.events().timerInterval();
     while (app.running() && !app.events().exitRequested()) {
         app.pumpEvents();
         app.renderFrame();
+        const uint32_t interval = app.events().timerInterval();
+        if (interval > 0) {
+            const uint64_t now = SDL_GetTicks();
+            if (now >= nextTick) {
+                nextTick = now + interval;
+                SDL_Event timerEvent{};
+                timerEvent.type = kModalTimerEvent;
+                timerEvent.user.code = 0;
+                app.events().dispatch(timerEvent);
+            }
+        }
     }
+    app.events().setTimer(0);
     app.events().pop();
     const int result = app.events().exitResult();
     // 消费退出请求：原版 WM_USER+2 消息被局部消息泵取走，不会影响外层模态

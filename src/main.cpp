@@ -3,6 +3,7 @@
 #include "game/core/log.h"
 
 #include <cstdio>
+#include <cstdlib>
 #include <string>
 
 // [RE 0x45709C] start
@@ -12,11 +13,15 @@
 int main(int argc, char** argv) {
     std::string gameDir = "resources/game";
     std::string shotPath;
+    int shotFrame = 47;
     int shotCursorX = -1;
     int shotCursorY = -1;
     bool autoClick = false;
     bool autoEsc = false;
+    int autoEscFrame = 25;
     std::string autoKey;
+    int hoverX = -1;
+    int hoverY = -1;
     int click2X = -1;
     int click2Y = -1;
     int click3X = -1;
@@ -35,6 +40,8 @@ int main(int argc, char** argv) {
             gameDir = argv[++i];
         } else if (arg == "--shot" && i + 1 < argc) {
             shotPath = argv[++i];
+        } else if (arg == "--shot-frame" && i + 1 < argc) {
+            shotFrame = std::atoi(argv[++i]);
         } else if (arg == "--shot-cursor" && i + 1 < argc) {
             if (std::sscanf(argv[++i], "%d,%d", &shotCursorX, &shotCursorY) != 2) {
                 shotCursorX = -1;
@@ -44,6 +51,13 @@ int main(int argc, char** argv) {
             autoClick = true;
         } else if (arg == "--auto-esc") {
             autoEsc = true;
+        } else if (arg == "--auto-esc-frame" && i + 1 < argc) {
+            autoEscFrame = std::atoi(argv[++i]);
+        } else if (arg == "--hover" && i + 1 < argc) {
+            if (std::sscanf(argv[++i], "%d,%d", &hoverX, &hoverY) != 2) {
+                hoverX = -1;
+                hoverY = -1;
+            }
         } else if (arg == "--auto-key" && i + 1 < argc) {
             autoKey = argv[++i];
         } else if (arg == "--auto-click2" && i + 1 < argc) {
@@ -88,14 +102,17 @@ int main(int argc, char** argv) {
         RICH4_LOGE("Application init failed");
         return 1;
     }
-    app.setAutoEsc(autoEsc);
+    app.setAutoEsc(autoEsc, autoEscFrame);
     if (!autoKey.empty()) {
         app.setAutoKey(autoKey);
     }
+    if (hoverX >= 0 && hoverY >= 0) {
+        app.setHoverPos(hoverX, hoverY);
+    }
     if (!shotPath.empty()) {
-        app.setScreenshot(shotPath, 47, shotCursorX, shotCursorY, autoClick, click2X, click2Y,
-                          click3X, click3Y, click4X, click4Y, click5X, click5Y, click6X, click6Y,
-                          click7X, click7Y);
+        app.setScreenshot(shotPath, shotFrame, shotCursorX, shotCursorY, autoClick, click2X,
+                          click2Y, click3X, click3Y, click4X, click4Y, click5X, click5Y, click6X,
+                          click6Y, click7X, click7Y);
     }
     app.run();
     app.shutdown();

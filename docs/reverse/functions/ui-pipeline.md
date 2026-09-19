@@ -85,16 +85,21 @@ SDL 侧：写 `Surface` → `SDL_UpdateTexture` → `SDL_RenderPresent`。
 ## 进入游戏链路（阶段 4）
 
 ```
-主菜单点击 → 0x406DE7 newGameInit（JUMP.MKF 地图预览 + 选人[跳过] + 玩家初始化）
-→ 0x401543 showLoadingScreen（Data.mkf[601] 全屏图）
-→ 0x407AD2 loadMapData（MAP.MKF GND + MAPDAT.MKF）
-→ 0x4190CF loadPanelUi（panel.mkf UI）
-→ 0x4291D6 stockTick（12 只股票）
-→ 0x415872 playIntro（AVI 跳过）
-→ 0x401981 enterGameLoop（压入 0x417E26 游戏内事件处理器）
+主菜单点击 → 0x406DE7 newGameInit
+  → 0x404E44 newGameDialog（选图/选人模态，三段状态机；见 404e44-new-game-dialog.md）
+  → 0x401543 showLoadingScreen（Data.mkf[601] 全屏图）
+  → 0x407AD2 loadMapData（MAP.MKF GND + MAPDAT.MKF）
+  → 0x4190CF loadPanelUi（panel.mkf UI）
+  → 0x4291D6 stockTick（12 只股票）
+  → 0x415872 playIntro（AVI 跳过）
+  → 0x401981 enterGameLoop（压入 0x417E26 游戏内事件处理器）
 ```
 
-重写：`src/app/new_game.cpp` / `src/app/game_loop.cpp`（骨架，面板与地图渲染待后续）。
+两个入口：主菜单按钮 0（原版开始游戏，gameMode=0）与按钮 4（时空之旅，gameMode=1）；
+`byte_46CAFC` 非 0 时（游戏内重新开始）保留上次选人配置并 10 tick 后自动確定。
+
+重写：`src/app/new_game.cpp` / `src/app/new_game_dialog.cpp` / `src/app/game_loop.cpp`
+（游戏内面板与地图渲染待后续）。
 
 ## 首页选项功能（读档 / 设置）
 

@@ -48,9 +48,17 @@ public:
     void mouseLogicalPos(int& x, int& y) const;
 
     // [NEW] 调试：第 25 帧合成 ESC 按下（验证弹出层关闭/主菜单无操作）
-    void setAutoEsc(bool on) { m_shotEsc = on; }
+    void setAutoEsc(bool on, int frame = 25) {
+        m_shotEsc = on;
+        m_shotEscFrame = frame;
+    }
     // [NEW] 调试：第 35 帧合成按键（SDL_GetKeyFromName 名称，如 "F5"），验证热键捕获
     void setAutoKey(const std::string& name) { m_shotKey = name; }
+    // [NEW] 调试：第 21 帧移动鼠标到逻辑坐标（只悬停不点击）
+    void setHoverPos(int x, int y) {
+        m_shotHoverX = x;
+        m_shotHoverY = y;
+    }
 
     // [NEW] 调试截图：第 frame 帧后保存 BMP 并退出（用于与原版画面比对）；
     //       cursorX/Y >= 0 时先移动鼠标到逻辑坐标（验证悬停等交互状态）；
@@ -119,6 +127,9 @@ private:
     float m_shotWinX = 0.0f;
     float m_shotWinY = 0.0f;
     bool m_shotEsc = false;
+    int m_shotEscFrame = 25;
+    int m_shotHoverX = -1;
+    int m_shotHoverY = -1;
     std::string m_shotKey;
     // [RE 0x401010] word_46CB09：確定键模拟左键按下的去重标志
     bool m_hookLeftDown = false;

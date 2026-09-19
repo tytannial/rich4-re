@@ -20,6 +20,9 @@ uint32_t readU32(const uint8_t* p) {
 bool UiImage::load(std::vector<uint8_t> data) {
     m_data = std::move(data);
     m_frames.clear();
+    m_frameBytes.clear();
+    m_frameSizes.clear();
+    m_palette = nullptr;
     m_isSprite = false;
 
     if (m_data.size() < 12) {
@@ -42,11 +45,17 @@ bool UiImage::load(std::vector<uint8_t> data) {
     if (pixelBase > m_data.size()) {
         return false;
     }
+    if (isSpr) {
+        // [RE 0x45663E] 调色板 = 资源基址 + data_offset（256 x RGB555）
+        m_palette = reinterpret_cast<const uint16_t*>(m_data.data() + dataOffset);
+    }
 
     // [RE 0x450069] 依据: 帧 0 指针 = 基址 + data_offset (+512 SPR 调色板);
     // 后续帧指针 = 前一帧指针 + 前一帧 size（像素数据顺序存放）
     const uint8_t* pixels = m_data.data() + pixelBase;
     m_frames.reserve(count);
+    m_frameBytes.reserve(count);
+    m_frameSizes.reserve(count);
     for (uint32_t i = 0; i < count; ++i) {
         UiFrameHeader header{};
         std::memcpy(&header, m_data.data() + 12 + static_cast<size_t>(i) * 12, sizeof(header));
@@ -57,6 +66,8 @@ bool UiImage::load(std::vector<uint8_t> data) {
         view.offsetY = header.offsetY;
         view.pixels = reinterpret_cast<const uint16_t*>(pixels);
         m_frames.push_back(view);
+        m_frameBytes.push_back(pixels);
+        m_frameSizes.push_back(header.size);
         pixels += header.size;
     }
     return true;

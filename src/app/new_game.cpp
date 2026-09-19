@@ -1,6 +1,7 @@
 #include "game/app/new_game.h"
 
 #include "game/app/game_loop.h"
+#include "game/app/new_game_dialog.h"
 #include "game/app/save_data.h"
 #include "game/application.h"
 #include "game/core/log.h"
@@ -35,26 +36,36 @@ bool loadMapPreview(Application& app) {
 }
 
 // [RE 0x406DE7] newGameInit
-// 依据: 0x406DE7 反编译; JUMP.MKF 地图预览; runModal(sub_404E44) 选图/选人;
-//       确认后 dword_499114 = dword_46CB3C + 2 等玩家初始化
-// 差异: 选图/选人界面（0x404E44）暂未实现，自动使用默认地图/玩家配置
+// 依据: 0x406DE7 反编译; JUMP.MKF 地图预览 + runModal(0x404E44) 选图/选人;
+//       确认后 dword_499114 = dword_46CB3C + 2（玩家数）等玩家初始化
+//       lParam == byte_46CAFC：再次进入（游戏内重新开始/时空之旅返回）时保留上次配置
+// 差异: 玩家/卡片/骰子初始化（sub_445A4D/sub_448B81/sub_44BAEA）待后续
 bool newGameInit(Application& app, bool mode1) {
     GameState& state = app.gameState();
     state.gameMode = mode1 ? 1 : 0;
-    state.mapIndex = 0;
 
-    if (!loadMapPreview(app)) {
+    // [RE 0x46CAFC] byte_46CAFC：非 0 时保留上次选人配置（0x406DE7 lParam!=0 分支）
+    const bool restore = state.gameInited;
+    if (!restore) {
+        // 0x406DE7 新游戏分支：清空选项与角色，默认 {玩家数=四人, 资金=200000}
+        state.newGameConfig = NewGameConfig{};
+    }
+
+    // [RE 0x404E44] 选图/选人模态（取消返回 false → 主菜单）
+    if (!newGameDialog(app, restore, state.newGameConfig)) {
+        RICH4_LOGI("new game cancelled (RE 0x404E44)");
         return false;
     }
 
-    // TODO(RE 0x404E44): 选图/选人界面（自动默认跳过）
+    state.mapIndex = state.newGameConfig.mapIndex;
+    state.playerCount = state.newGameConfig.playerCount();
+    state.currentPlayer = 0;
+    state.gameInited = true; // [RE 0x46CAFC] byte_46CAFC = 1
+
     // TODO(RE 0x445A4D/0x448B81/0x44BAEA): 玩家/卡片/骰子初始化
     // TODO(RE 0x47E80C/0x47F072): 玩家与地图配置数据表
-
-    state.playerCount = 4; // [RE 0x406DE7] dword_499114 = dword_46CB3C + 2（默认 2+2）
-    state.currentPlayer = 0;
-    RICH4_LOGI("new game: map=%d mode=%d players=%d", state.mapIndex, state.gameMode,
-               state.playerCount);
+    RICH4_LOGI("new game: map=%d mode=%d players=%d travel=%d", state.mapIndex, state.gameMode,
+               state.playerCount, state.newGameConfig.travelMode);
     return true;
 }
 

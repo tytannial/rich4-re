@@ -6,6 +6,7 @@
 #include "game/app/new_game.h"
 #include "game/core/log.h"
 
+
 namespace rich4 {
 
 bool Application::init(const std::string& gameDir) {
@@ -47,32 +48,41 @@ bool Application::init(const std::string& gameDir) {
 
 void Application::run() {
     // [RE 0x401B9C] WinMain 主循环（定义见 Application::init）
-    // sub_4029FD() 返回按钮索引后 switch 分发:
-    // 0/4 新游戏(sub_406DE7), 1 读档(sub_4190CF), 3 退出(sub_401815+DestroyWindow)
-    const int scene = mainMenuScene(*this); // [RE 0x4029FD]
-    if (!m_running) {
-        // 原版 Msg.message == 18(WM_QUIT) 时 WinMain 直接返回，不进入场景分发
-        return;
-    }
-    switch (scene) {
-        case 0:
-        case 4:
-            // [RE 0x401B9C] case 0/4: sub_406DE7 → sub_401543 → sub_407AD2 → ... → sub_401981(0)
-            // case 4 时 word_4991B6 = 1（新模式）
-            if (!startGame(*this, scene == 4)) {
-                RICH4_LOGE("startGame failed (RE 0x406DE7)");
-            }
-            break;
-        case 1:
-            // [RE 0x401B9C] case 1: 读档进入游戏（对话框内确认后经 sub_401966(1) 返回）
-            if (!loadGameFromSlot(*this, m_state.pendingLoadSlot)) {
-                RICH4_LOGE("loadGameFromSlot failed (RE 0x402AC5)");
-            }
-            break;
-        case 3:
-        default:
-            // 原版 case 3: sub_401815(); DestroyWindow(hWnd)
-            break;
+    // 主循环语义: LABEL_5 每次进主菜单前重置 word_4991B6/4991B8/byte_46CAFC;
+    //       sub_4029FD 返回按钮索引后 switch 分发:
+    //       0/4 新游戏（sub_406DE7 取消返回 0 → continue 回主菜单）, 1 读档,
+    //       3 退出（sub_401815 + DestroyWindow）
+    while (m_running) {
+        // [RE 0x4991B6/0x4991B8/0x46CAFC] LABEL_5 重置
+        m_state.gameMode = 0;
+        m_state.mapIndex = 0;
+        m_state.gameInited = false;
+        const int scene = mainMenuScene(*this); // [RE 0x4029FD]
+        if (!m_running) {
+            // 原版 Msg.message == 18(WM_QUIT) 时 WinMain 直接返回
+            return;
+        }
+        switch (scene) {
+            case 0:
+            case 4:
+                // [RE 0x401B9C] case 0/4: sub_406DE7 → ... → sub_401981(0)
+                // 取消（newGameInit 返回 0）时 continue 回主菜单（原版 if (!newGameInit) continue）
+                // case 4 时 word_4991B6 = 1（时空之旅）
+                if (!startGame(*this, scene == 4)) {
+                    RICH4_LOGI("startGame cancelled, back to main menu (RE 0x406DE7)");
+                }
+                continue; // 游戏内循环返回后回主菜单
+            case 1:
+                // [RE 0x401B9C] case 1: 读档进入游戏（对话框内确认后经 sub_401966(1) 返回）
+                if (!loadGameFromSlot(*this, m_state.pendingLoadSlot)) {
+                    RICH4_LOGI("loadGameFromSlot failed, back to main menu (RE 0x402AC5)");
+                }
+                continue;
+            case 3:
+            default:
+                // 原版 case 3: sub_401815(); DestroyWindow(hWnd)
+                return;
+        }
     }
 }
 
@@ -361,8 +371,18 @@ void Application::renderFrame() {
         }
     }
 
+    // [NEW] 调试：第 21 帧移动到指定逻辑坐标（只悬停不点击）
+    if (m_shotHoverX >= 0 && m_frameCount == 21) {
+        float wx = 0.0f;
+        float wy = 0.0f;
+        if (SDL_RenderCoordinatesToWindow(m_renderer.handle(), static_cast<float>(m_shotHoverX),
+                                          static_cast<float>(m_shotHoverY), &wx, &wy)) {
+            SDL_WarpMouseInWindow(m_window.handle(), wx, wy);
+        }
+    }
+
     // [NEW] 调试：第 25 帧合成 ESC 按下
-    if (m_shotEsc && m_frameCount == 25) {
+    if (m_shotEsc && m_frameCount == m_shotEscFrame) {
         SDL_Event ev{};
         ev.type = SDL_EVENT_KEY_DOWN;
         ev.key.key = SDLK_ESCAPE;
