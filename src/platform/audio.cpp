@@ -34,8 +34,10 @@ namespace {
 // 音量增益（原版 DirectSound 音量 0/-2000/-1000/-316/0 百分之一分贝 → 16 分制线性）
 constexpr int kVolumeGain[5] = {0, 2, 5, 11, 16};
 
-// 输出流目标缓冲（字节；8bit mono）
-constexpr int kTargetQueued = 8192;
+// 输出流目标缓冲（字节；8bit mono）。
+// 延迟权衡: 音效响应延迟 ≈ 水位/采样率（1024B @22050Hz ≈ 46ms，接近原版 DirectSound）；
+// 每帧 update 补充，帧率 60fps 时每帧消耗约 370B，水位可稳定维持。
+constexpr int kTargetQueued = 1024;
 
 // 8bit 无符号 PCM 混音（静音 = 128）
 inline void mixSample(uint8_t& dst, uint8_t src, int gain) {
@@ -177,6 +179,8 @@ bool Audio::open(int sampleRate) {
         return true;
     }
     // [RE 0x453B55] 原版 DirectSound 主缓冲 22050Hz / 8bit / mono
+    // 低延迟: 期望设备周期 512 帧（约 23ms），配合 update 水位 1024B（约 46ms）
+    SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, "512");
     SDL_AudioSpec spec{};
     spec.format = SDL_AUDIO_U8;
     spec.channels = 1;
