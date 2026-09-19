@@ -1,0 +1,29 @@
+# 构建输出
+/build/
+/assets/
+
+# IDA 数据库
+*.i64
+*.id0
+*.id1
+*.id2
+*.nam
+*.til
+
+# Python
+__pycache__/
+*.pyc
+
+# 编辑器
+.vscode/
+.idea/
+
+# 原始游戏资源（版权 + 体积，不提交）
+/resources/game/
+
+# 第三方库（自行下载，见 AGENTS.md）
+/third_party/*.zip
+/third_party/SDL3-*/
+
+# 第三方预编译依赖（可重新下载，见 AGENTS.md）
+/third_party/
