@@ -1,6 +1,7 @@
 #include "game/app/hotkey_dialog.h"
 
 #include "game/app/event_stack.h"
+#include "game/app/new_game_tables.h"
 #include "game/application.h"
 #include "game/core/log.h"
 #include "game/platform/input.h"
@@ -81,6 +82,7 @@ struct HotkeyDialogState {
     int originX = 0;                  // dword_48BB8E
     int originY = 0;                  // dword_48BB92
     bool blink = false;               // dword_48BBAA（WM_TIMER 250ms 翻转的闪烁态）
+    int pressed = -1;                 // dword_48BB9E：按住中的控件（0..27 列表项 / 100..102 按钮 / -1 无）
 };
 
 // 点击区（原版 sub_411122 WM_LBUTTONDOWN 的坐标范围，相对对话框）
@@ -98,6 +100,14 @@ bool hitRightColumn(int rx, int ry, int& row) {
         return true;
     }
     return false;
+}
+
+// [RE 0x451B9E] highlightRect：按住控件时对矩形四条边变暗（-16）画下凹按下态
+void drawPressBorder(Surface& surface, int x, int y, int w, int h) {
+    scaleSurfaceChannels(surface, x, y, w, 1, kChannelHalf);
+    scaleSurfaceChannels(surface, x, y + h - 1, w, 1, kChannelHalf);
+    scaleSurfaceChannels(surface, x, y, 1, h, kChannelHalf);
+    scaleSurfaceChannels(surface, x + w - 1, y, 1, h, kChannelHalf);
 }
 
 void redrawHotkeys(HotkeyDialogState& state) {
@@ -132,6 +142,10 @@ void redrawHotkeys(HotkeyDialogState& state) {
         if (i == state.editing && state.blink) {
             surface.fillRect(x - 26, y - 7, 53, 13, rgb888To555(0xF0F0F0));
         }
+        // [RE 0x451B9E] 按住列表项：四边变暗按下态（LBUTTONDOWN→UP 期间）
+        if (i == state.pressed) {
+            drawPressBorder(surface, x - 26, y - 7, 53, 13);
+        }
         char buf[32] = {};
         const uint16_t value = state.working[i];
         const uint8_t mod = static_cast<uint8_t>(value >> 8);
@@ -156,6 +170,15 @@ void redrawHotkeys(HotkeyDialogState& state) {
     text.drawText(surface, "原始設定", ox + 52, oy + 296, 2);
     text.drawText(surface, "取 消", ox + 165, oy + 296, 2);
     text.drawText(surface, "確 定", ox + 278, oy + 296, 2);
+
+    // [RE 0x451B9E] 按住按钮（原始設定/取消/確定）：四边变暗按下态
+    if (state.pressed >= 100 && state.pressed <= 102) {
+        static const int kBtnRect[3][4] = {
+            {17, 281, 71, 31}, {130, 281, 71, 31}, {242, 281, 71, 31}};
+        const int bi = state.pressed - 100;
+        drawPressBorder(surface, ox + kBtnRect[bi][0], oy + kBtnRect[bi][1], kBtnRect[bi][2],
+                        kBtnRect[bi][3]);
+    }
 }
 
 // 按键捕获（对应 0x411122 WM_KEYDOWN 0x100）
@@ -236,6 +259,7 @@ bool hotkeyEventHandler(const SDL_Event* event, void* user) {
     }
 
     if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN && event->button.button == SDL_BUTTON_LEFT) {
+        // [RE 0x411122] WM_LBUTTONDOWN：命中列表项/按钮 → 记 dword_48BB9E + 音效 + highlightRect 按下态
         const int rx = static_cast<int>(event->button.x) - state.originX;
         const int ry = static_cast<int>(event->button.y) - state.originY;
 
@@ -247,28 +271,44 @@ bool hotkeyEventHandler(const SDL_Event* event, void* user) {
             index = row + 15;
         }
         if (index >= 0) {
-            if (state.editing >= 0) {
-                // [RE 0x411122] 编辑中忽略列表点击（原版 dword_48BBA6 非零时跳过）
-                return true;
-            }
-            // [RE 0x411122] 仅键位 8-27 可编辑（原版 dword_48BB9E > 8）
-            if (index >= 8 && index < kKeyCount) {
-                state.app->audio().playEffect(1); // [RE 0x411122] unk_482322 列表点击音效
-                state.editing = index;
-                state.blink = false;
-                state.savedValue = state.working[index]; // [RE 0x411122] word_48BB8C
-                state.working[index] = 0;
-                RICH4_LOGI("hotkey capture started: index %d", index);
-            } else {
-                RICH4_LOGW("hotkey %d is fixed (RE 0x411122)", index);
-            }
+            state.pressed = index;
+            state.app->audio().playEffect(1); // unk_482322 列表点击音效
             redrawHotkeys(state);
             return true;
         }
 
-        switch (hitButton(rx, ry)) {
-            case ButtonHit::Reset: {
-                // [RE 0x411122] dword_48BB9E == 100：恢复默认键位（unk_47EDC2）
+        const ButtonHit b = hitButton(rx, ry);
+        if (b != ButtonHit::None) {
+            state.pressed = 100 + static_cast<int>(b) - 1; // Reset=100/Cancel=101/Confirm=102
+            const int sfx = (b == ButtonHit::Reset) ? 1 : (b == ButtonHit::Cancel) ? 4 : 2;
+            state.app->audio().playEffect(sfx); // 482322/482332/48232A
+            redrawHotkeys(state);
+            return true;
+        }
+        return true;
+    }
+
+    if (event->type == SDL_EVENT_MOUSE_BUTTON_UP && event->button.button == SDL_BUTTON_LEFT) {
+        // [RE 0x411122] WM_LBUTTONUP：sub_451D4E 恢复按下态，再依 dword_48BB9E 执行动作
+        const int pressed = state.pressed;
+        state.pressed = -1;
+        if (pressed < 0) {
+            return true;
+        }
+        if (pressed < kKeyCount) {
+            // 列表项：仅键位 8-27 可编辑（原版 dword_48BB9E > 8）；固定项闪一下即回
+            if (pressed >= 8) {
+                state.editing = pressed;
+                state.blink = false;
+                state.savedValue = state.working[pressed]; // word_48BB8C
+                state.working[pressed] = 0;
+                RICH4_LOGI("hotkey capture started: index %d", pressed);
+            }
+            redrawHotkeys(state);
+            return true;
+        }
+        switch (pressed) {
+            case 100: { // 原始設定：恢复默认键位（unk_47EDC2）
                 state.app->input().setDefaultBindings();
                 std::memcpy(state.working, state.app->input().bindings(),
                             kKeyCount * sizeof(uint16_t));
@@ -276,13 +316,10 @@ bool hotkeyEventHandler(const SDL_Event* event, void* user) {
                 redrawHotkeys(state);
                 return true;
             }
-            case ButtonHit::Cancel:
-                // [RE 0x411122] dword_48BB9E == 101：不保存退出
+            case 101: // 取消：不保存退出
                 state.app->events().requestExit(0);
                 return true;
-            case ButtonHit::Confirm: {
-                // [RE 0x411122] dword_48BB9E == 102：memcpy(word_497168) + saveConfig
-                // （写全局 byte_497158 设置区 + 工作区键位）
+            case 102: { // 確定：写回键位 + saveConfig（RE 0x411F80）
                 state.app->input().setBindings(state.working);
                 uint8_t cfg[kCfgSize] = {};
                 std::memcpy(cfg, state.app->gameState().settings, 16);
@@ -292,7 +329,6 @@ bool hotkeyEventHandler(const SDL_Event* event, void* user) {
                 state.app->events().requestExit(1);
                 return true;
             }
-            case ButtonHit::None:
             default:
                 return true;
         }
