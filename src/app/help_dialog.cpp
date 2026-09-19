@@ -377,7 +377,7 @@ bool helpEventHandler(const SDL_Event* event, void* user) {
     if (rx >= kCatHitX1 && rx < kCatHitX2 && ry >= kCatHitY &&
         ry < kCatHitY + kCatLineH * 8) {
         const int catIndex = (ry - kCatHitY) / kCatLineH;
-        state.app->audio().playEffect(4); // [RE 0x44E548] unk_482332 分类点击音效
+        state.app->audio().playEffect(1); // [RE 0x44E40B] unk_482322 命中控件点击音效
         state.category = catIndex;
         state.page = 0;
         state.scroll = 0;
@@ -388,6 +388,7 @@ bool helpEventHandler(const SDL_Event* event, void* user) {
 
     // 页面列表（命中 (108..192, 78+34j..110+34j)，仅可见项）
     if (rx >= kListHitX1 && rx < kListHitX2 && ry >= kListY && ry < kListY + kListLineH * 8) {
+        state.app->audio().playEffect(1); // [RE 0x44E40B] unk_482322 命中控件点击音效
         const int visible = cat.pageCount - state.scroll;
         const int item = (ry - kListY) / kListLineH;
         if (item >= 0 && item < visible && item < 8) {
@@ -402,11 +403,13 @@ bool helpEventHandler(const SDL_Event* event, void* user) {
     // updateMore=false：仅重绘按下动画，不重算截断标志（避免末屏重算丢失按钮）
     if (cat.pageCount > 8 && rx >= kScrollX && rx < kScrollX + 22) {
         if (ry >= kScrollUpY && ry < kScrollUpY + 15) {
+            state.app->audio().playEffect(1); // unk_482322
             state.pressed = 2;
             redrawHelp(state, false);
             return true;
         }
         if (ry >= kScrollDownY && ry < kScrollDownY + 15) {
+            state.app->audio().playEffect(1); // unk_482322
             state.pressed = 3;
             redrawHelp(state, false);
             return true;
@@ -416,11 +419,13 @@ bool helpEventHandler(const SDL_Event* event, void* user) {
     // 继续阅读按钮：Down 画按下态（帧 10/11），Up 执行（同上，不重算截断标志）
     if (state.hasMore && ry >= kMoreY && ry < kMoreY + 32) {
         if (rx >= kMoreLeftX && rx < kMoreRightX) {
+            state.app->audio().playEffect(1); // unk_482322
             state.pressed = 4;
             redrawHelp(state, false);
             return true;
         }
         if (rx >= kMoreRightX && rx < kMoreRightX + 23) {
+            state.app->audio().playEffect(1); // unk_482322
             state.pressed = 5;
             redrawHelp(state, false);
             return true;

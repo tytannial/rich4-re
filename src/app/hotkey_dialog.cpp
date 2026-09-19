@@ -80,6 +80,7 @@ struct HotkeyDialogState {
     uint16_t savedValue = 0;          // word_48BB8C（捕获前原值，右键取消恢复）
     int originX = 0;                  // dword_48BB8E
     int originY = 0;                  // dword_48BB92
+    bool blink = false;               // dword_48BBAA（WM_TIMER 250ms 翻转的闪烁态）
 };
 
 // 点击区（原版 sub_411122 WM_LBUTTONDOWN 的坐标范围，相对对话框）
@@ -127,8 +128,8 @@ void redrawHotkeys(HotkeyDialogState& state) {
         const int y = oy + 33 + 16 * (left ? i : i - 15);
         // [RE 0x410158] 颜色：键位 0-7 青色 0x00F0F0，8-27 黄色 0xF0F000（style 1 阴影）
         const uint32_t color = (i < 8) ? 61680u : 15790080u;
-        // [RE 0x411122] 编辑中闪烁框 53x13（原版 250ms 定时器翻转，简化为静态框）
-        if (i == state.editing) {
+        // [RE 0x411122] 编辑中闪烁框 53x13（WM_TIMER 250ms 翻转 dword_48BBAA，blink 控制）
+        if (i == state.editing && state.blink) {
             surface.fillRect(x - 26, y - 7, 53, 13, rgb888To555(0xF0F0F0));
         }
         char buf[32] = {};
@@ -214,7 +215,17 @@ bool hotkeyEventHandler(const SDL_Event* event, void* user) {
         std::memcpy(state.working, state.app->input().bindings(),
                     kKeyCount * sizeof(uint16_t));
         state.editing = -1;
+        state.blink = false;
         redrawHotkeys(state);
+        return true;
+    }
+
+    if (event->type == kModalTimerEvent) {
+        // [RE 0x411122] WM_TIMER(0x113)：编辑中翻转 dword_48BBAA → 待修改格反白闪烁
+        if (state.editing >= 0) {
+            state.blink = !state.blink;
+            redrawHotkeys(state);
+        }
         return true;
     }
 
@@ -242,8 +253,9 @@ bool hotkeyEventHandler(const SDL_Event* event, void* user) {
             }
             // [RE 0x411122] 仅键位 8-27 可编辑（原版 dword_48BB9E > 8）
             if (index >= 8 && index < kKeyCount) {
-                state.app->audio().playEffect(2); // [RE 0x4116DB] unk_48232A 列表点击音效
+                state.app->audio().playEffect(1); // [RE 0x411122] unk_482322 列表点击音效
                 state.editing = index;
+                state.blink = false;
                 state.savedValue = state.working[index]; // [RE 0x411122] word_48BB8C
                 state.working[index] = 0;
                 RICH4_LOGI("hotkey capture started: index %d", index);
@@ -323,8 +335,8 @@ void hotkeyDialog(Application& app) {
     state.originY = 240 - uiImage.frame(1).height / 2;
 
     RICH4_LOGI("hotkey dialog at (%d,%d) (RE 0x411A86)", state.originX, state.originY);
-    // [RE 0x4018E7] runModal(sub_411122)
-    runModal(app, &hotkeyEventHandler, &state);
+    // [RE 0x4018E7] runModal(sub_411122)；[RE 0x411122] SetTimer(0xFA=250ms) 驱动编辑闪烁
+    runModal(app, &hotkeyEventHandler, &state, 250);
 }
 
 } // namespace rich4
