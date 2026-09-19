@@ -45,6 +45,13 @@ void drawRectBorder(Surface& dst, int x, int y, int w, int h, uint16_t color);
 // 用于选人界面底部玩家角色动画（JUMP.MKF 角色 SPR）
 bool blitSpriteFrame(Surface& dst, const UiImage& spr, int frame, int x, int y);
 
+// [RE 0x456770] sub_456770 SPR 帧绘制（裁剪到全局裁剪矩形 dword_4861B8..C4）
+// 依据: 0x456770 反编译; 帧头 12 字节 {w,h,offX,offY,size}, 8bit 索引 + 调色板,
+//       目标 = (x - offX, y - offY), 裁剪到 dword_4861B8/C0/BC/C4
+// 用于游戏内地图精灵（棋子/地产/公司/特殊点/事件格）
+bool blitSpriteFrameClipped(Surface& dst, const UiImage& spr, int frame, int x, int y,
+                            bool useClipRect);
+
 // [RE 0x4552B7] convertImageChannels（经 0x455337 16bit 分支）
 // 依据: 0x455337 对每像素 R/G/B 各 5bit 查 32 字节表后重组 RGB555
 //       （表 = unk_485D68 + 32*a6，-16 = kChannelHalf，-20 = kChannelThird）

@@ -155,7 +155,12 @@ void drawRectBorder(Surface& dst, int x, int y, int w, int h, uint16_t color) {
 }
 
 bool blitSpriteFrame(Surface& dst, const UiImage& spr, int frame, int x, int y) {
-    // [RE 0x45663E] 依据: 8bit 索引像素经调色板取色, 0 透明, 裁剪到目标尺寸
+    return blitSpriteFrameClipped(dst, spr, frame, x, y, false);
+}
+
+bool blitSpriteFrameClipped(Surface& dst, const UiImage& spr, int frame, int x, int y,
+                            bool useClipRect) {
+    // [RE 0x456770] 依据: 8bit 索引像素经调色板取色, 0 透明, 裁剪到全局裁剪矩形
     if (!spr.isSprite() || frame < 0 || frame >= spr.frameCount()) {
         return false;
     }
@@ -165,35 +170,15 @@ bool blitSpriteFrame(Surface& dst, const UiImage& spr, int frame, int x, int y) 
         return false;
     }
     const UiFrameView& f = spr.frame(frame);
-    int dx = x - f.offsetX;
-    int dy = y - f.offsetY;
-    int sx = 0;
-    int sy = 0;
-    int w = f.width;
-    int h = f.height;
-    if (dx < 0) {
-        sx = -dx;
-        w -= sx;
-        dx = 0;
-    }
-    if (dy < 0) {
-        sy = -dy;
-        h -= sy;
-        dy = 0;
-    }
-    if (dx + w > dst.width()) {
-        w = dst.width() - dx;
-    }
-    if (dy + h > dst.height()) {
-        h = dst.height() - dy;
-    }
-    if (w <= 0 || h <= 0) {
+    const ClipResult c = clipBlit(f, x, y, 0, 0, f.width, f.height, useClipRect, dst.width(),
+                                  dst.height());
+    if (!c.visible) {
         return false;
     }
-    const uint8_t* s = src + static_cast<size_t>(sy) * f.width + sx;
-    uint16_t* d = dst.pixels() + static_cast<size_t>(dy) * dst.width() + dx;
-    for (int row = 0; row < h; ++row) {
-        for (int col = 0; col < w; ++col) {
+    const uint8_t* s = src + static_cast<size_t>(c.sy) * f.width + c.sx;
+    uint16_t* d = dst.pixels() + static_cast<size_t>(c.dy) * dst.width() + c.dx;
+    for (int row = 0; row < c.h; ++row) {
+        for (int col = 0; col < c.w; ++col) {
             const uint8_t index = s[col];
             if (index) {
                 d[col] = palette[index];

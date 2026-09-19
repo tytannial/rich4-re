@@ -130,5 +130,5 @@ g_mapPreview/Raw     0x48A354/0x48A358  暗化(-16)滚动源 / JUMP.MKF 原图
 | 悬停名字 | `--hover` 头像 | 头像斜移 + 名字条 |
 | 確定→补齐 | 点 OK | AI 灰度头像 + 图标 + 随机补齐日志 |
 | 过渡动画 | 等待 | 地图变亮 + 面板移出 + 头像飞动 |
-| 进入游戏 | 状态 2 按 ESC | `result=1` → loadMap → enterGameLoop |
+| 進入游戏 | 状态 2 按 ESC | `result=1` → loadMap → enterGameLoop（阶段 1：完整游戏画面） |
 | 时空之旅 | 点击主菜单按钮 4 | 面板帧 21 + 關卡五~八 + 太空预览 |

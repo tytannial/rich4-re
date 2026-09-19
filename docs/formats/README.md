@@ -12,7 +12,8 @@
 | [spr.md](spr.md) | SPR 8bit 精灵 | ✅ 已验证 | 导出 PNG 为可识别角色 |
 | [smp.md](smp.md) | SMP 16bit 位图 | ✅ 已验证 | 导出 PNG 为可识别图标 |
 | [text.md](text.md) | BIG5 文本 | ✅ 文本已验证 / 字库待逆向 | cp950 解码正确 |
-| [map.md](map.md) | GND 地图数据 | ⚠️ 结构部分解析 | 头部/网格已知，语义待逆向 |
+| [map.md](map.md) | GND 地图数据 | ✅ 已验证 | 8 个 GND 结构自洽（72x72 格 x 1026B） |
+| [mapdat.md](mapdat.md) | MAPDAT 地图物件表 | ✅ 已验证 | 8 个资源 `evtCellOff+28*count+28==filesize` |
 | [save.md](save.md) | SAVE%d.DAT 存档 | ⚠️ 头部/玩家表已解析 | 版本校验 + 界面加载验证 |
 | [cfg.md](cfg.md) | RICH4.CFG 配置 | ✅ 已验证 | 键位表与 `fn` 钩子逐项对应 |
 
@@ -61,7 +62,8 @@ python tools/extract_all.py resources/game --out ./assets --extract
 ## 待办
 
 - [ ] BIG5 点阵字库格式（位置/字模尺寸/索引）
-- [ ] GND 地图数据语义（结合地图渲染代码）
+- [ ] GND 格内 2 字节属性语义（`cellIndex` 之外的字段）
+- [ ] MAPDAT 各表剩余未标注字段（cellEnt +39 状态、estate/corp 类型枚举）
 - [ ] Data.mkf 的 302 个 BIN 资源细分（脚本/数据/调色板）
 - [ ] SAVE%d.DAT 存档结构
 - [ ] RICH4.CFG 配置与键位表
