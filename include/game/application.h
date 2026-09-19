@@ -49,6 +49,8 @@ public:
 
     // [NEW] 调试：第 25 帧合成 ESC 按下（验证弹出层关闭/主菜单无操作）
     void setAutoEsc(bool on) { m_shotEsc = on; }
+    // [NEW] 调试：第 35 帧合成按键（SDL_GetKeyFromName 名称，如 "F5"），验证热键捕获
+    void setAutoKey(const std::string& name) { m_shotKey = name; }
 
     // [NEW] 调试截图：第 frame 帧后保存 BMP 并退出（用于与原版画面比对）；
     //       cursorX/Y >= 0 时先移动鼠标到逻辑坐标（验证悬停等交互状态）；
@@ -82,6 +84,10 @@ private:
     void defaultEvent(const SDL_Event& event);
     // [PORT Win32:GetCursorPos] 窗口坐标 → 640x480 逻辑坐标
     void transformMouseEvent(SDL_Event& event);
+    // [RE 0x401010] 全局键盘钩子行为：方向键 SetCursorPos、確定模拟左键、取消模拟右键
+    void handleKeyboardHook(const SDL_Event& event);
+    // [RE 0x401010] 在当前鼠标位置合成鼠标事件（PostMessageA 迁移）
+    void pushMouseButton(uint32_t type, uint8_t button);
 
     std::string m_gameDir;
     Window m_window;
@@ -113,6 +119,9 @@ private:
     float m_shotWinX = 0.0f;
     float m_shotWinY = 0.0f;
     bool m_shotEsc = false;
+    std::string m_shotKey;
+    // [RE 0x401010] word_46CB09：確定键模拟左键按下的去重标志
+    bool m_hookLeftDown = false;
     int m_frameCount = 0;
     bool m_running = false;
 };

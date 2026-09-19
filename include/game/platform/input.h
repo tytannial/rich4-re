@@ -44,6 +44,10 @@ enum class GameKey : int {
     Count
 };
 
+// [RE 0x401010] SDL 键码 → Windows 虚拟键码（原版键盘钩子 wParam 比较用；
+// 仅覆盖 byte_47EDFA 表中可绑定的 78 键，见 hotkey 界面名称表）
+uint8_t sdlKeycodeToVk(SDL_Keycode key);
+
 class Input {
 public:
     static constexpr size_t kKeyCount = static_cast<size_t>(GameKey::Count);
@@ -65,6 +69,8 @@ private:
     std::array<uint16_t, kKeyCount> m_bindings{};
     std::array<bool, kKeyCount> m_down{};
     std::array<bool, kKeyCount> m_pressed{};
+    // [RE 0x401010] word_46CB07 累积值（CTRL 按下置 0x1100，其他键 |= VK，抬起清零）
+    uint16_t m_acc = 0;
 };
 
 } // namespace rich4

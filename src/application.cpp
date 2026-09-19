@@ -90,8 +90,11 @@ void Application::pumpEvents() {
         // [RE 0x4019DD] wndProc
         // 依据: 0x4019DD 窗口过程; WM_DESTROY(2) 走 sub_401815+PostQuitMessage,
         // 默认分支转发给 dword_48A010[nIDEvent]（模态栈顶），无处理器时 DefWindowProcA
-        if (!m_events.dispatch(event)) {
+        const bool consumed = m_events.dispatch(event);
+        if (!consumed) {
             defaultEvent(event);
+            // [RE 0x401010] 全局键盘钩子行为（fn 在窗口过程之外直接动作）
+            handleKeyboardHook(event);
         }
         // [PORT Win32:SetWindowsHookExA(WH_KEYBOARD)] fn(0x401010)（定义见 include/game/platform/input.h）
         // 原版全局键盘钩子先于窗口过程处理按键（读 word_497168 键位表）;
@@ -139,21 +142,88 @@ void Application::transformMouseEvent(SDL_Event& event) {
 
 void Application::defaultEvent(const SDL_Event& event) {
     // [RE 0x4019DD] 无模态处理器时调用 DefWindowProcA(hWnd, Msg, wParam, lParam)
-    // [RE 0x401010] 全局键盘钩子：ESC（取消指令）→ PostMessageA(hWnd, WM_RBUTTONUP, 0, 0)
-    // 迁移: ESC → 合成右键事件，交由当前模态按右键机制处理：
-    //       弹出层（载入/选项/日期/热键/帮助）→ 关闭/取消；主菜单不处理右键 → ESC 无操作
-    if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE) {
-        float wx = 0.0f;
-        float wy = 0.0f;
-        SDL_GetMouseState(&wx, &wy);
-        SDL_Event synth{};
-        synth.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
-        synth.button.button = SDL_BUTTON_RIGHT;
-        synth.button.clicks = 1;
-        synth.button.x = wx;
-        synth.button.y = wy;
-        SDL_PushEvent(&synth);
+    // 键盘钩子行为见 handleKeyboardHook（0x401010）
+    (void)event;
+}
+
+void Application::handleKeyboardHook(const SDL_Event& event) {
+    // [RE 0x401010] 全局键盘钩子 fn：在窗口过程之外直接动作
+    // 依据: fn(0x401010) 读 word_497168 键位表：
+    //   word_497168/6A/6C/6E（游標上/右/下/左移）→ SetCursorPos(±10)
+    //   word_497170（確定執行）→ PostMessageA(WM_LBUTTONDOWN/UP)（word_46CB09 去重）
+    //   word_497172（取消指令）→ PostMessageA(WM_RBUTTONUP)（合成右键按下，模态按右键机制处理）
+    // 迁移: SetCursorPos/PostMessageA → SDL_WarpMouseInWindow/SDL_PushEvent（逻辑像素 ±10）
+    if (event.type != SDL_EVENT_KEY_DOWN && event.type != SDL_EVENT_KEY_UP) {
+        return;
     }
+    const uint8_t vk = sdlKeycodeToVk(event.key.key);
+    if (vk == 0) {
+        return;
+    }
+    const uint16_t* bind = m_input.bindings();
+    const bool down = event.type == SDL_EVENT_KEY_DOWN;
+
+    if (down) {
+        // 索引 0-3：游標上/右/下/左移（原版钩子以单键 wParam 比较，忽略修饰键）
+        int dx = 0;
+        int dy = 0;
+        if (vk == (bind[0] & 0xFF)) {
+            dy = -10;
+        } else if (vk == (bind[1] & 0xFF)) {
+            dx = 10;
+        } else if (vk == (bind[2] & 0xFF)) {
+            dy = 10;
+        } else if (vk == (bind[3] & 0xFF)) {
+            dx = -10;
+        }
+        if (dx != 0 || dy != 0) {
+            RICH4_LOGI("keyboard hook: cursor move (%d,%d) (RE 0x401010)", dx, dy);
+            float wx = 0.0f;
+            float wy = 0.0f;
+            SDL_GetMouseState(&wx, &wy);
+            float lx = wx;
+            float ly = wy;
+            SDL_RenderCoordinatesFromWindow(m_renderer.handle(), wx, wy, &lx, &ly);
+            lx += static_cast<float>(dx);
+            ly += static_cast<float>(dy);
+            if (SDL_RenderCoordinatesToWindow(m_renderer.handle(), lx, ly, &wx, &wy)) {
+                SDL_WarpMouseInWindow(m_window.handle(), wx, wy);
+            }
+            return;
+        }
+    }
+    // 索引 4：確定執行 → 模拟左键（按下/抬起配对）
+    if (vk == (bind[4] & 0xFF)) {
+        if (down && !m_hookLeftDown) {
+            m_hookLeftDown = true;
+            RICH4_LOGI("keyboard hook: confirm click (RE 0x401010)");
+            pushMouseButton(SDL_EVENT_MOUSE_BUTTON_DOWN, SDL_BUTTON_LEFT);
+        } else if (!down && m_hookLeftDown) {
+            m_hookLeftDown = false;
+            pushMouseButton(SDL_EVENT_MOUSE_BUTTON_UP, SDL_BUTTON_LEFT);
+        }
+        return;
+    }
+    // 索引 5：取消指令 → 合成右键按下（对应原版 WM_RBUTTONUP）
+    if (down && vk == (bind[5] & 0xFF)) {
+        RICH4_LOGI("keyboard hook: cancel (RE 0x401010)");
+        pushMouseButton(SDL_EVENT_MOUSE_BUTTON_DOWN, SDL_BUTTON_RIGHT);
+    }
+}
+
+void Application::pushMouseButton(uint32_t type, uint8_t button) {
+    // [RE 0x401010] PostMessageA(hWnd, WM_LBUTTONDOWN/UP, ...) 迁移（定义见 handleKeyboardHook）
+    // 原版在 GetCursorPos 位置合成鼠标消息；lParam = x | (y << 16)
+    float wx = 0.0f;
+    float wy = 0.0f;
+    SDL_GetMouseState(&wx, &wy);
+    SDL_Event synth{};
+    synth.type = type;
+    synth.button.button = button;
+    synth.button.clicks = 1;
+    synth.button.x = wx;
+    synth.button.y = wy;
+    SDL_PushEvent(&synth);
 }
 
 void Application::renderFrame() {
@@ -298,6 +368,37 @@ void Application::renderFrame() {
         ev.key.key = SDLK_ESCAPE;
         ev.key.scancode = SDL_SCANCODE_ESCAPE;
         SDL_PushEvent(&ev);
+    }
+
+    // [NEW] 调试：第 35 帧合成按键按下+抬起（--auto-key，验证热键捕获；支持 "ctrl+x"）
+    if (!m_shotKey.empty() && m_frameCount == 35) {
+        std::string name = m_shotKey;
+        const bool ctrl = name.rfind("ctrl+", 0) == 0;
+        if (ctrl) {
+            name = name.substr(5);
+        }
+        const SDL_Keycode key = SDL_GetKeyFromName(name.c_str());
+        if (key != SDLK_UNKNOWN) {
+            SDL_Event ev{};
+            if (ctrl) {
+                ev.type = SDL_EVENT_KEY_DOWN;
+                ev.key.key = SDLK_LCTRL;
+                ev.key.scancode = SDL_SCANCODE_LCTRL;
+                SDL_PushEvent(&ev);
+            }
+            ev.type = SDL_EVENT_KEY_DOWN;
+            ev.key.key = key;
+            ev.key.scancode = SDL_GetScancodeFromKey(key, nullptr);
+            SDL_PushEvent(&ev);
+            ev.type = SDL_EVENT_KEY_UP;
+            SDL_PushEvent(&ev);
+            if (ctrl) {
+                ev.type = SDL_EVENT_KEY_UP;
+                ev.key.key = SDLK_LCTRL;
+                ev.key.scancode = SDL_SCANCODE_LCTRL;
+                SDL_PushEvent(&ev);
+            }
+        }
     }
 
     // [RE 0x401F98] 光标定时器（原版 fptc 20ms）：动画推进 + 位置跟踪

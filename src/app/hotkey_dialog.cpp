@@ -3,6 +3,7 @@
 #include "game/app/event_stack.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/platform/input.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
 #include "game/render/text.h"
@@ -51,111 +52,14 @@ const char* keyName(uint8_t vk) {
     return nullptr;
 }
 
-// [RE 0x474ABC] 28 项功能名（与键位一一对应；原版 settingsDialog 预画到帧 1 画布，
-//               左列 x=62 / 右列 x=208，12 号白色 0xF0F0F0）
+// [RE 0x46362E] 28 项功能名（与键位一一对应；原版 settingsDialog 预画到帧 1 画布，
+//               左列 x=62 / 右列 x=208，12 号白色 0xF0F0F0；0x474ABC 指针表）
 const char* const kHotkeyLabels[kKeyCount] = {
     "游標上移",  "游標右移", "游標下移", "游標左移",   "確定執行", "取消指令", "切換選項",
     "切換視窗組", "是<YES>", "否<NO>",  "前進指令",   "選擇骰子數", "股市",   "交易",
     "卡片",      "道具",    "查詢",    "地圖",       "地圖向左旋轉", "地圖向右旋轉", "託管",
     "系統",      "SAVE GAME", "LOAD GAME", "輔助說明", "向上換頁", "向下換頁", "結束程式",
 };
-
-// SDL 键码 → Windows VK（原版 byte_47EDFA 表使用 VK 码）
-uint8_t sdlToVk(SDL_Keycode key) {
-    if (key >= SDLK_A && key <= SDLK_Z) {
-        return static_cast<uint8_t>('A' + (key - SDLK_A));
-    }
-    if (key >= SDLK_0 && key <= SDLK_9) {
-        return static_cast<uint8_t>('0' + (key - SDLK_0));
-    }
-    switch (key) {
-        case SDLK_BACKSPACE:
-            return 0x08;
-        case SDLK_TAB:
-            return 0x09;
-        case SDLK_RETURN:
-            return 0x0D;
-        case SDLK_LCTRL:
-        case SDLK_RCTRL:
-            return 0x11;
-        case SDLK_ESCAPE:
-            return 0x1B;
-        case SDLK_SPACE:
-            return 0x20;
-        case SDLK_PAGEUP:
-            return 0x21;
-        case SDLK_PAGEDOWN:
-            return 0x22;
-        case SDLK_END:
-            return 0x23;
-        case SDLK_HOME:
-            return 0x24;
-        case SDLK_LEFT:
-            return 0x25;
-        case SDLK_UP:
-            return 0x26;
-        case SDLK_RIGHT:
-            return 0x27;
-        case SDLK_DOWN:
-            return 0x28;
-        case SDLK_INSERT:
-            return 0x2D;
-        case SDLK_ASTERISK:
-            return 0x6A;
-        case SDLK_KP_PLUS:
-            return 0x6B;
-        case SDLK_MINUS:
-        case SDLK_KP_MINUS:
-            return 0x6D;
-        case SDLK_SLASH:
-        case SDLK_KP_DIVIDE:
-            return 0x6F;
-        case SDLK_F1:
-            return 0x70;
-        case SDLK_F2:
-            return 0x71;
-        case SDLK_F3:
-            return 0x72;
-        case SDLK_F4:
-            return 0x73;
-        case SDLK_F5:
-            return 0x74;
-        case SDLK_F6:
-            return 0x75;
-        case SDLK_F7:
-            return 0x76;
-        case SDLK_F8:
-            return 0x77;
-        case SDLK_F9:
-            return 0x78;
-        case SDLK_F10:
-            return 0x79;
-        case SDLK_F11:
-            return 0x7A;
-        case SDLK_F12:
-            return 0x7B;
-        case SDLK_SEMICOLON:
-            return 0xBA;
-        case SDLK_EQUALS:
-            return 0xBB;
-        case SDLK_COMMA:
-            return 0xBC;
-        case SDLK_PERIOD:
-            return 0xBE;
-        case SDLK_GRAVE:
-            return 0xC0;
-        case SDLK_LEFTBRACKET:
-            return 0xDB;
-        case SDLK_BACKSLASH:
-            return 0xDC;
-        case SDLK_RIGHTBRACKET:
-            return 0xDD;
-        case SDLK_APOSTROPHE:
-            return 0xDE;
-        default:
-            return 0;
-    }
-}
 
 // 写 RICH4.CFG（[RE 0x411F80] fwrite 16B 设置 + 56B 键位）
 bool saveCfgRaw(const std::string& path, const uint8_t cfg[kCfgSize]) {
@@ -173,6 +77,7 @@ struct HotkeyDialogState {
     UiImage* ui = nullptr;
     uint16_t working[kKeyCount] = {}; // word_48BB10（与 word_48BB0E[1..28] 重叠）
     int editing = -1;                 // dword_48BBA6 - 1（捕获中键位，-1 无）
+    uint16_t savedValue = 0;          // word_48BB8C（捕获前原值，右键取消恢复）
     int originX = 0;                  // dword_48BB8E
     int originY = 0;                  // dword_48BB92
 };
@@ -254,7 +159,7 @@ void redrawHotkeys(HotkeyDialogState& state) {
 
 // 按键捕获（对应 0x411122 WM_KEYDOWN 0x100）
 void handleKeyCapture(HotkeyDialogState& state, SDL_Keycode key) {
-    const uint8_t vk = sdlToVk(key);
+    const uint8_t vk = sdlKeycodeToVk(key);
     if (vk == 0) {
         return;
     }
@@ -338,6 +243,7 @@ bool hotkeyEventHandler(const SDL_Event* event, void* user) {
             // [RE 0x411122] 仅键位 8-27 可编辑（原版 dword_48BB9E > 8）
             if (index >= 8 && index < kKeyCount) {
                 state.editing = index;
+                state.savedValue = state.working[index]; // [RE 0x411122] word_48BB8C
                 state.working[index] = 0;
                 RICH4_LOGI("hotkey capture started: index %d", index);
             } else {
@@ -380,7 +286,14 @@ bool hotkeyEventHandler(const SDL_Event* event, void* user) {
     }
 
     if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN && event->button.button == SDL_BUTTON_RIGHT) {
-        state.app->events().requestExit(0);
+        if (state.editing >= 0) {
+            // [RE 0x411122] 0x205：捕获中恢复原值（word_48BB8C）并取消捕获
+            state.working[state.editing] = state.savedValue;
+            state.editing = -1;
+            redrawHotkeys(state);
+        } else {
+            state.app->events().requestExit(0);
+        }
         return true;
     }
 

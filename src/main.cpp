@@ -16,6 +16,7 @@ int main(int argc, char** argv) {
     int shotCursorY = -1;
     bool autoClick = false;
     bool autoEsc = false;
+    std::string autoKey;
     int click2X = -1;
     int click2Y = -1;
     int click3X = -1;
@@ -43,6 +44,8 @@ int main(int argc, char** argv) {
             autoClick = true;
         } else if (arg == "--auto-esc") {
             autoEsc = true;
+        } else if (arg == "--auto-key" && i + 1 < argc) {
+            autoKey = argv[++i];
         } else if (arg == "--auto-click2" && i + 1 < argc) {
             if (std::sscanf(argv[++i], "%d,%d", &click2X, &click2Y) != 2) {
                 click2X = -1;
@@ -86,6 +89,9 @@ int main(int argc, char** argv) {
         return 1;
     }
     app.setAutoEsc(autoEsc);
+    if (!autoKey.empty()) {
+        app.setAutoKey(autoKey);
+    }
     if (!shotPath.empty()) {
         app.setScreenshot(shotPath, 47, shotCursorX, shotCursorY, autoClick, click2X, click2Y,
                           click3X, click3Y, click4X, click4Y, click5X, click5Y, click6X, click6Y,
