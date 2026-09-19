@@ -102,12 +102,17 @@ bool hitRightColumn(int rx, int ry, int& row) {
     return false;
 }
 
-// [RE 0x451B9E] highlightRect：按住控件时对矩形四条边变暗（-16）画下凹按下态
-void drawPressBorder(Surface& surface, int x, int y, int w, int h) {
-    scaleSurfaceChannels(surface, x, y, w, 1, kChannelHalf);
-    scaleSurfaceChannels(surface, x, y + h - 1, w, 1, kChannelHalf);
-    scaleSurfaceChannels(surface, x, y, 1, h, kChannelHalf);
-    scaleSurfaceChannels(surface, x + w - 1, y, 1, h, kChannelHalf);
+// [RE 0x451B9E] highlightRect：按住控件时矩形内容向右下平移 1px，再把顶/左 1px 变暗(-16)
+// 形成"下沉"浮雕（保存右列/底行供 sub_451D4E 恢复；本重写每帧全量重绘，抬起即复原）
+void pressDown(Surface& surface, int x, int y, int w, int h) {
+    uint16_t* p = surface.pixels();
+    for (int row = h - 2; row >= 0; --row) {
+        uint16_t* dst = p + static_cast<size_t>(y + row + 1) * Surface::kWidth + (x + 1);
+        const uint16_t* src = p + static_cast<size_t>(y + row) * Surface::kWidth + x;
+        std::memmove(dst, src, static_cast<size_t>(w - 1) * sizeof(uint16_t));
+    }
+    scaleSurfaceChannels(surface, x, y, w, 1, kChannelHalf); // 顶边阴影
+    scaleSurfaceChannels(surface, x, y, 1, h, kChannelHalf); // 左边阴影
 }
 
 void redrawHotkeys(HotkeyDialogState& state) {
@@ -142,9 +147,9 @@ void redrawHotkeys(HotkeyDialogState& state) {
         if (i == state.editing && state.blink) {
             surface.fillRect(x - 26, y - 7, 53, 13, rgb888To555(0xF0F0F0));
         }
-        // [RE 0x451B9E] 按住列表项：四边变暗按下态（LBUTTONDOWN→UP 期间）
+        // [RE 0x451B9E] 按住列表项：内容下沉 + 左上阴影（LBUTTONDOWN→UP 期间）
         if (i == state.pressed) {
-            drawPressBorder(surface, x - 26, y - 7, 53, 13);
+            pressDown(surface, x - 26, y - 7, 53, 13);
         }
         char buf[32] = {};
         const uint16_t value = state.working[i];
@@ -171,13 +176,13 @@ void redrawHotkeys(HotkeyDialogState& state) {
     text.drawText(surface, "取 消", ox + 165, oy + 296, 2);
     text.drawText(surface, "確 定", ox + 278, oy + 296, 2);
 
-    // [RE 0x451B9E] 按住按钮（原始設定/取消/確定）：四边变暗按下态
+    // [RE 0x451B9E] 按住按钮（原始設定/取消/確定）：内容下沉 + 左上阴影
     if (state.pressed >= 100 && state.pressed <= 102) {
         static const int kBtnRect[3][4] = {
             {17, 281, 71, 31}, {130, 281, 71, 31}, {242, 281, 71, 31}};
         const int bi = state.pressed - 100;
-        drawPressBorder(surface, ox + kBtnRect[bi][0], oy + kBtnRect[bi][1], kBtnRect[bi][2],
-                        kBtnRect[bi][3]);
+        pressDown(surface, ox + kBtnRect[bi][0], oy + kBtnRect[bi][1], kBtnRect[bi][2],
+                  kBtnRect[bi][3]);
     }
 }
 
@@ -271,6 +276,10 @@ bool hotkeyEventHandler(const SDL_Event* event, void* user) {
             index = row + 15;
         }
         if (index >= 0) {
+            if (state.editing >= 0) {
+                // [RE 0x411122] 捕获中（dword_48BBA6 非零）否决列表命中 → 禁止切换编辑目标
+                return true;
+            }
             state.pressed = index;
             state.app->audio().playEffect(1); // unk_482322 列表点击音效
             redrawHotkeys(state);
