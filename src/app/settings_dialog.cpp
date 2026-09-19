@@ -237,7 +237,8 @@ void applyControl(SettingsState& state, int control, int rx, int ry) {
     const auto clamp = [](int v, int lo, int hi) { return std::min(std::max(v, lo), hi); };
     switch (control) {
         case 0: // 速度滑块：byte_48BB48 = (rx - 81) / 16
-            state.settings[0] = static_cast<uint8_t>(clamp((rx - 81) / 16, 0, 3));
+            // [RE 0x4103A3] 控件范围 (81..127) → (rx-81)>>4 最大 2（绘制 settings[0]+1 = 3 格）
+            state.settings[0] = static_cast<uint8_t>(clamp((rx - 81) / 16, 0, 2));
             break;
         case 1: // 音乐音量：byte_48BB4A = (rx - 89) / 16 + 1
             state.settings[2] = static_cast<uint8_t>(clamp((rx - 89) / 16 + 1, 0, 4));
