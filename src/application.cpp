@@ -244,6 +244,24 @@ void Application::renderFrame() {
             SDL_PushEvent(&ev);
         }
     }
+    // [NEW] 调试：第 41 帧移动到第六个逻辑坐标并点击
+    if (m_shotClick6X >= 0 && m_frameCount == 41) {
+        float wx = 0.0f;
+        float wy = 0.0f;
+        if (SDL_RenderCoordinatesToWindow(m_renderer.handle(), static_cast<float>(m_shotClick6X),
+                                          static_cast<float>(m_shotClick6Y), &wx, &wy)) {
+            SDL_WarpMouseInWindow(m_window.handle(), wx, wy);
+            SDL_Event ev{};
+            ev.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+            ev.button.button = SDL_BUTTON_LEFT;
+            ev.button.clicks = 1;
+            ev.button.x = wx;
+            ev.button.y = wy;
+            SDL_PushEvent(&ev);
+            ev.type = SDL_EVENT_MOUSE_BUTTON_UP;
+            SDL_PushEvent(&ev);
+        }
+    }
 
     // [RE 0x401F98] 光标定时器（原版 fptc 20ms）：动画推进 + 位置跟踪
     int mx = 0;

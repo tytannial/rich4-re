@@ -23,6 +23,8 @@ int main(int argc, char** argv) {
     int click4Y = -1;
     int click5X = -1;
     int click5Y = -1;
+    int click6X = -1;
+    int click6Y = -1;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--game" && i + 1 < argc) {
@@ -56,6 +58,11 @@ int main(int argc, char** argv) {
                 click5X = -1;
                 click5Y = -1;
             }
+        } else if (arg == "--auto-click6" && i + 1 < argc) {
+            if (std::sscanf(argv[++i], "%d,%d", &click6X, &click6Y) != 2) {
+                click6X = -1;
+                click6Y = -1;
+            }
         } else if (arg == "--help" || arg == "-h") {
             std::printf("usage: rich4 [--game <dir>] [--shot <file.bmp>] [--shot-cursor x,y] "
                         "[--auto-click] [--auto-click2 x,y]\n");
@@ -69,8 +76,8 @@ int main(int argc, char** argv) {
         return 1;
     }
     if (!shotPath.empty()) {
-        app.setScreenshot(shotPath, 40, shotCursorX, shotCursorY, autoClick, click2X, click2Y,
-                          click3X, click3Y, click4X, click4Y, click5X, click5Y);
+        app.setScreenshot(shotPath, 45, shotCursorX, shotCursorY, autoClick, click2X, click2Y,
+                          click3X, click3Y, click4X, click4Y, click5X, click5Y, click6X, click6Y);
     }
     app.run();
     app.shutdown();

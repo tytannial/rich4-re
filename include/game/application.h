@@ -49,11 +49,11 @@ public:
 
     // [NEW] 调试截图：第 frame 帧后保存 BMP 并退出（用于与原版画面比对）；
     //       cursorX/Y >= 0 时先移动鼠标到逻辑坐标（验证悬停等交互状态）；
-    //       autoClick 时在第 10 帧合成左键点击；click2/3/4/5 在第 20/30/35/38 帧再点
+    //       autoClick 时在第 10 帧合成左键点击；click2-6 在第 20/30/35/38/41 帧再点
     void setScreenshot(const std::string& path, int frame, int cursorX = -1, int cursorY = -1,
                        bool autoClick = false, int click2X = -1, int click2Y = -1,
                        int click3X = -1, int click3Y = -1, int click4X = -1, int click4Y = -1,
-                       int click5X = -1, int click5Y = -1) {
+                       int click5X = -1, int click5Y = -1, int click6X = -1, int click6Y = -1) {
         m_shotPath = path;
         m_shotFrame = frame;
         m_shotCursorX = cursorX;
@@ -67,6 +67,8 @@ public:
         m_shotClick4Y = click4Y;
         m_shotClick5X = click5X;
         m_shotClick5Y = click5Y;
+        m_shotClick6X = click6X;
+        m_shotClick6Y = click6Y;
     }
 
 private:
@@ -98,6 +100,8 @@ private:
     int m_shotClick4Y = -1;
     int m_shotClick5X = -1;
     int m_shotClick5Y = -1;
+    int m_shotClick6X = -1;
+    int m_shotClick6Y = -1;
     float m_shotWinX = 0.0f;
     float m_shotWinY = 0.0f;
     int m_frameCount = 0;

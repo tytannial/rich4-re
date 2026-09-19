@@ -249,7 +249,8 @@ void redrawHelp(HelpState& state, bool updateMore = true) {
 
 // [RE 0x44DD9F] 继续阅读翻屏：a1=1 下一屏 / a1=0 上一屏
 // 依据: dword_4762B8 为屏起点标记（0 或 '@' 行）；前进/回退最多 14 行（遇 '@' 停），
-//       结果写回 dword_4762B8；绘制时若为 '@' 行则从其后一行开始
+//       结果写回 dword_4762B8；绘制时若为 '@' 行则从其后一行开始。
+//       无效翻页（首屏上一页 / 末屏下一页）不改变画面内容，但需重绘以复位按下动画
 void scrollScreen(HelpState& state, bool forward) {
     const int count = static_cast<int>(state.lines.size());
     if (forward) {
@@ -257,22 +258,21 @@ void scrollScreen(HelpState& state, bool forward) {
         if (v < count && state.lines[v].isBreak) {
             ++v; // 跳过 '@' 分页符行
         }
-        if (v >= count) {
-            return; // 已到末尾（原版 v2 == size 直接返回）
-        }
-        int v1 = 0;
-        while (v < count) {
-            ++v;
-            if (v >= count || state.lines[v].isBreak || v1 == kTextMaxLines - 1) {
-                break;
+        if (v < count) {
+            int v1 = 0;
+            while (v < count) {
+                ++v;
+                if (v >= count || state.lines[v].isBreak || v1 == kTextMaxLines - 1) {
+                    break;
+                }
+                ++v1;
             }
-            ++v1;
+            if (v < count) {
+                state.pageMark = v; // 有效翻页
+            }
+            // v >= count：前进到末尾，保持当前屏（原版 v2 == size 直接返回）
         }
-        state.pageMark = v;
-    } else {
-        if (state.pageMark == 0) {
-            return; // 已在首屏（原版 !v2 直接返回）
-        }
+    } else if (state.pageMark > 0) {
         int v = state.pageMark;
         int v1 = 0;
         while (v > 0) {
@@ -282,7 +282,7 @@ void scrollScreen(HelpState& state, bool forward) {
             }
             ++v1;
         }
-        state.pageMark = v;
+        state.pageMark = v; // 有效翻页
     }
     redrawHelp(state, false);
 }
