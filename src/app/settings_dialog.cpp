@@ -259,12 +259,17 @@ void applyControl(SettingsState& state, int control, int rx, int ry) {
             state.settings[3] = static_cast<uint8_t>(clamp((rx - 89) / 16 + 1, 0, 4));
             break;
         case 6: { // 音乐列表：行号 → 曲目
-            const int index = (ry - 233) / 15;
+            // [RE 0x410668] 原版以全局音乐音量 byte_49715A 判断（对话框工作副本未保存不影响）
+            const int index = (ry - 226) / 15;
             if (index >= 0 && index < 8) {
-                state.app->audio().playEffect(3); // [RE 0x4106B2] unk_48233A 列表点击音效
-                // [RE 0x454D91] sub_454D91(index+1)：立即播放选中曲目（CD 音轨 track02-09）
-                state.app->audio().playMusic(index);
-                state.currentTrack = index + 1;
+                if (state.app->gameState().settings[2] == 0) {
+                    // 音乐已关闭：播放提示音（unk_48233A id=3），不切换曲目
+                    state.app->audio().playEffect(3);
+                } else {
+                    // [RE 0x410687] sub_454D91(index+1)：播放选中曲目（CD 音轨 track02-09）
+                    state.app->audio().playMusic(index);
+                    state.currentTrack = index + 1;
+                }
             }
             break;
         }

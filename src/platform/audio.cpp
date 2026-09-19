@@ -332,7 +332,8 @@ bool Audio::playEffect(int effectId) {
 }
 
 bool Audio::playMusic(int trackIndex) {
-    if (!m_impl->stream || m_musicDir.empty()) {
+    // [RE 0x454D91] 原版 if (byte_49715A)：音乐音量为 0 时不播放
+    if (!m_impl->stream || m_musicDir.empty() || m_musicVolume <= 0) {
         return false;
     }
     if (trackIndex < 0 || trackIndex > 7) {
@@ -356,7 +357,8 @@ bool Audio::playMusic(int trackIndex) {
 }
 
 bool Audio::playSceneMusic(int sceneIndex) {
-    if (!m_impl->stream || m_musicDir.empty()) {
+    // [RE 0x4549CF] 原版 if (byte_49715A)：音乐音量为 0 时不播放
+    if (!m_impl->stream || m_musicDir.empty() || m_musicVolume <= 0) {
         return false;
     }
     if (sceneIndex < 0 || sceneIndex >= 17) {
