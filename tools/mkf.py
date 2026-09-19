@@ -66,12 +66,17 @@ class MKF:
         self.entries = self._build_entries()
 
     def _build_entries(self) -> list[Entry]:
+        # 索引表每一项都是资源头偏移（最后一项也是有效资源）。
+        # 依据: Data.mkf 索引 602 项, index[601] 指向 614400 字节资源
+        #       （原版 0x401543 sub_450441(handle, 601) 读取）；7 个 MKF 全部验证。
         entries = []
-        for i in range(len(self.index) - 1):
+        for i in range(len(self.index)):
             off = self.index[i]
-            if off + HEADER_SIZE > len(self.data):
+            if off + HEADER_SIZE > self.index_offset:
                 break
             dec, comp, doff, dlen = struct.unpack_from("<4I", self.data, off)
+            if off + HEADER_SIZE + comp > self.index_offset:
+                break
             entries.append(Entry(i, off, dec, comp, doff, dlen, off + HEADER_SIZE))
         return entries
 

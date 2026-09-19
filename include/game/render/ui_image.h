@@ -1,0 +1,47 @@
+#pragma once
+
+#include <cstdint>
+#include <vector>
+
+namespace rich4 {
+
+// SMP/SPR 帧头（资源内 12 字节）。
+// 依据: docs/formats/smp.md / spr.md; 0x455C52 等 blit 按 [w,h,offX,offY,size] 访问
+struct UiFrameHeader {
+    uint16_t width;
+    uint16_t height;
+    int16_t offsetX;
+    int16_t offsetY;
+    uint32_t size; // 像素数据字节数（= w*h*2）
+};
+
+// 运行时帧视图：帧头 + 像素指针。
+// [RE 0x450069] sub_450069 指针化后的等价结构
+struct UiFrameView {
+    uint16_t width = 0;
+    uint16_t height = 0;
+    int16_t offsetX = 0;
+    int16_t offsetY = 0;
+    const uint16_t* pixels = nullptr;
+};
+
+// SMP/SPR 图像资源（对应原版 sub_450441 加载 + sub_450069 指针化的资源内存）。
+class UiImage {
+public:
+    // [RE 0x450069] relocateFrames
+    // 依据: SPR 帧 0 像素 = 基址 + data_offset + 512（跳过 256 色 RGB555 调色板）;
+    //       SMP 帧 0 像素 = 基址 + data_offset; 后续帧 = 前一帧指针 + 前一帧 size
+    bool load(std::vector<uint8_t> data);
+
+    int frameCount() const { return static_cast<int>(m_frames.size()); }
+    const UiFrameView& frame(int index) const { return m_frames[static_cast<size_t>(index)]; }
+    bool isSprite() const { return m_isSprite; }
+    const std::vector<uint8_t>& data() const { return m_data; }
+
+private:
+    std::vector<uint8_t> m_data;
+    std::vector<UiFrameView> m_frames;
+    bool m_isSprite = false;
+};
+
+} // namespace rich4

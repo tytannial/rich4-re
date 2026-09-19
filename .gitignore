@@ -27,3 +27,8 @@ __pycache__/
 
 # 第三方预编译依赖（可重新下载，见 AGENTS.md）
 /third_party/
+
+# 构建产物
+/rich4.exe
+/rich4_R.exe
+/SDL3.dll

@@ -14,19 +14,22 @@
 |   [资源头 16B][数据...]     |
 |   ...                      |
 +----------------------------+ index_offset
-| index[0] : u32 = 4         |   资源区起始
-| index[1] : u32             |   第 0 个资源头的偏移
-| index[2] : u32             |   第 1 个资源头的偏移
+| index[0] : u32 = 4         |   资源 0 头偏移（资源区起始）
+| index[1] : u32             |   资源 1 头偏移
+| index[2] : u32             |   资源 2 头偏移
 | ...                        |
-| index[N-1] : u32           |   最后一个资源的结束偏移
+| index[N-1] : u32           |   资源 N-1 头偏移（也是最后一个资源）
 +----------------------------+ EOF
 ```
 
 - 索引项数 `N = (filesize - index_offset) / 4`
-- 资源数 `= N - 1`
+- 资源数 `= N`（**索引表每一项都是资源头偏移**，没有结束哨兵项）
+  - 依据: Data.mkf 索引 602 项，`index[601]` 指向 614400 字节资源，
+    原版 `0x401543` 中 `sub_450441(handle, 601)` 正是读取该资源；
+    7 个 MKF 全部验证 `index[N-1] + 16 + compressed_size == index_offset`
 - 所有整数为 **小端序 (little-endian)**
 - 第 `i` 个资源头位于 `index[i]`，其数据紧跟头之后
-- 第 `i` 个资源数据大小 `= compressed_size`，结束位置即 `index[i+1]`
+- 第 `i` 个资源数据大小 `= compressed_size`
 
 ## 资源头 (16 字节)
 
@@ -65,8 +68,8 @@ typedef struct {
 
 typedef struct {
     uint32_t index_offset;
-    uint32_t entry_count;      /* N - 1 */
-    const uint32_t *index;     /* N 项, index[i] = 第 i-1 个资源头偏移 */
+    uint32_t entry_count;      /* N */
+    const uint32_t *index;     /* N 项, index[i] = 第 i 个资源头偏移 */
     const uint8_t  *data;
     size_t         size;
 } MkfArchive;
@@ -76,14 +79,14 @@ typedef struct {
 
 | 文件 | 资源数 | 压缩数 |
 |------|--------|--------|
-| Data.mkf | 601 | 310 |
-| Speaking.mkf | 1373 | 0 |
-| map.mkf | 297 | 23 |
-| Effect.mkf | 114 | 0 |
-| Panel.mkf | 112 | 91 |
-| help.mkf | 99 | 0 |
-| jump.mkf | 70 | 36 |
-| **合计** | **2666** | **460** |
+| Data.mkf | 602 | 310 |
+| Speaking.mkf | 1374 | 0 |
+| map.mkf | 298 | 23 |
+| Effect.mkf | 115 | 0 |
+| Panel.mkf | 113 | 92 |
+| help.mkf | 100 | 0 |
+| jump.mkf | 71 | 36 |
+| **合计** | **2673** | **461** |
 
 ## 工具
 

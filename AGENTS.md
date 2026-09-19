@@ -14,7 +14,7 @@
 |------|------|
 | `resources/game/` | 原始游戏文件（exe + mkf + dat + cfg），**只读，不提交** |
 | `docs/formats/` | 资源格式规范（已完整解析，见 `README.md`） |
-| `docs/reverse/` | 函数/全局/字符串逆向资料 |
+| `docs/reverse/` | 逆向规范与函数档案（注释格式、地址映射表、逐函数笔记） |
 | `tools/` | Python 逆向与资源解析工具 |
 | `include/game/` | C++ 头文件 |
 | `src/` | C++ 源码 |
@@ -62,6 +62,9 @@ python tools/extract_all.py resources/game --out ./assets --manifest docs/format
 python tools/mkf.py list resources/game/Data.mkf
 python tools/spr.py extract <spr.bin> <outdir> [--rgb565]
 python tools/smp.py extract <smp.bin> <outdir> [--rgb565]
+
+# 逆向标注校验 + 生成地址映射表
+python tools/re_map.py
 ```
 
 ## 代码约定
@@ -72,15 +75,21 @@ python tools/smp.py extract <smp.bin> <outdir> [--rgb565]
 - 平台层不抛异常，错误以 `bool` / `std::optional` 返回
 - 内部字符串 UTF-8；BIG5 仅在资源加载期转换
 - **不要添加无关注释**；格式相关说明可引用 `docs/formats/*.md`
+- **逆向标注强制**：每个重写函数/全局都要标注原始地址与依据
+  （`// [RE 0xXXXXXX] 原符号名` + `依据:` 行；平台迁移用 `[PORT ...]` + `替换依据:`），
+  格式见 `docs/reverse/README.md`，提交前跑 `python tools/re_map.py` 校验
 
 ## 重要参考
 
 - `docs/formats/README.md` — 资源格式总览与工具索引
 - `docs/formats/lzhuf.md` — 压缩算法（含易错点说明）
+- `docs/reverse/README.md` — 逆向注释规范与工作流
+- `docs/reverse/address-map.md` — 地址↔重写符号映射表（自动生成）
 - `include/game/formats.h` — 全部格式的 C 结构定义
 
 ## 注意事项
 
 - `resources/game/` 下的文件**不要修改或提交**（版权 + 体积）
+- `resources/game/rich4.exe.i64` 是权威逆向数据库（重命名/注释成果），**修改后需保存**
 - `src/resource/lzhuf_tables.cpp` 由 `tools/gen_lzhuf_tables.py` 从 exe 生成，**勿手改**
 - LZHUF 解压器每次解压需重置工作区（自适应树有状态）

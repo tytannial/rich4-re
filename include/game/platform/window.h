@@ -4,6 +4,9 @@
 
 namespace rich4 {
 
+// [PORT Win32:CreateWindowExA] 主窗口
+// 替换依据: 0x401B9C CreateWindowExA(0, "Rich4", "Rich4", WS_POPUP(0x80000000),
+//           屏幕宽高) → SDL_CreateWindow；原版全屏无边框，SDL 侧窗口化可缩放
 class Window {
 public:
     Window() = default;
