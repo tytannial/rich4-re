@@ -100,14 +100,15 @@ struct HelpState {
     int originX = 0;            // dword_48C5E4
     int originY = 0;            // dword_48C5E8
     std::vector<HelpLine> lines;
-    int screenLine = 0;         // dword_4762B8（当前屏起始行）
+    int pageMark = 0;           // dword_4762B8（0 或 '@' 行索引；绘制起点 = 其后一行）
     bool hasMore = false;       // dword_48C5EC（正文被 '@' 或 14 行截断）
+    int pressed = -1;           // dword_48C5FC 按下的控件（2=上滚 3=下滚 4=继续左 5=继续右）
 };
 
 // 加载页面文本（help.mkf[start+page]，0x00 分隔行，'@' 行 = 分页符）
 void loadPage(HelpState& state) {
     state.lines.clear();
-    state.screenLine = 0;
+    state.pageMark = 0;
     state.hasMore = false;
     if (!state.help || state.category < 0) {
         return;
@@ -137,36 +138,39 @@ void loadPage(HelpState& state) {
     }
 }
 
-// 绘制正文：从 screenLine 起最多 14 行，遇 '@' 行停止
-// （[RE 0x44DFB4] 主路径 / [RE 0x44DD9F] 翻屏路径共用；
-//   updateMore=false 时保持 dword_48C5EC 不变——原版翻屏不重算截断标志）
+// 绘制正文：从 pageMark（0 或 '@' 行）之后起最多 14 行，遇 '@' 行停止
+// （[RE 0x44DFB4] 主路径 / [RE 0x44DD9F] 翻屏路径共用；原版绘制循环不更新
+//   dword_4762B8；updateMore=false 时保持 dword_48C5EC 不变——翻屏不重算截断标志）
 void drawPageText(HelpState& state, Surface& surface, bool updateMore) {
     TextRenderer& text = state.app->text();
     text.setFont(12, 0x101010, 0x101010, 0, 1);
     if (updateMore) {
         state.hasMore = false;
     }
+    const int count = static_cast<int>(state.lines.size());
+    int v = state.pageMark;
+    if (v < count && state.lines[v].isBreak) {
+        ++v; // 跳过 '@' 分页符行
+    }
     int drawn = 0;
-    int i = state.screenLine;
-    while (i < static_cast<int>(state.lines.size())) {
-        if (state.lines[i].isBreak) {
+    while (v < count) {
+        if (state.lines[v].isBreak) {
             if (updateMore) {
                 state.hasMore = true;
             }
             break;
         }
-        text.drawText(surface, state.lines[i].text.c_str(), state.originX + kTextX,
+        text.drawText(surface, state.lines[v].text.c_str(), state.originX + kTextX,
                       state.originY + kTextY + kTextLineH * drawn, 0);
-        ++i;
+        ++v;
         ++drawn;
         if (drawn == kTextMaxLines) {
             if (updateMore) {
-                state.hasMore = i < static_cast<int>(state.lines.size());
+                state.hasMore = v < count;
             }
             break;
         }
     }
-    state.screenLine = i;
 }
 
 void redrawHelp(HelpState& state, bool updateMore = true) {
@@ -179,8 +183,8 @@ void redrawHelp(HelpState& state, bool updateMore = true) {
     const int oy = state.originY;
     TextRenderer& text = state.app->text();
 
-    // [RE 0x44DFB4] 帧 0 框架（全屏）
-    blitElement(surface, ui.frame(0), ox, oy, false);
+    // [RE 0x44DFB4] 帧 0 框架（全屏，原版 blitElementFullscreen = 不透明 blit）
+    blitElementOpaque(surface, ui.frame(0), ox, oy);
 
     // [RE 0x44EB39] 8 个目录名（原版初始化时画到帧 0 画布）
     text.setFont(12, 0x101010, 0x101010, 0, 1);
@@ -194,25 +198,29 @@ void redrawHelp(HelpState& state, bool updateMore = true) {
     const HelpCategory& cat = kCategories[state.category];
 
     // 帧 1 选中高亮条 (26, 58+36*cat) + 选中分类名重画（目录位置被高亮条覆盖）
-    blitElement(surface, ui.frame(1), ox + kCatHitX1, oy + kCatLineH * state.category + kCatHitY,
-                false);
+    blitElementOpaque(surface, ui.frame(1), ox + kCatHitX1,
+                      oy + kCatLineH * state.category + kCatHitY);
     text.setFont(12, 0x101010, 0x101010, 0, 1);
     text.drawText(surface, cat.name, ox + kCatNameX, oy + kCatNameY + kCatLineH * state.category, 2);
     text.drawText(surface, cat.name, ox + kContentTitleX, oy + kContentTitleY, 2);
 
-    // 滚动箭头（帧 4/5，pageCount > 8 时）
+    // 滚动箭头（帧 4/5 正常，帧 6/7 按下；pageCount > 8 时）
     if (cat.pageCount > 8) {
-        blitElement(surface, ui.frame(4), ox + kScrollX, oy + kScrollUpY, false);
-        blitElement(surface, ui.frame(5), ox + kScrollX, oy + kScrollDownY, false);
+        const int upFrame = (state.pressed == 2) ? 6 : 4;
+        const int downFrame = (state.pressed == 3) ? 7 : 5;
+        blitElementOpaque(surface, ui.frame(upFrame), ox + kScrollX, oy + kScrollUpY);
+        blitElementOpaque(surface, ui.frame(downFrame), ox + kScrollX, oy + kScrollDownY);
     }
 
     // 正文（14 行上限）
     drawPageText(state, surface, updateMore);
 
-    // 继续阅读按钮（帧 8/9）
+    // 继续阅读按钮（帧 8/9 正常，帧 10/11 按下）
     if (state.hasMore) {
-        blitElement(surface, ui.frame(8), ox + kMoreLeftX, oy + kMoreY, false);
-        blitElement(surface, ui.frame(9), ox + kMoreRightX, oy + kMoreY, false);
+        const int leftFrame = (state.pressed == 4) ? 10 : 8;
+        const int rightFrame = (state.pressed == 5) ? 11 : 9;
+        blitElementOpaque(surface, ui.frame(leftFrame), ox + kMoreLeftX, oy + kMoreY);
+        blitElementOpaque(surface, ui.frame(rightFrame), ox + kMoreRightX, oy + kMoreY);
     }
 
     // 页面列表（帧 3 选中 / 帧 2 未选中）+ 标题（15 号粗体）
@@ -222,7 +230,7 @@ void redrawHelp(HelpState& state, bool updateMore = true) {
             break;
         }
         const int frame = (index == state.page) ? 3 : 2;
-        blitElement(surface, ui.frame(frame), ox + kListHitX1, oy + kListY + kListLineH * i, false);
+        blitElementOpaque(surface, ui.frame(frame), ox + kListHitX1, oy + kListY + kListLineH * i);
     }
     text.setFont(15, 0x101010, 0x101010, kTextStyleBold, 0);
     for (int i = 0; i < 8; ++i) {
@@ -240,34 +248,41 @@ void redrawHelp(HelpState& state, bool updateMore = true) {
 }
 
 // [RE 0x44DD9F] 继续阅读翻屏：a1=1 下一屏 / a1=0 上一屏
+// 依据: dword_4762B8 为屏起点标记（0 或 '@' 行）；前进/回退最多 14 行（遇 '@' 停），
+//       结果写回 dword_4762B8；绘制时若为 '@' 行则从其后一行开始
 void scrollScreen(HelpState& state, bool forward) {
     const int count = static_cast<int>(state.lines.size());
     if (forward) {
-        int i = state.screenLine;
-        if (i < count && state.lines[i].isBreak) {
-            ++i; // 跳过 '@' 分页符行
+        int v = state.pageMark;
+        if (v < count && state.lines[v].isBreak) {
+            ++v; // 跳过 '@' 分页符行
         }
-        if (i >= count) {
+        if (v >= count) {
             return; // 已到末尾（原版 v2 == size 直接返回）
         }
-        state.screenLine = i;
-    } else {
-        if (state.screenLine == 0) {
-            return;
-        }
-        int first = state.screenLine;
-        int back = 0;
-        while (first > 0 && back < kTextMaxLines) {
-            --first;
-            ++back;
-            if (state.lines[first].isBreak) {
+        int v1 = 0;
+        while (v < count) {
+            ++v;
+            if (v >= count || state.lines[v].isBreak || v1 == kTextMaxLines - 1) {
                 break;
             }
+            ++v1;
         }
-        if (first < count && state.lines[first].isBreak) {
-            ++first; // 跳过 '@' 分页符行
+        state.pageMark = v;
+    } else {
+        if (state.pageMark == 0) {
+            return; // 已在首屏（原版 !v2 直接返回）
         }
-        state.screenLine = first;
+        int v = state.pageMark;
+        int v1 = 0;
+        while (v > 0) {
+            --v;
+            if (state.lines[v].isBreak || v1 == kTextMaxLines - 1) {
+                break;
+            }
+            ++v1;
+        }
+        state.pageMark = v;
     }
     redrawHelp(state, false);
 }
@@ -281,8 +296,58 @@ bool helpEventHandler(const SDL_Event* event, void* user) {
         state.category = 0;
         state.page = 0;
         state.scroll = 0;
+        state.pressed = -1;
         loadPage(state);
         redrawHelp(state);
+        return true;
+    }
+
+    // [RE 0x44E40B] WM_LBUTTONUP(0x202)：执行按下控件（滚动/继续阅读）
+    if (event->type == SDL_EVENT_MOUSE_BUTTON_UP && event->button.button == SDL_BUTTON_LEFT) {
+        const int pressed = state.pressed;
+        state.pressed = -1;
+        if (pressed < 0) {
+            return true;
+        }
+        const HelpCategory& cat = kCategories[state.category];
+        if ((pressed == 2 || pressed == 3) && cat.pageCount > 8) {
+            if (pressed == 2 && state.scroll > 0) {
+                // [RE 0x44E40B] case 2：向上滚动一屏（page 同步上移）
+                if (state.scroll <= 8) {
+                    state.page -= state.scroll;
+                    state.scroll = 0;
+                } else {
+                    state.page -= 8;
+                    state.scroll -= 8;
+                }
+                loadPage(state);
+            } else if (pressed == 3) {
+                // [RE 0x44E40B] case 3：向下滚动一屏（page 同步下移）
+                const int maxScroll = cat.pageCount - 8;
+                if (state.scroll < maxScroll) {
+                    if (state.scroll + 8 >= maxScroll) {
+                        state.page += maxScroll - state.scroll;
+                        state.scroll = maxScroll;
+                    } else {
+                        state.page += 8;
+                        state.scroll += 8;
+                    }
+                    loadPage(state);
+                }
+            }
+            redrawHelp(state);
+            return true;
+        }
+        if (pressed == 4) {
+            // [RE 0x44E40B] case 4 → sub_44DD9F(0)：上一屏
+            scrollScreen(state, false);
+            return true;
+        }
+        if (pressed == 5) {
+            // [RE 0x44E40B] case 5 → sub_44DD9F(1)：下一屏
+            scrollScreen(state, true);
+            return true;
+        }
         return true;
     }
 
@@ -327,49 +392,30 @@ bool helpEventHandler(const SDL_Event* event, void* user) {
         return true;
     }
 
-    // 滚动箭头（pageCount > 8 时有效）
+    // 滚动箭头：Down 画按下态（帧 6/7），Up 执行（pageCount > 8 时有效）
     if (cat.pageCount > 8 && rx >= kScrollX && rx < kScrollX + 22) {
-        if (ry >= kScrollUpY && ry < kScrollUpY + 15 && state.scroll > 0) {
-            // [RE 0x44E40B] case 2：向上滚动一屏（page 同步上移）
-            if (state.scroll <= 8) {
-                state.page -= state.scroll;
-                state.scroll = 0;
-            } else {
-                state.page -= 8;
-                state.scroll -= 8;
-            }
-            loadPage(state);
+        if (ry >= kScrollUpY && ry < kScrollUpY + 15) {
+            state.pressed = 2;
             redrawHelp(state);
             return true;
         }
         if (ry >= kScrollDownY && ry < kScrollDownY + 15) {
-            // [RE 0x44E40B] case 3：向下滚动一屏（page 同步下移）
-            const int maxScroll = cat.pageCount - 8;
-            if (state.scroll < maxScroll) {
-                if (state.scroll + 8 >= maxScroll) {
-                    state.page += maxScroll - state.scroll;
-                    state.scroll = maxScroll;
-                } else {
-                    state.page += 8;
-                    state.scroll += 8;
-                }
-                loadPage(state);
-                redrawHelp(state);
-            }
+            state.pressed = 3;
+            redrawHelp(state);
             return true;
         }
     }
 
-    // 继续阅读按钮（正文被截断时有效）
+    // 继续阅读按钮：Down 画按下态（帧 10/11），Up 执行
     if (state.hasMore && ry >= kMoreY && ry < kMoreY + 32) {
         if (rx >= kMoreLeftX && rx < kMoreRightX) {
-            // [RE 0x44E40B] case 4 → sub_44DD9F(0)：上一屏
-            scrollScreen(state, false);
+            state.pressed = 4;
+            redrawHelp(state);
             return true;
         }
         if (rx >= kMoreRightX && rx < kMoreRightX + 23) {
-            // [RE 0x44E40B] case 5 → sub_44DD9F(1)：下一屏
-            scrollScreen(state, true);
+            state.pressed = 5;
+            redrawHelp(state);
             return true;
         }
     }

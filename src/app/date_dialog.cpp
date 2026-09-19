@@ -106,6 +106,7 @@ struct DateDialogState {
     uint32_t initialDate = 0; // dword_48BB5C 当前日期（重置用）
     int originX = 0;          // dword_48BB7C
     int originY = 0;          // bErase（原版变量名）
+    int pressed = -1;         // dword_474D78 按下中的控件（-1 无）
 };
 
 int hitTest(int rx, int ry) {
@@ -131,8 +132,8 @@ void redrawDateDialog(DateDialogState& state) {
     const int year = static_cast<int>((state.date >> 16) & 0xFFFF);
     TextRenderer& text = state.app->text();
 
-    // [RE 0x40FF4B] 背景帧 2
-    blitElement(surface, ui.frame(kFrameBg), ox, oy, false);
+    // [RE 0x40FF4B] 背景帧 2（原版 blitElementFullscreen = 不透明 blit，0 像素写入）
+    blitElementOpaque(surface, ui.frame(kFrameBg), ox, oy);
 
     // 月份名 + 年份（原版 setTextFont(15, 0x101010, 0x101010, 2, 0)）
     text.setFont(15, 0x101010, 0x101010, kTextStyleBold, 0);
@@ -183,14 +184,14 @@ void applyDateControl(DateDialogState& state, int control, int rx, int ry) {
                 month = 12;
             }
             break;
-        case 1: // 年-1（最小 1998，原版 0x7CE）
-            if (year > 1998) {
-                --year;
-            }
-            break;
-        case 2: // 月+1
+        case 1: // 月+1（左列下，原版 case 1）
             if (++month == 13) {
                 month = 1;
+            }
+            break;
+        case 2: // 年-1（右列上，原版 case 2，最小 1998 = 0x7CE）
+            if (year > 1998) {
+                --year;
             }
             break;
         case 3: // 年+1
@@ -230,6 +231,26 @@ void applyDateControl(DateDialogState& state, int control, int rx, int ry) {
                  (static_cast<uint32_t>(year) << 16);
 }
 
+// [RE 0x410AC3] WM_LBUTTONDOWN 按下态：箭头帧 12/13 画在控件矩形左上；
+//               按钮帧 14 + 文本（位置 +1,+1）
+void drawPressedControl(DateDialogState& state, int control) {
+    Surface& surface = state.app->surface();
+    const UiImage& ui = *state.ui;
+    const int ox = state.originX;
+    const int oy = state.originY;
+    const ControlRect& r = kControls[control];
+    if (control <= 3) {
+        const int frame = (control == 0 || control == 2) ? kFrameArrowH : kFrameArrowV;
+        blitElementOpaque(surface, ui.frame(frame), ox + r.left, oy + r.top);
+    } else if (control >= 4 && control <= 6) {
+        blitElementOpaque(surface, ui.frame(kFrameButton), ox + r.left, oy + r.top);
+        TextRenderer& text = state.app->text();
+        text.setFont(15, 0x101010, 0x101010, kTextStyleBold, 0);
+        text.drawText(surface, kButtons[control - 4], ox + kButtonTextX[control - 4] + 1,
+                      oy + kButtonTextY + 1, 2);
+    }
+}
+
 // [RE 0x410AC3] dateDialogWndProc
 bool dateDialogEventHandler(const SDL_Event* event, void* user) {
     auto& state = *static_cast<DateDialogState*>(user);
@@ -237,6 +258,7 @@ bool dateDialogEventHandler(const SDL_Event* event, void* user) {
     if (!event) {
         // [RE 0x410AC3] WM_USER+1(1025)：重置工作值 + 居中 + 绘制
         state.date = state.initialDate;
+        state.pressed = -1;
         redrawDateDialog(state);
         return true;
     }
@@ -246,9 +268,14 @@ bool dateDialogEventHandler(const SDL_Event* event, void* user) {
         const int ry = static_cast<int>(event->button.y) - state.originY;
         if (event->button.button == SDL_BUTTON_LEFT) {
             const int hit = hitTest(rx, ry);
-            if (hit >= 0) {
+            if (hit == 7) {
+                // [RE 0x410AC3] case 7：日历点击（Down 立即执行）
                 applyDateControl(state, hit, rx, ry);
                 redrawDateDialog(state);
+            } else if (hit >= 0) {
+                // [RE 0x410AC3] 其余控件：Down 画按下态，Up 执行动作
+                state.pressed = hit;
+                drawPressedControl(state, hit);
             }
             return true;
         }
@@ -257,6 +284,19 @@ bool dateDialogEventHandler(const SDL_Event* event, void* user) {
             state.app->events().requestExit(0);
             return true;
         }
+    }
+
+    if (event->type == SDL_EVENT_MOUSE_BUTTON_UP && event->button.button == SDL_BUTTON_LEFT) {
+        // [RE 0x410AC3] WM_LBUTTONUP(0x202)：执行按下控件的动作
+        const int rx = static_cast<int>(event->button.x) - state.originX;
+        const int ry = static_cast<int>(event->button.y) - state.originY;
+        const int pressed = state.pressed;
+        state.pressed = -1;
+        if (pressed >= 0 && pressed != 7) {
+            applyDateControl(state, pressed, rx, ry);
+            redrawDateDialog(state);
+        }
+        return true;
     }
 
     return false;

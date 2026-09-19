@@ -2,7 +2,7 @@
 
 > 由 `python tools/re_map.py` 自动生成，勿手改。
 
-## RE 映射（63 条）
+## RE 映射（64 条）
 
 | 地址 | 原符号 | 重写位置 | 依据 |
 |------|--------|----------|------|
@@ -36,6 +36,7 @@
 | `0x417E26` | gameEventHandler（骨架） | `src/app/game_loop.cpp:14` | 0x417E26 反编译; WM_PAINT 绘制面板（sub_415D31/415E70/415F69/416E6D/4166F8/4169BC）, WM_MOUSEMOVE 地图坐标换算（×761856>>16 ≈ 11.625，限幅 220..2084）与小地图拖拽, WM_LBUTTONDOWN 地图点击/玩家移动, WM_USER+1 绘制玩家信息面板 差异: 面板绘制与地图交互在后续阶段接入；当前仅保留事件骨架 |
 | `0x4190CF` | loadPanelUi | `src/app/new_game.cpp:97` | 0x4190CF 反编译; panel.mkf 索引 0-8（dword_48BE0C/0x475118/0x48BE10/...）; sub_451A5A(200,200) 与地图尺寸离屏缓冲 差异: 面板资源与离屏缓冲在游戏内 UI 阶段接入 |
 | `0x4291D6` | stockInit | `src/app/new_game.cpp:106` | 0x4291D6 反编译; 12 只股票随机初始涨跌（rand），历史记录 dword_497328 差异: 股票系统在游戏内经济阶段接入 |
+| `0x44DD9F` | 继续阅读翻屏 | `src/app/help_dialog.cpp:250` | dword_4762B8 为屏起点标记（0 或 '@' 行）；前进/回退最多 14 行（遇 '@' 停）， 结果写回 dword_4762B8；绘制时若为 '@' 行则从其后一行开始 |
 | `0x44F70C` | measure | `include/game/render/text.h:47` | 0x44F70C 扫描 rect 范围内非零像素，输出 [minX, minY, maxX, maxY] |
 | `0x44F9D8` | setFont | `include/game/render/text.h:34` | CreateFontA(-size, 0,0,0, weight, 0,0,0, 0x88(CHINESEBIG5_CHARSET), 0,0,0,0, "細明體"); style bit1 时 weight=700 否则 400; spacing 存入 dword_4762DC; fg/bg 经 ((c&0xFF0000)>>16)\|((u8)c<<16)\|(c&0xFF00) 转 COLORREF |
 | `0x44FABC` | drawText | `include/game/render/text.h:40` | 0x44FABC 反编译; '#NNNN' 前缀播放语音(sub_45441A)后从 +5 绘制; DT_CALCRECT 计算尺寸 + 边距 10; 阴影(bit0)/描边(bit2)多次绘制; 测量包围盒后按 align 调整位置 blit 到目标; 绘制后清零文本区域 align: 0 左上 / 1 右上 / 2,3,4 居中 / 5 垂直居中 / 6 左下 / 7 底中 |
