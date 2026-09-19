@@ -51,6 +51,15 @@ const char* keyName(uint8_t vk) {
     return nullptr;
 }
 
+// [RE 0x474ABC] 28 项功能名（与键位一一对应；原版 settingsDialog 预画到帧 1 画布，
+//               左列 x=62 / 右列 x=208，12 号白色 0xF0F0F0）
+const char* const kHotkeyLabels[kKeyCount] = {
+    "游標上移",  "游標右移", "游標下移", "游標左移",   "確定執行", "取消指令", "切換選項",
+    "切換視窗組", "是<YES>", "否<NO>",  "前進指令",   "選擇骰子數", "股市",   "交易",
+    "卡片",      "道具",    "查詢",    "地圖",       "地圖向左旋轉", "地圖向右旋轉", "託管",
+    "系統",      "SAVE GAME", "LOAD GAME", "輔助說明", "向上換頁", "向下換頁", "結束程式",
+};
+
 // SDL 键码 → Windows VK（原版 byte_47EDFA 表使用 VK 码）
 uint8_t sdlToVk(SDL_Keycode key) {
     if (key >= SDLK_A && key <= SDLK_Z) {
@@ -148,17 +157,7 @@ uint8_t sdlToVk(SDL_Keycode key) {
     }
 }
 
-// 读/写 RICH4.CFG（[RE 0x411F80] fwrite 16B 设置 + 56B 键位）
-bool loadCfgRaw(const std::string& path, uint8_t out[kCfgSize]) {
-    std::FILE* fp = std::fopen(path.c_str(), "rb");
-    if (!fp) {
-        return false;
-    }
-    const size_t got = std::fread(out, 1, kCfgSize, fp);
-    std::fclose(fp);
-    return got == kCfgSize;
-}
-
+// 写 RICH4.CFG（[RE 0x411F80] fwrite 16B 设置 + 56B 键位）
 bool saveCfgRaw(const std::string& path, const uint8_t cfg[kCfgSize]) {
     std::FILE* fp = std::fopen(path.c_str(), "wb");
     if (!fp) {
@@ -208,15 +207,24 @@ void redrawHotkeys(HotkeyDialogState& state) {
     blitElement(surface, ui.frame(1), ox, oy, false);
 
     TextRenderer& text = state.app->text();
+
+    // [RE 0x411B53] 28 项功能名（原版 settingsDialog 初始化时预画到帧 1 画布）
+    text.setFont(12, 0xF0F0F0, 0x101010, kTextStyleShadow, 0);
+    for (int i = 0; i < kKeyCount; ++i) {
+        const bool left = i < 15;
+        text.drawText(surface, kHotkeyLabels[i], ox + (left ? 62 : 208),
+                      oy + 33 + 16 * (left ? i : i - 15), 2);
+    }
+
     for (int i = 0; i < kKeyCount; ++i) {
         const bool left = i < 15;
         const int x = ox + (left ? 132 : 284);
         const int y = oy + 33 + 16 * (left ? i : i - 15);
-        // 颜色：键位 0-7 青色 61680(0xF0F0)，8-27 黄色 15790080(0xF0F000)
+        // [RE 0x410158] 颜色：键位 0-7 青色 0x00F0F0，8-27 黄色 0xF0F000（style 1 阴影）
         const uint32_t color = (i < 8) ? 61680u : 15790080u;
-        // 编辑中的项高亮（原版 250ms 闪烁框，简化为静态白框）
+        // [RE 0x411122] 编辑中闪烁框 53x13（原版 250ms 定时器翻转，简化为静态框）
         if (i == state.editing) {
-            surface.fillRect(x - 40, y - 8, 80, 16, rgb888To555(0xFFFFFF));
+            surface.fillRect(x - 26, y - 7, 53, 13, rgb888To555(0xF0F0F0));
         }
         char buf[32] = {};
         const uint16_t value = state.working[i];
@@ -232,7 +240,7 @@ void redrawHotkeys(HotkeyDialogState& state) {
             }
         }
         if (buf[0] != '\0') {
-            text.setFont(12, color, 0x101010, kTextStyleBold, 0);
+            text.setFont(12, color, 0x101010, kTextStyleShadow, 0);
             text.drawText(surface, buf, x, y, 2);
         }
     }
@@ -263,8 +271,8 @@ void handleKeyCapture(HotkeyDialogState& state, SDL_Keycode key) {
     const uint16_t candidate = static_cast<uint16_t>(state.working[index] | vk);
     for (int j = 0; j < kKeyCount; ++j) {
         if (j != index && state.working[j] == candidate) {
+            // 原版冲突时仅重绘并保持编辑状态（不退出捕获）
             RICH4_LOGW("hotkey conflict: %s used by key %d", keyName(vk) ? keyName(vk) : "?", j);
-            state.editing = -1;
             return;
         }
     }
@@ -323,6 +331,10 @@ bool hotkeyEventHandler(const SDL_Event* event, void* user) {
             index = row + 15;
         }
         if (index >= 0) {
+            if (state.editing >= 0) {
+                // [RE 0x411122] 编辑中忽略列表点击（原版 dword_48BBA6 非零时跳过）
+                return true;
+            }
             // [RE 0x411122] 仅键位 8-27 可编辑（原版 dword_48BB9E > 8）
             if (index >= 8 && index < kKeyCount) {
                 state.editing = index;
@@ -351,12 +363,12 @@ bool hotkeyEventHandler(const SDL_Event* event, void* user) {
                 return true;
             case ButtonHit::Confirm: {
                 // [RE 0x411122] dword_48BB9E == 102：memcpy(word_497168) + saveConfig
+                // （写全局 byte_497158 设置区 + 工作区键位）
                 state.app->input().setBindings(state.working);
                 uint8_t cfg[kCfgSize] = {};
-                const std::string path = state.app->gameDir() + "/RICH4.CFG";
-                loadCfgRaw(path, cfg);
+                std::memcpy(cfg, state.app->gameState().settings, 16);
                 std::memcpy(cfg + 16, state.working, kKeyCount * sizeof(uint16_t));
-                saveCfgRaw(path, cfg);
+                saveCfgRaw(state.app->gameDir() + "/RICH4.CFG", cfg);
                 RICH4_LOGI("hotkeys saved (RE 0x411F80)");
                 state.app->events().requestExit(1);
                 return true;

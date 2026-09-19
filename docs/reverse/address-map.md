@@ -2,12 +2,12 @@
 
 > 由 `python tools/re_map.py` 自动生成，勿手改。
 
-## RE 映射（61 条）
+## RE 映射（63 条）
 
 | 地址 | 原符号 | 重写位置 | 依据 |
 |------|--------|----------|------|
 | `0x401543` | showLoading | `src/app/new_game.cpp:61` | 0x401543 反编译; sub_450441(dword_48A0E4, 601) 取 614400 字节全屏图, memcpy 到 dword_48A08C 后 BltFast 显示 |
-| `0x4015D6` | gameInit | `src/app/game_init.cpp:11` | 0x4015D6 反编译; 失败路径弹 "DirectDraw Initial Error!" / "DirectDraw SetMode Error!"; 由 WinMain(0x401B9C) 调用, 返回非 0 才进入主循环（迁移: DirectDrawCreate + SetCooperativeLevel(FULLSCREEN\|EXCLUSIVE) + SetDisplayMode(640,480,16) → SDL 窗口 + 逻辑分辨率（Application::init）） |
+| `0x4015D6` | gameInit | `src/app/game_init.cpp:12` | 0x4015D6 反编译; 失败路径弹 "DirectDraw Initial Error!" / "DirectDraw SetMode Error!"; 由 WinMain(0x401B9C) 调用, 返回非 0 才进入主循环（迁移: DirectDrawCreate + SetCooperativeLevel(FULLSCREEN\|EXCLUSIVE) + SetDisplayMode(640,480,16) → SDL 窗口 + 逻辑分辨率（Application::init）） |
 | `0x401815` | gameShutdown | `src/app/game_shutdown.cpp:9` | 0x401815 反编译; if (!byte_46CB05) 保证幂等; 依次关闭音频/MKF/输入/调色板, 卸载键盘钩子, Release 主表面/后台表面/DirectDraw 接口 |
 | `0x4018E7` | runModal | `src/app/event_stack.cpp:53` | 0x4018E7 反编译; dword_48A010[++nIDEvent]=handler; PostMessage(0x401) 通知进入; 局部消息泵直到 WM_USER+2(0x402); 返回 Msg.lParam; --nIDEvent（迁移: Win32 局部消息泵 → SDL 事件循环（Application::pumpEvents/renderFrame）; 0x401/0x402 消息 → handler(nullptr) / EventStack::requestExit） |
 | `0x401966` | postModalExit | `src/app/event_stack.cpp:41` | PostMessageA(hWnd, 0x402, 0, lParam) —— 请求退出当前模态并回传结果 |
@@ -26,11 +26,12 @@
 | `0x406DE7` | newGameInit | `src/app/new_game.cpp:37` | 0x406DE7 反编译; JUMP.MKF 地图预览; runModal(sub_404E44) 选图/选人; 确认后 dword_499114 = dword_46CB3C + 2 等玩家初始化 差异: 选图/选人界面（0x404E44）暂未实现，自动使用默认地图/玩家配置 |
 | `0x407AD2` | loadMap | `src/app/new_game.cpp:73` | 0x407AD2 反编译; sub_4502FE("MAP.MKF") + sub_450441(handle, 2*(4*mode+map)) 取 GND 地图数据（dword_47493C）; MAPDAT.MKF 提供玩家初始位置（可选） 差异: 玩家/物件初始化（sub_40E033/sub_40B93B/sub_40A4E1）待后续实现 |
 | `0x40FD49` | 滑块单位帧与复选标记帧。 | `src/app/settings_dialog.cpp:89` | 元素偏移 = 12 + 12*i；dword_48BB60+72 → 帧 5（15x16 滑块单位）; dword_48BB60+120 → 帧 9（16x16 复选标记） |
-| `0x4103A3` | settingsWndProc | `src/app/settings_dialog.cpp:306` | 0x4103A3 反编译; WM_MOUSEMOVE(515) 查找控件矩形 dword_474B92 并处理; WM_LBUTTONDOWN(513) 分发控件操作; WM_USER+1 重置悬停并复制设置 |
+| `0x4103A3` | settingsWndProc | `src/app/settings_dialog.cpp:297` | 0x4103A3 反编译; WM_MOUSEMOVE(515) 查找控件矩形 dword_474B92 并处理; WM_LBUTTONDOWN(513) 分发控件操作; WM_USER+1 重置悬停并复制设置 |
 | `0x4119E3` | dateDialog（日期更改界面） | `include/game/app/date_dialog.h:9` | 0x4119E3 中 _dos_getdate + runModal(sub_410AC3)；确认后 dword_48BB50/dword_497160 = 日期 日期打包: BYTE0 = 日, BYTE1 = 月, HIWORD = 年（对应 dword_48BB84） 返回新日期；取消返回 0（原版 -1 语义） |
 | `0x411A86` | hotkeyDialog（熱鍵設定界面） | `include/game/app/hotkey_dialog.h:7` | 0x411A86 → runModal(sub_411122); 帧 1（328x336）居中; word_48BB10 工作键位（初值 word_497168）; 确定时 saveConfig（0x411F80） |
 | `0x411A96` | helpDialog（遊戲說明界面） | `include/game/app/help_dialog.h:7` | 0x411A96 → sub_44EB39(-1,-1)；help.mkf[0] 界面框架（400x400 居中）; 8 个分类目录 + 页面文本（help.mkf[起始+页号]，BIG5 0x00 分隔行） |
-| `0x411B53` | settingsDialog | `src/app/settings_dialog.cpp:364` | 0x411B53 反编译; dword_48BB58 = page; sub_450441(data.mkf, 3); 对话框居中 (320 - 帧0宽/2, 240 - 帧0高/2); runModal(sub_4103A3) |
+| `0x411B53` | settingsDialog | `src/app/settings_dialog.cpp:355` | 0x411B53 反编译; dword_48BB58 = page; sub_450441(data.mkf, 3); 对话框居中 (320 - 帧0宽/2, 240 - 帧0高/2); runModal(sub_4103A3) |
+| `0x411E8F` | 读取 | `src/app/game_init.cpp:39` | 0x411E8F CFG 存在时读 16B 设置 + 56B 键位；不存在时设置区保留默认值 （byte_497158=1, 497159=1, 49715A=4, 49715B=4, 49715C=1, 49715D=1） |
 | `0x415872` | playIntro | `src/app/new_game.cpp:114` | 0x415872 反编译; JUMP.MKF 45/46 资源 + sub_451677 播放 AVI （AIRPLANE.AVI 或 off_4750E8[地图索引]） 差异: AVI 播放依赖 MCI，SDL 侧暂无替代（跳过） |
 | `0x417E26` | gameEventHandler（骨架） | `src/app/game_loop.cpp:14` | 0x417E26 反编译; WM_PAINT 绘制面板（sub_415D31/415E70/415F69/416E6D/4166F8/4169BC）, WM_MOUSEMOVE 地图坐标换算（×761856>>16 ≈ 11.625，限幅 220..2084）与小地图拖拽, WM_LBUTTONDOWN 地图点击/玩家移动, WM_USER+1 绘制玩家信息面板 差异: 面板绘制与地图交互在后续阶段接入；当前仅保留事件骨架 |
 | `0x4190CF` | loadPanelUi | `src/app/new_game.cpp:97` | 0x4190CF 反编译; panel.mkf 索引 0-8（dword_48BE0C/0x475118/0x48BE10/...）; sub_451A5A(200,200) 与地图尺寸离屏缓冲 差异: 面板资源与离屏缓冲在游戏内 UI 阶段接入 |
@@ -51,7 +52,7 @@
 | `0x45620F` | sub_45620F | `include/game/render/blit.h:35` | 0x45620F 用 memset32 画上下边、循环画左右边的空心矩形（颜色经 convertColor） 用于存档槽悬停高亮（0xFFFF00）与地图选择框 |
 | `0x45709C` | start | `src/main.cpp:8` | 0x45709C 为 CRT 入口 thunk（jmp sub_458CED）; sub_458CED 初始化 CRT 后调用 WinMain(GetModuleHandleA(0), 0, lpCmdLine, 10)（迁移: CRT 启动 + WinMain → 标准 main(argc, argv); lpCmdLine → --game <dir> 参数） |
 | `0x46CAD8` | nIDEvent | `include/game/app/event_stack.h:46` | 栈顶索引; 0x4018E7 中 ++nIDEvent 压栈、--nIDEvent 出栈 |
-| `0x46CB05` | byte_46CB05 | `include/game/game_state.h:28` | 0x401815 清理函数的幂等标志（非 0 时跳过清理） |
+| `0x46CB05` | byte_46CB05 | `include/game/game_state.h:33` | 0x401815 清理函数的幂等标志（非 0 时跳过清理） |
 | `0x46CB28` | word_46CB28 | `src/app/main_menu.cpp:17` | DGROUP 原始数据 0x46CB28: BE00 7C01 4801 7C01 D401 7A01 4801 C201 3E00 7C01 为 5 组 u16 (x, y)；0x4029FD 循环 i<5 用 word_46CB28[2i]/word_46CB2A[2i] 布局 索引语义（由 0x40257A 点击分支与 WinMain switch 推断）: 0 新游戏 / 1 读档 / 2 设置(不退出) / 3 退出 / 4 新游戏(模式 1) |
 | `0x4861B8` | dword_4861B8/C0/BC/C4 | `include/game/render/blit.h:11` | 0x455C52/0x455FD9/0x455E24 裁剪模式 1 使用该矩形 (left, right, top, bottom) |
 | `0x48A010` | dword_48A010 | `include/game/app/event_stack.h:13` | 0x48A010 为 20 项函数指针数组; 0x4019DD 窗口过程把消息转发给 dword_48A010[nIDEvent]; 0x4018E7 压栈/出栈并返回 handler 的结果码 |
@@ -61,12 +62,13 @@
 | `0x48A08C` | dword_48A08C | `include/game/render/surface.h:11` | 0x401543 memcpy(dword_48A08C, data.mkf[601], 614400)（614400 = 640*480*2）; 0x451B36 sub_456F60(dword_48A08C, 0, 614400); 0x456418/0x4563F5 等以其为绘制目标; 0x40257A WM_PAINT 把绘制结果经 DDraw 后台表面 BltFast 到主表面（迁移: DDraw 后台表面 Lock/Unlock + BltFast → SDL 纹理每帧上传（RGB555 与原版一致）） |
 | `0x48A0E4` | dword_48A0E4 | `include/game/game_state.h:12` | 0x4015D6 中 sub_4502FE("data.mkf") 的返回值; 0x450441 以其为资源库句柄 |
 | `0x48A184` | dword_48A184 | `src/app/main_menu.cpp:36` | 0x40257A 中鼠标移动时记录的悬停按钮索引，-1 表示无 |
-| `0x48A354` | dword_48A354 | `include/game/game_state.h:58` | 0x406DE7 分配 0x96000 字节并由 JUMP.MKF 地图图填充 |
-| `0x497160` | dword_497160 | `include/game/game_state.h:54` | 0x4119E3 中日期更改确认后写入 dword_48BB50/dword_497160 |
-| `0x49910C` | dword_49910C | `include/game/game_state.h:44` | 0x417E26 中 *dword_49910C 为当前玩家索引 |
-| `0x499114` | dword_499114 | `include/game/game_state.h:40` | 0x406DE7 中 dword_499114 = dword_46CB3C + 2（玩家数） |
-| `0x4991B6` | word_4991B6 | `include/game/game_state.h:32` | WinMain case 4 设置（新模式）; 0x406DE7 中参与资源索引 4*mode+map |
-| `0x4991B8` | word_4991B8 | `include/game/game_state.h:36` | 0x406DE7 中地图索引; 0x407AD2 中参与 MAP.MKF 索引 |
+| `0x48A354` | dword_48A354 | `include/game/game_state.h:63` | 0x406DE7 分配 0x96000 字节并由 JUMP.MKF 地图图填充 |
+| `0x497158` | byte_497158 | `include/game/game_state.h:28` | 0x411E8F CFG 不存在时初始化 byte_497158=1/497159=1/49715A=4/49715B=4/ 49715C=1/49715D=1；存在时由 CFG 前 16 字节覆盖 |
+| `0x497160` | dword_497160 | `include/game/game_state.h:59` | 0x4119E3 中日期更改确认后写入 dword_48BB50/dword_497160 |
+| `0x49910C` | dword_49910C | `include/game/game_state.h:49` | 0x417E26 中 *dword_49910C 为当前玩家索引 |
+| `0x499114` | dword_499114 | `include/game/game_state.h:45` | 0x406DE7 中 dword_499114 = dword_46CB3C + 2（玩家数） |
+| `0x4991B6` | word_4991B6 | `include/game/game_state.h:37` | WinMain case 4 设置（新模式）; 0x406DE7 中参与资源索引 4*mode+map |
+| `0x4991B8` | word_4991B8 | `include/game/game_state.h:41` | 0x406DE7 中地图索引; 0x407AD2 中参与 MAP.MKF 索引 |
 
 ## PORT 映射（8 条）
 

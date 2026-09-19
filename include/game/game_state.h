@@ -25,6 +25,11 @@ struct GameState {
     // 依据: 0x4015D6 中 sub_4502FE("effect.mkf") 的返回值
     MkfArchive effect;
 
+    // [RE 0x497158] byte_497158 设置区（16 字节，格式见 docs/formats/cfg.md）
+    // 依据: 0x411E8F CFG 不存在时初始化 byte_497158=1/497159=1/49715A=4/49715B=4/
+    //       49715C=1/49715D=1；存在时由 CFG 前 16 字节覆盖
+    uint8_t settings[16] = {1, 1, 4, 4, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
     // [RE 0x46CB05] byte_46CB05
     // 依据: 0x401815 清理函数的幂等标志（非 0 时跳过清理）
     bool shutdownDone = false;

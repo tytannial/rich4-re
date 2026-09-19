@@ -3,6 +3,7 @@
 #include "game/application.h"
 #include "game/core/log.h"
 
+#include <cstdio>
 #include <cstdlib>
 
 namespace rich4 {
@@ -36,7 +37,14 @@ bool gameInit(Application& app) {
     }
 
     // [RE 0x411E8F] 读取 RICH4.CFG（设置区 + 28 项键位表，见 docs/formats/cfg.md）
-    app.input().loadConfig(dir + "/RICH4.CFG");
+    // 依据: 0x411E8F CFG 存在时读 16B 设置 + 56B 键位；不存在时设置区保留默认值
+    //       （byte_497158=1, 497159=1, 49715A=4, 49715B=4, 49715C=1, 49715D=1）
+    const std::string cfgPath = dir + "/RICH4.CFG";
+    if (std::FILE* fp = std::fopen(cfgPath.c_str(), "rb")) {
+        std::fread(state.settings, 1, sizeof(state.settings), fp);
+        std::fclose(fp);
+    }
+    app.input().loadConfig(cfgPath);
 
     // [RE 0x4020FA] 光标初始化（Data.mkf[0] 光标资源，43 帧，定义见 cursor.h）
     if (auto cursorRes = state.data.read(0)) {

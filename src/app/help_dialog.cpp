@@ -10,6 +10,7 @@
 #include "game/render/ui_image.h"
 #include "game/resource/mkf.h"
 
+#include <string>
 #include <vector>
 
 namespace rich4 {
@@ -55,42 +56,59 @@ const char* const* const kCategoryTitles[8] = {
     kCat4Titles, kCat5Titles, kCat6Titles, kCat7Titles,
 };
 
-// 布局（[RE 0x44DFB4]/[RE 0x44EB39]，相对 400x400 框架）
-constexpr int kCatNameX = 59;       // 目录名 x（sub_44EB39）
-constexpr int kCatNameY = 73;       // 目录名首行 y
-constexpr int kCatLineH = 36;       // 目录行距
-constexpr int kTitleBarX = 26;      // 标题栏帧 1 偏移（sub_44DFB4）
-constexpr int kTitleBarY = 58;
-constexpr int kContentTitleX = 140; // 分类标题
+// 布局（[RE 0x44DFB4] 绘制 / [RE 0x44E40B] 控件表 dword_476254 与 dword_476274 等，
+//       均相对 400x400 框架；帧号 = 原版偏移/12 - 1）
+constexpr int kCatHitX1 = 26;       // 目录项命中区 (26..91, 58+36i..90+36i)
+constexpr int kCatHitX2 = 92;
+constexpr int kCatHitY = 58;
+constexpr int kCatLineH = 36;
+constexpr int kCatNameX = 59;       // 目录名中心
+constexpr int kCatNameY = 73;
+constexpr int kListHitX1 = 108;     // 页面列表命中区 (108..192, 78+34j..110+34j)
+constexpr int kListHitX2 = 193;
+constexpr int kListY = 78;
+constexpr int kListLineH = 34;
+constexpr int kListNameX = 150;     // 页面标题中心（15 号）
+constexpr int kListNameY = 94;
+constexpr int kScrollX = 170;       // 滚动箭头帧 4/5
+constexpr int kScrollUpY = 43;
+constexpr int kScrollDownY = 59;
+constexpr int kMoreLeftX = 322;     // 继续阅读按钮帧 8/9
+constexpr int kMoreRightX = 343;
+constexpr int kMoreY = 48;
+constexpr int kContentTitleX = 140; // 分类名（内容区）
 constexpr int kContentTitleY = 57;
-constexpr int kPageListX = 108;     // 页面列表 x（帧 2/3）
-constexpr int kPageListY = 78;
-constexpr int kPageListLineH = 34;
-constexpr int kPageListTitleX = 150;
-constexpr int kPageListTitleY = 94;
-constexpr int kPageTitleX = 270;    // 当前页标题
+constexpr int kPageTitleX = 270;    // 当前页标题（15 号）
 constexpr int kPageTitleY = 63;
-constexpr int kTextX = 232;         // 正文 x
+constexpr int kTextX = 232;         // 正文
 constexpr int kTextY = 90;
 constexpr int kTextLineH = 18;
-constexpr int kTextMaxLines = 14;   // 原版每页最多 14 行（v1 == 13 截断）
-constexpr int kPageListVisible = 8;
+constexpr int kTextMaxLines = 14;
+
+struct HelpLine {
+    bool isBreak = false; // '@' 分页符行（原版 *(BYTE*)==64）
+    std::string text;
+};
 
 struct HelpState {
     Application* app = nullptr;
-    UiImage* ui = nullptr;   // help.mkf[0] 界面框架
+    UiImage* ui = nullptr;      // help.mkf[0] 界面框架
     MkfArchive* help = nullptr;
-    int category = -1;       // dword_476018（-1 = 仅显示目录）
-    int page = 0;            // dword_47601C
-    int scroll = 0;          // dword_4761C4 列表滚动
-    int originX = 0;         // dword_48C5E4
-    int originY = 0;         // dword_48C5E8
-    std::vector<std::string> lines; // 当前页文本行（UTF-8）
+    int category = 0;           // dword_476018（原版初始 0，打开即显示首分类）
+    int page = 0;               // dword_47601C
+    int scroll = 0;             // dword_4761C4[5*cat]
+    int originX = 0;            // dword_48C5E4
+    int originY = 0;            // dword_48C5E8
+    std::vector<HelpLine> lines;
+    int screenLine = 0;         // dword_4762B8（当前屏起始行）
+    bool hasMore = false;       // dword_48C5EC（正文被 '@' 或 14 行截断）
 };
 
-// 加载页面文本（help.mkf[start+page]，0x00 分隔行 → BIG5→UTF-8）
+// 加载页面文本（help.mkf[start+page]，0x00 分隔行，'@' 行 = 分页符）
 void loadPage(HelpState& state) {
     state.lines.clear();
+    state.screenLine = 0;
+    state.hasMore = false;
     if (!state.help || state.category < 0) {
         return;
     }
@@ -102,17 +120,56 @@ void loadPage(HelpState& state) {
     const uint8_t* data = blob->data();
     size_t start = 0;
     for (size_t i = 0; i < blob->size(); ++i) {
-        if (data[i] == 0) {
-            if (i > start) {
-                state.lines.push_back(big5ToUtf8(reinterpret_cast<const char*>(data + start),
-                                                 static_cast<int>(i - start)));
-            }
-            start = i + 1;
+        if (data[i] != 0) {
+            continue;
         }
+        if (i > start) {
+            HelpLine line;
+            if (data[start] == '@') {
+                line.isBreak = true;
+            } else {
+                line.text = big5ToUtf8(reinterpret_cast<const char*>(data + start),
+                                       static_cast<int>(i - start));
+            }
+            state.lines.push_back(std::move(line));
+        }
+        start = i + 1;
     }
 }
 
-void redrawHelp(HelpState& state) {
+// 绘制正文：从 screenLine 起最多 14 行，遇 '@' 行停止
+// （[RE 0x44DFB4] 主路径 / [RE 0x44DD9F] 翻屏路径共用；
+//   updateMore=false 时保持 dword_48C5EC 不变——原版翻屏不重算截断标志）
+void drawPageText(HelpState& state, Surface& surface, bool updateMore) {
+    TextRenderer& text = state.app->text();
+    text.setFont(12, 0x101010, 0x101010, 0, 1);
+    if (updateMore) {
+        state.hasMore = false;
+    }
+    int drawn = 0;
+    int i = state.screenLine;
+    while (i < static_cast<int>(state.lines.size())) {
+        if (state.lines[i].isBreak) {
+            if (updateMore) {
+                state.hasMore = true;
+            }
+            break;
+        }
+        text.drawText(surface, state.lines[i].text.c_str(), state.originX + kTextX,
+                      state.originY + kTextY + kTextLineH * drawn, 0);
+        ++i;
+        ++drawn;
+        if (drawn == kTextMaxLines) {
+            if (updateMore) {
+                state.hasMore = i < static_cast<int>(state.lines.size());
+            }
+            break;
+        }
+    }
+    state.screenLine = i;
+}
+
+void redrawHelp(HelpState& state, bool updateMore = true) {
     Surface& surface = state.app->surface();
     if (!state.ui) {
         return;
@@ -122,14 +179,13 @@ void redrawHelp(HelpState& state) {
     const int oy = state.originY;
     TextRenderer& text = state.app->text();
 
-    // [RE 0x44DFB4] 帧 0 框架
+    // [RE 0x44DFB4] 帧 0 框架（全屏）
     blitElement(surface, ui.frame(0), ox, oy, false);
 
-    // 8 个目录项（[RE 0x44EB39] 位置 (59, 73+36i)，字号 12）
+    // [RE 0x44EB39] 8 个目录名（原版初始化时画到帧 0 画布）
     text.setFont(12, 0x101010, 0x101010, 0, 1);
     for (int i = 0; i < 8; ++i) {
-        text.drawText(surface, kCategories[i].name, ox + kCatNameX,
-                      oy + kCatNameY + kCatLineH * i, 2);
+        text.drawText(surface, kCategories[i].name, ox + kCatNameX, oy + kCatNameY + kCatLineH * i, 2);
     }
 
     if (state.category < 0) {
@@ -137,35 +193,83 @@ void redrawHelp(HelpState& state) {
     }
     const HelpCategory& cat = kCategories[state.category];
 
-    // 标题栏（帧 1）+ 分类名
-    blitElement(surface, ui.frame(1), ox + kTitleBarX,
-                oy + kCatLineH * state.category + kTitleBarY, false);
+    // 帧 1 选中高亮条 (26, 58+36*cat) + 选中分类名重画（目录位置被高亮条覆盖）
+    blitElement(surface, ui.frame(1), ox + kCatHitX1, oy + kCatLineH * state.category + kCatHitY,
+                false);
+    text.setFont(12, 0x101010, 0x101010, 0, 1);
+    text.drawText(surface, cat.name, ox + kCatNameX, oy + kCatNameY + kCatLineH * state.category, 2);
     text.drawText(surface, cat.name, ox + kContentTitleX, oy + kContentTitleY, 2);
 
-    // 页面列表（帧 3 选中 / 帧 2 未选中）
-    for (int i = 0; i < kPageListVisible; ++i) {
+    // 滚动箭头（帧 4/5，pageCount > 8 时）
+    if (cat.pageCount > 8) {
+        blitElement(surface, ui.frame(4), ox + kScrollX, oy + kScrollUpY, false);
+        blitElement(surface, ui.frame(5), ox + kScrollX, oy + kScrollDownY, false);
+    }
+
+    // 正文（14 行上限）
+    drawPageText(state, surface, updateMore);
+
+    // 继续阅读按钮（帧 8/9）
+    if (state.hasMore) {
+        blitElement(surface, ui.frame(8), ox + kMoreLeftX, oy + kMoreY, false);
+        blitElement(surface, ui.frame(9), ox + kMoreRightX, oy + kMoreY, false);
+    }
+
+    // 页面列表（帧 3 选中 / 帧 2 未选中）+ 标题（15 号粗体）
+    for (int i = 0; i < 8; ++i) {
         const int index = state.scroll + i;
         if (index >= cat.pageCount) {
             break;
         }
-        const int y = kPageListY + kPageListLineH * i;
         const int frame = (index == state.page) ? 3 : 2;
-        if (frame < ui.frameCount()) {
-            blitElement(surface, ui.frame(frame), ox + kPageListX, oy + y, false);
+        blitElement(surface, ui.frame(frame), ox + kListHitX1, oy + kListY + kListLineH * i, false);
+    }
+    text.setFont(15, 0x101010, 0x101010, kTextStyleBold, 0);
+    for (int i = 0; i < 8; ++i) {
+        const int index = state.scroll + i;
+        if (index >= cat.pageCount) {
+            break;
         }
-        text.drawText(surface, kCategoryTitles[state.category][index], ox + kPageListTitleX,
-                      oy + kPageListTitleY + kPageListLineH * i, 2);
+        text.drawText(surface, kCategoryTitles[state.category][index], ox + kListNameX,
+                      oy + kListNameY + kListLineH * i, 2);
     }
 
     // 当前页标题
     text.drawText(surface, kCategoryTitles[state.category][state.page], ox + kPageTitleX,
                   oy + kPageTitleY, 2);
+}
 
-    // 正文（最多 14 行，行距 18）
-    for (size_t i = 0; i < state.lines.size() && i < kTextMaxLines; ++i) {
-        text.drawText(surface, state.lines[i].c_str(), ox + kTextX,
-                      oy + kTextY + kTextLineH * static_cast<int>(i), 0);
+// [RE 0x44DD9F] 继续阅读翻屏：a1=1 下一屏 / a1=0 上一屏
+void scrollScreen(HelpState& state, bool forward) {
+    const int count = static_cast<int>(state.lines.size());
+    if (forward) {
+        int i = state.screenLine;
+        if (i < count && state.lines[i].isBreak) {
+            ++i; // 跳过 '@' 分页符行
+        }
+        if (i >= count) {
+            return; // 已到末尾（原版 v2 == size 直接返回）
+        }
+        state.screenLine = i;
+    } else {
+        if (state.screenLine == 0) {
+            return;
+        }
+        int first = state.screenLine;
+        int back = 0;
+        while (first > 0 && back < kTextMaxLines) {
+            --first;
+            ++back;
+            if (state.lines[first].isBreak) {
+                break;
+            }
+        }
+        if (first < count && state.lines[first].isBreak) {
+            ++first; // 跳过 '@' 分页符行
+        }
+        state.screenLine = first;
     }
+    redrawHelp(state, false);
 }
 
 // [RE 0x44E40B] helpWndProc
@@ -173,10 +277,11 @@ bool helpEventHandler(const SDL_Event* event, void* user) {
     auto& state = *static_cast<HelpState*>(user);
 
     if (!event) {
-        // [RE 0x44E40B] WM_USER+1：初始显示目录
-        state.category = -1;
+        // [RE 0x44E40B] WM_USER+1：居中 + 初始显示首个分类
+        state.category = 0;
         state.page = 0;
         state.scroll = 0;
+        loadPage(state);
         redrawHelp(state);
         return true;
     }
@@ -188,48 +293,85 @@ bool helpEventHandler(const SDL_Event* event, void* user) {
     const int ry = static_cast<int>(event->button.y) - state.originY;
 
     if (event->button.button == SDL_BUTTON_RIGHT) {
-        // 分类模式 → 返回目录；目录模式 → 退出
-        if (state.category >= 0) {
-            state.category = -1;
-            state.page = 0;
-            state.scroll = 0;
-            state.lines.clear();
-            redrawHelp(state);
-        } else {
-            state.app->events().requestExit(0);
-        }
+        // [RE 0x44E40B] WM_RBUTTONDOWN：退出
+        state.app->events().requestExit(0);
         return true;
     }
-
     if (event->button.button != SDL_BUTTON_LEFT) {
         return true;
     }
 
-    // 目录项点击（左侧 8 行）
-    if (rx >= 30 && rx <= 210 && ry >= kCatNameY - 18) {
-        const int cat = (ry - kCatNameY + kCatLineH / 2) / kCatLineH;
-        if (cat >= 0 && cat < 8) {
-            state.category = cat;
-            state.page = 0;
-            state.scroll = 0;
+    const HelpCategory& cat = kCategories[state.category];
+
+    // 目录项（命中 (26..91, 58+36i..90+36i)）
+    if (rx >= kCatHitX1 && rx < kCatHitX2 && ry >= kCatHitY &&
+        ry < kCatHitY + kCatLineH * 8) {
+        const int catIndex = (ry - kCatHitY) / kCatLineH;
+        state.category = catIndex;
+        state.page = 0;
+        state.scroll = 0;
+        loadPage(state);
+        redrawHelp(state);
+        return true;
+    }
+
+    // 页面列表（命中 (108..192, 78+34j..110+34j)，仅可见项）
+    if (rx >= kListHitX1 && rx < kListHitX2 && ry >= kListY && ry < kListY + kListLineH * 8) {
+        const int visible = cat.pageCount - state.scroll;
+        const int item = (ry - kListY) / kListLineH;
+        if (item >= 0 && item < visible && item < 8) {
+            state.page = state.scroll + item;
+            loadPage(state);
+            redrawHelp(state);
+        }
+        return true;
+    }
+
+    // 滚动箭头（pageCount > 8 时有效）
+    if (cat.pageCount > 8 && rx >= kScrollX && rx < kScrollX + 22) {
+        if (ry >= kScrollUpY && ry < kScrollUpY + 15 && state.scroll > 0) {
+            // [RE 0x44E40B] case 2：向上滚动一屏（page 同步上移）
+            if (state.scroll <= 8) {
+                state.page -= state.scroll;
+                state.scroll = 0;
+            } else {
+                state.page -= 8;
+                state.scroll -= 8;
+            }
             loadPage(state);
             redrawHelp(state);
             return true;
         }
-    }
-
-    // 页面列表点击（右侧 8 项）
-    if (state.category >= 0 && rx >= kPageListX && rx <= kPageListX + 90 && ry >= kPageListY) {
-        const int item = (ry - kPageListY) / kPageListLineH;
-        if (item >= 0 && item < kPageListVisible) {
-            const int index = state.scroll + item;
-            if (index < kCategories[state.category].pageCount) {
-                state.page = index;
+        if (ry >= kScrollDownY && ry < kScrollDownY + 15) {
+            // [RE 0x44E40B] case 3：向下滚动一屏（page 同步下移）
+            const int maxScroll = cat.pageCount - 8;
+            if (state.scroll < maxScroll) {
+                if (state.scroll + 8 >= maxScroll) {
+                    state.page += maxScroll - state.scroll;
+                    state.scroll = maxScroll;
+                } else {
+                    state.page += 8;
+                    state.scroll += 8;
+                }
                 loadPage(state);
                 redrawHelp(state);
             }
+            return true;
         }
-        return true;
+    }
+
+    // 继续阅读按钮（正文被截断时有效）
+    if (state.hasMore && ry >= kMoreY && ry < kMoreY + 32) {
+        if (rx >= kMoreLeftX && rx < kMoreRightX) {
+            // [RE 0x44E40B] case 4 → sub_44DD9F(0)：上一屏
+            scrollScreen(state, false);
+            return true;
+        }
+        if (rx >= kMoreRightX && rx < kMoreRightX + 23) {
+            // [RE 0x44E40B] case 5 → sub_44DD9F(1)：下一屏
+            scrollScreen(state, true);
+            return true;
+        }
     }
 
     return true;
@@ -254,7 +396,7 @@ void helpDialog(Application& app) {
     if (auto blob = help.read(0)) {
         uiImage.load(std::move(*blob));
     }
-    if (uiImage.frameCount() < 4) {
+    if (uiImage.frameCount() < 12) {
         RICH4_LOGE("helpDialog: help.mkf[0] invalid");
         return;
     }

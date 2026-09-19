@@ -104,22 +104,11 @@ struct SettingsState {
     int currentTrack = 1;      // sub_454F5B 当前曲目（1-8）
 };
 
-// 读 RICH4.CFG 全部 72 字节（保留键位表）
-bool loadCfg(const std::string& path, uint8_t out[kCfgSize]) {
-    std::FILE* fp = std::fopen(path.c_str(), "rb");
-    if (!fp) {
-        return false;
-    }
-    const size_t got = std::fread(out, 1, kCfgSize, fp);
-    std::fclose(fp);
-    return got == kCfgSize;
-}
-
-// [RE 0x411F80] 写 RICH4.CFG（16 字节设置 + 56 字节键位）
-bool saveCfg(const std::string& path, const uint8_t settings[16]) {
+// [RE 0x411F80] 写 RICH4.CFG（16 字节设置 + 56 字节键位，即全局 byte_497158/word_497168）
+bool saveCfg(const std::string& path, const uint8_t settings[16], const uint16_t* bindings) {
     uint8_t cfg[kCfgSize] = {};
-    loadCfg(path, cfg); // 保留现有键位表
     std::memcpy(cfg, settings, 16);
+    std::memcpy(cfg + 16, bindings, Input::kKeyCount * sizeof(uint16_t));
     std::FILE* fp = std::fopen(path.c_str(), "wb");
     if (!fp) {
         return false;
@@ -260,7 +249,9 @@ void applyControl(SettingsState& state, int control, int rx, int ry) {
             state.app->events().requestExit(0);
             break;
         case 8: // 確定：memcpy(byte_497158) + sub_411F80 写 RICH4.CFG
-            saveCfg(state.app->gameDir() + "/RICH4.CFG", state.settings);
+            std::memcpy(state.app->gameState().settings, state.settings, sizeof(state.settings));
+            saveCfg(state.app->gameDir() + "/RICH4.CFG", state.settings,
+                    state.app->input().bindings());
             RICH4_LOGI("settings saved (RE 0x411F80)");
             state.app->events().requestExit(1);
             break;
@@ -385,10 +376,7 @@ int settingsDialog(Application& app, int page) {
     state.originY = 240 - uiImage.frame(0).height / 2;
 
     // 复制当前设置（原版 WM_USER+1: memcpy(&byte_48BB48, &byte_497158, 16)）
-    uint8_t cfg[kCfgSize] = {};
-    if (loadCfg(app.gameDir() + "/RICH4.CFG", cfg)) {
-        std::memcpy(state.settings, cfg, 16);
-    }
+    std::memcpy(state.settings, app.gameState().settings, sizeof(state.settings));
 
     redrawSettings(state);
     RICH4_LOGI("settings dialog: page=%d at (%d,%d) (RE 0x411B53)", page, state.originX,
