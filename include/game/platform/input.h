@@ -46,6 +46,8 @@ enum class GameKey : int {
 
 class Input {
 public:
+    static constexpr size_t kKeyCount = static_cast<size_t>(GameKey::Count);
+
     bool loadConfig(const std::string& cfgPath);
     void setDefaultBindings();
 
@@ -55,10 +57,14 @@ public:
     bool isDown(GameKey key) const;
     bool wasPressed(GameKey key) const;
 
+    // 热键设置界面读写键位表（对应 word_497168，28 x u16）
+    const uint16_t* bindings() const { return m_bindings.data(); }
+    void setBindings(const uint16_t* values);
+
 private:
-    std::array<uint16_t, static_cast<size_t>(GameKey::Count)> m_bindings{};
-    std::array<bool, static_cast<size_t>(GameKey::Count)> m_down{};
-    std::array<bool, static_cast<size_t>(GameKey::Count)> m_pressed{};
+    std::array<uint16_t, kKeyCount> m_bindings{};
+    std::array<bool, kKeyCount> m_down{};
+    std::array<bool, kKeyCount> m_pressed{};
 };
 
 } // namespace rich4

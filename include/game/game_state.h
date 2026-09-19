@@ -51,6 +51,10 @@ struct GameState {
     // [RE 0x47493C] 完整存档数据（0x402AC5 读取的全部状态，供后续恢复）
     std::vector<uint8_t> saveData;
 
+    // [RE 0x497160] dword_497160 游戏内日期（BYTE0=日, BYTE1=月, HIWORD=年）
+    // 依据: 0x4119E3 中日期更改确认后写入 dword_48BB50/dword_497160
+    uint32_t gameDate = 0;
+
     // [RE 0x48A354] dword_48A354 地图预览缓冲（614400 = 640*480*2 全屏 RGB555）
     // 依据: 0x406DE7 分配 0x96000 字节并由 JUMP.MKF 地图图填充
     std::vector<uint8_t> mapPreview;

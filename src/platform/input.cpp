@@ -8,7 +8,7 @@
 namespace rich4 {
 
 namespace {
-constexpr size_t kKeyCount = static_cast<size_t>(GameKey::Count);
+constexpr size_t kKeyCount = Input::kKeyCount;
 }
 
 void Input::setDefaultBindings() {
@@ -20,6 +20,12 @@ void Input::setDefaultBindings() {
         0x48, 0x21, 0x22, 0x11,
     };
     std::memcpy(m_bindings.data(), kDefaults, sizeof(kDefaults));
+}
+
+void Input::setBindings(const uint16_t* values) {
+    if (values) {
+        std::memcpy(m_bindings.data(), values, kKeyCount * sizeof(uint16_t));
+    }
 }
 
 bool Input::loadConfig(const std::string& cfgPath) {

@@ -1,0 +1,404 @@
+#include "game/app/hotkey_dialog.h"
+
+#include "game/app/event_stack.h"
+#include "game/application.h"
+#include "game/core/log.h"
+#include "game/render/blit.h"
+#include "game/render/surface.h"
+#include "game/render/text.h"
+#include "game/render/ui_image.h"
+
+#include <cstdio>
+#include <cstring>
+
+namespace rich4 {
+
+namespace {
+
+constexpr int kKeyCount = 28;
+constexpr size_t kCfgSize = 72; // 16 设置 + 56 键位（sub_411F80）
+
+// [RE 0x47EDFA] 可选按键表（78 项，VK → 名称；方向键原版为 BIG5 A1F4-A1F7）
+struct VkName {
+    uint8_t vk;
+    const char* name;
+};
+constexpr VkName kKeyNames[] = {
+    {0x08, "BS"},   {0x09, "TAB"},   {0x0D, "ENTER"}, {0x11, "CTRL-"}, {0x1B, "ESC"},
+    {0x20, "SPACE"}, {0x21, "PG UP"}, {0x22, "PG DN"}, {0x23, "END"},  {0x24, "HOME"},
+    {0x25, "←"},    {0x26, "↑"},     {0x27, "→"},     {0x28, "↓"},     {0x2D, "INS"},
+    {0x30, "0"},    {0x31, "1"},     {0x32, "2"},     {0x33, "3"},     {0x34, "4"},
+    {0x35, "5"},    {0x36, "6"},     {0x37, "7"},     {0x38, "8"},     {0x39, "9"},
+    {0x41, "A"},    {0x42, "B"},     {0x43, "C"},     {0x44, "D"},     {0x45, "E"},
+    {0x46, "F"},    {0x47, "G"},     {0x48, "H"},     {0x49, "I"},     {0x4A, "J"},
+    {0x4B, "K"},    {0x4C, "L"},     {0x4D, "M"},     {0x4E, "N"},     {0x4F, "O"},
+    {0x50, "P"},    {0x51, "Q"},     {0x52, "R"},     {0x53, "S"},     {0x54, "T"},
+    {0x55, "U"},    {0x56, "V"},     {0x57, "W"},     {0x58, "X"},     {0x59, "Y"},
+    {0x5A, "Z"},    {0x6A, "*"},     {0x6B, "+"},     {0x6D, "-"},     {0x6F, "/"},
+    {0x70, "F1"},   {0x71, "F2"},    {0x72, "F3"},    {0x73, "F4"},    {0x74, "F5"},
+    {0x75, "F6"},   {0x76, "F7"},    {0x77, "F8"},    {0x78, "F9"},    {0x79, "F10"},
+    {0x7A, "F11"},  {0x7B, "F12"},   {0xBA, ";"},     {0xBB, "="},     {0xBC, "<"},
+    {0xBD, "-"},    {0xBE, ">"},     {0xBF, "?"},     {0xC0, "~"},     {0xDB, "["},
+    {0xDC, "\\"},   {0xDD, "]"},     {0xDE, "'"},
+};
+
+const char* keyName(uint8_t vk) {
+    for (const VkName& entry : kKeyNames) {
+        if (entry.vk == vk) {
+            return entry.name;
+        }
+    }
+    return nullptr;
+}
+
+// SDL 键码 → Windows VK（原版 byte_47EDFA 表使用 VK 码）
+uint8_t sdlToVk(SDL_Keycode key) {
+    if (key >= SDLK_A && key <= SDLK_Z) {
+        return static_cast<uint8_t>('A' + (key - SDLK_A));
+    }
+    if (key >= SDLK_0 && key <= SDLK_9) {
+        return static_cast<uint8_t>('0' + (key - SDLK_0));
+    }
+    switch (key) {
+        case SDLK_BACKSPACE:
+            return 0x08;
+        case SDLK_TAB:
+            return 0x09;
+        case SDLK_RETURN:
+            return 0x0D;
+        case SDLK_LCTRL:
+        case SDLK_RCTRL:
+            return 0x11;
+        case SDLK_ESCAPE:
+            return 0x1B;
+        case SDLK_SPACE:
+            return 0x20;
+        case SDLK_PAGEUP:
+            return 0x21;
+        case SDLK_PAGEDOWN:
+            return 0x22;
+        case SDLK_END:
+            return 0x23;
+        case SDLK_HOME:
+            return 0x24;
+        case SDLK_LEFT:
+            return 0x25;
+        case SDLK_UP:
+            return 0x26;
+        case SDLK_RIGHT:
+            return 0x27;
+        case SDLK_DOWN:
+            return 0x28;
+        case SDLK_INSERT:
+            return 0x2D;
+        case SDLK_ASTERISK:
+            return 0x6A;
+        case SDLK_KP_PLUS:
+            return 0x6B;
+        case SDLK_MINUS:
+        case SDLK_KP_MINUS:
+            return 0x6D;
+        case SDLK_SLASH:
+        case SDLK_KP_DIVIDE:
+            return 0x6F;
+        case SDLK_F1:
+            return 0x70;
+        case SDLK_F2:
+            return 0x71;
+        case SDLK_F3:
+            return 0x72;
+        case SDLK_F4:
+            return 0x73;
+        case SDLK_F5:
+            return 0x74;
+        case SDLK_F6:
+            return 0x75;
+        case SDLK_F7:
+            return 0x76;
+        case SDLK_F8:
+            return 0x77;
+        case SDLK_F9:
+            return 0x78;
+        case SDLK_F10:
+            return 0x79;
+        case SDLK_F11:
+            return 0x7A;
+        case SDLK_F12:
+            return 0x7B;
+        case SDLK_SEMICOLON:
+            return 0xBA;
+        case SDLK_EQUALS:
+            return 0xBB;
+        case SDLK_COMMA:
+            return 0xBC;
+        case SDLK_PERIOD:
+            return 0xBE;
+        case SDLK_GRAVE:
+            return 0xC0;
+        case SDLK_LEFTBRACKET:
+            return 0xDB;
+        case SDLK_BACKSLASH:
+            return 0xDC;
+        case SDLK_RIGHTBRACKET:
+            return 0xDD;
+        case SDLK_APOSTROPHE:
+            return 0xDE;
+        default:
+            return 0;
+    }
+}
+
+// 读/写 RICH4.CFG（[RE 0x411F80] fwrite 16B 设置 + 56B 键位）
+bool loadCfgRaw(const std::string& path, uint8_t out[kCfgSize]) {
+    std::FILE* fp = std::fopen(path.c_str(), "rb");
+    if (!fp) {
+        return false;
+    }
+    const size_t got = std::fread(out, 1, kCfgSize, fp);
+    std::fclose(fp);
+    return got == kCfgSize;
+}
+
+bool saveCfgRaw(const std::string& path, const uint8_t cfg[kCfgSize]) {
+    std::FILE* fp = std::fopen(path.c_str(), "wb");
+    if (!fp) {
+        return false;
+    }
+    const size_t wrote = std::fwrite(cfg, 1, kCfgSize, fp);
+    std::fclose(fp);
+    return wrote == kCfgSize;
+}
+
+struct HotkeyDialogState {
+    Application* app = nullptr;
+    UiImage* ui = nullptr;
+    uint16_t working[kKeyCount] = {}; // word_48BB10（与 word_48BB0E[1..28] 重叠）
+    int editing = -1;                 // dword_48BBA6 - 1（捕获中键位，-1 无）
+    int originX = 0;                  // dword_48BB8E
+    int originY = 0;                  // dword_48BB92
+};
+
+// 点击区（原版 sub_411122 WM_LBUTTONDOWN 的坐标范围，相对对话框）
+bool hitLeftColumn(int rx, int ry, int& row) {
+    if (rx >= 105 && rx <= 160 && ry >= 25 && ry <= 264) {
+        row = (ry - 25) / 16;
+        return true;
+    }
+    return false;
+}
+
+bool hitRightColumn(int rx, int ry, int& row) {
+    if (rx >= 257 && rx <= 312 && ry >= 25 && ry <= 264) {
+        row = (ry - 25) / 16;
+        return true;
+    }
+    return false;
+}
+
+void redrawHotkeys(HotkeyDialogState& state) {
+    Surface& surface = state.app->surface();
+    if (!state.ui) {
+        return;
+    }
+    const UiImage& ui = *state.ui;
+    const int ox = state.originX;
+    const int oy = state.originY;
+
+    // [RE 0x410158] 帧 1 背景
+    blitElement(surface, ui.frame(1), ox, oy, false);
+
+    TextRenderer& text = state.app->text();
+    for (int i = 0; i < kKeyCount; ++i) {
+        const bool left = i < 15;
+        const int x = ox + (left ? 132 : 284);
+        const int y = oy + 33 + 16 * (left ? i : i - 15);
+        // 颜色：键位 0-7 青色 61680(0xF0F0)，8-27 黄色 15790080(0xF0F000)
+        const uint32_t color = (i < 8) ? 61680u : 15790080u;
+        // 编辑中的项高亮（原版 250ms 闪烁框，简化为静态白框）
+        if (i == state.editing) {
+            surface.fillRect(x - 40, y - 8, 80, 16, rgb888To555(0xFFFFFF));
+        }
+        char buf[32] = {};
+        const uint16_t value = state.working[i];
+        const uint8_t mod = static_cast<uint8_t>(value >> 8);
+        const uint8_t key = static_cast<uint8_t>(value);
+        if (mod == 0x11) {
+            std::strcat(buf, "CTRL-");
+        }
+        if (key != 0) {
+            const char* name = keyName(key);
+            if (name) {
+                std::strcat(buf, name);
+            }
+        }
+        if (buf[0] != '\0') {
+            text.setFont(12, color, 0x101010, kTextStyleBold, 0);
+            text.drawText(surface, buf, x, y, 2);
+        }
+    }
+
+    // 按钮文本（原版 sub_411B53 画到帧 1 画布：(52/165/278, 296)）
+    text.setFont(12, 0x101010, 0x101010, kTextStyleBold, 0);
+    text.drawText(surface, "原始設定", ox + 52, oy + 296, 2);
+    text.drawText(surface, "取 消", ox + 165, oy + 296, 2);
+    text.drawText(surface, "確 定", ox + 278, oy + 296, 2);
+}
+
+// 按键捕获（对应 0x411122 WM_KEYDOWN 0x100）
+void handleKeyCapture(HotkeyDialogState& state, SDL_Keycode key) {
+    const uint8_t vk = sdlToVk(key);
+    if (vk == 0) {
+        return;
+    }
+    const int index = state.editing;
+    if (index < 0 || index >= kKeyCount) {
+        return;
+    }
+    if (vk == 0x11) {
+        // [RE 0x411122] CTRL 键：word_48BB0E[idx] = 4352 (0x1100)，继续等待主键
+        state.working[index] = 0x1100;
+        return;
+    }
+    // [RE 0x411122] 冲突检测：候选值 = VK | 当前编辑值，与其余键位比较
+    const uint16_t candidate = static_cast<uint16_t>(state.working[index] | vk);
+    for (int j = 0; j < kKeyCount; ++j) {
+        if (j != index && state.working[j] == candidate) {
+            RICH4_LOGW("hotkey conflict: %s used by key %d", keyName(vk) ? keyName(vk) : "?", j);
+            state.editing = -1;
+            return;
+        }
+    }
+    state.working[index] = candidate;
+    state.editing = -1;
+    RICH4_LOGI("hotkey %d set to 0x%04X (RE 0x411122)", index, candidate);
+}
+
+// 按钮（原版坐标范围，相对对话框）
+enum class ButtonHit { None, Reset, Cancel, Confirm };
+
+ButtonHit hitButton(int rx, int ry) {
+    if (ry < 281 || ry > 311) {
+        return ButtonHit::None;
+    }
+    if (rx >= 17 && rx <= 87) {
+        return ButtonHit::Reset;
+    }
+    if (rx >= 130 && rx <= 200) {
+        return ButtonHit::Cancel;
+    }
+    if (rx >= 242 && rx <= 312) {
+        return ButtonHit::Confirm;
+    }
+    return ButtonHit::None;
+}
+
+// [RE 0x411122] hotkeyWndProc
+bool hotkeyEventHandler(const SDL_Event* event, void* user) {
+    auto& state = *static_cast<HotkeyDialogState*>(user);
+
+    if (!event) {
+        // [RE 0x411122] WM_USER+1(1025)：复制当前键位 + 居中 + 绘制
+        std::memcpy(state.working, state.app->input().bindings(),
+                    kKeyCount * sizeof(uint16_t));
+        state.editing = -1;
+        redrawHotkeys(state);
+        return true;
+    }
+
+    if (event->type == SDL_EVENT_KEY_DOWN && state.editing >= 0) {
+        handleKeyCapture(state, event->key.key);
+        redrawHotkeys(state);
+        return true;
+    }
+
+    if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN && event->button.button == SDL_BUTTON_LEFT) {
+        const int rx = static_cast<int>(event->button.x) - state.originX;
+        const int ry = static_cast<int>(event->button.y) - state.originY;
+
+        int row = -1;
+        int index = -1;
+        if (hitLeftColumn(rx, ry, row)) {
+            index = row;
+        } else if (hitRightColumn(rx, ry, row)) {
+            index = row + 15;
+        }
+        if (index >= 0) {
+            // [RE 0x411122] 仅键位 8-27 可编辑（原版 dword_48BB9E > 8）
+            if (index >= 8 && index < kKeyCount) {
+                state.editing = index;
+                state.working[index] = 0;
+                RICH4_LOGI("hotkey capture started: index %d", index);
+            } else {
+                RICH4_LOGW("hotkey %d is fixed (RE 0x411122)", index);
+            }
+            redrawHotkeys(state);
+            return true;
+        }
+
+        switch (hitButton(rx, ry)) {
+            case ButtonHit::Reset: {
+                // [RE 0x411122] dword_48BB9E == 100：恢复默认键位（unk_47EDC2）
+                state.app->input().setDefaultBindings();
+                std::memcpy(state.working, state.app->input().bindings(),
+                            kKeyCount * sizeof(uint16_t));
+                state.editing = -1;
+                redrawHotkeys(state);
+                return true;
+            }
+            case ButtonHit::Cancel:
+                // [RE 0x411122] dword_48BB9E == 101：不保存退出
+                state.app->events().requestExit(0);
+                return true;
+            case ButtonHit::Confirm: {
+                // [RE 0x411122] dword_48BB9E == 102：memcpy(word_497168) + saveConfig
+                state.app->input().setBindings(state.working);
+                uint8_t cfg[kCfgSize] = {};
+                const std::string path = state.app->gameDir() + "/RICH4.CFG";
+                loadCfgRaw(path, cfg);
+                std::memcpy(cfg + 16, state.working, kKeyCount * sizeof(uint16_t));
+                saveCfgRaw(path, cfg);
+                RICH4_LOGI("hotkeys saved (RE 0x411F80)");
+                state.app->events().requestExit(1);
+                return true;
+            }
+            case ButtonHit::None:
+            default:
+                return true;
+        }
+    }
+
+    if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN && event->button.button == SDL_BUTTON_RIGHT) {
+        state.app->events().requestExit(0);
+        return true;
+    }
+
+    return false;
+}
+
+} // namespace
+
+void hotkeyDialog(Application& app) {
+    // [RE 0x411A86] 依据: runModal(sub_411122)；帧 1 居中 (320-宽/2, 240-高/2)
+    HotkeyDialogState state;
+    state.app = &app;
+
+    UiImage uiImage;
+    if (auto blob = app.gameState().data.read(3)) {
+        uiImage.load(std::move(*blob));
+    } else {
+        RICH4_LOGE("hotkeyDialog: Data.mkf[3] unavailable");
+        return;
+    }
+    if (uiImage.frameCount() < 2) {
+        return;
+    }
+    state.ui = &uiImage;
+    state.originX = 320 - uiImage.frame(1).width / 2;
+    state.originY = 240 - uiImage.frame(1).height / 2;
+
+    RICH4_LOGI("hotkey dialog at (%d,%d) (RE 0x411A86)", state.originX, state.originY);
+    // [RE 0x4018E7] runModal(sub_411122)
+    runModal(app, &hotkeyEventHandler, &state);
+}
+
+} // namespace rich4

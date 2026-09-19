@@ -1,6 +1,9 @@
 #include "game/app/settings_dialog.h"
 
+#include "game/app/date_dialog.h"
 #include "game/app/event_stack.h"
+#include "game/app/help_dialog.h"
+#include "game/app/hotkey_dialog.h"
 #include "game/application.h"
 #include "game/core/log.h"
 #include "game/render/blit.h"
@@ -278,12 +281,22 @@ void applyControl(SettingsState& state, int control, int rx, int ry) {
         case 15: // byte_48BB4D = i - 13（单选）
             state.settings[5] = static_cast<uint8_t>(control - 13);
             break;
-        case 3:
+        case 3: {
+            // [RE 0x4103A3] case 3 → funcs_410935[0] = sub_4119E3 日期更改
+            GameState& gs = state.app->gameState();
+            const uint32_t result = dateDialog(*state.app, gs.gameDate);
+            if (result != 0) {
+                gs.gameDate = result;
+            }
+            break;
+        }
         case 4:
+            // [RE 0x4103A3] case 4 → funcs_410935[1] = sub_411A86 熱鍵設定
+            hotkeyDialog(*state.app);
+            break;
         case 5:
-            // [RE 0x4103A3] case 3/4/5 → funcs_410935[control-3]
-            // TODO(RE 0x4119E3/0x411A86/0x411A96): 日期更改/熱鍵設定/遊戲說明 子界面
-            RICH4_LOGW("TODO: settings page %d (RE 0x4119E3/0x411A86/0x411A96)", control - 3);
+            // [RE 0x4103A3] case 5 → funcs_410935[2] = sub_411A96 遊戲說明
+            helpDialog(*state.app);
             break;
         default:
             break;
