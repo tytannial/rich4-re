@@ -22,15 +22,26 @@
 
 ## 构建
 
-工具链：**MSVC (VS 18 Community) + CMake + Ninja**。首次配置会通过 CMake FetchContent 拉取 SDL3。
+工具链：**MSVC (VS 18 Community) + CMake + Ninja**。
+
+### 准备 SDL3
+
+从 https://github.com/libsdl-org/SDL/releases 下载 `SDL3-devel-<ver>-VC.zip`，
+解压到 `third_party/`（如 `third_party/SDL3-3.4.16/`）。CMake 会自动查找该目录。
+若未提供，则回退到 FetchContent 从源码构建（较慢）。
+
+### 编译
 
 ```powershell
-# 若 cmake 不在 PATH, 先加载 MSVC 环境:
+# 加载 MSVC 环境
 & "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvars64.bat"
 
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
+
+> 注意：Strawberry Perl 自带的 cmake/ninja 在本机已损坏（缺 DLL），
+> 请使用 VS 自带或独立安装的 CMake/Ninja。
 
 ## 运行
 
