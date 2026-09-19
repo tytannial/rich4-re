@@ -157,13 +157,20 @@ void redrawSettings(SettingsState& state) {
     if (state.settings[1]) {
         blitElement(surface, ui.frame(kCheckFrame), ox + 98, oy + 50, false);
     }
-    // 音乐音量滑块：数量 settings[2]，起点 (89,81)
-    for (int i = 0; i < state.settings[2] && i < 4; ++i) {
-        blitElement(surface, ui.frame(kSliderFrame), ox + 89 + i * 16, oy + 81, false);
+    // 音乐音量滑块 + 静音指示灯：数量 settings[2]，起点 (89,81)；
+    // [RE 0x40FD49] 音量非 0 时叠加帧 9 指示灯 (66,82)，为 0（静音）时熄灭
+    if (state.settings[2]) {
+        for (int i = 0; i < state.settings[2] && i < 4; ++i) {
+            blitElement(surface, ui.frame(kSliderFrame), ox + 89 + i * 16, oy + 81, false);
+        }
+        blitElement(surface, ui.frame(kCheckFrame), ox + 66, oy + 82, false);
     }
-    // 音效音量滑块：数量 settings[3]，起点 (89,113)
-    for (int i = 0; i < state.settings[3] && i < 4; ++i) {
-        blitElement(surface, ui.frame(kSliderFrame), ox + 89 + i * 16, oy + 113, false);
+    // 音效音量滑块 + 静音指示灯：数量 settings[3]，起点 (89,113)；指示灯 (66,114)
+    if (state.settings[3]) {
+        for (int i = 0; i < state.settings[3] && i < 4; ++i) {
+            blitElement(surface, ui.frame(kSliderFrame), ox + 89 + i * 16, oy + 113, false);
+        }
+        blitElement(surface, ui.frame(kCheckFrame), ox + 66, oy + 114, false);
     }
     // [RE 0x40FD49] 自動存檔开关（settings[4]）：帧 9 在 (98,146)
     if (state.settings[4]) {
