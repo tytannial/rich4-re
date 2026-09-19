@@ -139,10 +139,20 @@ void Application::transformMouseEvent(SDL_Event& event) {
 
 void Application::defaultEvent(const SDL_Event& event) {
     // [RE 0x4019DD] 无模态处理器时调用 DefWindowProcA(hWnd, Msg, wParam, lParam)
-    // 原版内层循环还在消息泵空转时检查场景切换标志（byte_46CB01/byte_46CAF8/byte_46CAF9），
-    // 当前骨架阶段无游戏内场景，仅保留退出键。
+    // [RE 0x401010] 全局键盘钩子：ESC（取消指令）→ PostMessageA(hWnd, WM_RBUTTONUP, 0, 0)
+    // 迁移: ESC → 合成右键事件，交由当前模态按右键机制处理：
+    //       弹出层（载入/选项/日期/热键/帮助）→ 关闭/取消；主菜单不处理右键 → ESC 无操作
     if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_ESCAPE) {
-        m_running = false;
+        float wx = 0.0f;
+        float wy = 0.0f;
+        SDL_GetMouseState(&wx, &wy);
+        SDL_Event synth{};
+        synth.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+        synth.button.button = SDL_BUTTON_RIGHT;
+        synth.button.clicks = 1;
+        synth.button.x = wx;
+        synth.button.y = wy;
+        SDL_PushEvent(&synth);
     }
 }
 
@@ -279,6 +289,15 @@ void Application::renderFrame() {
             ev.type = SDL_EVENT_MOUSE_BUTTON_UP;
             SDL_PushEvent(&ev);
         }
+    }
+
+    // [NEW] 调试：第 25 帧合成 ESC 按下
+    if (m_shotEsc && m_frameCount == 25) {
+        SDL_Event ev{};
+        ev.type = SDL_EVENT_KEY_DOWN;
+        ev.key.key = SDLK_ESCAPE;
+        ev.key.scancode = SDL_SCANCODE_ESCAPE;
+        SDL_PushEvent(&ev);
     }
 
     // [RE 0x401F98] 光标定时器（原版 fptc 20ms）：动画推进 + 位置跟踪

@@ -333,6 +333,12 @@ bool settingsEventHandler(const SDL_Event* event, void* user) {
         return true;
     }
 
+    if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN && event->button.button == SDL_BUTTON_RIGHT) {
+        // [RE 0x4103A3] WM_RBUTTONUP：取消（postModalExit(0)）
+        state.app->events().requestExit(0);
+        return true;
+    }
+
     if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN && event->button.button == SDL_BUTTON_LEFT) {
         const int rx = static_cast<int>(event->button.x) - state.originX;
         const int ry = static_cast<int>(event->button.y) - state.originY;
