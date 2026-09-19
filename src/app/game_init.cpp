@@ -46,6 +46,17 @@ bool gameInit(Application& app) {
     }
     app.input().loadConfig(cfgPath);
 
+    // [RE 0x453B55] DirectSound 初始化（22050Hz/8bit/mono 主缓冲）→ SDL 音频流
+    // [RE 0x4541E3] 音效库 Effect.mkf; [RE 0x47E773/0x47E793] 音乐表;
+    // [RE 0x49715A] 音乐音量 / [RE 0x49715B] 音效音量（settings[2]/[3]）
+    if (!app.audio().open(22050)) {
+        RICH4_LOGW("gameInit: audio unavailable (silent mode)");
+    }
+    app.audio().setEffectArchive(&state.effect);
+    app.audio().setMusicDir(app.mediaDir() + "/Music");
+    app.audio().setEffectVolume(state.settings[3]);
+    app.audio().setMusicVolume(state.settings[2]);
+
     // [RE 0x4020FA] 光标初始化（Data.mkf[0] 光标资源，43 帧，定义见 cursor.h）
     if (auto cursorRes = state.data.read(0)) {
         if (app.cursor().init(std::move(*cursorRes))) {

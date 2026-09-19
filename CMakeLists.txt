@@ -41,7 +41,8 @@ endif()
 file(GLOB_RECURSE RICH4_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/*.cpp")
 
 add_executable(rich4 ${RICH4_SOURCES})
-target_include_directories(rich4 PRIVATE "${CMAKE_SOURCE_DIR}/include")
+target_include_directories(rich4 PRIVATE "${CMAKE_SOURCE_DIR}/include"
+                                        "${CMAKE_SOURCE_DIR}/third_party/stb")
 target_link_libraries(rich4 PRIVATE SDL3::SDL3)
 
 if(MSVC)

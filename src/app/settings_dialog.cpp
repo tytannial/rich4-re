@@ -103,7 +103,19 @@ struct SettingsState {
     int originY = 0;           // dword_48BB78 对话框 y
     int page = 0;              // dword_48BB58 当前页
     int currentTrack = 1;      // sub_454F5B 当前曲目（1-8）
+    // 进入设置前的音乐状态（取消时恢复，原版 0x4109DA 恢复播放）
+    int musicTrackBefore = 0;  // 1-8；0 = 非可选曲目
+    int musicSceneBefore = -1; // 场景音乐索引；-1 = 无
 };
+
+// [RE 0x4109DA] 退出设置时恢复进入前的音乐（sub_4549CF(原索引)）
+void restoreMusic(SettingsState& state) {
+    if (state.musicTrackBefore > 0) {
+        state.app->audio().playMusic(state.musicTrackBefore - 1);
+    } else if (state.musicSceneBefore >= 0) {
+        state.app->audio().playSceneMusic(state.musicSceneBefore);
+    }
+}
 
 // [RE 0x411F80] 写 RICH4.CFG（16 字节设置 + 56 字节键位，即全局 byte_497158/word_497168）
 bool saveCfg(const std::string& path, const uint8_t settings[16], const uint16_t* bindings) {
@@ -249,18 +261,25 @@ void applyControl(SettingsState& state, int control, int rx, int ry) {
         case 6: { // 音乐列表：行号 → 曲目
             const int index = (ry - 233) / 15;
             if (index >= 0 && index < 8) {
+                state.app->audio().playEffect(3); // [RE 0x4106B2] unk_48233A 列表点击音效
+                // [RE 0x454D91] sub_454D91(index+1)：立即播放选中曲目（CD 音轨 track02-09）
+                state.app->audio().playMusic(index);
                 state.currentTrack = index + 1;
-                // TODO(RE 0x454D91): 播放选中曲目（MIDI 迁移后接入）
             }
             break;
         }
         case 7: // 取消（不保存）
+            // [RE 0x4109DA] 恢复进入设置前的音乐
+            restoreMusic(state);
             state.app->events().requestExit(0);
             break;
         case 8: // 確定：memcpy(byte_497158) + sub_411F80 写 RICH4.CFG
             std::memcpy(state.app->gameState().settings, state.settings, sizeof(state.settings));
             saveCfg(state.app->gameDir() + "/RICH4.CFG", state.settings,
                     state.app->input().bindings());
+            // [RE 0x49715A/0x49715B] 应用音乐/音效音量（原版 DirectSound 音量表 / MCI 音量）
+            state.app->audio().setEffectVolume(state.settings[3]);
+            state.app->audio().setMusicVolume(state.settings[2]);
             RICH4_LOGI("settings saved (RE 0x411F80)");
             state.app->events().requestExit(1);
             break;
@@ -328,6 +347,9 @@ bool settingsEventHandler(const SDL_Event* event, void* user) {
         if (hit != state.hoverControl) {
             // [RE 0x4103A3] 悬停变化：重绘高亮（帧 6 页按钮 / 帧 3-4 按钮）
             state.hoverControl = hit;
+            if (hit >= 0) {
+                state.app->audio().playEffect(0); // [RE 0x4106D3] unk_48231A 悬停音效
+            }
             redrawSettings(state);
         }
         return true;
@@ -335,6 +357,7 @@ bool settingsEventHandler(const SDL_Event* event, void* user) {
 
     if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN && event->button.button == SDL_BUTTON_RIGHT) {
         // [RE 0x4103A3] WM_RBUTTONUP：取消（postModalExit(0)）
+        restoreMusic(state);
         state.app->events().requestExit(0);
         return true;
     }
@@ -345,6 +368,7 @@ bool settingsEventHandler(const SDL_Event* event, void* user) {
         const int hit = hitTest(rx, ry);
         if (hit >= 0) {
             state.hoverControl = hit;
+            state.app->audio().playEffect(1); // [RE 0x410539] unk_482322 点击音效
             applyControl(state, hit, rx, ry);
             if (hit >= 0 && hit <= 2) {
                 state.dragControl = hit; // 滑块开始拖动
@@ -392,6 +416,11 @@ int settingsDialog(Application& app, int page) {
 
     // 复制当前设置（原版 WM_USER+1: memcpy(&byte_48BB48, &byte_497158, 16)）
     std::memcpy(state.settings, app.gameState().settings, sizeof(state.settings));
+
+    // [RE 0x454F5B] sub_454F5B：当前曲目（音乐列表红色高亮）
+    state.currentTrack = app.audio().currentTrack();
+    state.musicTrackBefore = state.currentTrack;
+    state.musicSceneBefore = app.audio().currentSceneIndex();
 
     redrawSettings(state);
     RICH4_LOGI("settings dialog: page=%d at (%d,%d) (RE 0x411B53)", page, state.originX,

@@ -376,6 +376,7 @@ bool helpEventHandler(const SDL_Event* event, void* user) {
     if (rx >= kCatHitX1 && rx < kCatHitX2 && ry >= kCatHitY &&
         ry < kCatHitY + kCatLineH * 8) {
         const int catIndex = (ry - kCatHitY) / kCatLineH;
+        state.app->audio().playEffect(4); // [RE 0x44E548] unk_482332 分类点击音效
         state.category = catIndex;
         state.page = 0;
         state.scroll = 0;

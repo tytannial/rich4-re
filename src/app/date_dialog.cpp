@@ -268,6 +268,9 @@ bool dateDialogEventHandler(const SDL_Event* event, void* user) {
         const int ry = static_cast<int>(event->button.y) - state.originY;
         if (event->button.button == SDL_BUTTON_LEFT) {
             const int hit = hitTest(rx, ry);
+            if (hit >= 0) {
+                state.app->audio().playEffect(1); // [RE 0x410C42] unk_482322 点击音效
+            }
             if (hit == 7) {
                 // [RE 0x410AC3] case 7：日历点击（Down 立即执行）
                 applyDateControl(state, hit, rx, ry);

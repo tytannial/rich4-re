@@ -44,6 +44,9 @@ bool newGameInit(Application& app, bool mode1) {
     GameState& state = app.gameState();
     state.gameMode = mode1 ? 1 : 0;
 
+    // [RE 0x4549CF] sub_4549CF(0x8001)：选人界面场景音乐（off_47E793[1] → track11.ogg）
+    app.audio().playSceneMusic(1);
+
     // [RE 0x46CAFC] byte_46CAFC：非 0 时保留上次选人配置（0x406DE7 lParam!=0 分支）
     const bool restore = state.gameInited;
     if (!restore) {

@@ -97,6 +97,9 @@ bool mainMenuEventHandler(const SDL_Event* event, void* user) {
         if (hit != state.hoverIndex) {
             // [RE 0x40257A] 悬停变化: 重绘旧按钮(sub_45643D 恢复) + 高亮新按钮(sub_456418)
             state.hoverIndex = hit;
+            if (hit >= 0) {
+                state.app->audio().playEffect(0); // [RE 0x402892] unk_48231A 悬停音效
+            }
             redrawMenu(state);
         }
         return true;
@@ -109,6 +112,7 @@ bool mainMenuEventHandler(const SDL_Event* event, void* user) {
             case 3:
             case 4:
                 // sub_402460(0) 恢复绘制 + sub_401966(索引) 退出模态并回传
+                state.app->audio().playEffect(1); // [RE 0x40262B] unk_482322 点击音效
                 state.app->events().requestExit(state.hoverIndex);
                 return true;
             case 1: {
@@ -143,6 +147,9 @@ int mainMenuScene(Application& app) {
     // [RE 0x4029FD] mainMenuScene
     // 依据: 0x4029FD 反编译; sub_450441(dword_48A0E4, 1, 0, 0) 取菜单资源;
     //       5 按钮布局 word_46CB28; sub_4018E7(sub_40257A, 0) 进入模态循环返回按钮索引
+    // [RE 0x4549CF] sub_4549CF(0)：主菜单场景音乐（off_47E793[0] → track10.ogg）
+    app.audio().playSceneMusic(0);
+
     MainMenuState state;
     state.app = &app;
 
@@ -163,7 +170,10 @@ int mainMenuScene(Application& app) {
 
     RICH4_LOGI("main menu: 5 buttons (RE 0x4029FD)");
     // [RE 0x4018E7] sub_4018E7(sub_40257A, 0)：进入主菜单模态循环
-    return runModal(app, &mainMenuEventHandler, &state);
+    const int result = runModal(app, &mainMenuEventHandler, &state);
+    // [RE 0x454ACB] sub_454ACB()：关闭主菜单音乐
+    app.audio().stopMusic();
+    return result;
 }
 
 } // namespace rich4

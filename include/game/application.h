@@ -43,6 +43,8 @@ public:
     Cursor& cursor() { return m_cursor; }
     TextRenderer& text() { return m_text; }
     const std::string& gameDir() const { return m_gameDir; }
+    // [NEW] 媒体目录（音乐/视频）：<gameDir>/Media，回退 <gameDir>/../Media
+    const std::string& mediaDir() const { return m_mediaDir; }
 
     // 鼠标位置（640x480 逻辑坐标，对应原版全屏坐标）
     void mouseLogicalPos(int& x, int& y) const;
@@ -98,6 +100,7 @@ private:
     void pushMouseButton(uint32_t type, uint8_t button);
 
     std::string m_gameDir;
+    std::string m_mediaDir;
     Window m_window;
     Renderer m_renderer;
     Input m_input;

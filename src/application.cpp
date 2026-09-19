@@ -6,6 +6,7 @@
 #include "game/app/new_game.h"
 #include "game/core/log.h"
 
+#include <filesystem>
 
 namespace rich4 {
 
@@ -16,6 +17,11 @@ bool Application::init(const std::string& gameDir) {
     // 迁移: Win32 窗口类/全屏窗口 → SDL_CreateWindow（窗口化，现代化目标）;
     //       显示模式由 0x4015D6 的 SetDisplayMode(640,480,16) 决定 → 逻辑分辨率 640x480
     m_gameDir = gameDir;
+    // [NEW] 媒体目录（音乐/视频）：优先 <gameDir>/Media，回退 <gameDir>/../Media
+    m_mediaDir = gameDir + "/Media";
+    if (!std::filesystem::exists(m_mediaDir + "/Music")) {
+        m_mediaDir = gameDir + "/../Media";
+    }
 
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
         RICH4_LOGE("SDL_Init failed: %s", SDL_GetError());
@@ -241,6 +247,9 @@ void Application::renderFrame() {
     // 0x40257A WM_PAINT: sub_40235D(移除光标) + BltFast(后台→主表面) + sub_402250(重绘光标)
     // 迁移: 每帧上传 Surface 纹理; 光标按原版语义在绘制前移除、上传前重绘
     m_renderer.beginFrame();
+
+    // [PORT WINMM:DirectSound] 音频混音喂流（每帧混合活动音效/音乐）
+    m_audio.update();
 
     // [NEW] 调试：把鼠标移到指定逻辑坐标（截图验证悬停状态用）
     if (m_shotCursorX >= 0 && m_frameCount == 1) {

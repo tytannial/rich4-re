@@ -445,12 +445,14 @@ void toggleAvatar(DialogState& st) {
         }
         deselectCharacter(st, idx);
         --st.selectedCount;
+        st.app->audio().playEffect(1); // [RE 0x4542CE] unk_482322
     } else {
         if (!selectCharacter(st, st.selectedCount, idx)) {
             return;
         }
         st.charState[idx] = 1;
         ++st.selectedCount;
+        st.app->audio().playEffect(1); // [RE 0x4542CE] unk_482322
     }
     redrawAll(st);
 }
@@ -461,6 +463,7 @@ void switchMap(DialogState& st, int mapIndex) {
         return;
     }
     st.config->mapIndex = mapIndex;
+    st.app->audio().playEffect(1); // [RE 0x4542CE] unk_482322
     loadMapPreview(st);
     redrawAll(st);
 }
@@ -477,6 +480,7 @@ void handleLeftButtonUp(DialogState& st) {
         if (st.selectedCount > 0) {
             st.phase = kPhaseFillAi;
             st.fillTick = 0;
+            st.app->audio().playEffect(1); // [RE 0x4542CE] unk_482322
         }
         redrawAll(st);
         return;
@@ -512,6 +516,7 @@ void fillOneAi(DialogState& st) {
     st.charState[pick] = 1; // [RE 0x404E44] 状态 1（不是 2；2 专用于上轮遗留）
     st.slots[st.selectedCount].isAi = true;
     ++st.selectedCount;
+    st.app->audio().playEffect(1); // [RE 0x4542CE] unk_482322
     RICH4_LOGI("newGameDialog: fill AI slot=%d char=%d count=%d (RE 0x404E44)",
                st.selectedCount - 1, pick, st.selectedCount);
 }
@@ -527,6 +532,7 @@ void beginEnterPhase(DialogState& st) {
         st.transSlotX[i] = static_cast<int>(kPlayerSlotX[st.config->playerCountIndex][i]);
     }
     st.app->events().setTimer(50);
+    st.app->audio().playEffect(5); // [RE 0x4542CE] unk_46CCD0
 }
 
 void handleTimer(DialogState& st) {
@@ -598,6 +604,7 @@ void handleSelectEvent(DialogState& st, const SDL_Event& event) {
                 if (idx != st.avatarHover) {
                     st.avatarHover = idx;
                     if (st.charState[idx] == 0) {
+                        st.app->audio().playEffect(0); // [RE 0x4542CE] unk_48231A
                         dirty = true;
                     }
                 }
@@ -644,6 +651,8 @@ void handleSelectEvent(DialogState& st, const SDL_Event& event) {
                 toggleAvatar(st);
             } else if (hit >= 1 && hit <= 8) {
                 st.pressedCtrl = hit;
+                // [RE 0x4542CE] 按下音效 id = 控件索引（確定=1 / 取消=2 / 选项=1）
+                st.app->audio().playEffect(hit <= 2 ? hit : 1);
                 redrawAll(st);
             } else if (hit >= 9) {
                 switchMap(st, hit - 9);

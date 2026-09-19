@@ -129,6 +129,7 @@ bool loadDialogEventHandler(const SDL_Event* event, void* user) {
         }
         if (hit != state.hoverIndex) {
             state.hoverIndex = hit;
+            state.app->audio().playEffect(0); // [RE 0x403722] unk_48231A 悬停音效
             redrawLoadDialog(state);
         }
         return true;
@@ -138,12 +139,14 @@ bool loadDialogEventHandler(const SDL_Event* event, void* user) {
         if (event->button.button == SDL_BUTTON_LEFT) {
             // [RE 0x40363A] 有效存档 → postModalExit(槽索引)
             if (state.hoverIndex >= 0 && state.slots[state.hoverIndex].valid) {
+                state.app->audio().playEffect(2); // [RE 0x403909] unk_48232A 选槽音效
                 state.app->events().requestExit(state.hoverIndex);
             }
             return true;
         }
         if (event->button.button == SDL_BUTTON_RIGHT) {
             // [RE 0x40363A] WM_RBUTTONDOWN(0x204): 取消（postModalExit(-1)）
+            state.app->audio().playEffect(4); // [RE 0x403936] unk_482332 取消音效
             state.app->events().requestExit(-1);
             return true;
         }

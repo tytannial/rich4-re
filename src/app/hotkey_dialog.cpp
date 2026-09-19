@@ -242,6 +242,7 @@ bool hotkeyEventHandler(const SDL_Event* event, void* user) {
             }
             // [RE 0x411122] 仅键位 8-27 可编辑（原版 dword_48BB9E > 8）
             if (index >= 8 && index < kKeyCount) {
+                state.app->audio().playEffect(2); // [RE 0x4116DB] unk_48232A 列表点击音效
                 state.editing = index;
                 state.savedValue = state.working[index]; // [RE 0x411122] word_48BB8C
                 state.working[index] = 0;
