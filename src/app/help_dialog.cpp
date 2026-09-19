@@ -311,6 +311,7 @@ bool helpEventHandler(const SDL_Event* event, void* user) {
         }
         const HelpCategory& cat = kCategories[state.category];
         if ((pressed == 2 || pressed == 3) && cat.pageCount > 8) {
+            bool changed = false;
             if (pressed == 2 && state.scroll > 0) {
                 // [RE 0x44E40B] case 2：向上滚动一屏（page 同步上移）
                 if (state.scroll <= 8) {
@@ -321,6 +322,7 @@ bool helpEventHandler(const SDL_Event* event, void* user) {
                     state.scroll -= 8;
                 }
                 loadPage(state);
+                changed = true;
             } else if (pressed == 3) {
                 // [RE 0x44E40B] case 3：向下滚动一屏（page 同步下移）
                 const int maxScroll = cat.pageCount - 8;
@@ -333,9 +335,11 @@ bool helpEventHandler(const SDL_Event* event, void* user) {
                         state.scroll += 8;
                     }
                     loadPage(state);
+                    changed = true;
                 }
             }
-            redrawHelp(state);
+            // 有效滚动重算截断标志；无效滚动保持（避免末屏重算丢失按钮）
+            redrawHelp(state, changed);
             return true;
         }
         if (pressed == 4) {
@@ -393,29 +397,30 @@ bool helpEventHandler(const SDL_Event* event, void* user) {
     }
 
     // 滚动箭头：Down 画按下态（帧 6/7），Up 执行（pageCount > 8 时有效）
+    // updateMore=false：仅重绘按下动画，不重算截断标志（避免末屏重算丢失按钮）
     if (cat.pageCount > 8 && rx >= kScrollX && rx < kScrollX + 22) {
         if (ry >= kScrollUpY && ry < kScrollUpY + 15) {
             state.pressed = 2;
-            redrawHelp(state);
+            redrawHelp(state, false);
             return true;
         }
         if (ry >= kScrollDownY && ry < kScrollDownY + 15) {
             state.pressed = 3;
-            redrawHelp(state);
+            redrawHelp(state, false);
             return true;
         }
     }
 
-    // 继续阅读按钮：Down 画按下态（帧 10/11），Up 执行
+    // 继续阅读按钮：Down 画按下态（帧 10/11），Up 执行（同上，不重算截断标志）
     if (state.hasMore && ry >= kMoreY && ry < kMoreY + 32) {
         if (rx >= kMoreLeftX && rx < kMoreRightX) {
             state.pressed = 4;
-            redrawHelp(state);
+            redrawHelp(state, false);
             return true;
         }
         if (rx >= kMoreRightX && rx < kMoreRightX + 23) {
             state.pressed = 5;
-            redrawHelp(state);
+            redrawHelp(state, false);
             return true;
         }
     }

@@ -53,7 +53,8 @@ public:
     void setScreenshot(const std::string& path, int frame, int cursorX = -1, int cursorY = -1,
                        bool autoClick = false, int click2X = -1, int click2Y = -1,
                        int click3X = -1, int click3Y = -1, int click4X = -1, int click4Y = -1,
-                       int click5X = -1, int click5Y = -1, int click6X = -1, int click6Y = -1) {
+                       int click5X = -1, int click5Y = -1, int click6X = -1, int click6Y = -1,
+                       int click7X = -1, int click7Y = -1) {
         m_shotPath = path;
         m_shotFrame = frame;
         m_shotCursorX = cursorX;
@@ -69,6 +70,8 @@ public:
         m_shotClick5Y = click5Y;
         m_shotClick6X = click6X;
         m_shotClick6Y = click6Y;
+        m_shotClick7X = click7X;
+        m_shotClick7Y = click7Y;
     }
 
 private:
@@ -102,6 +105,8 @@ private:
     int m_shotClick5Y = -1;
     int m_shotClick6X = -1;
     int m_shotClick6Y = -1;
+    int m_shotClick7X = -1;
+    int m_shotClick7Y = -1;
     float m_shotWinX = 0.0f;
     float m_shotWinY = 0.0f;
     int m_frameCount = 0;
