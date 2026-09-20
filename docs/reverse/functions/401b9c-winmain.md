@@ -9,7 +9,7 @@
 | 调用者 | `0x458CED`（CRT 启动，传入 `GetModuleHandleA(0)`、`lpCmdLine`、`nShowCmd=10`） |
 | 被调用 | `0x4015D6` 初始化, `0x451677` 播放 START.AVI, `0x4029FD` 主菜单, `0x406DE7` 新游戏, `0x4190CF` 读档流程, `0x401981` 进入游戏, `0x401815` 清理 |
 | 重写符号 | `src/application.cpp` `Application::init/run` |
-| 状态 | 已实现（主循环/场景分发/取消回主菜单，游戏内菜单路径待后续） |
+| 状态 | 已实现（主循环/场景分发/取消回主菜单；游戏内菜单经 `g_sceneRequest`/`g_quitGame` 接入） |
 
 ## 功能
 
@@ -77,9 +77,10 @@ WORD word_4991B6;       // 新游戏模式（case 4 设置）
   每次回主菜单前重置 `word_4991B6/4991B8`、`byte_46CAFC`；
   `case 0/4` 新游戏取消（`newGameInit` 返回 0）时 `continue` 回主菜单
   （原版 `if (!newGameInit(...)) continue`），修复了此前"取消即退出程序"的问题
-- 游戏内菜单事件（`byte_46CAF8`：重新开始/读档/回主菜单）与
-  `byte_46CAF9` 退出路径在游戏内菜单阶段接入；"重新开始"走 `LABEL_6`
-  不经重置，`byte_46CAFC` 保持 1 以保留选人配置
+- 游戏内菜单事件（`byte_46CAF8` = `GameState.sceneRequest`：重新开始/回主菜单）与
+  `byte_46CAF9` = `GameState.quitGame` 退出路径已接入：`settingsDialog(1)` 返回值设置后，
+  由 `game_loop.cpp` 的 16ms timer 检测并 `requestExit`；
+  当前"重新遊戲"重置游戏日期为系统日期后回主菜单（`byte_46CAFC` 保留选人配置）
 
 ## 验证方式
 

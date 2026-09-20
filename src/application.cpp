@@ -393,6 +393,7 @@ void Application::renderFrame() {
 
     // [NEW] 调试：第 25 帧合成 ESC 按下
     if (m_shotEsc && m_frameCount == m_shotEscFrame) {
+        RICH4_LOGI("auto-esc: synthesize ESC at frame %d", m_frameCount);
         SDL_Event ev{};
         ev.type = SDL_EVENT_KEY_DOWN;
         ev.key.key = SDLK_ESCAPE;
@@ -450,6 +451,58 @@ void Application::renderFrame() {
             ev.type = SDL_EVENT_MOUSE_BUTTON_UP;
             SDL_PushEvent(&ev);
         }
+    }
+
+    // [NEW] 调试：在指定帧再次点击逻辑坐标（游戏内菜单打开后再点按钮）
+    if (m_gameClick2X >= 0 && m_frameCount == m_gameClick2Frame) {
+        float wx = 0.0f;
+        float wy = 0.0f;
+        if (SDL_RenderCoordinatesToWindow(m_renderer.handle(), static_cast<float>(m_gameClick2X),
+                                          static_cast<float>(m_gameClick2Y), &wx, &wy)) {
+            RICH4_LOGI("game-click2 frame=%d logical=(%d,%d) window=(%.0f,%.0f)", m_frameCount,
+                       m_gameClick2X, m_gameClick2Y, wx, wy);
+            SDL_WarpMouseInWindow(m_window.handle(), wx, wy);
+            SDL_Event ev{};
+            ev.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+            ev.button.button = SDL_BUTTON_LEFT;
+            ev.button.clicks = 1;
+            ev.button.x = wx;
+            ev.button.y = wy;
+            SDL_PushEvent(&ev);
+            ev.type = SDL_EVENT_MOUSE_BUTTON_UP;
+            SDL_PushEvent(&ev);
+        }
+    }
+
+    // [NEW] 调试：第三次点击逻辑坐标（确认框 YES 等）
+    if (m_gameClick3X >= 0 && m_frameCount == m_gameClick3Frame) {
+        float wx = 0.0f;
+        float wy = 0.0f;
+        if (SDL_RenderCoordinatesToWindow(m_renderer.handle(), static_cast<float>(m_gameClick3X),
+                                          static_cast<float>(m_gameClick3Y), &wx, &wy)) {
+            RICH4_LOGI("game-click3 frame=%d logical=(%d,%d) window=(%.0f,%.0f)", m_frameCount,
+                       m_gameClick3X, m_gameClick3Y, wx, wy);
+            SDL_WarpMouseInWindow(m_window.handle(), wx, wy);
+            SDL_Event ev{};
+            ev.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+            ev.button.button = SDL_BUTTON_LEFT;
+            ev.button.clicks = 1;
+            ev.button.x = wx;
+            ev.button.y = wy;
+            SDL_PushEvent(&ev);
+            ev.type = SDL_EVENT_MOUSE_BUTTON_UP;
+            SDL_PushEvent(&ev);
+        }
+    }
+
+    // [NEW] 调试：在指定帧合成 ESC（游戏内系统菜单验证）
+    if (m_gameEscFrame >= 0 && m_frameCount == m_gameEscFrame) {
+        RICH4_LOGI("game-esc: synthesize ESC at frame %d", m_frameCount);
+        SDL_Event ev{};
+        ev.type = SDL_EVENT_KEY_DOWN;
+        ev.key.key = SDLK_ESCAPE;
+        ev.key.scancode = SDL_SCANCODE_ESCAPE;
+        SDL_PushEvent(&ev);
     }
 
     // [NEW] 调试：在指定帧合成右键按下+抬起（小地图右键回玩家视角验证）

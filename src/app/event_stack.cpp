@@ -58,6 +58,9 @@ int runModal(Application& app, EventStack::Handler handler, void* user, uint32_t
     //       SetTimer/WM_TIMER → 循环内按 tickMs 合成 SDL_EVENT_TIMER（选人界面动画用）
     app.events().push(handler, user);
     app.events().clearExit();
+    // 保存外层 timer 间隔：嵌套模态（如 settingsDialog）返回后需恢复，
+    // 否则外层游戏内循环（16ms tick）的定时器会被清零而停止
+    const uint32_t savedTimer = app.events().timerInterval();
     app.events().setTimer(tickMs);
     if (handler) {
         // 对应 PostMessage(hWnd, 0x401, 0, lParam)：通知栈顶处理器模态进入/重绘
@@ -80,7 +83,7 @@ int runModal(Application& app, EventStack::Handler handler, void* user, uint32_t
             }
         }
     }
-    app.events().setTimer(0);
+    app.events().setTimer(savedTimer);
     app.events().pop();
     const int result = app.events().exitResult();
     // 消费退出请求：原版 WM_USER+2 消息被局部消息泵取走，不会影响外层模态

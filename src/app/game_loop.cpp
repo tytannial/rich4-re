@@ -249,14 +249,35 @@ bool gameEventHandler(const SDL_Event* event, void* user) {
         return true;
     }
     if (event->type == kModalTimerEvent) {
+        // [RE 0x401B9C] 内层循环检测场景切换/退出请求（游戏内菜单结果）
+        GameState& st = app.gameState();
+        if (st.quitGame || st.sceneRequest != 0) {
+            RICH4_LOGI("system menu: scene=%d quit=%d -> exit game loop (RE 0x401B9C)",
+                       st.sceneRequest, st.quitGame ? 1 : 0);
+            st.quitGame = false;
+            st.sceneRequest = 0;
+            app.events().requestExit(0);
+            return true;
+        }
+        if (st.surrenderRequest) {
+            // [RE 0x411AE0] 認輸投降：当前玩家出局
+            st.surrenderRequest = false;
+            if (st.currentPlayer >= 0 && st.currentPlayer < st.playerCount) {
+                st.players[st.currentPlayer].alive &= ~1;
+            }
+            renderGameFrame(app);
+            return true;
+        }
         // 原版 WinMain idle loop 的 sub_4192F7（脏区刷新）
         updateScroll(app);
         renderGameFrame(app);
         return true;
     }
     if (event->type == SDL_EVENT_KEY_DOWN && event->key.key == SDLK_ESCAPE) {
-        // TODO(RE 0x417E26): 游戏内系统菜单（原版 ESC 打开系统菜单而非直接退出）
-        app.events().requestExit(0);
+        // [RE 0x417E26] ESC 打开游戏内系统菜单（settingsDialog page=1）
+        RICH4_LOGI("ESC -> system menu (RE 0x417E26)");
+        settingsDialog(app, 1);
+        renderGameFrame(app);
         return true;
     }
     if (event->type == SDL_EVENT_MOUSE_MOTION) {

@@ -2,7 +2,7 @@
 
 > 由 `python tools/re_map.py` 自动生成，勿手改。
 
-## RE 映射（89 条）
+## RE 映射（90 条）
 
 | 地址 | 原符号 | 重写位置 | 依据 |
 |------|--------|----------|------|
@@ -35,12 +35,12 @@
 | `0x40829D` | 等距地图渲染 | `include/game/app/map_render.h:7` | 0x40829D 反编译; 视口中心 = 当前玩家像素坐标（centerX/centerY = -1 时用上次值）, 遍历 kIsoDrawOrder 绘制地面等距地块（sub_4557A1）, 再按等距表定位 cellEnts 物件与玩家棋子; 首次进入时随机选择出生点 cellEnt |
 | `0x40A4E1` | sub_40A4E1(0) | `src/app/map_render.cpp:285` | 0x40A4E1 反编译; blitBackground 拷贝 dword_48BAD0 → dword_48BADC, 再对 estates/corps/specPts 用 sub_456384 画 g_playerColor 标记 （5696/65536 缩放，帧 = (dir&1) + 22/24/24；specPts 小地图用 +24，见 a1=0 分支） |
 | `0x40A9BD` | mapDialog（大地圖界面） | `include/game/app/map_dialog.h:7` | 0x40A9BD → runModal(sub_40A801) + sub_415E70(1); sub_40A801 WM_PAINT 绘制大地图（dword_48BADC 帧 1，400x400）到 (20,60) + 玩家标记（g_pieceSprites 帧 6，11392/65536 缩放）; WM_RBUTTONUP → postModalExit(0) |
-| `0x40FD49` | 滑块单位帧与复选标记帧。 | `src/app/settings_dialog.cpp:90` | 元素偏移 = 12 + 12*i；dword_48BB60+72 → 帧 5（15x16 滑块单位）; dword_48BB60+120 → 帧 9（16x16 复选标记） |
-| `0x4103A3` | settingsWndProc | `src/app/settings_dialog.cpp:330` | 0x4103A3 反编译; WM_MOUSEMOVE(515) 查找控件矩形 dword_474B92 并处理; WM_LBUTTONDOWN(513) 分发控件操作; WM_USER+1 重置悬停并复制设置 |
+| `0x40FD49` | 滑块单位帧与复选标记帧。 | `src/app/settings_dialog.cpp:96` | 元素偏移 = 12 + 12*i；dword_48BB60+72 → 帧 5（15x16 滑块单位）; dword_48BB60+120 → 帧 9（16x16 复选标记） |
+| `0x4103A3` | settingsWndProc | `src/app/settings_dialog.cpp:357` | 0x4103A3 反编译; WM_MOUSEMOVE(515) 查找控件矩形 dword_474B92 并处理; WM_LBUTTONDOWN(513) 分发控件操作; WM_USER+1 重置悬停并复制设置 |
 | `0x4119E3` | dateDialog（日期更改界面） | `include/game/app/date_dialog.h:9` | 0x4119E3 中 _dos_getdate + runModal(sub_410AC3)；确认后 dword_48BB50/dword_497160 = 日期 日期打包: BYTE0 = 日, BYTE1 = 月, HIWORD = 年（对应 dword_48BB84） 返回新日期；取消返回 0（原版 -1 语义） |
 | `0x411A86` | hotkeyDialog（熱鍵設定界面） | `include/game/app/hotkey_dialog.h:7` | 0x411A86 → runModal(sub_411122); 帧 1（328x336）居中; word_48BB10 工作键位（初值 word_497168）; 确定时 saveConfig（0x411F80） |
 | `0x411A96` | helpDialog（遊戲說明界面） | `include/game/app/help_dialog.h:7` | 0x411A96 → sub_44EB39(-1,-1)；help.mkf[0] 界面框架（400x400 居中）; 8 个分类目录 + 页面文本（help.mkf[起始+页号]，BIG5 0x00 分隔行） |
-| `0x411B53` | settingsDialog | `src/app/settings_dialog.cpp:399` | 0x411B53 反编译; dword_48BB58 = page; sub_450441(data.mkf, 3); 对话框居中 (320 - 帧0宽/2, 240 - 帧0高/2); runModal(sub_4103A3) |
+| `0x411B53` | settingsDialog | `src/app/settings_dialog.cpp:426` | 0x411B53 反编译; dword_48BB58 = page; sub_450441(data.mkf, 3); 对话框居中 (320 - 帧0宽/2, 240 - 帧0高/2); runModal(sub_4103A3) |
 | `0x411E8F` | 读取 | `src/app/game_init.cpp:39` | 0x411E8F CFG 存在时读 16B 设置 + 56B 键位；不存在时设置区保留默认值 （byte_497158=1, 497159=1, 49715A=4, 49715B=4, 49715C=1, 49715D=1） |
 | `0x415872` | playIntro | `src/app/new_game.cpp:391` | 0x415872 反编译; JUMP.MKF 45/46 资源 + sub_451677 播放 AVI （AIRPLANE.AVI 或 off_4750E8[地图索引]） 差异: AVI 播放依赖 MCI，SDL 侧暂无替代（跳过） |
 | `0x415D31` | 顶部工具条（panel.mkf[1]） | `src/app/game_panel.cpp:58` | 帧 0 背景 blit 到 (0,0); 11 个按钮帧 1+i 画在 (40*i+20, 20); 高亮帧 12+i（dword_48BDE4 为高亮索引） （原版 (u16*)dword_475118 + 6*i + 12 → 帧 i+1；+78 → 帧 i+12） |
@@ -57,6 +57,7 @@
 | `0x4502FE` | mkfOpen | `src/resource/mkf.cpp:20` | 0x4015D6 中 sub_4502FE("data.mkf"/"speaking.mkf"/"panel.mkf"/"effect.mkf")， 返回句柄存入 dword_48A0E4/0x48A054/0x48A05C/0x48A058；0x450441 以句柄取资源 差异: 原版打开文件后按需 seek+解压（带缓存），当前实现全量读入 + 索引预解析 |
 | `0x450441` | mkfRead | `src/resource/mkf.cpp:82` | 0x4029FD 中 sub_450441(dword_48A0E4, 1, 0, 0) 取 data.mkf 索引 1（菜单资源）； 0x406DE7 等多处按 (句柄, 索引, 输出, ...) 调用 差异: 原版返回内部缓存指针，当前返回独立 vector；关闭对应 sub_450404 |
 | `0x4520A6` | 日历计算 | `src/app/date_dialog.cpp:80` | 0x4520A6 中 v6 = (天数+4)%7（1998-01-01 为周四）; 2 月闰年 29 天（年%4） |
+| `0x453A32` | confirmDialog（data.mkf[440]，YES/NO | `include/game/app/confirm_dialog.h:7` | 0x453A32 → sub_450441(data, 440) + 居中 (320,200) + runModal(sub_45367E); sub_45367E 鼠标 x 左/右半 → 帧 1/2 高亮; 左键抬起左半→1(YES)/右半→0(NO); 右键抬起或取消键 → 0 返回: true = YES（确定）, false = NO（取消） |
 | `0x45523E` | sub_45523E（经 | `include/game/render/surface.h:44` | 0x45523E 返回 (c>>3)&0x1F \| (c>>6)&0x3E0 \| (c>>9)&0x7C00（RGB888→RGB555）（迁移: SDL 侧内部固定 RGB555，原版 dword_47637C 显示格式分支（sub_45175D 检测）不再需要） |
 | `0x4552B7` | convertImageChannels（经 | `include/game/render/blit.h:55` | 0x455337 对每像素 R/G/B 各 5bit 查 32 字节表后重组 RGB555 （表 = unk_485D68 + 32*a6，-16 = kChannelHalf，-20 = kChannelThird） 用于地图预览暗化（选人界面滚动背景） |
 | `0x4552E7` | scaleElementChannels | `include/game/render/blit.h:62` | 0x4552E7 对元素内 (x, y, w, h) 区域逐像素做 convertImageChannels 变换 用于已选头像变暗（-16）与悬停名字条（-20） |
@@ -77,7 +78,7 @@
 | `0x46CB05` | byte_46CB05 | `include/game/game_state.h:151` | 0x401815 清理函数的幂等标志（非 0 时跳过清理） |
 | `0x46CB28` | word_46CB28 | `src/app/main_menu.cpp:17` | DGROUP 原始数据 0x46CB28: BE00 7C01 4801 7C01 D401 7A01 4801 C201 3E00 7C01 为 5 组 u16 (x, y)；0x4029FD 循环 i<5 用 word_46CB28[2i]/word_46CB2A[2i] 布局 索引语义（由 0x40257A 点击分支与 WinMain switch 推断）: 0 新游戏 / 1 读档 / 2 设置(不退出) / 3 退出 / 4 新游戏(模式 1) |
 | `0x46CB3C` | g_newGameOptions | `include/game/game_state.h:11` | 0x406DE7 中 dword_46CB3C[0..5] 为 6 项选项索引、dword_46CB54 为地图索引; dword_48A35C[3*k] 为玩家 k 的角色 ID（bit31 = AI，状态 1 随机补齐时置位） |
-| `0x474A54` | 设置项标签（BIG5 | `src/app/settings_dialog.cpp:62` | 索引 5 = "樂 曲"(0x46355B)、6 = "視 窗"(0x463562)、7 = "日、月曆"(0x463569) |
+| `0x474A54` | 设置项标签（BIG5 | `src/app/settings_dialog.cpp:64` | 索引 5 = "樂 曲"(0x46355B)、6 = "視 窗"(0x463562)、7 = "日、月曆"(0x463569) |
 | `0x47EDFA` | 可绑定键表（78 | `src/platform/input.cpp:14` | 0x411122 WM_KEYDOWN 以 wParam(VK) 查表；0x401010 钩子以 wParam 匹配键位表 |
 | `0x4861B8` | dword_4861B8/C0/BC/C4 | `include/game/render/blit.h:13` | 0x455C52/0x455FD9/0x455E24 裁剪模式 1 使用该矩形 (left, right, top, bottom) |
 | `0x48A010` | dword_48A010 | `include/game/app/event_stack.h:18` | 0x48A010 为 20 项函数指针数组; 0x4019DD 窗口过程把消息转发给 dword_48A010[nIDEvent]; 0x4018E7 压栈/出栈并返回 handler 的结果码 |

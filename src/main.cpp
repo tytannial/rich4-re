@@ -45,6 +45,13 @@ int main(int argc, char** argv) {
     int gameRClickX = -1;
     int gameRClickY = -1;
     int gameRClickFrame = 0;
+    int gameClick2X = -1;
+    int gameClick2Y = -1;
+    int gameClick2Frame = 0;
+    int gameClick3X = -1;
+    int gameClick3Y = -1;
+    int gameClick3Frame = 0;
+    int gameEscFrame = -1;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--game" && i + 1 < argc) {
@@ -87,6 +94,20 @@ int main(int argc, char** argv) {
                 gameRClickX = -1;
                 gameRClickY = -1;
             }
+        } else if (arg == "--game-click2" && i + 1 < argc) {
+            if (std::sscanf(argv[++i], "%d,%d,%d", &gameClick2X, &gameClick2Y, &gameClick2Frame) !=
+                3) {
+                gameClick2X = -1;
+                gameClick2Y = -1;
+            }
+        } else if (arg == "--game-click3" && i + 1 < argc) {
+            if (std::sscanf(argv[++i], "%d,%d,%d", &gameClick3X, &gameClick3Y, &gameClick3Frame) !=
+                3) {
+                gameClick3X = -1;
+                gameClick3Y = -1;
+            }
+        } else if (arg == "--game-esc" && i + 1 < argc) {
+            gameEscFrame = std::atoi(argv[++i]);
         } else if (arg == "--auto-click2" && i + 1 < argc) {            if (std::sscanf(argv[++i], "%d,%d", &click2X, &click2Y) != 2) {
                 click2X = -1;
                 click2Y = -1;
@@ -143,6 +164,15 @@ int main(int argc, char** argv) {
     }
     if (gameRClickX >= 0 && gameRClickY >= 0) {
         app.setGameRClick(gameRClickX, gameRClickY, gameRClickFrame);
+    }
+    if (gameClick2X >= 0 && gameClick2Y >= 0) {
+        app.setGameClick2(gameClick2X, gameClick2Y, gameClick2Frame);
+    }
+    if (gameClick3X >= 0 && gameClick3Y >= 0) {
+        app.setGameClick3(gameClick3X, gameClick3Y, gameClick3Frame);
+    }
+    if (gameEscFrame >= 0) {
+        app.setGameEsc(gameEscFrame);
     }
     if (!shotPath.empty()) {
         app.setScreenshot(shotPath, shotFrame, shotCursorX, shotCursorY, autoClick, click2X,

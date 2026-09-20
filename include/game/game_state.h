@@ -299,6 +299,13 @@ struct GameState {
     int pendingAction = 0;
     // [RE 0x48BDE4] dword_48BDE4：工具条悬停按钮索引（-1 无）
     int topBarHover = -1;
+    // ===== 游戏内系统菜单结果（0x411B53 / 0x401B9C 内层循环）=====
+    // [RE 0x46CAF8] g_sceneRequest：场景切换请求（重新遊戲 → 1，回主菜单）
+    int sceneRequest = 0;
+    // [RE 0x46CAF9] g_quitGame：退出请求（結束遊戲）
+    bool quitGame = false;
+    // [RE 0x411AE0] 認輸投降请求（当前玩家出局）
+    bool surrenderRequest = false;
 };
 
 } // namespace rich4

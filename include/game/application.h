@@ -85,6 +85,23 @@ public:
         m_gameRClickFrame = frame;
     }
 
+    // [NEW] 调试：在指定帧再次点击逻辑坐标（如游戏内菜单打开后再点按钮）
+    void setGameClick2(int x, int y, int frame) {
+        m_gameClick2X = x;
+        m_gameClick2Y = y;
+        m_gameClick2Frame = frame;
+    }
+
+    // [NEW] 调试：第三次点击逻辑坐标（确认框 YES 等）
+    void setGameClick3(int x, int y, int frame) {
+        m_gameClick3X = x;
+        m_gameClick3Y = y;
+        m_gameClick3Frame = frame;
+    }
+
+    // [NEW] 调试：在指定帧合成 ESC（游戏内系统菜单验证）
+    void setGameEsc(int frame) { m_gameEscFrame = frame; }
+
     // [NEW] 调试截图：第 frame 帧后保存 BMP 并退出（用于与原版画面比对）；
     //       cursorX/Y >= 0 时先移动鼠标到逻辑坐标（验证悬停等交互状态）；
     //       autoClick 时在第 10 帧合成左键点击；click2-6 在第 20/30/35/38/41 帧再点
@@ -155,6 +172,13 @@ private:
     int m_gameClickX = -1;
     int m_gameClickY = -1;
     int m_gameClickFrame = 0;
+    int m_gameClick2X = -1;
+    int m_gameClick2Y = -1;
+    int m_gameClick2Frame = 0;
+    int m_gameClick3X = -1;
+    int m_gameClick3Y = -1;
+    int m_gameClick3Frame = 0;
+    int m_gameEscFrame = -1;
     int m_gameDragX1 = -1;
     int m_gameDragY1 = -1;
     int m_gameDragX2 = -1;

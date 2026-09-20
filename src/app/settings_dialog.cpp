@@ -1,5 +1,6 @@
 #include "game/app/settings_dialog.h"
 
+#include "game/app/confirm_dialog.h"
 #include "game/app/date_dialog.h"
 #include "game/app/event_stack.h"
 #include "game/app/help_dialog.h"
@@ -14,6 +15,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 
 namespace rich4 {
 
@@ -77,7 +79,11 @@ const char* const kPageLabels[3] = {"原始設定", "取 消", "確 定"};
 
 // [RE 0x463590/463599/4635A2] off_474A54 索引 12-14：页按钮文本（帧 page+10 画布）
 // 位置 word_474B38[3*j] (j=12..14) = (108,31)/(108,85)/(108,136)
-const char* const kPageButtonText[3] = {"日期更改", "熱鍵設定", "遊戲說明"};
+// [RE 0x4635AB/4635B4/4635BD] 索引 15-17：游戏内菜单按钮（settingsDialog(1) 时用 3*page+12..14）
+const char* const kPageButtonText[2][3] = {
+    {"日期更改", "熱鍵設定", "遊戲說明"}, // page 0：主菜单设置（funcs_410935）
+    {"重新遊戲", "認輸投降", "結束遊戲"}, // page 1：游戏内系统菜单
+};
 struct PageButtonPos {
     int x;
     int y;
@@ -129,6 +135,19 @@ bool saveCfg(const std::string& path, const uint8_t settings[16], const uint16_t
     const size_t wrote = std::fwrite(cfg, 1, kCfgSize, fp);
     std::fclose(fp);
     return wrote == kCfgSize;
+}
+
+// [RE 0x411AA3] dos_getdate：系统日期 → (年<<16)|(月<<8)|日
+uint32_t currentSystemDate() {
+    const std::time_t now = std::time(nullptr);
+    std::tm tmv{};
+#ifdef _WIN32
+    localtime_s(&tmv, &now);
+#else
+    localtime_r(&now, &tmv);
+#endif
+    return (static_cast<uint32_t>(tmv.tm_year + 1900) << 16) |
+           (static_cast<uint32_t>(tmv.tm_mon + 1) << 8) | static_cast<uint32_t>(tmv.tm_mday);
 }
 
 // 命中检测（相对对话框坐标）
@@ -223,8 +242,9 @@ void redrawSettings(SettingsState& state) {
     // [RE 0x411B53] 页按钮文本（字号 20）：画在帧 (page+10) 画布上，帧 10 位于 (168,2)
     // 原版: setTextFont(20, 0x101010, 0x101010, 2, 1) + drawText(帧(page+10), 索引 3*page+12..14)
     text.setFont(20, 0x101010, 0x101010, kTextStyleBold, 1);
+    const int pageIdx = (state.page >= 0 && state.page < 2) ? state.page : 0;
     for (int i = 0; i < 3; ++i) {
-        text.drawText(surface, kPageButtonText[i], ox + 168 + kPageButtonPos[i].x,
+        text.drawText(surface, kPageButtonText[pageIdx][i], ox + 168 + kPageButtonPos[i].x,
                       oy + 2 + kPageButtonPos[i].y, 2);
     }
 
@@ -305,22 +325,29 @@ void applyControl(SettingsState& state, int control, int rx, int ry) {
         case 15: // byte_48BB4D = i - 13（单选）
             state.settings[5] = static_cast<uint8_t>(control - 13);
             break;
-        case 3: {
-            // [RE 0x4103A3] case 3 → funcs_410935[0] = sub_4119E3 日期更改
-            GameState& gs = state.app->gameState();
-            const uint32_t result = dateDialog(*state.app, gs.gameDate);
-            if (result != 0) {
-                gs.gameDate = result;
-            }
-            break;
-        }
+        case 3:
         case 4:
-            // [RE 0x4103A3] case 4 → funcs_410935[1] = sub_411A86 熱鍵設定
-            hotkeyDialog(*state.app);
-            break;
         case 5:
-            // [RE 0x4103A3] case 5 → funcs_410935[2] = sub_411A96 遊戲說明
-            helpDialog(*state.app);
+            if (state.page != 0) {
+                // [RE 0x4103A3] 游戏内菜单：确认框 YES → postModalExit(control-2)（1/2/3）
+                // 原版: sub_453A32(320,200) 确认后 postModalExit(dword_474D74 - 2)
+                if (confirmDialog(*state.app)) {
+                    state.app->events().requestExit(control - 2);
+                }
+            } else if (control == 3) {
+                // [RE 0x4103A3] case 3 → funcs_410935[0] = sub_4119E3 日期更改
+                GameState& gs = state.app->gameState();
+                const uint32_t result = dateDialog(*state.app, gs.gameDate);
+                if (result != 0) {
+                    gs.gameDate = result;
+                }
+            } else if (control == 4) {
+                // [RE 0x4103A3] case 4 → funcs_410935[1] = sub_411A86 熱鍵設定
+                hotkeyDialog(*state.app);
+            } else {
+                // [RE 0x4103A3] case 5 → funcs_410935[2] = sub_411A96 遊戲說明
+                helpDialog(*state.app);
+            }
             break;
         default:
             break;
@@ -430,7 +457,29 @@ int settingsDialog(Application& app, int page) {
     redrawSettings(state);
     RICH4_LOGI("settings dialog: page=%d at (%d,%d) (RE 0x411B53)", page, state.originX,
                state.originY);
-    return runModal(app, &settingsEventHandler, &state);
+    const int result = runModal(app, &settingsEventHandler, &state);
+    // [RE 0x411B53] 游戏内菜单返回值：1=重新遊戲(sub_411AA3) / 2=認輸投降(sub_411AE0) /
+    //               3=結束遊戲(sub_411B46)
+    if (page != 0) {
+        GameState& gs = app.gameState();
+        RICH4_LOGI("system menu result=%d (RE 0x411B53)", result);
+        switch (result & 0x7FFF) {
+            case 1:
+                gs.gameDate = currentSystemDate();
+                gs.sceneRequest = 1;
+                break;
+            case 2:
+                gs.surrenderRequest = true;
+                break;
+            case 3:
+                saveCfg(app.gameDir() + "/RICH4.CFG", gs.settings, app.input().bindings());
+                gs.quitGame = true;
+                break;
+            default:
+                break;
+        }
+    }
+    return result;
 }
 
 } // namespace rich4
