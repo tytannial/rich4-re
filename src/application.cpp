@@ -495,13 +495,15 @@ void Application::renderFrame() {
         }
     }
 
-    // [NEW] 调试：在指定帧合成 ESC（游戏内系统菜单验证）
+    // [NEW] 调试：在指定帧合成 ESC 按下+抬起（游戏内取消操作验证）
     if (m_gameEscFrame >= 0 && m_frameCount == m_gameEscFrame) {
         RICH4_LOGI("game-esc: synthesize ESC at frame %d", m_frameCount);
         SDL_Event ev{};
         ev.type = SDL_EVENT_KEY_DOWN;
         ev.key.key = SDLK_ESCAPE;
         ev.key.scancode = SDL_SCANCODE_ESCAPE;
+        SDL_PushEvent(&ev);
+        ev.type = SDL_EVENT_KEY_UP;
         SDL_PushEvent(&ev);
     }
 

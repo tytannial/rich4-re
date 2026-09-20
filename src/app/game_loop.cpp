@@ -273,13 +273,9 @@ bool gameEventHandler(const SDL_Event* event, void* user) {
         renderGameFrame(app);
         return true;
     }
-    if (event->type == SDL_EVENT_KEY_DOWN && event->key.key == SDLK_ESCAPE) {
-        // [RE 0x417E26] ESC 打开游戏内系统菜单（settingsDialog page=1）
-        RICH4_LOGI("ESC -> system menu (RE 0x417E26)");
-        settingsDialog(app, 1);
-        renderGameFrame(app);
-        return true;
-    }
+    // [RE 0x401010] ESC 默认绑定"取消指令"（默认键位 bind[5] = 0x1B），由全局键盘钩子处理：
+    // 抬起时合成 WM_RBUTTONUP → handleRightButtonUp（取消手动视角，与右键一致）。
+    // 游戏内系统菜单仅由工具条"设置"按钮打开（0x417D65 case 1 → settingsDialog(1)）
     if (event->type == SDL_EVENT_MOUSE_MOTION) {
         handleMouseMove(app, static_cast<int>(event->motion.x), static_cast<int>(event->motion.y));
         return true;
@@ -309,7 +305,7 @@ bool gameEventHandler(const SDL_Event* event, void* user) {
 
 void enterGameLoop(Application& app) {
     // [RE 0x401981] 依据: sub_401981(0) 压入 sub_417E26 并 PostMessage(0x401) 进入游戏内循环
-    RICH4_LOGI("enter game loop (RE 0x401981), ESC to exit");
+    RICH4_LOGI("enter game loop (RE 0x401981)");
     runModal(app, &gameEventHandler, &app, 16);
 }
 
