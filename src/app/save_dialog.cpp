@@ -41,9 +41,9 @@ void redrawSaveDialog(SaveDialogState& state) {
         return;
     }
     const UiImage& ui = *state.uiImage;
-    // 背景帧 1（555x381）到 (40,48)，不透明覆盖（其余区域保留游戏画面）
+    // 背景帧 1（555x381）到 (40,48)：色键 0 透明（原版 sub_456418），保留游戏画面
     if (ui.frameCount() > kPanelFrame) {
-        blitElementOpaque(surface, ui.frame(kPanelFrame), kPanelX, kPanelY);
+        blitElement(surface, ui.frame(kPanelFrame), kPanelX, kPanelY, false);
     }
     TextRenderer& text = state.app->text();
     for (int i = 0; i < kSlotCount; ++i) {
