@@ -14,12 +14,11 @@ struct MapDialogState {
     Application* app = nullptr;
 };
 
-// [RE 0x40A801] WM_PAINT：大地图 + 玩家标记
+// [RE 0x40A801] WM_PAINT：大地图叠加在游戏画面上（不清屏）
 void redrawMap(MapDialogState& st) {
     Application& app = *st.app;
     GameState& state = app.gameState();
     Surface& dst = app.surface();
-    dst.clear();
     // 大地图帧 1（400x400）到 (20,60)
     if (state.miniMapRaw.frameCount() > 1) {
         blitElementOpaque(dst, state.miniMapRaw.frame(1), 20, 60);

@@ -2,7 +2,7 @@
 
 > 由 `python tools/re_map.py` 自动生成，勿手改。
 
-## RE 映射（88 条）
+## RE 映射（89 条）
 
 | 地址 | 原符号 | 重写位置 | 依据 |
 |------|--------|----------|------|
@@ -23,8 +23,9 @@
 | `0x4029FD` | mainMenuScene | `src/app/main_menu.cpp:147` | 0x4029FD 反编译; sub_450441(dword_48A0E4, 1, 0, 0) 取菜单资源; 5 按钮布局 word_46CB28; sub_4018E7(sub_40257A, 0) 进入模态循环返回按钮索引 [RE 0x4549CF] sub_4549CF(0)：主菜单场景音乐（off_47E793[0] → track10.ogg） |
 | `0x402AC5` | loadGameFromSlot | `include/game/app/new_game.h:13` | 0x402AC5 反编译; showLoadingScreen + fseek(4) 读取全部存档状态 + loadMapData + 每玩家棋盘数据（10008B + 地图数据）; 由读档对话框返回后调用 差异: 完整状态恢复（股票/卡片/骰子/地图物件）待后续，当前恢复地图/模式/玩家数 |
 | `0x402FD1` | saveGameToSlot | `include/game/app/save_data.h:32` | 0x402FD1 反编译; 字段顺序 version(38)/日期/地图/模式/玩家数/玩家(104x4)/ 人类数/道具表/格子表/卡片/股票/回合/地图数据/每玩家棋盘数据 差异: g_miscTable336/g_miscTable36A/dword_499084 等阶段 3 字段以 0 占位 |
+| `0x403396` | saveDialog | `src/app/save_dialog.cpp:35` | 0x403396 反编译; blit 帧 1 到 (40,48); 槽位元素帧 10 到 (129, 57+72i); 年 (165, y+36) / 月日 (165, y+57) / 地图图标 (209, y) / 头像 (289+72k, y) |
 | `0x40363A` | loadDialogWndProc | `src/app/load_dialog.cpp:106` | 0x40363A 反编译; WM_MOUSEMOVE 列表区域 (0x82..0x240, 0x19..0x1C7) 计算槽索引 v4 = (y-24)/72 并画高亮; WM_LBUTTONDOWN 有效槽 postModalExit(slot); WM_RBUTTONUP(0x205) postModalExit(-1); WM_USER+1 重置高亮 |
-| `0x4039C2` | saveDialogWndProc | `src/app/save_dialog.cpp:86` | 0x4039C2 反编译; WM_MOUSEMOVE 列表区域计算槽索引 (y-57)/72; WM_LBUTTONDOWN 槽位 → saveGameToSlot; WM_RBUTTONUP → postModalExit(-1) |
+| `0x4039C2` | saveDialogWndProc | `src/app/save_dialog.cpp:88` | 0x4039C2 反编译; WM_MOUSEMOVE 列表 (0x81..0x241, 0x39..0x1A1) 计算槽 (y-57)/72; WM_LBUTTONDOWN → saveGameToSlot(槽+1) + postModalExit; WM_RBUTTONUP → postModalExit(-1) |
 | `0x403D74` | loadDialog | `include/game/app/load_dialog.h:7` | 0x403D74 反编译; sub_450441(data.mkf, 520) 界面资源 + (data.mkf, 2) 头像资源; 扫描 SAVE0.DAT..SAVE5.DAT 绘制槽位; runModal(sub_40363A) 事件处理 返回选中槽索引（0-5）；取消（右键）或无效返回 -1 |
 | `0x404165` | saveDialog（存檔界面） | `include/game/app/save_dialog.h:7` | 0x404165 → data.mkf[520] 界面 + data.mkf[2] 头像 + runModal(sub_4039C2); 点击槽位经 saveDialog/saveGameToSlot 写入 SAVE%d.DAT 返回选中槽索引（0-5）；取消返回 -1 |
 | `0x404E44` | newGameDialog（定义见 | `include/game/app/new_game_dialog.h:9` | 0x404E44 反编译（4773B 三段状态机, g_newGameState 0=选择/1=随机补齐AI/2=进入过渡）; 由 0x406DE7 newGameInit 经 runModal 调用; 返回 1=确认 / 0=取消 restorePrevious 对应原版 lParam != 0（保留上次配置 + 恢复玩家 0 角色 + 10 tick 后自动確定） 确认时把界面选择结果写回 config |

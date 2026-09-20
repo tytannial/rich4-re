@@ -15,13 +15,13 @@ namespace rich4 {
 
 namespace {
 
-constexpr int kSlotCount = 6;    // SAVE0.DAT .. SAVE5.DAT
+constexpr int kSlotCount = 5;    // SAVE1.DAT .. SAVE5.DAT（SAVE0 = AUTO 不可手动存）
 constexpr int kSlotHeight = 72;  // 槽位间距
-constexpr int kSlotFirstY = 24;  // 首槽 y
-constexpr int kSlotFrame = 10;   // 槽位元素帧
-constexpr int kHighlightX = 127;
-constexpr int kHighlightW = 452;
-constexpr int kHighlightH = 76;
+constexpr int kSlotFirstY = 57;  // 首槽 y（原版 72*(i-1)+57）
+constexpr int kSlotFrame = 10;   // 槽位元素帧（原版 dword_48A338+132）
+constexpr int kPanelFrame = 1;   // 界面背景帧（555x381，原版 dword_48A338+24）
+constexpr int kPanelX = 40;
+constexpr int kPanelY = 48;
 constexpr uint16_t kHighlightColor = rgb888To555(0xFFFF00);
 
 struct SaveDialogState {
@@ -32,35 +32,36 @@ struct SaveDialogState {
     int hoverIndex = -1;
 };
 
-// [RE 0x4039C2] WM_PAINT：界面 + 各槽（已存在显示信息，空槽仅框）
+// [RE 0x403396] saveDialog：背景帧 1 + 5 槽（SAVE1-5）+ 日期/地图/头像
+// 依据: 0x403396 反编译; blit 帧 1 到 (40,48); 槽位元素帧 10 到 (129, 57+72i);
+//       年 (165, y+36) / 月日 (165, y+57) / 地图图标 (209, y) / 头像 (289+72k, y)
 void redrawSaveDialog(SaveDialogState& state) {
     Surface& surface = state.app->surface();
     if (!state.uiImage) {
         return;
     }
     const UiImage& ui = *state.uiImage;
-    blitElement(surface, ui.frame(0), 40, 15, false);
-
+    // 背景帧 1（555x381）到 (40,48)，不透明覆盖（其余区域保留游戏画面）
+    if (ui.frameCount() > kPanelFrame) {
+        blitElementOpaque(surface, ui.frame(kPanelFrame), kPanelX, kPanelY);
+    }
+    TextRenderer& text = state.app->text();
     for (int i = 0; i < kSlotCount; ++i) {
         const int y = kSlotHeight * i + kSlotFirstY;
         if (kSlotFrame < ui.frameCount()) {
             blitElement(surface, ui.frame(kSlotFrame), 129, y, false);
         }
         const SaveSlot& slot = state.slots[i];
-        TextRenderer& text = state.app->text();
-        text.setFont(16, 0xF0F0F0, 0x101010, kTextStyleShadow | kTextStyleBold, 1);
-        if (i == 0) {
-            text.drawText(surface, "AUTO", 165, y + 15, 2);
-        }
         if (!slot.valid) {
             continue;
         }
+        text.setFont(16, 0xF0F0F0, 0x101010, kTextStyleShadow | kTextStyleBold, 1);
         char buf[32];
         std::snprintf(buf, sizeof(buf), "%u", slot.datetime >> 16);
-        text.drawText(surface, buf, 165, kSlotHeight * i + 60, 2);
+        text.drawText(surface, buf, 165, y + 36, 2);
         std::snprintf(buf, sizeof(buf), "%u/%u", (slot.datetime >> 8) & 0xFFu,
                       slot.datetime & 0xFFu);
-        text.drawText(surface, buf, 165, kSlotHeight * i + 81, 2);
+        text.drawText(surface, buf, 165, y + 57, 2);
         const int mapFrame = 4 * slot.gameMode + slot.mapIndex + 2;
         if (mapFrame < ui.frameCount()) {
             blitElement(surface, ui.frame(mapFrame), 209, y, false);
@@ -76,16 +77,17 @@ void redrawSaveDialog(SaveDialogState& state) {
             }
         }
     }
-
+    // 悬停高亮（原版两次 drawRectBorder 加粗，黄色）
     if (state.hoverIndex >= 0 && state.hoverIndex < kSlotCount) {
-        const int y = kSlotHeight * state.hoverIndex + 22;
-        drawRectBorder(surface, kHighlightX, y, kHighlightW, kHighlightH, kHighlightColor);
+        const int y = kSlotHeight * state.hoverIndex + 55;
+        drawRectBorder(surface, 127, y, 0x1C4, 76, kHighlightColor);
+        drawRectBorder(surface, 128, y + 1, 0x1C2, 74, kHighlightColor);
     }
 }
 
 // [RE 0x4039C2] saveDialogWndProc
-// 依据: 0x4039C2 反编译; WM_MOUSEMOVE 列表区域计算槽索引 (y-57)/72;
-//       WM_LBUTTONDOWN 槽位 → saveGameToSlot; WM_RBUTTONUP → postModalExit(-1)
+// 依据: 0x4039C2 反编译; WM_MOUSEMOVE 列表 (0x81..0x241, 0x39..0x1A1) 计算槽 (y-57)/72;
+//       WM_LBUTTONDOWN → saveGameToSlot(槽+1) + postModalExit; WM_RBUTTONUP → postModalExit(-1)
 bool saveDialogEventHandler(const SDL_Event* event, void* user) {
     auto& state = *static_cast<SaveDialogState*>(user);
 
@@ -98,8 +100,8 @@ bool saveDialogEventHandler(const SDL_Event* event, void* user) {
         const int x = static_cast<int>(event->motion.x);
         const int y = static_cast<int>(event->motion.y);
         int hit = -1;
-        if (x > 0x81 && x < 0x241 && y > 0x18 && y < 0x1C8) {
-            const int index = (y - 24) / kSlotHeight;
+        if (x > 0x81 && x < 0x241 && y > 0x39 && y < 0x1A1) {
+            const int index = (y - kSlotFirstY) / kSlotHeight;
             if (index >= 0 && index < kSlotCount) {
                 hit = index;
             }
@@ -114,9 +116,10 @@ bool saveDialogEventHandler(const SDL_Event* event, void* user) {
     if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN && event->button.button == SDL_BUTTON_LEFT) {
         if (state.hoverIndex >= 0) {
             state.app->audio().playEffect(2); // [RE 0x4542CE] unk_48232A
-            // [RE 0x402FD1] saveGameToSlot
-            if (saveGameToSlot(state.app->gameDir(), state.hoverIndex, state.app->gameState())) {
-                RICH4_LOGI("saved to slot %d (RE 0x402FD1)", state.hoverIndex);
+            // [RE 0x402FD1] saveGameToSlot(槽+1)：SAVE1-5
+            if (saveGameToSlot(state.app->gameDir(), state.hoverIndex + 1,
+                               state.app->gameState())) {
+                RICH4_LOGI("saved to slot %d (RE 0x4039C2)", state.hoverIndex + 1);
                 state.app->events().requestExit(state.hoverIndex);
             }
         }
@@ -153,7 +156,7 @@ int saveDialog(Application& app) {
 
     for (int i = 0; i < kSlotCount; ++i) {
         char name[32];
-        std::snprintf(name, sizeof(name), "SAVE%d.DAT", i);
+        std::snprintf(name, sizeof(name), "SAVE%d.DAT", i + 1);
         readSaveHeader(app.gameDir() + "/" + name, state.slots[i]);
     }
 
