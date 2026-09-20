@@ -289,6 +289,10 @@ struct GameState {
     // [RE 0x48BE1C/0x48BE20] 手动视口中心（小地图拖拽设置，限幅 220..2084）
     int viewTargetX = 0;
     int viewTargetY = 0;
+    // [NEW] 小地图点击平滑跳转：当前平滑视口中心与进行中标志（原版为直接跳转）
+    int viewSmoothX = 0;
+    int viewSmoothY = 0;
+    bool viewScrolling = false;
     // [RE 0x48BE29] byte_48BE29：小地图拖拽中
     bool dragMiniMap = false;
     // [RE 0x48BE28] byte_48BE28：待处理操作（1/2=旋转，>=100=工具条按钮 index-100）

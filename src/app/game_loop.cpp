@@ -29,13 +29,43 @@ constexpr int kMiniMapH = 200;
 void renderGameFrame(Application& app) {
     GameState& state = app.gameState();
     if (state.manualView) {
-        // [RE 0x48BE18] dword_48BE18 非 0：用 dword_48BE1C/BE20 作为视口中心
-        renderMap(app, state.viewTargetX, state.viewTargetY);
+        // [RE 0x48BE18] dword_48BE18 非 0：用平滑视口中心（原版 dword_48BE1C/BE20）
+        renderMap(app, state.viewSmoothX, state.viewSmoothY);
     } else {
         // 否则以当前玩家位置为中心
         renderMap(app, -1, 0);
     }
     renderGamePanel(app);
+}
+
+// [NEW] 小地图点击平滑跳转：每 tick 向目标视口中心插值（原版直接跳转）
+void updateScroll(Application& app) {
+    GameState& state = app.gameState();
+    if (!state.viewScrolling) {
+        return;
+    }
+    state.viewSmoothX += (state.viewTargetX - state.viewSmoothX) / 4;
+    state.viewSmoothY += (state.viewTargetY - state.viewSmoothY) / 4;
+    const int dx = state.viewTargetX - state.viewSmoothX;
+    const int dy = state.viewTargetY - state.viewSmoothY;
+    if (dx > -2 && dx < 2 && dy > -2 && dy < 2) {
+        state.viewSmoothX = state.viewTargetX;
+        state.viewSmoothY = state.viewTargetY;
+        state.viewScrolling = false;
+    }
+}
+
+// [NEW] 设置平滑跳转目标（从当前视口中心开始插值）
+void startScroll(Application& app, int targetX, int targetY) {
+    GameState& state = app.gameState();
+    if (!state.viewScrolling) {
+        state.viewSmoothX = state.viewX;
+        state.viewSmoothY = state.viewY;
+    }
+    state.viewTargetX = targetX;
+    state.viewTargetY = targetY;
+    state.manualView = true;
+    state.viewScrolling = true;
 }
 
 int clampInt(int v, int lo, int hi) {
@@ -97,7 +127,7 @@ void handleTopBarButton(Application& app, int index) {
 // [RE 0x417E26] WM_MOUSEMOVE
 void handleMouseMove(Application& app, int x, int y) {
     GameState& state = app.gameState();
-    // 小地图拖拽：视口中心 = (761856 * Δ)>>16，限幅 220..2084
+    // 小地图拖拽：视口中心 = (761856 * Δ)>>16，限幅 220..2084（拖拽立即跟随）
     if (state.dragMiniMap) {
         int mx = 0;
         int my = 0;
@@ -105,12 +135,15 @@ void handleMouseMove(Application& app, int x, int y) {
             state.dragMiniMap = false;
             return;
         }
-        const int vx = (761856 * mx) >> 16;
-        const int vy = (761856 * my) >> 16;
+        const int vx = clampInt((761856 * mx) >> 16, 220, 2084);
+        const int vy = clampInt((761856 * my) >> 16, 220, 2084);
         if (vx != state.viewTargetX || vy != state.viewTargetY) {
-            state.viewTargetX = clampInt(vx, 220, 2084);
-            state.viewTargetY = clampInt(vy, 220, 2084);
+            state.viewTargetX = vx;
+            state.viewTargetY = vy;
+            state.viewSmoothX = vx;
+            state.viewSmoothY = vy;
             state.manualView = true;
+            state.viewScrolling = false;
             renderGameFrame(app);
         }
         return;
@@ -139,11 +172,15 @@ void handleLeftButtonDown(Application& app, int x, int y) {
         state.pendingAction = (x - 443) / 25 + 1; // 1=左旋 / 2=右旋
         return;
     }
-    // 小地图拖拽
+    // 小地图拖拽 / 点击平滑跳转
     int mx = 0;
     int my = 0;
     if (miniMapHitRegion(state, x, y, mx, my)) {
         state.dragMiniMap = true;
+        // [NEW] 点击小地图平滑跳转到该处（原版直接跳转）
+        startScroll(app, clampInt((761856 * mx) >> 16, 220, 2084),
+                    clampInt((761856 * my) >> 16, 220, 2084));
+        renderGameFrame(app);
         return;
     }
     // 工具条按钮
@@ -193,6 +230,7 @@ bool gameEventHandler(const SDL_Event* event, void* user) {
     }
     if (event->type == kModalTimerEvent) {
         // 原版 WinMain idle loop 的 sub_4192F7（脏区刷新）
+        updateScroll(app);
         renderGameFrame(app);
         return true;
     }
