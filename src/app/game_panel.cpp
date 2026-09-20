@@ -56,8 +56,9 @@ int firstWeekday(int year, int month) {
 }
 
 // [RE 0x415D31] 顶部工具条（panel.mkf[1]）
-// 依据: 帧 0 背景 blit 到 (0,0); 11 个按钮帧 2+i 画在 (40*i+20, 20);
-//       按下/高亮帧 13+i（dword_48BDE4 为高亮索引，阶段 1 恒 -1）
+// 依据: 帧 0 背景 blit 到 (0,0); 11 个按钮帧 1+i 画在 (40*i+20, 20);
+//       高亮帧 12+i（dword_48BDE4 为高亮索引）
+//       （原版 (u16*)dword_475118 + 6*i + 12 → 帧 i+1；+78 → 帧 i+12）
 void drawTopBar(Application& app) {
     GameState& state = app.gameState();
     Surface& dst = app.surface();
@@ -66,22 +67,23 @@ void drawTopBar(Application& app) {
     }
     blitElementOpaque(dst, state.panelTopBar.frame(0), 0, 0);
     for (int i = 0; i < 11; ++i) {
-        // 高亮帧 13+i（原版 dword_48BDE4+13），普通帧 2+i
-        const int frame = (i == state.topBarHover) ? (13 + i) : (2 + i);
+        // 普通帧 1+i，高亮帧 12+i
+        const int frame = (i == state.topBarHover) ? (12 + i) : (1 + i);
         if (frame < state.panelTopBar.frameCount()) {
             blitElement(dst, state.panelTopBar.frame(frame), 40 * i + 20, 20, false);
         }
     }
 }
 
-// [RE 0x4166F8] 玩家信息条（布局 2，440,0-640,80；panel.mkf[0] 帧 5）
+// [RE 0x4166F8] 玩家信息条（布局 2，440,0-640,80；panel.mkf[0] 帧 4 = 200x80）
+// 依据: 0x4166F8 反编译; dword_48BE0C + 60 → 帧 4（+12 主头 + 12*4）
 void drawPlayerBar(Application& app) {
     GameState& state = app.gameState();
     Surface& dst = app.surface();
-    if (state.panelFrame0.frameCount() <= 5) {
+    if (state.panelFrame0.frameCount() <= 4) {
         return;
     }
-    blitElementOpaque(dst, state.panelFrame0.frame(5), 440, 0);
+    blitElementOpaque(dst, state.panelFrame0.frame(4), 440, 0);
 
     const int v1 = state.currentPlayer;
     if (v1 >= state.playerCount && v1 != 8) {
