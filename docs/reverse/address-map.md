@@ -38,7 +38,7 @@
 | `0x411E8F` | 读取 | `src/app/game_init.cpp:39` | 0x411E8F CFG 存在时读 16B 设置 + 56B 键位；不存在时设置区保留默认值 （byte_497158=1, 497159=1, 49715A=4, 49715B=4, 49715C=1, 49715D=1） |
 | `0x415872` | playIntro | `src/app/new_game.cpp:391` | 0x415872 反编译; JUMP.MKF 45/46 资源 + sub_451677 播放 AVI （AIRPLANE.AVI 或 off_4750E8[地图索引]） 差异: AVI 播放依赖 MCI，SDL 侧暂无替代（跳过） |
 | `0x415D31` | 顶部工具条（panel.mkf[1]） | `src/app/game_panel.cpp:56` | 帧 0 背景 blit 到 (0,0); 11 个按钮帧 2+i 画在 (40*i+20, 20); 按下/高亮帧 13+i（dword_48BDE4 为高亮索引，阶段 1 恒 -1） |
-| `0x417E26` | gameEventHandler | `src/app/game_loop.cpp:22` | 0x417E26 反编译; WM_PAINT 绘制面板, WM_MOUSEMOVE 地图坐标换算 （×761856>>16 ≈ 11.625，限幅 220..2084）与小地图拖拽, WM_LBUTTONDOWN 地图点击/玩家移动, WM_USER+1 绘制玩家信息面板 差异: 地图交互（拖拽/点击/工具条）阶段 2 接入；当前每 tick 全量重绘 + ESC 退出 |
+| `0x417E26` | gameEventHandler | `src/app/game_loop.cpp:167` | 0x417E26 反编译; WM_PAINT 绘制面板, WM_MOUSEMOVE 地图坐标换算 （×761856>>16 ≈ 11.625，限幅 220..2084）与小地图拖拽, WM_LBUTTONDOWN 地图点击/玩家移动, WM_USER+1 绘制玩家信息面板 差异: sub_417559 物件信息框、日历/页签切换阶段 3 接入 |
 | `0x4190CF` | loadPanelUi | `src/app/new_game.cpp:362` | 0x4190CF 反编译; panel.mkf 索引 0-8（dword_48BE0C/0x475118/0x48BE10/0x48BE14/ 0x48BE04/0x48BE08/0x48BDF8）; dword_475118 非 0 时跳过（幂等） |
 | `0x4291D6` | stockTick | `src/app/new_game.cpp:383` | 0x4291D6 反编译; 12 只股票随机初始涨跌（rand），历史记录 dword_497328 差异: 股票行情在游戏内经济阶段接入；当前仅保持 kStockInit 初值 |
 | `0x44DD9F` | 继续阅读翻屏 | `src/app/help_dialog.cpp:250` | dword_4762B8 为屏起点标记（0 或 '@' 行）；前进/回退最多 14 行（遇 '@' 停）， 结果写回 dword_4762B8；绘制时若为 '@' 行则从其后一行开始。 无效翻页（首屏上一页 / 末屏下一页）不改变画面内容，但需重绘以复位按下动画 |

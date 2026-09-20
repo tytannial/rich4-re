@@ -57,8 +57,10 @@ void renderMap(Application& app, int centerX, int centerY) {
     Surface& dst = app.surface();
 
     if (centerX == -1) {
-        centerX = state.viewX;
-        centerY = state.viewY;
+        // 非手动视角：以当前玩家位置为中心（原版 sub_415E70 非 dword_48BE18 分支）
+        const Player& p = state.players[state.currentPlayer];
+        centerX = p.spriteX;
+        centerY = p.spriteY;
     }
     if (state.currentPlayer < 4 && centerX == 0 && centerY == 0) {
         const int ce = pickSpawnCellEnt(state);

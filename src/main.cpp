@@ -34,6 +34,14 @@ int main(int argc, char** argv) {
     int click6Y = -1;
     int click7X = -1;
     int click7Y = -1;
+    int gameClickX = -1;
+    int gameClickY = -1;
+    int gameClickFrame = 0;
+    int gameDragX1 = -1;
+    int gameDragY1 = -1;
+    int gameDragX2 = -1;
+    int gameDragY2 = -1;
+    int gameDragFrame = 0;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--game" && i + 1 < argc) {
@@ -60,6 +68,16 @@ int main(int argc, char** argv) {
             }
         } else if (arg == "--auto-key" && i + 1 < argc) {
             autoKey = argv[++i];
+        } else if (arg == "--game-click" && i + 1 < argc) {
+            if (std::sscanf(argv[++i], "%d,%d,%d", &gameClickX, &gameClickY, &gameClickFrame) != 3) {
+                gameClickX = -1;
+                gameClickY = -1;
+            }
+        } else if (arg == "--game-drag" && i + 1 < argc) {
+            if (std::sscanf(argv[++i], "%d,%d,%d,%d,%d", &gameDragX1, &gameDragY1, &gameDragX2,
+                            &gameDragY2, &gameDragFrame) != 5) {
+                gameDragX1 = -1;
+            }
         } else if (arg == "--auto-click2" && i + 1 < argc) {
             if (std::sscanf(argv[++i], "%d,%d", &click2X, &click2Y) != 2) {
                 click2X = -1;
@@ -108,6 +126,12 @@ int main(int argc, char** argv) {
     }
     if (hoverX >= 0 && hoverY >= 0) {
         app.setHoverPos(hoverX, hoverY);
+    }
+    if (gameClickX >= 0 && gameClickY >= 0) {
+        app.setGameClick(gameClickX, gameClickY, gameClickFrame);
+    }
+    if (gameDragX1 >= 0 && gameDragY1 >= 0) {
+        app.setGameDrag(gameDragX1, gameDragY1, gameDragX2, gameDragY2, gameDragFrame);
     }
     if (!shotPath.empty()) {
         app.setScreenshot(shotPath, shotFrame, shotCursorX, shotCursorY, autoClick, click2X,

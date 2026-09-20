@@ -400,6 +400,58 @@ void Application::renderFrame() {
         SDL_PushEvent(&ev);
     }
 
+    // [NEW] 调试：在指定帧执行逻辑坐标拖拽（视角拖拽验证）
+    if (m_gameDragX1 >= 0 && m_frameCount == m_gameDragFrame) {
+        float wx1 = 0.0f;
+        float wy1 = 0.0f;
+        float wx2 = 0.0f;
+        float wy2 = 0.0f;
+        if (SDL_RenderCoordinatesToWindow(m_renderer.handle(), static_cast<float>(m_gameDragX1),
+                                          static_cast<float>(m_gameDragY1), &wx1, &wy1) &&
+            SDL_RenderCoordinatesToWindow(m_renderer.handle(), static_cast<float>(m_gameDragX2),
+                                          static_cast<float>(m_gameDragY2), &wx2, &wy2)) {
+            RICH4_LOGI("game-drag frame=%d (%d,%d)->(%d,%d)", m_frameCount, m_gameDragX1,
+                       m_gameDragY1, m_gameDragX2, m_gameDragY2);
+            SDL_WarpMouseInWindow(m_window.handle(), wx1, wy1);
+            SDL_Event ev{};
+            ev.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+            ev.button.button = SDL_BUTTON_LEFT;
+            ev.button.clicks = 1;
+            ev.button.x = wx1;
+            ev.button.y = wy1;
+            SDL_PushEvent(&ev);
+            ev.type = SDL_EVENT_MOUSE_MOTION;
+            ev.motion.x = wx2;
+            ev.motion.y = wy2;
+            SDL_PushEvent(&ev);
+            ev.type = SDL_EVENT_MOUSE_BUTTON_UP;
+            ev.button.x = wx2;
+            ev.button.y = wy2;
+            SDL_PushEvent(&ev);
+        }
+    }
+
+    // [NEW] 调试：在指定帧点击逻辑坐标（游戏内交互验证，如小地图旋转/工具条按钮）
+    if (m_gameClickX >= 0 && m_frameCount == m_gameClickFrame) {
+        float wx = 0.0f;
+        float wy = 0.0f;
+        if (SDL_RenderCoordinatesToWindow(m_renderer.handle(), static_cast<float>(m_gameClickX),
+                                          static_cast<float>(m_gameClickY), &wx, &wy)) {
+            RICH4_LOGI("game-click frame=%d logical=(%d,%d) window=(%.0f,%.0f)", m_frameCount,
+                       m_gameClickX, m_gameClickY, wx, wy);
+            SDL_WarpMouseInWindow(m_window.handle(), wx, wy);
+            SDL_Event ev{};
+            ev.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+            ev.button.button = SDL_BUTTON_LEFT;
+            ev.button.clicks = 1;
+            ev.button.x = wx;
+            ev.button.y = wy;
+            SDL_PushEvent(&ev);
+            ev.type = SDL_EVENT_MOUSE_BUTTON_UP;
+            SDL_PushEvent(&ev);
+        }
+    }
+
     // [NEW] 调试：第 35 帧合成按键按下+抬起（--auto-key，验证热键捕获；支持 "ctrl+x"）
     if (!m_shotKey.empty() && m_frameCount == 35) {
         std::string name = m_shotKey;

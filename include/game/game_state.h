@@ -275,11 +275,24 @@ struct GameState {
 
     // [RE 0x499088] dword_499088 地图旋转方向（0-7）
     int mapRotation = 0;
-    // [RE 0x48B2AC/0x48B2B0] 地图视口中心像素坐标
+    // [RE 0x48B2AC/0x48B2B0] 地图视口中心像素坐标（上次绘制值）
     int viewX = 0;
     int viewY = 0;
     // [RE 0x475118] dword_475118 面板资源已加载标志（0x4190CF 幂等判断）
     bool panelLoaded = false;
+
+    // ===== 游戏内交互状态（0x417E26）=====
+    // [RE 0x48BE18] dword_48BE18：非 0 时用 dword_48BE1C/BE20 作为视口中心（手动视角）
+    bool manualView = false;
+    // [RE 0x48BE1C/0x48BE20] 手动视口中心（小地图拖拽设置，限幅 220..2084）
+    int viewTargetX = 0;
+    int viewTargetY = 0;
+    // [RE 0x48BE29] byte_48BE29：小地图拖拽中
+    bool dragMiniMap = false;
+    // [RE 0x48BE28] byte_48BE28：待处理操作（1/2=旋转，>=100=工具条按钮 index-100）
+    int pendingAction = 0;
+    // [RE 0x48BDE4] dword_48BDE4：工具条悬停按钮索引（-1 无）
+    int topBarHover = -1;
 };
 
 } // namespace rich4

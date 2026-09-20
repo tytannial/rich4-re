@@ -64,7 +64,8 @@ void drawTopBar(Application& app) {
     }
     blitElementOpaque(dst, state.panelTopBar.frame(0), 0, 0);
     for (int i = 0; i < 11; ++i) {
-        const int frame = 2 + i;
+        // 高亮帧 13+i（原版 dword_48BDE4+13），普通帧 2+i
+        const int frame = (i == state.topBarHover) ? (13 + i) : (2 + i);
         if (frame < state.panelTopBar.frameCount()) {
             blitElement(dst, state.panelTopBar.frame(frame), 40 * i + 20, 20, false);
         }
@@ -177,7 +178,7 @@ void drawMiniMap(Application& app) {
         }
     }
     if (markX && markY) {
-        drawRectBorder(dst, markX - 15, markY - 15, 30, 30, 0);
+        drawRectBorder(dst, markX - 15, markY - 15, 30, 30, 0x7FE0); // 黄色 RGB555
     }
 }
 

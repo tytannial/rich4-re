@@ -62,6 +62,22 @@ public:
         m_shotHoverY = y;
     }
 
+    // [NEW] 调试：在指定帧点击逻辑坐标（游戏内交互验证，如小地图旋转/工具条按钮）
+    void setGameClick(int x, int y, int frame) {
+        m_gameClickX = x;
+        m_gameClickY = y;
+        m_gameClickFrame = frame;
+    }
+
+    // [NEW] 调试：在指定帧执行逻辑坐标拖拽 DOWN(x1,y1)→MOTION(x2,y2)→UP（视角拖拽验证）
+    void setGameDrag(int x1, int y1, int x2, int y2, int frame) {
+        m_gameDragX1 = x1;
+        m_gameDragY1 = y1;
+        m_gameDragX2 = x2;
+        m_gameDragY2 = y2;
+        m_gameDragFrame = frame;
+    }
+
     // [NEW] 调试截图：第 frame 帧后保存 BMP 并退出（用于与原版画面比对）；
     //       cursorX/Y >= 0 时先移动鼠标到逻辑坐标（验证悬停等交互状态）；
     //       autoClick 时在第 10 帧合成左键点击；click2-6 在第 20/30/35/38/41 帧再点
@@ -129,6 +145,14 @@ private:
     int m_shotClick7Y = -1;
     float m_shotWinX = 0.0f;
     float m_shotWinY = 0.0f;
+    int m_gameClickX = -1;
+    int m_gameClickY = -1;
+    int m_gameClickFrame = 0;
+    int m_gameDragX1 = -1;
+    int m_gameDragY1 = -1;
+    int m_gameDragX2 = -1;
+    int m_gameDragY2 = -1;
+    int m_gameDragFrame = 0;
     bool m_shotEsc = false;
     int m_shotEscFrame = 25;
     int m_shotHoverX = -1;
