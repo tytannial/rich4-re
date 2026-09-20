@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <vector>
 
 #include "game/app/map_tables.h"
 #include "game/application.h"
@@ -19,6 +20,17 @@ constexpr int kViewCenterX = 220;  // [RE 0x40829D] v130 += 220
 constexpr int kViewCenterY = 260;  // [RE 0x40829D] v125 += 260
 constexpr int kViewHalf = 14;      // [RE 0x40829D] (row+14)/(col+14)
 constexpr int kOrderCount = 296;   // [RE 0x473610] 每方向有效遍历项
+
+// [RE 0x40829D] 物件精灵绘制项（对应原版 dword_48A44C/48A84C/word_48A850/854/856 列表）
+// 原版按 dword_48A44C[m] 低 16 位（16*y）排序（sub_457E6C + sub_4079F9）
+struct SpriteDraw {
+    const UiImage* spr = nullptr;
+    int frame = 0;
+    int x = 0;
+    int y = 0;
+    int colorIdx = -1; // 调色板索引（-1 无）
+    uint16_t id = 0;   // 物件 ID（10000+=玩家 / 2000+=estate / 4000+=corp / 6000+=specPt / 8000+=evtCell）
+};
 
 // [RE 0x407A2C] 像素坐标 -> 等距屏幕偏移
 // 依据: outX = (xo*coeff[0] + yo*coeff[2])>>5; outY = (xo*coeff[1] + yo*coeff[3])>>5
@@ -154,27 +166,169 @@ void renderMap(Application& app, int centerX, int centerY) {
         blitElement(dst, state.cellEntTiles.frame(frame), sx, sy, true);
     }
 
-    // 玩家棋子（阶段 1：静态帧 0；动画/朝向阶段 2 接入）
+    // 物件精灵收集（对应 sub_40829D 的 dword_48A44C 列表，按 y 排序后绘制）
+    std::vector<SpriteDraw> items;
+    items.reserve(64);
+    auto projectItem = [&](int px, int py, int& sx, int& sy) -> bool {
+        const int cr = (py >> 5) - cellY + kViewHalf;
+        const int cc = (px >> 5) - cellX + kViewHalf;
+        if (cr < 0 || cr > 28 || cc < 0 || cc > 28) {
+            return false;
+        }
+        int ox = 0;
+        int oy = 0;
+        isoProject(state, px, py, ox, oy);
+        const int idx = 3364 * dir + 116 * cr + 4 * cc;
+        sx = baseX + isoAt(idx + 2) - ox;
+        sy = baseY + isoAt(idx) - oy;
+        return true;
+    };
+    auto addItem = [&](const UiImage* spr, int frame, int px, int py, int colorIdx, uint16_t id) {
+        if (!spr || spr->frameCount() <= 0) {
+            return;
+        }
+        int sx = 0;
+        int sy = 0;
+        if (!projectItem(px, py, sx, sy)) {
+            return;
+        }
+        items.push_back({spr, frame, sx, sy, colorIdx, id});
+    };
+
+    // 玩家棋子（data.mkf 棋子动画，帧 0；朝向/行走动画阶段 3 接入）
     for (int j = 0; j < state.playerCount && j < 9; ++j) {
         const Player& p = state.players[j];
         if (p.spriteX == 0 && p.spriteY == 0) {
             continue;
         }
-        const int cr = (p.spriteY >> 5) - cellY + kViewHalf;
-        const int cc = (p.spriteX >> 5) - cellX + kViewHalf;
-        if (cr < 0 || cr > 28 || cc < 0 || cc > 28) {
+        addItem(&state.pieceAnim[j], 0, p.spriteX, p.spriteY, -1,
+                static_cast<uint16_t>(0x8000u | (1u << j)));
+    }
+
+    // 特殊点（图块 = dword_48AE4C[sprite]，颜色 = 拥有者）
+    for (size_t i = 1; i < state.specPts.size(); ++i) {
+        const SpecPt& sp = state.specPts[i];
+        if (sp.sprite == 0 || sp.sprite >= 5) {
             continue;
         }
-        int px = 0;
-        int py = 0;
-        isoProject(state, p.spriteX, p.spriteY, px, py);
-        const int idx = 3364 * dir + 116 * cr + 4 * cc;
-        const int sx = baseX + isoAt(idx + 2) - px;
-        const int sy = baseY + isoAt(idx) - py;
-        blitSpriteFrameClipped(dst, state.pieceAnim[j], 0, sx, sy, true);
+        addItem(&state.specPointTiles[sp.sprite], 0, sp.x, sp.y, sp.owner ? sp.owner - 1 : -1,
+                static_cast<uint16_t>(6000 + i));
+    }
+
+    // 事件格（图块 = dword_48AE4C[sprite]）
+    for (size_t i = 1; i < state.evtCells.size(); ++i) {
+        const EvtCell& ec = state.evtCells[i];
+        if (ec.sprite == 0 || ec.sprite >= 5) {
+            continue;
+        }
+        addItem(&state.specPointTiles[ec.sprite], 0, ec.x, ec.y, -1,
+                static_cast<uint16_t>(8000 + i));
+    }
+
+    // 地产（无主时不绘制；颜色 = 拥有者）
+    for (size_t i = 1; i < state.estates.size(); ++i) {
+        const Estate& es = state.estates[i];
+        if (es.owner == 0) {
+            continue;
+        }
+        const int frame = (8 - (state.mapRotation + es.dir)) & 7;
+        addItem(&state.estateFlag, frame, es.x, es.y, es.owner - 1,
+                static_cast<uint16_t>(2000 + i));
+    }
+
+    // 公司（无主时不绘制；图块 = dword_48AE64[sub]，颜色 = 拥有者）
+    for (size_t i = 1; i < state.corps.size(); ++i) {
+        const Corp& cp = state.corps[i];
+        if (cp.owner == 0 || cp.sub >= 17) {
+            continue;
+        }
+        const int frame = (8 - (state.mapRotation + cp.dir)) & 7;
+        addItem(&state.corpTiles[cp.sub], frame, cp.x, cp.y, cp.owner - 1,
+                static_cast<uint16_t>(4000 + i));
+    }
+
+    // 按 y 排序（原版 sub_457E6C + sub_4079F9 按 16*y）
+    std::sort(items.begin(), items.end(),
+              [](const SpriteDraw& a, const SpriteDraw& b) { return a.y < b.y; });
+
+    for (const SpriteDraw& it : items) {
+        if (it.spr->isSprite()) {
+            blitSpriteFrameClipped(dst, *it.spr, it.frame, it.x, it.y, true);
+        } else {
+            blitElement(dst, it.spr->frame(it.frame), it.x, it.y, true);
+        }
     }
 
     setClipRect(0, 0, 640, 480);
+}
+
+// [RE 0x456384] 彩色掩码绘制（把 src 非零像素画成 color 到目标缓冲）
+void blitColorMask(std::vector<uint16_t>& dst, int dstW, int dstH, const UiFrameView& src, int x,
+                   int y, uint16_t color) {
+    const int dx = x - src.offsetX;
+    const int dy = y - src.offsetY;
+    for (int row = 0; row < src.height; ++row) {
+        const int py = dy + row;
+        if (py < 0 || py >= dstH) {
+            continue;
+        }
+        for (int col = 0; col < src.width; ++col) {
+            const int px = dx + col;
+            if (px < 0 || px >= dstW || src.pixels[row * src.width + col] == 0) {
+                continue;
+            }
+            dst[py * dstW + px] = color;
+        }
+    }
+}
+
+// [RE 0x40A4E1] sub_40A4E1(0)：小地图原图拷贝 + 地产/公司/特殊点玩家颜色标记
+// 依据: 0x40A4E1 反编译; blitBackground 拷贝 dword_48BAD0 → dword_48BADC,
+//       再对 estates/corps/specPts 用 sub_456384 画 g_playerColor 标记
+//       （5696/65536 缩放，帧 = (dir&1) + 22/24/28）
+void buildMiniMapMarks(Application& app) {
+    GameState& state = app.gameState();
+    constexpr int kSize = 200;
+    if (state.miniMapRaw.frameCount() <= 0) {
+        return;
+    }
+    const UiFrameView& src = state.miniMapRaw.frame(0);
+    state.miniMapBuffer.assign(static_cast<size_t>(kSize) * kSize, 0);
+    for (int y = 0; y < kSize; ++y) {
+        for (int x = 0; x < kSize; ++x) {
+            if (x < src.width && y < src.height) {
+                state.miniMapBuffer[y * kSize + x] = src.pixels[y * src.width + x];
+            }
+        }
+    }
+    auto mark = [&](int frame, int px, int py, uint16_t color) {
+        if (frame < 0 || frame >= state.estateTiles.frameCount()) {
+            return;
+        }
+        blitColorMask(state.miniMapBuffer, kSize, kSize, state.estateTiles.frame(frame),
+                      (5696 * px) >> 16, (5696 * py) >> 16, color);
+    };
+    for (size_t i = 1; i < state.estates.size(); ++i) {
+        const Estate& es = state.estates[i];
+        if (es.owner == 0) {
+            continue;
+        }
+        mark((es.dir & 1) + 22, es.x, es.y, state.players[es.owner - 1].color);
+    }
+    for (size_t i = 1; i < state.corps.size(); ++i) {
+        const Corp& cp = state.corps[i];
+        if (cp.owner == 0) {
+            continue;
+        }
+        mark((cp.dir & 1) + 24, cp.x, cp.y, state.players[cp.owner - 1].color);
+    }
+    for (size_t i = 1; i < state.specPts.size(); ++i) {
+        const SpecPt& sp = state.specPts[i];
+        if (sp.owner == 0) {
+            continue;
+        }
+        mark((sp.dir & 1) + 28, sp.x, sp.y, state.players[sp.owner - 1].color);
+    }
 }
 
 void initMapEntities(Application& app) {
@@ -195,7 +349,8 @@ void initMapEntities(Application& app) {
         }
     }
     // TODO(RE 0x40E033): 随机地图物件放置（空地/平房/店舖/商場/商業大樓）
-    // TODO(RE 0x40A4E1): 小地图背景绘制（叠加地产/公司标记）
+    // [RE 0x40A4E1] 小地图背景 + 标记叠加
+    buildMiniMapMarks(app);
 }
 
 } // namespace rich4

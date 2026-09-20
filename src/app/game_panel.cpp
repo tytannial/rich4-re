@@ -16,6 +16,8 @@ namespace {
 
 constexpr uint32_t kTextDark = 0x101010; // 原版 1052688
 constexpr uint32_t kTextRed = 0xFF0000;  // 原版 16711680
+constexpr int kMiniMapW = 200;           // 小地图尺寸
+constexpr int kMiniMapH = 200;
 
 // [RE 0x452793] 千分位金额格式化（sub_452793）
 void formatMoney(char* out, int32_t value) {
@@ -156,7 +158,15 @@ void drawMiniMap(Application& app) {
     if (v1 == 0) {
         return;
     }
-    if (state.miniMap.frameCount() > 0) {
+    // [RE 0x40A4E1] 优先用叠加标记后的工作副本（dword_48BADC）
+    if (state.miniMapBuffer.size() == static_cast<size_t>(kMiniMapW) * kMiniMapH) {
+        uint16_t* d = dst.pixels() + static_cast<size_t>(v1) * Surface::kWidth + 440;
+        for (int row = 0; row < kMiniMapH; ++row) {
+            std::memcpy(d, &state.miniMapBuffer[static_cast<size_t>(row) * kMiniMapW],
+                        kMiniMapW * sizeof(uint16_t));
+            d += Surface::kWidth;
+        }
+    } else if (state.miniMap.frameCount() > 0) {
         blitElementOpaque(dst, state.miniMap.frame(0), 440, v1);
     }
     // 玩家标记（5696/65536 缩放）+ 当前玩家框

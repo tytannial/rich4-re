@@ -2,7 +2,7 @@
 
 > 由 `python tools/re_map.py` 自动生成，勿手改。
 
-## RE 映射（81 条）
+## RE 映射（82 条）
 
 | 地址 | 原符号 | 重写位置 | 依据 |
 |------|--------|----------|------|
@@ -26,9 +26,10 @@
 | `0x403D74` | loadDialog | `include/game/app/load_dialog.h:7` | 0x403D74 反编译; sub_450441(data.mkf, 520) 界面资源 + (data.mkf, 2) 头像资源; 扫描 SAVE0.DAT..SAVE5.DAT 绘制槽位; runModal(sub_40363A) 事件处理 返回选中槽索引（0-5）；取消（右键）或无效返回 -1 |
 | `0x404E44` | newGameDialog（定义见 | `include/game/app/new_game_dialog.h:9` | 0x404E44 反编译（4773B 三段状态机, g_newGameState 0=选择/1=随机补齐AI/2=进入过渡）; 由 0x406DE7 newGameInit 经 runModal 调用; 返回 1=确认 / 0=取消 restorePrevious 对应原版 lParam != 0（保留上次配置 + 恢复玩家 0 角色 + 10 tick 后自动確定） 确认时把界面选择结果写回 config |
 | `0x406DE7` | newGameInit | `src/app/new_game.cpp:152` | 0x406DE7 反编译; JUMP.MKF 地图预览 + runModal(0x404E44) 选图/选人; 确认后（v19==1）初始化玩家/卡片/经济/股票（0x40715F..0x4074C4 段） lParam == byte_46CAFC：再次进入（游戏内重新开始/时空之旅返回）时保留上次配置 差异: 卡片系统（sub_445A4D givePlayerCard）与道具/股票洗牌已按原版实现核心逻辑 |
-| `0x407A2C` | 像素坐标 | `src/app/map_render.cpp:23` | outX = (xo*coeff[0] + yo*coeff[2])>>5; outY = (xo*coeff[1] + yo*coeff[3])>>5 |
+| `0x407A2C` | 像素坐标 | `src/app/map_render.cpp:35` | outX = (xo*coeff[0] + yo*coeff[2])>>5; outY = (xo*coeff[1] + yo*coeff[3])>>5 |
 | `0x407AD2` | loadMap | `src/app/new_game.cpp:277` | 0x407AD2 反编译; sub_4502FE("MAP.MKF") + sub_450441(handle, 2*(4*mode+map)) 取 GND 地图数据; +1 取 MAPDAT（本作无独立 MAPDAT.MKF，走 fallback 分支）; 加载图块/棋子精灵并初始化格子表 差异: 玩家地图数据（10008B/玩家）与 sub_42915A/sub_428CAF 待后续 |
 | `0x40829D` | 等距地图渲染 | `include/game/app/map_render.h:7` | 0x40829D 反编译; 视口中心 = 当前玩家像素坐标（centerX/centerY = -1 时用上次值）, 遍历 kIsoDrawOrder 绘制地面等距地块（sub_4557A1）, 再按等距表定位 cellEnts 物件与玩家棋子; 首次进入时随机选择出生点 cellEnt |
+| `0x40A4E1` | sub_40A4E1(0) | `src/app/map_render.cpp:285` | 0x40A4E1 反编译; blitBackground 拷贝 dword_48BAD0 → dword_48BADC, 再对 estates/corps/specPts 用 sub_456384 画 g_playerColor 标记 （5696/65536 缩放，帧 = (dir&1) + 22/24/28） |
 | `0x40FD49` | 滑块单位帧与复选标记帧。 | `src/app/settings_dialog.cpp:90` | 元素偏移 = 12 + 12*i；dword_48BB60+72 → 帧 5（15x16 滑块单位）; dword_48BB60+120 → 帧 9（16x16 复选标记） |
 | `0x4103A3` | settingsWndProc | `src/app/settings_dialog.cpp:330` | 0x4103A3 反编译; WM_MOUSEMOVE(515) 查找控件矩形 dword_474B92 并处理; WM_LBUTTONDOWN(513) 分发控件操作; WM_USER+1 重置悬停并复制设置 |
 | `0x4119E3` | dateDialog（日期更改界面） | `include/game/app/date_dialog.h:9` | 0x4119E3 中 _dos_getdate + runModal(sub_410AC3)；确认后 dword_48BB50/dword_497160 = 日期 日期打包: BYTE0 = 日, BYTE1 = 月, HIWORD = 年（对应 dword_48BB84） 返回新日期；取消返回 0（原版 -1 语义） |
@@ -37,7 +38,7 @@
 | `0x411B53` | settingsDialog | `src/app/settings_dialog.cpp:399` | 0x411B53 反编译; dword_48BB58 = page; sub_450441(data.mkf, 3); 对话框居中 (320 - 帧0宽/2, 240 - 帧0高/2); runModal(sub_4103A3) |
 | `0x411E8F` | 读取 | `src/app/game_init.cpp:39` | 0x411E8F CFG 存在时读 16B 设置 + 56B 键位；不存在时设置区保留默认值 （byte_497158=1, 497159=1, 49715A=4, 49715B=4, 49715C=1, 49715D=1） |
 | `0x415872` | playIntro | `src/app/new_game.cpp:391` | 0x415872 反编译; JUMP.MKF 45/46 资源 + sub_451677 播放 AVI （AIRPLANE.AVI 或 off_4750E8[地图索引]） 差异: AVI 播放依赖 MCI，SDL 侧暂无替代（跳过） |
-| `0x415D31` | 顶部工具条（panel.mkf[1]） | `src/app/game_panel.cpp:56` | 帧 0 背景 blit 到 (0,0); 11 个按钮帧 2+i 画在 (40*i+20, 20); 按下/高亮帧 13+i（dword_48BDE4 为高亮索引，阶段 1 恒 -1） |
+| `0x415D31` | 顶部工具条（panel.mkf[1]） | `src/app/game_panel.cpp:58` | 帧 0 背景 blit 到 (0,0); 11 个按钮帧 2+i 画在 (40*i+20, 20); 按下/高亮帧 13+i（dword_48BDE4 为高亮索引，阶段 1 恒 -1） |
 | `0x417E26` | gameEventHandler | `src/app/game_loop.cpp:167` | 0x417E26 反编译; WM_PAINT 绘制面板, WM_MOUSEMOVE 地图坐标换算 （×761856>>16 ≈ 11.625，限幅 220..2084）与小地图拖拽, WM_LBUTTONDOWN 地图点击/玩家移动, WM_USER+1 绘制玩家信息面板 差异: sub_417559 物件信息框、日历/页签切换阶段 3 接入 |
 | `0x4190CF` | loadPanelUi | `src/app/new_game.cpp:362` | 0x4190CF 反编译; panel.mkf 索引 0-8（dword_48BE0C/0x475118/0x48BE10/0x48BE14/ 0x48BE04/0x48BE08/0x48BDF8）; dword_475118 非 0 时跳过（幂等） |
 | `0x4291D6` | stockTick | `src/app/new_game.cpp:383` | 0x4291D6 反编译; 12 只股票随机初始涨跌（rand），历史记录 dword_497328 差异: 股票行情在游戏内经济阶段接入；当前仅保持 kStockInit 初值 |
