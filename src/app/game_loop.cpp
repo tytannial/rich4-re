@@ -2,12 +2,15 @@
 
 #include <algorithm>
 
+#include "game/app/ai_dialog.h"
 #include "game/app/event_stack.h"
 #include "game/app/game_panel.h"
 #include "game/app/help_dialog.h"
 #include "game/app/load_dialog.h"
+#include "game/app/map_dialog.h"
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
+#include "game/app/save_dialog.h"
 #include "game/app/settings_dialog.h"
 #include "game/application.h"
 #include "game/core/log.h"
@@ -66,12 +69,24 @@ void handleTopBarButton(Application& app, int index) {
             // [RE 0x417D65] case 1: settingsDialog(1)
             settingsDialog(app, 1);
             break;
+        case 2:
+            // [RE 0x417D65] case 2: sub_41E345（託管AI / 玩家資訊）
+            aiDialog(app);
+            break;
         case 3: {
             // [RE 0x417D65] case 3: loadDialog(1)（游戏内读档阶段 3 接入）
             const int slot = loadDialog(app);
             RICH4_LOGI("in-game load dialog returned slot %d (TODO RE 0x417D65)", slot);
             break;
         }
+        case 4:
+            // [RE 0x417D65] case 4: sub_404165（存檔）
+            saveDialog(app);
+            break;
+        case 5:
+            // [RE 0x417D65] case 5: sub_40A9BD（大地圖）
+            mapDialog(app);
+            break;
         default:
             // 2/4-10 依赖游戏内逻辑（存檔/地圖/卡片/道具/股票等）
             RICH4_LOGI("top bar button %d not implemented (RE 0x417D65)", index);
