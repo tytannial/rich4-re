@@ -452,6 +452,27 @@ void Application::renderFrame() {
         }
     }
 
+    // [NEW] 调试：在指定帧合成右键按下+抬起（小地图右键回玩家视角验证）
+    if (m_gameRClickX >= 0 && m_frameCount == m_gameRClickFrame) {
+        float wx = 0.0f;
+        float wy = 0.0f;
+        if (SDL_RenderCoordinatesToWindow(m_renderer.handle(), static_cast<float>(m_gameRClickX),
+                                          static_cast<float>(m_gameRClickY), &wx, &wy)) {
+            RICH4_LOGI("game-rclick frame=%d logical=(%d,%d) window=(%.0f,%.0f)", m_frameCount,
+                       m_gameRClickX, m_gameRClickY, wx, wy);
+            SDL_WarpMouseInWindow(m_window.handle(), wx, wy);
+            SDL_Event ev{};
+            ev.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+            ev.button.button = SDL_BUTTON_RIGHT;
+            ev.button.clicks = 1;
+            ev.button.x = wx;
+            ev.button.y = wy;
+            SDL_PushEvent(&ev);
+            ev.type = SDL_EVENT_MOUSE_BUTTON_UP;
+            SDL_PushEvent(&ev);
+        }
+    }
+
     // [NEW] 调试：第 35 帧合成按键按下+抬起（--auto-key，验证热键捕获；支持 "ctrl+x"）
     if (!m_shotKey.empty() && m_frameCount == 35) {
         std::string name = m_shotKey;

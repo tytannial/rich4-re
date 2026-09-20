@@ -170,6 +170,7 @@ void handleLeftButtonDown(Application& app, int x, int y) {
     // 小地图箭头（旋转）：(443,miniY+3)-(493,miniY+28)，左/右各 25 像素
     if (miniY != 0 && x >= 443 && x <= 493 && y >= miniY + 3 && y <= miniY + 28) {
         state.pendingAction = (x - 443) / 25 + 1; // 1=左旋 / 2=右旋
+        renderGameFrame(app);                     // 按下态箭头（帧 18/19）
         return;
     }
     // 小地图拖拽 / 点击平滑跳转
@@ -200,6 +201,8 @@ void handleLeftButtonUp(Application& app, int x, int y) {
     (void)x;
     (void)y;
     GameState& state = app.gameState();
+    // [RE 0x417E26] 结束小地图拖拽（原版无条件 byte_48BE29 = 0）
+    state.dragMiniMap = false;
     if (state.pendingAction == 1) {
         // [RE 0x417E26] byte_48BE28==1: dword_499088 = (dir - 1) & 7
         state.mapRotation = (state.mapRotation - 1) & 7;
@@ -214,6 +217,23 @@ void handleLeftButtonUp(Application& app, int x, int y) {
         renderGameFrame(app);
     }
     state.pendingAction = 0;
+}
+
+// [RE 0x417E26] WM_RBUTTONUP：小地图上右键 → 取消手动视角，回到当前玩家
+// 见 0x417E26 反编译; if (dword_48BE18 && 布局 && 鼠标在小地图区) dword_48BE18 = 0
+void handleRightButtonUp(Application& app, int x, int y) {
+    GameState& state = app.gameState();
+    if (!state.manualView) {
+        return;
+    }
+    int mx = 0;
+    int my = 0;
+    if (!miniMapHitRegion(state, x, y, mx, my)) {
+        return;
+    }
+    state.manualView = false;
+    state.viewScrolling = false;
+    renderGameFrame(app);
 }
 
 // [RE 0x417E26] gameEventHandler
@@ -255,8 +275,9 @@ bool gameEventHandler(const SDL_Event* event, void* user) {
             handleLeftButtonUp(app, static_cast<int>(event->button.x),
                                static_cast<int>(event->button.y));
         } else if (event->button.button == SDL_BUTTON_RIGHT) {
-            // [RE 0x417E26] WM_RBUTTONUP: 结束小地图拖拽
-            app.gameState().dragMiniMap = false;
+            // [RE 0x417E26] WM_RBUTTONUP: 小地图上右键回到当前玩家视角
+            handleRightButtonUp(app, static_cast<int>(event->button.x),
+                                static_cast<int>(event->button.y));
         }
         return true;
     }

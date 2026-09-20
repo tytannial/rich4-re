@@ -78,6 +78,13 @@ public:
         m_gameDragFrame = frame;
     }
 
+    // [NEW] 调试：在指定帧合成右键按下+抬起（小地图右键回到玩家视角验证）
+    void setGameRClick(int x, int y, int frame) {
+        m_gameRClickX = x;
+        m_gameRClickY = y;
+        m_gameRClickFrame = frame;
+    }
+
     // [NEW] 调试截图：第 frame 帧后保存 BMP 并退出（用于与原版画面比对）；
     //       cursorX/Y >= 0 时先移动鼠标到逻辑坐标（验证悬停等交互状态）；
     //       autoClick 时在第 10 帧合成左键点击；click2-6 在第 20/30/35/38/41 帧再点
@@ -153,6 +160,9 @@ private:
     int m_gameDragX2 = -1;
     int m_gameDragY2 = -1;
     int m_gameDragFrame = 0;
+    int m_gameRClickX = -1;
+    int m_gameRClickY = -1;
+    int m_gameRClickFrame = 0;
     bool m_shotEsc = false;
     int m_shotEscFrame = 25;
     int m_shotHoverX = -1;

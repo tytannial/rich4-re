@@ -285,7 +285,7 @@ void blitColorMask(std::vector<uint16_t>& dst, int dstW, int dstH, const UiFrame
 // [RE 0x40A4E1] sub_40A4E1(0)：小地图原图拷贝 + 地产/公司/特殊点玩家颜色标记
 // 依据: 0x40A4E1 反编译; blitBackground 拷贝 dword_48BAD0 → dword_48BADC,
 //       再对 estates/corps/specPts 用 sub_456384 画 g_playerColor 标记
-//       （5696/65536 缩放，帧 = (dir&1) + 22/24/28）
+//       （5696/65536 缩放，帧 = (dir&1) + 22/24/24；specPts 小地图用 +24，见 a1=0 分支）
 void buildMiniMapMarks(Application& app) {
     GameState& state = app.gameState();
     constexpr int kSize = 200;
@@ -327,7 +327,7 @@ void buildMiniMapMarks(Application& app) {
         if (sp.owner == 0) {
             continue;
         }
-        mark((sp.dir & 1) + 28, sp.x, sp.y, state.players[sp.owner - 1].color);
+        mark((sp.dir & 1) + 24, sp.x, sp.y, state.players[sp.owner - 1].color);
     }
 }
 

@@ -171,6 +171,16 @@ void drawMiniMap(Application& app) {
     } else if (state.miniMap.frameCount() > 0) {
         blitElementOpaque(dst, state.miniMap.frame(0), 440, v1);
     }
+    // [RE 0x416E6D] 左右旋转箭头（data.mkf[517] 帧 18/19 按下、20/21 正常）
+    // 原版 sub_416E6D: sub_456418(dword_48BAD8 + 252/264, 443/468, v1+3)
+    //       （252 = 12+12*20 → 帧 20，264 = 12+12*21 → 帧 21）;
+    //       按下态帧 18/19 见 sub_417E26 WM_LBUTTONDOWN/UP（12*(byte_48BE28+17)+12）
+    if (state.estateTiles.frameCount() > 21) {
+        const int leftFrame = (state.pendingAction == 1) ? 18 : 20;
+        const int rightFrame = (state.pendingAction == 2) ? 19 : 21;
+        blitElement(dst, state.estateTiles.frame(leftFrame), 443, v1 + 3, false);
+        blitElement(dst, state.estateTiles.frame(rightFrame), 468, v1 + 3, false);
+    }
     // 玩家标记（5696/65536 缩放）+ 当前玩家框
     int markX = 0;
     int markY = 0;
@@ -190,7 +200,18 @@ void drawMiniMap(Application& app) {
         }
     }
     if (markX && markY) {
-        drawRectBorder(dst, markX - 15, markY - 15, 30, 30, 0x7FE0); // 黄色 RGB555
+        // [RE 0x416E6D] 当前玩家框（白色，push 0FFFFFFh）
+        drawRectBorder(dst, markX - 15, markY - 15, 30, 30, rgb888To555(0xFFFFFF));
+    }
+    // [RE 0x416E6D] 手动视野框（红色，push 0FF0000h；dword_48BE18 时显示视口中心）
+    // 原版 sub_416E6D: if(dword_48BE18){ v5=(5696*dword_48BE1C)>>16; v6=(5696*dword_48BE20)>>16;
+    //       if(v5+440!=v8||v6+v1!=v9) drawRectBorder(v5+425, v1+v6-15, 30, 30, 0xFF0000) }
+    if (state.manualView) {
+        const int vx = (5696 * state.viewSmoothX) >> 16;
+        const int vy = (5696 * state.viewSmoothY) >> 16;
+        if (vx + 440 != markX || vy + v1 != markY) {
+            drawRectBorder(dst, vx + 425, v1 + vy - 15, 30, 30, rgb888To555(0xFF0000));
+        }
     }
 }
 
