@@ -179,6 +179,22 @@ bool newGameInit(Application& app, bool mode1) {
     state.playerCount = state.newGameConfig.playerCount();
     state.currentPlayer = 0;
     state.gameInited = true; // [RE 0x46CAFC] byte_46CAFC = 1
+    // 重新开局：重置地图旋转/回合/骰子等残留状态（避免"重新遊戲"后旧局状态串场）
+    state.mapRotation = 0;
+    state.dicePhase = 0;
+    state.remainingSteps = 0;
+    state.diceAnimActive = false;
+    state.diceAnimOpened = false;
+    state.diceLandPlayed = false;
+    state.showDice = false;
+    state.musicTimer = 0;
+    state.pendingSpawnPlayer = 0;
+    state.gamePlayerControl = false;
+    for (int k = 0; k < 9; ++k) {
+        state.playerActionState[k] = 0;
+        state.playerMoveGroup[k] = 0;
+        state.playerMoveFrame[k] = 0;
+    }
 
     // [RE 0x406DE7] 确认后：玩家数/人类数/当前玩家/起始资金
     state.humanCount = 0;
