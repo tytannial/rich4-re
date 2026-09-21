@@ -7,6 +7,7 @@
 #include "game/core/log.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
+#include "game/platform/audio.h"
 #include "game/render/ui_image.h"
 
 namespace rich4 {
@@ -57,6 +58,7 @@ bool confirmEventHandler(const SDL_Event* event, void* user) {
             hover = (x < st.originX + w / 2) ? 1 : 2;
         }
         if (hover != st.hover) {
+            st.app->audio().playEffect(0); // [RE 0x4537A8] 悬停音效（dword_48231A）
             st.hover = hover;
             redrawConfirm(st);
         }
@@ -65,6 +67,7 @@ bool confirmEventHandler(const SDL_Event* event, void* user) {
     if (event->type == SDL_EVENT_MOUSE_BUTTON_UP) {
         if (event->button.button == SDL_BUTTON_RIGHT) {
             // [RE 0x45367E] WM_RBUTTONUP(0x205) → postModalExit(0)
+            st.app->audio().playEffect(4); // [RE 0x4534A5] 取消音效（dword_482332）
             st.app->events().requestExit(0);
             return true;
         }
@@ -73,12 +76,15 @@ bool confirmEventHandler(const SDL_Event* event, void* user) {
             const int x = static_cast<int>(event->button.x);
             const int y = static_cast<int>(event->button.y);
             if (x >= st.originX && x < st.originX + w && y >= st.originY && y < st.originY + h) {
+                // [RE 0x45390F/0x453976] 确定/取消按钮点击音效（dword_48232A=选槽）
+                st.app->audio().playEffect(2);
                 st.app->events().requestExit(x < st.originX + w / 2 ? 1 : 0);
             }
             return true;
         }
     }
     if (event->type == SDL_EVENT_KEY_DOWN && event->key.key == SDLK_ESCAPE) {
+        st.app->audio().playEffect(4); // [RE 0x4534A5] 取消音效（dword_482332）
         st.app->events().requestExit(0);
         return true;
     }

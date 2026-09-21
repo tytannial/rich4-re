@@ -213,6 +213,8 @@ void handleLeftButtonDown(Application& app, int x, int y) {
         if (lx >= 0 && ly >= 0 && lx < state.advancePanelW && ly < state.advancePanelH) {
             const int ctrl = static_cast<int>(
                 state.panel8Mask[static_cast<size_t>(ly) * state.advancePanelW + lx]) + 10;
+            // [RE 0x41820E/0x4182CF/0x41833B] 前进面板控件点击音效（dword_482322）
+            app.audio().playEffect(1);
             if (ctrl == 13) { // GO → sub_419703 + sub_41D546 + sub_40DD1F
                 state.manualView = false;
                 disablePlayerControl(app);
@@ -244,7 +246,8 @@ void handleLeftButtonDown(Application& app, int x, int y) {
     // 小地图箭头（旋转）：(443,miniY+3)-(493,miniY+28)，左/右各 25 像素
     if (miniY != 0 && x >= 443 && x <= 493 && y >= miniY + 3 && y <= miniY + 28) {
         state.pendingAction = (x - 443) / 25 + 1; // 1=左旋 / 2=右旋
-        renderGameFrame(app);                     // 按下态箭头（帧 18/19）
+        app.audio().playEffect(1); // [RE 0x41867F] 小地图区点击音效（dword_482322）
+        renderGameFrame(app);      // 按下态箭头（帧 18/19）
         return;
     }
     // 小地图拖拽 / 点击平滑跳转
@@ -264,12 +267,14 @@ void handleLeftButtonDown(Application& app, int x, int y) {
     if (layout != 1 && y >= 288 && y <= 314) {
         if (x >= 448 && x <= 474) {
             RICH4_LOGI("calendar click: mode->0 (RE 0x417E26)");
+            app.audio().playEffect(1); // [RE 0x4183B7] 日历切换音效（dword_482322）
             state.calendarMode = 0;
             renderGameFrame(app);
             return;
         }
         if (x >= 478 && x <= 504) {
             RICH4_LOGI("calendar click: mode->1 (RE 0x417E26)");
+            app.audio().playEffect(1); // [RE 0x4183FF] 日历切换音效（dword_482322）
             state.calendarMode = 1;
             renderGameFrame(app);
             return;
@@ -278,6 +283,7 @@ void handleLeftButtonDown(Application& app, int x, int y) {
     // 工具条按钮
     if (x < 440 && y < kTopBarH) {
         state.pendingAction = x / 40 + 100;
+        app.audio().playEffect(1); // [RE 0x418482] 工具条/页签点击音效（dword_482322）
         return;
     }
     // 地图区（sub_417559 物件信息框阶段 3 接入）
