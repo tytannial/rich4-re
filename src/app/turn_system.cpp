@@ -236,7 +236,7 @@ void updateParachute(Application& app) {
         return;
     }
     // 按真实时间推进（原版 sub_45144F 用 timeGetTime，与帧率无关）
-    const uint32_t now = SDL_GetTicks();
+    const uint32_t now = static_cast<uint32_t>(SDL_GetTicks());
     const uint32_t interval = static_cast<uint32_t>(std::max(1, st.parachute.speedMs()));
     if (st.parachuteLastMs == 0) {
         st.parachuteLastMs = now;
@@ -246,9 +246,6 @@ void updateParachute(Application& app) {
         // 帧数据播完时 nextFrame 返回 false（frameCount 含 0xF100 占位帧，不可用作结束条件）
         if (!st.parachute.nextFrame()) {
             finishParachute(app);
-        } else {
-            RICH4_LOGI("parachute frame %d/%d t=%u", st.parachute.frameIndex(),
-                       st.parachute.frameCount(), now);
         }
     }
 }

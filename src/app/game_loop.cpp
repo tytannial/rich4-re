@@ -39,7 +39,6 @@ void drawParachuteFrame(Application& app) {
     uint16_t* d = dst.pixels();
     const int ox = (440 - w) / 2;
     const int oy = 40 + (440 - h) / 2;
-    int drawn = 0;
     for (int row = 0; row < h; ++row) {
         const int py = oy + row;
         if (py < 0 || py >= Surface::kHeight) {
@@ -55,10 +54,8 @@ void drawParachuteFrame(Application& app) {
                 continue; // 色键 0 透明
             }
             d[static_cast<size_t>(py) * Surface::kWidth + px] = c;
-            ++drawn;
         }
     }
-    RICH4_LOGI("parachute draw: %d px frame=%d (RE 0x45144F)", drawn, st.parachute.frameIndex());
 }
 
 // [RE 0x417E26] 游戏内绘制（WM_PAINT 分支；定义见 gameEventHandler）
