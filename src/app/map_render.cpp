@@ -344,9 +344,16 @@ void renderMap(Application& app, int centerX, int centerY) {
             addItem(&state.pieceTiles, ci, es.x, es.y, -1, static_cast<uint16_t>(2000 + i),
                     &state.flagTiles, pickFrame);
         } else {
-            // [RE 0x40829D] 有建筑：type==0 → dword_48AE48[level] 建筑表；type!=0 → dword_48AE60
-            //   （estateFlag），调色板替换 owner 色；建筑表待 P1 升级流程补
-            addItem(&state.estateFlag, frame, es.x, es.y, es.owner, static_cast<uint16_t>(2000 + i),
+            // [RE 0x40829D] 有建筑：type==0 → dword_48AE48[level]；type!=0 → dword_48AE60
+            //   （estateFlag），调色板替换 owner 色。
+            //   dword_48AE48[level]（level 1..5）= g_specTiles[level-1]（地址 0x48AE48+4*level
+            //   即 0x48AE4C 起的 g_specTiles 数组）= 地图预加载图块 map.mkf[5*base+38+level]
+            //   （重写 specPointTiles[level-1]）；此前误全部画 estateFlag（大地块旗帜外观）
+            const UiImage* tile = &state.estateFlag;
+            if (es.type == 0 && es.level >= 1 && es.level <= 5) {
+                tile = &state.specPointTiles[es.level - 1];
+            }
+            addItem(tile, frame, es.x, es.y, es.owner, static_cast<uint16_t>(2000 + i),
                     &state.flagTiles, pickFrame);
         }
     }
