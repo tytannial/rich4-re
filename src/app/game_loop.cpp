@@ -259,14 +259,17 @@ void handleLeftButtonDown(Application& app, int x, int y) {
         return;
     }
     // [RE 0x417E26] 日历点击切换显示模式（byte_497164）：
-    //   日历顶栏 y∈[280,314]，左箭头 x∈[448,474]→大数字(0)、右箭头 x∈[478,504]→月历网格(1)
-    if (y >= 280 && y <= 314) {
+    //   原版条件 byte_49715D!=1（有日历的布局）且 y∈[288,314]，
+    //   左箭头 x∈[448,474]→大数字(0)、右箭头 x∈[478,504]→月历网格(1)
+    if (layout != 1 && y >= 288 && y <= 314) {
         if (x >= 448 && x <= 474) {
+            RICH4_LOGI("calendar click: mode->0 (RE 0x417E26)");
             state.calendarMode = 0;
             renderGameFrame(app);
             return;
         }
         if (x >= 478 && x <= 504) {
+            RICH4_LOGI("calendar click: mode->1 (RE 0x417E26)");
             state.calendarMode = 1;
             renderGameFrame(app);
             return;

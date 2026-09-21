@@ -8,6 +8,7 @@
 #include "game/core/log.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
+#include "game/render/raw_bitmap.h"
 #include "game/render/text.h"
 
 namespace rich4 {
@@ -274,20 +275,35 @@ bool isSpecialDate(const GameState& st, uint32_t date) {
     return false;
 }
 
-// [RE 0x4169BC] 节日专属背景：data.mkf[kCalendarRes[base]+idx]，缓存到 holidayBg（原版 dword_48BDD0）
+// [RE 0x4169BC] 节日专属背景：data.mkf[kCalendarRes[base]+idx] 是 RAW 200x200 插画，
+//   缓存到 holidayBgData（原版 dword_48BDCC/dword_48BDD0）
 void drawHolidayBackground(Application& app, int holiday) {
     GameState& st = app.gameState();
     const int base = 4 * st.gameMode + st.mapIndex;
     const int resIdx = kCalendarRes[base] + holiday;
     if (st.holidayBgIdx != resIdx) {
         auto blob = st.data.read(static_cast<size_t>(resIdx));
-        if (blob) {
-            st.holidayBg.load(std::move(*blob));
-        }
+        st.holidayBgData = blob ? std::move(*blob) : std::vector<uint8_t>{};
         st.holidayBgIdx = resIdx;
     }
-    if (st.holidayBg.frameCount() > 0) {
-        blitElementOpaque(app.surface(), st.holidayBg.frame(0), 440, 280);
+    const RawBitmap raw = decodeRawBitmap(st.holidayBgData);
+    if (!raw.valid()) {
+        return;
+    }
+    Surface& dst = app.surface();
+    uint16_t* d = dst.pixels();
+    for (int row = 0; row < raw.height; ++row) {
+        const int py = 280 + row;
+        if (py < 0 || py >= Surface::kHeight) {
+            continue;
+        }
+        for (int col = 0; col < raw.width; ++col) {
+            const int px = 440 + col;
+            if (px < 0 || px >= Surface::kWidth) {
+                continue;
+            }
+            d[static_cast<size_t>(py) * Surface::kWidth + px] = raw.pixels[row * raw.width + col];
+        }
     }
 }
 
