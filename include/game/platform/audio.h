@@ -38,7 +38,10 @@ public:
     //   → Effect.mkf 索引 0/1/2/4/3/5）
     bool playEffect(int effectId);
     // [RE 0x48234A] 播放游戏音效槽（0..23；原版 dword_48234A[2*slot] 映射到 Effect.mkf 索引）
+    //   同槽替换（原版单 DirectSound buffer：sub_4542E9 停止 + sub_4542CE 播放）
     bool playEffectSlot(int slot);
+    // [RE 0x4542E9] 停止指定音效槽（移动结束等）
+    void stopEffectSlot(int slot);
     // [RE byte_49715B] 音效音量 0-4（0 = 静音）
     void setEffectVolume(int volume) { m_effectVolume = volume; }
     int effectVolume() const { return m_effectVolume; }

@@ -743,6 +743,10 @@ void updateGameState(Application& app) {
         }
         case 1: {
             if (st.remainingSteps == 0) {
+                // [RE 0x40D7C4 case1] 移动结束：停止载具/移动音效（原版 sub_4542E9）
+                if (st.moveSoundIndex > 0) {
+                    app.audio().stopEffectSlot(st.moveSoundIndex);
+                }
                 st.playerActionState[p] = 0;
                 st.playerMoveFrame[p] = 0;
                 st.playerActionWait[p] = 5;
@@ -776,11 +780,15 @@ void updateGameState(Application& app) {
                 if (st.playerMoveFrame[p] < perDir - 1) {
                     ++st.playerMoveFrame[p]; // 逐帧播扔骰动作
                 } else {
-                    // [RE 0x40D7C4 case2] 帧到 perDir 时播放掷骰音效：
-                    //   音效槽 = 特殊组?15 : (载具&3)+11（原版 dword_4749D4 → dword_48234A）
+                    // [RE 0x40D7C4 case2] 帧到 perDir 时播放音效：
+                    //   1) 载具/移动槽 = 特殊组?15 : (载具&3)+11（dword_4749D4 → dword_48234A）
+                    //   2) 掷骰音效槽 3（dword_482362，当前玩家<4 且 cellNo 非0）
                     const int diceSfx =
                         st.playerMoveGroup[p] ? 15 : (st.players[p].travel & 3) + 11;
                     app.audio().playEffectSlot(diceSfx);
+                    if (p < 4 && st.players[p].cellNo != 0) {
+                        app.audio().playEffectSlot(3);
+                    }
                     st.dicePhase = 1; // 停在末帧（松手），不重置回第0帧
                 }
                 break; // map_render 按 playerMoveFrame 画角色扔骰帧

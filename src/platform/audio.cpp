@@ -160,6 +160,7 @@ struct Audio::Impl {
     struct Voice {
         PcmBuffer pcm;
         size_t pos = 0;
+        int slot = -1; // 游戏音效槽（-1 = UI/独立音效，不参与同槽替换）
     };
     std::vector<Voice> voices;
 
@@ -339,7 +340,20 @@ bool Audio::playEffectSlot(int slot) {
     if (slot < 0 || slot >= 24) {
         return false;
     }
-    return playEffect(kEffectSlotIndex[slot]);
+    // [RE 0x4542E9/0x4542CE] 原版单 buffer：同槽先停止旧音效再播放（替换式，避免叠加）
+    stopEffectSlot(slot);
+    if (!playEffect(kEffectSlotIndex[slot])) {
+        return false;
+    }
+    m_impl->voices.back().slot = slot;
+    return true;
+}
+
+void Audio::stopEffectSlot(int slot) {
+    auto& voices = m_impl->voices;
+    voices.erase(std::remove_if(voices.begin(), voices.end(),
+                                [slot](const Impl::Voice& v) { return v.slot == slot; }),
+                 voices.end());
 }
 
 bool Audio::playMusic(int trackIndex) {
