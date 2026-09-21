@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "game/render/fli.h"
 #include "game/render/ui_image.h"
 #include "game/resource/mkf.h"
 
@@ -36,28 +37,36 @@ struct NewGameConfig {
 struct Player {
     const char* name = nullptr; // +0  角色名（BIG5→UTF-8）
     uint16_t color = 0;         // +4  g_playerColor 0x496B6C
-    uint16_t spriteX = 0;       // +8  g_playerSpriteX 0x496B70
+    uint16_t spriteX = 0;       // +8  g_playerSpriteX 0x496B70（52 步进 word 数组）
     uint16_t spriteY = 0;       // +10 g_playerSpriteY 0x496B72
     uint16_t cellEntId = 0;     // +12 g_playerCellEntId 0x496B74
-    uint16_t facing = 0;        // +14 word_496B76（移动方向）
+    uint16_t prevCellEnt = 0;   // +14 word_496B76（上一步所在 cellEnt，移动排除回头路）
     uint8_t dir = 0;            // +16 byte_496B78（绘制朝向 0-7）
-    uint8_t travel = 0;         // +17 byte_496B79（行进方式）
-    uint8_t pad18 = 0;          // +18 byte_496B7A
+    uint8_t travel = 0;         // +17 byte_496B79（行进方式 0-3）
+    uint8_t diceCount = 1;      // +18 byte_496B7A（骰子个数）
     uint8_t charIndex = 0;      // +19 g_playerCharIndex 0x496B7B（角色 ID）
-    uint8_t pad20 = 0;          // +20
-    uint8_t alive = 0;          // +21 g_playerAlive 0x496B7D
+    uint8_t byte20 = 0;         // +20
+    uint8_t alive = 0;          // +21 g_playerAlive 0x496B7D（bit0 存活，0x10/0x20/0x30 状态）
+    uint8_t byte22 = 0;         // +22
+    uint8_t byte23 = 0;         // +23
+    uint8_t byte24 = 0;         // +24
     uint8_t aiAssetPct = 0;     // +25 byte_496B81（AI 初始资金百分比）
     int32_t cash = 0;           // +28 g_playerCash 0x496B84
     int32_t bank = 0;           // +32 g_playerBank 0x496B88
     int32_t loan = 0;           // +36 g_playerLoan 0x496B8C
     uint32_t loanDate = 0;      // +44 g_playerLoanDate 0x496B94
     uint16_t points = 0;        // +48 g_playerPoints 0x496B98
-    uint32_t dword50 = 0;       // +50 dword_496B9A
-    uint8_t byte54 = 0;         // +54 byte_496B9E
+    uint32_t stateFlags = 0;    // +50 dword_496B9A（BYTE0-3 各状态效果剩余回合）
+    uint8_t byte54 = 0;         // +54 byte_496B9E（额外状态）
     uint8_t state37 = 0;        // +55 g_playerState37 0x496B9F
+    uint8_t skipMove = 0;       // +56 byte_496BA0（跳过移动）
+    uint8_t fixedStep = 0;      // +57 byte_496BA1（固定步数）
+    uint8_t byte58 = 0;         // +58
     uint8_t cardCount = 0;      // +62 g_playerCardCnt 0x496BA6
     uint8_t cellTableIdx = 0;   // +63 byte_496BA7
+    uint8_t cellNo = 0;         // +64 g_playerCellNo 0x496BA8
     uint8_t vehicle = 0;        // +65 g_playerVehicle 0x496BA9
+    uint8_t byte66 = 0;         // +66 byte_496BAA
     uint8_t kind = 0;           // +100 g_playerKind 0x496BCC（1=人类 2=AI）
 };
 
@@ -83,8 +92,9 @@ struct Estate {
     uint8_t owner = 0;          // +25 拥有者（玩家号+1）
     uint8_t level = 0;          // +26 等级
     uint8_t dir = 0;            // +27 朝向
-    uint8_t pad28[20] = {};     // +28..+47
-    int32_t price = 0;          // +48
+    uint8_t pad28[16] = {};     // +28..+43
+    int32_t price = 0;          // +44 收购价（sub_41982D）
+    uint32_t expireDate = 0;    // +48 到期日期（dword_497160 比较，sub_41CF67）
 };
 
 // [RE 0x498E88] g_corps 每项 56 字节
@@ -97,7 +107,9 @@ struct Corp {
     uint8_t sub = 0;            // +26
     uint8_t dir = 0;            // +27
     uint8_t flag = 0;           // +28 旗帜（&1）
-    uint8_t pad29[27] = {};     // +29..+55
+    uint8_t pad29[19] = {};     // +29..+47
+    int32_t price = 0;          // +48
+    uint32_t expireDate = 0;    // +52 到期日期（sub_41CF67）
 };
 
 // [RE 0x498E7C] g_specPts 每项 52 字节
@@ -244,7 +256,11 @@ struct GameState {
     UiImage panelFrame3;          // [RE 0x48BE14] panel.mkf[3]
     UiImage panelFrame7;          // [RE 0x48BE04] panel.mkf[7]
     UiImage panelFrame8;          // [RE 0x48BE08] panel.mkf[8]
-    UiImage panelFrames456[3];    // [RE 0x48BDF8] panel.mkf[4..6]
+    // [RE 0x48BDF8/0x48BDF4] 骰子滚动动画 panel.mkf[4/5/6]（FLC，按骰子数 1/2/3）
+    //   原版 sub_419572 用 sub_45144F 播放；非 UiImage（无 SPR/SMP 魔数，loadUiImage 会失败）
+    FliDecoder diceAnim;          // 当前掷骰滚动动画（panel[骰子数+3]）
+    bool diceAnimActive = false;  // 状态2 滚动播放中
+    uint64_t diceHoldStartMs = 0; // 点数停留起始（原版 sub_45285E(500)）
 
     // [RE 0x496D08] g_cellTable 每项 24 字节（+0 = 类型）
     std::vector<uint8_t> cellTable;
@@ -306,6 +322,105 @@ struct GameState {
     bool quitGame = false;
     // [RE 0x411AE0] 認輸投降请求（当前玩家出局）
     bool surrenderRequest = false;
+
+    // ===== 回合/移动状态机（0x40D7C4）=====
+    // 每玩家 52 字节步进数组（0x498EA0 起，索引 = 玩家号 0..8）
+    // [RE 0x498EA0] byte_498EA0 行动标志位（bit7=待开始回合 0x30=状态效果 0x0F=动画组）
+    uint8_t playerActionFlags[9] = {};
+    // [RE 0x498EA1] byte_498EA1 移动动画组（0=普通 1=特殊/载具）
+    uint8_t playerMoveGroup[9] = {};
+    // [RE 0x498EA2] byte_498EA2 行动状态: 0=收尾倒计时 1=移动中 2=掷骰 3=特殊移动
+    uint8_t playerActionState[9] = {};
+    // [RE 0x498EA3] byte_498EA3 移动动画帧/已走步数
+    uint8_t playerMoveFrame[9] = {};
+    // [RE 0x498EA4] byte_498EA4 行走动画帧偏移（到达后循环）
+    uint8_t playerActionExtra[9] = {};
+    // [RE 0x498EA5] byte_498EA5 状态 0 倒计时（负数 = 直接下一位玩家）
+    int8_t playerActionWait[9] = {};
+    // [RE 0x498EA8/0x498EAC] flt_498EA8/EAC 每玩家浮点像素坐标
+    float playerStepX[9] = {};
+    float playerStepY[9] = {};
+
+    // [RE 0x46CB01] byte_46CB01 游戏内运行标志
+    bool gameLoopActive = false;
+    // [RE 0x46CAFA] byte_46CAFA 本帧需运行状态机
+    bool gameFrameTick = false;
+    // [RE 0x46CAFB] byte_46CAFB 状态机激活
+    bool gameStateActive = false;
+    // [RE 0x46CAFD] byte_46CAFD 玩家可操作（前进面板可用）
+    bool gamePlayerControl = false;
+    // [RE 0x46CAFE] byte_46CAFE 系统菜单/暂停态
+    bool gamePauseMenu = false;
+    // [RE 0x46CAFF] byte_46CAFF 取消键触发跳过回合
+    bool gameSkipRequest = false;
+    // [RE 0x475110] dword_475110 脏区标志（bit1=地图区）
+    uint8_t dirtyFlags = 0;
+    // [RE 0x475118] dword_475118 工具条资源已加载（游戏内标志）
+    bool gamePanelReady = false;
+
+    // [RE 0x48BAF8] dword_48BAF8 剩余移动步数（= 骰子点数）
+    int remainingSteps = 0;
+    // [RE 0x48BB00] byte_48BB00 待处理落地事件
+    bool stepActionPending = false;
+    // [RE 0x4749DC] dword_4749DC 单格移动剩余帧
+    int stepFrames = 0;
+    // [RE 0x48BAE4/0x48BAE8] dword_48BAE4/E8 目标像素坐标
+    int stepTargetX = 0;
+    int stepTargetY = 0;
+    // [RE 0x48BAEC/0x48BAF0] flt_48BAEC/F0 每帧位移
+    float stepDeltaX = 0.0f;
+    float stepDeltaY = 0.0f;
+    // [RE 0x48BAF4] dword_48BAF4 半步点（载具状态切换）
+    int stepHalf = 0;
+    // [RE 0x4749E0] byte_4749E0 到达后停留帧
+    int stepDwell = 0;
+
+    // [RE 0x4749D4] dword_4749D4 当前移动音效索引
+    int moveSoundIndex = 0;
+    // [RE 0x475284] qword_475284 前进面板屏幕位置
+    int advancePanelX = 0;
+    int advancePanelY = 0;
+    // [RE 0x48BDD4] dword_48BDD4 前进面板闪烁帧（0/1，GO 金色高亮）
+    int advancePanelBlink = 0;
+    // [RE 0x419572] 骰子点数（最多 3 个）与显示标志
+    int diceValues[3] = {0, 0, 0};
+    bool showDice = false;
+
+    // 事件槽（玩家 4..8 使用；16 字节步进）
+    // [RE 0x498DF2] byte_498DF2 槽占用（sub_418EBD 轮换检查）
+    uint8_t slotBusy2[8] = {};
+    // [RE 0x498DF5] byte_498DF5 槽标志（sub_40B93B）
+    uint8_t slotFlag5[8] = {};
+    // [RE 0x498DF6] byte_498DF6 槽标志（sub_40DD1F）
+    uint8_t slotFlag6[8] = {};
+    // [RE 0x498DF7] byte_498DF7 槽标志（sub_40DD1F）
+    uint8_t slotFlag7[8] = {};
+    // [RE 0x498E31] byte_498E31 槽朝向
+    uint8_t slotDir[8] = {};
+    // [RE 0x498E32] byte_498E32 槽占用
+    uint8_t slotBusy[8] = {};
+    // [RE 0x498E34/35/36/37] 槽状态倒计时（负数 = 完成）
+    int8_t slotTimerA[8] = {};
+    int8_t slotTimerB[8] = {};
+    int8_t slotTimerC[8] = {};
+    int8_t slotTimerD[8] = {};
+    // [RE 0x498E2C/0x498E2E] 槽 cellEnt / 上一步 cellEnt
+    uint16_t slotCell[8] = {};
+    uint16_t slotPrevCell[8] = {};
+    // [RE 0x498E28/0x498E2A] g_miscTable80 / word_498E2A 槽像素坐标
+    uint16_t slotPixelX[8] = {};
+    uint16_t slotPixelY[8] = {};
+
+    // [RE 0x498EB4] dword_498EB4 行走动画资源（每玩家 13 槽：EB4[13n+2*state+group]）
+    UiImage walkRes[9][13];
+
+    // [RE 0x475114] dword_475114 待入场玩家（+1；0 = 无）
+    int pendingSpawnPlayer = 0;
+    // [RE 0x45144F] 跳伞动画（data.mkf[charIndex+559] FLC）
+    FliDecoder parachute;
+    bool parachuteActive = false;
+    int parachuteTimer = 0;
+    uint32_t parachuteLastMs = 0;
 };
 
 } // namespace rich4

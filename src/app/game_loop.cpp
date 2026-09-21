@@ -12,6 +12,7 @@
 #include "game/app/map_tables.h"
 #include "game/app/save_dialog.h"
 #include "game/app/settings_dialog.h"
+#include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/log.h"
 #include "game/render/surface.h"
@@ -24,6 +25,42 @@ constexpr int kTopBarH = 40;   // 顶部工具条高度
 constexpr int kMiniMapW = 200; // 小地图尺寸
 constexpr int kMiniMapH = 200;
 
+// [RE 0x45144F] 跳伞动画帧（FLC）叠加到地图区
+// 依据: 0x45144F 播放 data.mkf[charIndex+559] 到 (0,40) 区域
+void drawParachuteFrame(Application& app) {
+    GameState& st = app.gameState();
+    Surface& dst = app.surface();
+    const int w = st.parachute.width();
+    const int h = st.parachute.height();
+    if (w <= 0 || h <= 0) {
+        return;
+    }
+    const uint16_t* src = st.parachute.pixels();
+    uint16_t* d = dst.pixels();
+    const int ox = (440 - w) / 2;
+    const int oy = 40 + (440 - h) / 2;
+    int drawn = 0;
+    for (int row = 0; row < h; ++row) {
+        const int py = oy + row;
+        if (py < 0 || py >= Surface::kHeight) {
+            continue;
+        }
+        for (int col = 0; col < w; ++col) {
+            const int px = ox + col;
+            if (px < 0 || px >= Surface::kWidth) {
+                continue;
+            }
+            const uint16_t c = src[static_cast<size_t>(row) * w + col];
+            if (c == 0) {
+                continue; // 色键 0 透明
+            }
+            d[static_cast<size_t>(py) * Surface::kWidth + px] = c;
+            ++drawn;
+        }
+    }
+    RICH4_LOGI("parachute draw: %d px frame=%d (RE 0x45144F)", drawn, st.parachute.frameIndex());
+}
+
 // [RE 0x417E26] 游戏内绘制（WM_PAINT 分支；定义见 gameEventHandler）
 // 顶部工具条 + 地图区 + 按 byte_49715D 布局的右侧面板；每 tick 全量重绘
 void renderGameFrame(Application& app) {
@@ -34,6 +71,9 @@ void renderGameFrame(Application& app) {
     } else {
         // 否则以当前玩家位置为中心
         renderMap(app, -1, 0);
+    }
+    if (state.parachuteActive && state.parachute.valid()) {
+        drawParachuteFrame(app);
     }
     renderGamePanel(app);
 }
@@ -165,6 +205,30 @@ void handleMouseMove(Application& app, int x, int y) {
 // [RE 0x417E26] WM_LBUTTONDOWN
 void handleLeftButtonDown(Application& app, int x, int y) {
     GameState& state = app.gameState();
+    // [RE 0x417E26] 前进面板命中：仅 GO 控件（panel.mkf[8] 像素 +10 == 13）触发；
+    //   其余区域继续正常交互（工具条/地图），不再整体拦截
+    if (state.gamePlayerControl && state.panelFrame8.frameCount() > 0) {
+        const UiFrameView& hit = state.panelFrame8.frame(0);
+        const int lx = x - state.advancePanelX;
+        const int ly = y - state.advancePanelY;
+        if (lx >= 0 && ly >= 0 && lx < hit.width && ly < hit.height && hit.pixels) {
+            const int ctrl =
+                static_cast<int>(hit.pixels[static_cast<size_t>(ly) * hit.width + lx] & 0xFF) + 10;
+            if (ctrl == 13) { // GO → sub_40DD1F
+                disablePlayerControl(app);
+                startPlayerMove(app);
+                return;
+            }
+            if (ctrl == 11) { // 選擇骰子數
+                Player& pl = state.players[state.currentPlayer];
+                const int maxDice = (pl.travel == 2) ? 3 : (pl.travel == 1 ? 2 : 1);
+                if (maxDice > 1) {
+                    pl.diceCount = static_cast<uint8_t>(pl.diceCount % maxDice + 1);
+                }
+                return;
+            }
+        }
+    }
     const int layout = state.settings[5] & 3;
     const int miniY = kMiniMapY[layout];
     // 小地图箭头（旋转）：(443,miniY+3)-(493,miniY+28)，左/右各 25 像素
@@ -268,7 +332,14 @@ bool gameEventHandler(const SDL_Event* event, void* user) {
             renderGameFrame(app);
             return true;
         }
-        // 原版 WinMain idle loop 的 sub_4192F7（脏区刷新）
+        // [RE 0x417E26] WM_TIMER(0x113): dword_48BDD4 ^= 1（前进面板 GO 闪烁，约 500ms）
+        static int s_blinkTick = 0;
+        if (++s_blinkTick >= 31) {
+            s_blinkTick = 0;
+            st.advancePanelBlink ^= 1;
+        }
+        // [RE 0x401B9C] idle loop: sub_4192F7(渲染) + sub_40D7C4(状态机)
+        updateGameState(app);
         updateScroll(app);
         renderGameFrame(app);
         return true;
@@ -276,6 +347,29 @@ bool gameEventHandler(const SDL_Event* event, void* user) {
     // [RE 0x401010] ESC 默认绑定"取消指令"（默认键位 bind[5] = 0x1B），由全局键盘钩子处理：
     // 抬起时合成 WM_RBUTTONUP → handleRightButtonUp（取消手动视角，与右键一致）。
     // 游戏内系统菜单仅由工具条"设置"按钮打开（0x417D65 case 1 → settingsDialog(1)）
+    // [RE 0x401010] 全局键盘钩子 fn 的游戏内功能键（word_49717C 前進指令 / 49717E 選擇骰子數）
+    if (event->type == SDL_EVENT_KEY_DOWN) {
+        GameState& st = app.gameState();
+        const uint8_t vk = sdlKeycodeToVk(event->key.key);
+        const uint16_t* bind = app.input().bindings();
+        if (st.gamePlayerControl && vk != 0 && vk == (bind[10] & 0xFF)) {
+            // [RE 0x401010] word_49717C 前進指令 → setPauseDraw(0); sub_419703(); sub_41D546(); sub_40DD1F()
+            RICH4_LOGI("advance key: start move (RE 0x401010/0x40DD1F)");
+            disablePlayerControl(app);
+            startPlayerMove(app);
+            return true;
+        }
+        if (st.gamePlayerControl && vk != 0 && vk == (bind[11] & 0xFF)) {
+            // [RE 0x401010] word_49717E 選擇骰子數（机车 1-2 / 汽车 1-3）
+            Player& pl = st.players[st.currentPlayer];
+            const int maxDice = (pl.travel == 2) ? 3 : (pl.travel == 1 ? 2 : 1);
+            if (maxDice > 1) {
+                pl.diceCount = static_cast<uint8_t>(pl.diceCount % maxDice + 1);
+            }
+            RICH4_LOGI("dice count: %d (RE 0x401010)", pl.diceCount);
+            return true;
+        }
+    }
     if (event->type == SDL_EVENT_MOUSE_MOTION) {
         handleMouseMove(app, static_cast<int>(event->motion.x), static_cast<int>(event->motion.y));
         return true;
@@ -306,6 +400,7 @@ bool gameEventHandler(const SDL_Event* event, void* user) {
 void enterGameLoop(Application& app) {
     // [RE 0x401981] 依据: sub_401981(0) 压入 sub_417E26 并 PostMessage(0x401) 进入游戏内循环
     RICH4_LOGI("enter game loop (RE 0x401981)");
+    initTurnState(app);
     runModal(app, &gameEventHandler, &app, 16);
 }
 
