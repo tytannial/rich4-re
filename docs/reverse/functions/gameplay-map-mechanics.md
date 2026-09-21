@@ -187,7 +187,11 @@ specPt 3 项、evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 
 - [x] `landingEvent` case 0 无主地产购地（守卫/算价/现金检查/询问/神明阻止/owner/音效槽 17/小地图/期限/扣款）
 - [x] 询问文本核对（0x4639E1，BIG5）：`"%s\n\n費用:%d元\n\n是否買下此地?"`（IDA get_string 在 \n 处截断，须用 get_bytes 核对）
 - [x] 空地"信物"（0x40829D @0x4091DF）：**level==0 有主 → 棋子图 pieceTiles（0x48AEA8）+ 帧=角色 ID**、不调色板；
-      level>0 → `dword_48AE48[level]` 建筑表（type==0）/ `dword_48AE60`（estateFlag，type!=0），owner 调色板；无主不绘制
+      level>0 → `dword_48AE48[level]` **住宅建筑外观**（type==0）/ `dword_48AE60`（estateFlag，type!=0），owner 调色板；无主不绘制
+- [x] 住宅建筑外观资源（0x4091F9 `mov eax, ds:dword_48AE48[eax*4]`）：`dword_48AE48[level]`（level 1..5）
+      与 `g_specTiles[level-1]` **同址**（0x48AE48 + 4*level = 0x48AE4C 起的数组），
+      即地图预加载图块 `map.mkf[5*base+38+level]`（重写 `specPointTiles[level-1]`）；
+      误用 estateFlag 会表现为"升级后变连锁店外观"（已修 `12ea114`）
 - [x] 回合缓冲：case 0 有 objId 路径统一返回 **0x88**（loc_41B111，等 8 帧后下一位）；objId==0 → 0x80
 - [x] 吐槽机制（0x44F627）：同名地产 ≥3 时 `sub_44EF41` 角色语音/表情（买地后必定、升级后 1/3 概率）→ **P4 待实现**
 - 差异（待补）：AI 决策 `sub_41D7D4`；现金不足提示（`byte_46398B`="現金不夠支付！" + `showMessage` 1500ms）；
@@ -195,9 +199,11 @@ specPt 3 项、evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 
 
 ### P1 升级 + 收租（同链路）
 
-- [ ] case 0 自己地产升级（0x419911..0x419A52：level<5、费用 `word[est+30]*moneyMul`、询问、`level++`）
-- [ ] case 0 他人地产收租（`loc_419A67`；租金表 = `estate +32+2*level`，实测 6 级）
-- [ ] 状态机 case 3 修正：移动结束收租（0x40DA4B → `sub_40DF69`，30*moneyMul）
+- [x] case 0 自己地产升级（0x419911..0x419A52：level<5、type==0、state37==0，费用 `word[est+30]*moneyMul`，
+      AI 自动 / 人类 askDialog、神明阻止、音效槽 18）—— `a491b8a`
+- [x] 住宅建筑外观（`dword_48AE48[level]` = `specPointTiles[level-1]`，实机确认）—— `12ea114`
+- [x] 状态机 case 3 修正：移动结束收租（0x40DA4B → `sub_40DF69`，30*moneyMul；重写立即转账）—— `36c3392`
+- [ ] case 0 他人地产收租（`loc_419A67`；租金表 = `estate +32+2*level`，实测 6 级）—— 待实机对照（收租已在 case 3）
 - [ ] 连锁店收费（`estate+24 type≠0`：收费与地段无关、以店面总数计算，不并入路段联合计算）`[HELP 21]`
 - [ ] 验收：升级成功/失败、踩他人地产扣款、同路段联合租金、连锁店收费
 

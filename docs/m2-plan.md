@@ -18,12 +18,18 @@
     结算时机未定位；重写简化为立即转账
 - ✅ **任务 E** `a491b8a`：升级/加盖（`landingEvent` 自己地产分支 0x419911：守卫 level<5 &&
   type==0 && state37==0，费用 `priceBase * moneyMul`，AI 自动升级，音效槽 18）
+  - **外观修复** `12ea114`：`dword_48AE48[level]` 与 `g_specTiles[level-1]` **同址**
+    （0x48AE48 + 4*level = 0x48AE4C 起数组）→ 住宅建筑外观 = `specPointTiles[level-1]`
+    （`map.mkf[5*base+38+level]`）；此前 level>0 全画 estateFlag（"升级后变连锁店外观"）。
+    **实机已确认加盖外观正确**
 - ⬜ **任务 F：建造菜单（未开始，下一会话继续）**——IDA 结论：
   - `sub_423B3B(player, tab)` 5 页签筛选：0=我的地产+公司 / 1=我的地产 / 2=我的公司 /
     **3=普通地块（owner=me && level≠0 && type==0）** / **4=大地块（owner=me && level≠0 && type≠0）**
   - `sub_4225A3(player, dir)` 列表绘制（地产名/建筑名/费用 `moneyMul*(priceAdd + priceBase*level)`/到期日）
   - `sub_423CF3` 外层对话框（页签/翻页/确认）；**入口待查**（疑似工具栏按钮）
   - 大地块判定：`estate.type(+24) != 0`；5 类特殊建筑 = `kBuildingNames[6..10]`
+  - 住宅外观已定位（`specPointTiles[level-1]`）；**大地块特殊建筑外观资源**需在查
+    `sub_423CF3` 建造流程时一并定位（可能在 `sub_4225A3` 的建筑名/图块分支）
 
 ## 0. 上下文与工作流
 
