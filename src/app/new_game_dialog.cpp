@@ -581,6 +581,10 @@ void handleTimer(DialogState& st) {
         st.transSlotX[i] += st.transAccel;
     }
     redrawTransition(st);
+    // [RE 0x404E44] 状态 2 过渡动画完成后进入游戏（原版动画结束 postModalExit(1)）
+    if (st.transMapX <= -640) {
+        st.app->events().requestExit(1);
+    }
 }
 
 void handleSelectEvent(DialogState& st, const SDL_Event& event) {

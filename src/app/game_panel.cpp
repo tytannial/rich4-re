@@ -215,6 +215,16 @@ void drawMiniMap(Application& app) {
     }
 }
 
+// [RE 0x4523D5] 特殊日期判断（星期日 或 节日表）
+// 差异: 节日表 byte_47FF4A（8 地图 x 1152B）待提取；当前仅星期日
+bool isSpecialDate(uint32_t date) {
+    const int year = static_cast<int>((date >> 16) & 0xFFFF);
+    const int month = static_cast<int>((date >> 8) & 0xFF);
+    const int day = static_cast<int>(date & 0xFF);
+    const int wd = (firstWeekday(year, month) + day - 1) % 7;
+    return wd == 0;
+}
+
 // [RE 0x4169BC] 日历（440,280-640,480；panel.mkf[2]）
 void drawCalendar(Application& app) {
     GameState& state = app.gameState();
@@ -240,13 +250,16 @@ void drawCalendar(Application& app) {
     const int totalDays = daysInMonth(year, month);
     int col = 470 + 23 * firstWd;
     int row = 378;
+    const uint32_t ym = date & 0xFFFFFF00u;
     for (int d = 1; d <= totalDays; ++d) {
         char text[8];
         std::snprintf(text, sizeof(text), "%d", d);
         if (d == day) {
             drawRectBorder(dst, col - 10, row - 6, 0x14, 14, 0xF800);
         }
-        app.text().setFont(12, kTextDark, 0, 2, 1);
+        // [RE 0x4523D5] 特殊日期（星期日/节日）→ 红字
+        const bool special = isSpecialDate(ym | static_cast<uint32_t>(d));
+        app.text().setFont(12, special ? kTextRed : kTextDark, 0, 2, 1);
         app.text().drawText(dst, text, col, row, 2);
         if (col == 608) {
             col = 447;
@@ -271,6 +284,71 @@ void drawCalendar(Application& app) {
     app.text().drawText(dst, text, 500, 376, 2);
 }
 
+// [RE 0x417191] 前进面板（panel.mkf[7] = dword_48BE04）
+// 依据: 0x417191 反编译;
+//   背景帧 = dword_48BDD4 + v1（v1 = byte_496BA0?2 : byte_496BA1?4 : 0）
+//   GO/骰子图标（帧 6..11）:
+//     travel 0/3: 帧 6（byte_496BA0）或 7，(x+8/y+26) 或 (x+7/y+26)
+//     travel 1: 2 个骰子（帧 2i+6 未选 / 2i+7 选中），(x+8/y+19i+16) / (x+7/y+19i+16)
+//     travel 2: 3 个骰子，(x+8/y+16j+9) / (x+7/y+16j+9)
+// 差异: 位置 qword_475284 原版动态确定，当前用 advancePanelX/Y
+void drawAdvancePanel(Application& app) {
+    GameState& state = app.gameState();
+    if (!state.gamePlayerControl || state.panelFrame7.frameCount() <= 0) {
+        return;
+    }
+    Surface& dst = app.surface();
+    const Player& p = state.players[state.currentPlayer];
+    const int x = state.advancePanelX;
+    const int y = state.advancePanelY;
+    int v1 = 0;
+    if (p.skipMove) {
+        v1 = 2;
+    }
+    if (p.fixedStep) {
+        v1 = 4;
+    }
+    const int bg = v1 + state.advancePanelBlink;
+    if (bg >= 0 && bg < state.panelFrame7.frameCount()) {
+        blitElement(dst, state.panelFrame7.frame(bg), x, y, false);
+    }
+    auto blitFrame = [&](int frame, int px, int py) {
+        if (frame >= 0 && frame < state.panelFrame7.frameCount()) {
+            blitElement(dst, state.panelFrame7.frame(frame), px, py, false);
+        }
+    };
+    switch (p.travel & 3) {
+        case 0:
+        case 3:
+            if (p.skipMove) {
+                blitFrame(6, x + 8, y + 26);
+            } else {
+                blitFrame(7, x + 7, y + 26);
+            }
+            break;
+        case 1:
+            for (int i = 0; i < 2; ++i) {
+                if (i > static_cast<int>(p.diceCount) - 1 || p.skipMove) {
+                    blitFrame(2 * i + 6, x + 8, y + 19 * i + 16);
+                } else {
+                    blitFrame(2 * i + 7, x + 7, y + 19 * i + 16);
+                }
+            }
+            break;
+        case 2:
+            for (int j = 0; j < 3; ++j) {
+                if (j > static_cast<int>(p.diceCount) - 1 || p.skipMove) {
+                    blitFrame(2 * j + 6, x + 8, y + 16 * j + 9);
+                } else {
+                    blitFrame(2 * j + 7, x + 7, y + 16 * j + 9);
+                }
+            }
+            break;
+        default:
+            break;
+    }
+}
+
 } // namespace
 
 void renderGamePanel(Application& app) {
@@ -288,6 +366,7 @@ void renderGamePanel(Application& app) {
         drawMiniMap(app);
         drawCalendar(app);
     }
+    drawAdvancePanel(app);
 }
 
 } // namespace rich4

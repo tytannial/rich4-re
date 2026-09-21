@@ -30,12 +30,12 @@ void serializePlayer(uint8_t out[kPlayerSize], const Player& p) {
     std::memcpy(out + 8, &p.spriteX, 2);
     std::memcpy(out + 10, &p.spriteY, 2);
     std::memcpy(out + 12, &p.cellEntId, 2);
-    std::memcpy(out + 14, &p.facing, 2);
+    std::memcpy(out + 14, &p.prevCellEnt, 2);
     out[16] = p.dir;
     out[17] = p.travel;
-    out[18] = p.pad18;
+    out[18] = p.diceCount;
     out[19] = p.charIndex;
-    out[20] = p.pad20;
+    out[20] = p.byte20;
     out[21] = p.alive;
     out[25] = p.aiAssetPct;
     std::memcpy(out + 28, &p.cash, 4);
@@ -43,7 +43,7 @@ void serializePlayer(uint8_t out[kPlayerSize], const Player& p) {
     std::memcpy(out + 36, &p.loan, 4);
     std::memcpy(out + 44, &p.loanDate, 4);
     std::memcpy(out + 48, &p.points, 2);
-    std::memcpy(out + 50, &p.dword50, 4);
+    std::memcpy(out + 50, &p.stateFlags, 4);
     out[54] = p.byte54;
     out[55] = p.state37;
     out[62] = p.cardCount;
