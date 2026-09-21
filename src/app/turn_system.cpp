@@ -2,9 +2,14 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
+#include <string>
 
 #include "game/application.h"
+#include "game/app/confirm_dialog.h"
+#include "game/app/map_render.h"
+#include "game/core/encoding.h"
 #include "game/core/log.h"
 
 namespace rich4 {
@@ -268,12 +273,93 @@ int facingBetween(GameState& st, int fromId, int toId) {
 }
 
 // [RE 0x41982D] landingEvent
-// 依据: 0x41982D 反编译; 按 cellEnt 物件 ID（2000+ 地产 / 4000+ 公司 / 6000+ 特殊点）与
-//       cellEnt+36 格子类型（1..18）处理购地/升级/收租/税/卡片/机会
-// 差异: M2 实现；M1 返回 0x80（-128），等价于"无可执行事件，进入下一位"
+// 依据: 0x41982D 反编译; 停留格结算。switch(cellEnt+36 低字节 格子类型 0..16)：
+//   入口先按 g_cellTypeSound[type]（0x475299）播放格子音效（type 2..16）
+//   case 0 = 按 objId 分（2000..4000 地产 / 4000..6000 公司 / 其他 → loc_41A168）
+//   无主地产购地（loc_41A013）：
+//     守卫 state37 / cellTableIdx==12 → 价格=(level*priceBase+priceAdd)*moneyMul
+//     → 现金检查（不足 → 0x41A159）→ sprintf("%s\n\n", estate.name) → 人类 askDialog
+//     → sub_40FA61 携带神明检查 → owner=cur+1 → 音效槽 17（dword_4823D2）
+//     → rebuildMiniMap(0) → 期限 expireDate（g_landPermDays）→ 扣现金
+// 差异: 事件格 case 2..16、公司/特殊点（loc_41A168）、AI 决策（sub_41D7D4）、
+//       现金不足提示（0x41A159）、神明阻止文本（showMessage）、提示框背景待补
 int landingEvent(Application& app, uint16_t cellEntId) {
-    (void)app;
-    (void)cellEntId;
+    GameState& st = app.gameState();
+    const int p = st.currentPlayer;
+    if (p < 0 || p >= 9 || cellEntId >= st.cellEnts.size()) {
+        return 0x80;
+    }
+    const CellEnt& ce = st.cellEnts[cellEntId];
+    const uint16_t objId = ce.special; // +32
+    const uint8_t cellType = static_cast<uint8_t>(ce.occMask & 0xFF); // +36 低字节
+    // [RE 0x475299] g_cellTypeSound[type] → 音效槽
+    static const uint8_t kCellTypeSound[17] = {9, 0, 10, 10, 10, 10, 10, 10, 10,
+                                               10, 16, 16, 16, 16, 10, 10, 10};
+    if (cellType >= 2 && cellType <= 16) {
+        app.audio().playEffectSlot(kCellTypeSound[cellType]);
+    }
+    if (cellType != 0) {
+        RICH4_LOGI("landingEvent: cellType %u objId %u (RE 0x41982D, P2 TODO)", cellType, objId);
+        return 0x80;
+    }
+    // case 0：普通格，按 objId 分
+    if (objId > 2000 && objId < 4000) {
+        const int idx = static_cast<int>(objId) - 2000;
+        if (idx <= 0 || idx >= static_cast<int>(st.estates.size())) {
+            return 0x80;
+        }
+        Estate& es = st.estates[idx];
+        Player& pl = st.players[p];
+        if (es.owner == 0) {
+            // ---- 无主地产购地（loc_41A013）----
+            if (pl.state37 != 0 || pl.cellTableIdx == 12) {
+                return 0x80;
+            }
+            const int32_t price =
+                (static_cast<int32_t>(es.level) * es.priceBase + es.priceAdd) * st.moneyMul;
+            if (price > pl.cash) {
+                // [RE 0x41A159] 现金不足（原版提示待补）
+                RICH4_LOGI("buy land: cash %d < price %d (RE 0x41A159 TODO)", pl.cash, price);
+                return 0x80;
+            }
+            const std::string label = big5ToUtf8(es.name, sizeof(es.name));
+            char text[160];
+            std::snprintf(text, sizeof(text), "%s\n\n", label.c_str()); // 原版 %s\n\n
+            bool buy = false;
+            if ((pl.alive & 6) != 0) {
+                buy = false; // TODO [RE 0x41D7D4] AI 决策 sub_41D7D4(price)
+            } else if (pl.alive == 1) {
+                // [RE 0x440BA8] askDialog：文本居中 (220,140) + YES/NO 框 (220,320)
+                buy = confirmDialog(app, text, 220, 320);
+            }
+            if (!buy) {
+                return 0x80;
+            }
+            // [RE 0x40FA61] 携带神明（槽 7/8/15）阻止（原版显示神明名 1500ms）
+            const uint8_t carried = pl.cellTableIdx;
+            if (carried == 7 || carried == 8 || carried == 15) {
+                RICH4_LOGI("buy land blocked by carried god %u (RE 0x40FA61, text TODO)", carried);
+                return 0x80;
+            }
+            es.owner = static_cast<uint8_t>(p + 1);
+            // [RE 0x41D476(0,0,1)] UI/地图刷新（重写每帧重绘，无需显式）
+            app.audio().playEffectSlot(17); // [RE 0x4823D2] 买地音效
+            buildMiniMapMarks(app);         // [RE 0x40A4E1] rebuildMiniMap(0)
+            if (st.cfgLandPerm > 0 && st.cfgLandPerm <= 3) {
+                // [RE 0x4751F0] g_landPermDays（打包日期偏移：年<<16 / 月<<8）
+                static const int32_t kLandPermDays[4] = {0, 0x00020000, 0x00010000, 0x00000600};
+                // [RE 0x4521CB] 日期加法（月 > 12 时 +0xF400 进位）
+                int32_t d = static_cast<int32_t>(st.gameDate) + kLandPermDays[st.cfgLandPerm];
+                if ((kLandPermDays[st.cfgLandPerm] & 0xFF00) != 0 && (d & 0xFF00) > 0xC00) {
+                    d += 0xF400;
+                }
+                es.expireDate = static_cast<uint32_t>(d);
+            }
+            pl.cash -= price;
+            RICH4_LOGI("buy land: estate %d price %d owner %d (RE 0x41982D/0x41A013)", idx, price,
+                       p + 1);
+        }
+    }
     return 0x80;
 }
 

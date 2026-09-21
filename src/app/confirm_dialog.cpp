@@ -7,6 +7,7 @@
 #include "game/core/log.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
+#include "game/render/text.h"
 #include "game/platform/audio.h"
 #include "game/render/ui_image.h"
 
@@ -14,9 +15,6 @@ namespace rich4 {
 
 namespace {
 
-// [RE 0x453A32] sub_453A32(320, 200)：确认框中心
-constexpr int kDialogCX = 320;
-constexpr int kDialogCY = 200;
 constexpr int kFrameNormal = 0;
 constexpr int kFrameYes = 1;
 constexpr int kFrameNo = 2;
@@ -27,11 +25,19 @@ struct ConfirmState {
     int originX = 0;
     int originY = 0;
     int hover = 0; // 0=无 1=YES 2=NO
+    const char* text = nullptr; // [RE 0x440BA8] askDialog 形式：非空时居中绘制
+    int cx = 320;
+    int cy = 200;
 };
 
 // [RE 0x45367E] WM_PAINT：帧 0 背景 / 帧 1 YES 高亮 / 帧 2 NO 高亮
 void redrawConfirm(ConfirmState& st) {
     Surface& dst = st.app->surface();
+    if (st.text != nullptr) {
+        // [RE 0x440BA8] 文本居中于 (cx, 140)，setTextFont(16, 0xF0F0F0, 0x101010, 3, 1)
+        st.app->text().setFont(16, 0xF0F0F0, 0x101010, kTextStyleShadow | kTextStyleBold, 1);
+        st.app->text().drawText(dst, st.text, st.cx, 140, 4);
+    }
     const UiImage& ui = *st.ui;
     const int frame = (st.hover == 1) ? kFrameYes : (st.hover == 2) ? kFrameNo : kFrameNormal;
     if (frame < ui.frameCount()) {
@@ -93,7 +99,7 @@ bool confirmEventHandler(const SDL_Event* event, void* user) {
 
 } // namespace
 
-bool confirmDialog(Application& app) {
+bool confirmDialog(Application& app, const char* text, int cx, int cy) {
     UiImage ui;
     if (auto blob = app.gameState().data.read(440)) {
         ui.load(std::move(*blob));
@@ -107,9 +113,13 @@ bool confirmDialog(Application& app) {
     ConfirmState st;
     st.app = &app;
     st.ui = &ui;
-    st.originX = kDialogCX - ui.frame(0).width / 2;
-    st.originY = kDialogCY - ui.frame(0).height / 2;
-    RICH4_LOGI("confirm dialog (RE 0x453A32)");
+    st.text = text;
+    st.cx = cx;
+    st.cy = cy;
+    st.originX = cx - ui.frame(0).width / 2;
+    st.originY = cy - ui.frame(0).height / 2;
+    RICH4_LOGI("confirm dialog at (%d,%d)%s (RE 0x453A32)", cx, cy,
+               text ? " +text (RE 0x440BA8)" : "");
     return runModal(app, &confirmEventHandler, &st) == 1;
 }
 

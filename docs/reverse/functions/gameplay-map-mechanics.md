@@ -107,11 +107,12 @@
 6. `g_cfgLandPerm != 0` → `est[+48] = sub_4521CB(dword_497160, dword_4751F0[g_cfgLandPerm])`（期限表 `{0,0,2,0}`）
 7. `g_playerCash -= 价格`
 
-- [ ] 数据：`Estate` 补 `+28`（u16）、`+30`（u16）价格字段（核对 `parseMapDat`）
-- [ ] `confirmDialog` 支持文本（对齐 `sub_440BA8` 的绘制与坐标）
-- [ ] `landingEvent` case 0 无主地产购地（含取消/钱不够分支）
-- [ ] 音效槽 `dword_4823D2` 确认 + 播放
-- [ ] 验收：实机走到无主地产 → 弹"地产名+价格"询问框 → 确定后地块变色/扣款/小地图更新；取消无变化；钱不够提示
+- [x] 数据：`Estate` 补 `+28 priceAdd` / `+30 priceBase` / `+32..+43 fees[6]` / `name[19]`（+4..+22 BIG5）
+- [x] `confirmDialog` 支持文本与坐标（对齐 `askDialog`：文本居中 (cx,140) + 框 (cx,cy)）
+- [x] `landingEvent` case 0 无主地产购地（守卫/算价/现金检查/询问/神明阻止/owner/音效槽 17/小地图/期限/扣款）
+- [ ] 音效槽 `dword_4823D2` = 槽 17 已确认并播放 ✅
+- [ ] 验收：实机走到无主地产 → 弹"地产名"询问框（原版 `%s\n\n` 仅名称）→ 确定后地块变色/扣款/小地图更新；取消无变化
+- 差异（待补）：AI 决策 `sub_41D7D4`、现金不足提示（0x41A159）、神明阻止文本（`showMessage`）、提示框背景（`g_tipFrame+72`）
 
 ### P1 升级 + 收租（同链路）
 

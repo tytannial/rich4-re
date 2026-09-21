@@ -92,7 +92,7 @@ struct CellEnt {
 struct Estate {
     int16_t x = 0;              // +0
     int16_t y = 0;              // +2
-    uint8_t pad4[19] = {};      // +4..+22
+    char name[19] = {};         // +4..+22 地产名（BIG5，原版 sprintf "%s\n\n" 显示）
     uint8_t flag = 0;           // +23 旗帜（&1）
     uint8_t type = 0;           // +24 类型
     uint8_t owner = 0;          // +25 拥有者（玩家号+1）
