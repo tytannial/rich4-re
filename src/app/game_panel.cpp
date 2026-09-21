@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstring>
 
+#include "game/app/map_render.h"
 #include "game/app/map_tables.h"
 #include "game/application.h"
 #include "game/core/log.h"
@@ -161,7 +162,39 @@ void drawMiniMap(Application& app) {
     if (v1 == 0) {
         return;
     }
-    // [RE 0x40A4E1] 优先用叠加标记后的工作副本（dword_48BADC）
+    // [RE 0x40A4E1] 重建工作副本（底图 + 地产/公司/特殊点玩家颜色标记），随物件变化更新
+    buildMiniMapMarks(app);
+    // [DIAG] 小地图状态（每 120 帧一次）
+    static int s_mmLog = 0;
+    if (++s_mmLog >= 120) {
+        s_mmLog = 0;
+        int eOwn = 0;
+        int cOwn = 0;
+        int sOwn = 0;
+        for (size_t i = 1; i < state.estates.size(); ++i) {
+            if (state.estates[i].owner) {
+                ++eOwn;
+            }
+        }
+        for (size_t i = 1; i < state.corps.size(); ++i) {
+            if (state.corps[i].owner) {
+                ++cOwn;
+            }
+        }
+        for (size_t i = 1; i < state.specPts.size(); ++i) {
+            if (state.specPts[i].owner) {
+                ++sOwn;
+            }
+        }
+        RICH4_LOGI("minimap: y=%d buf=%zu rawF=%d mmF=%d estates=%zu(own%d) corps=%zu(own%d) specPts=%zu(own%d)",
+                   v1, state.miniMapBuffer.size(), state.miniMapRaw.frameCount(),
+                   state.miniMap.frameCount(), state.estates.size(), eOwn, state.corps.size(), cOwn,
+                   state.specPts.size(), sOwn);
+        for (int i = 0; i < state.playerCount && i < 9; ++i) {
+            RICH4_LOGI("minimap player %d: sprite=(%d,%d) pieceF=%d", i, state.players[i].spriteX,
+                       state.players[i].spriteY, state.pieceSprites[i].frameCount());
+        }
+    }
     if (state.miniMapBuffer.size() == static_cast<size_t>(kMiniMapW) * kMiniMapH) {
         uint16_t* d = dst.pixels() + static_cast<size_t>(v1) * Surface::kWidth + 440;
         for (int row = 0; row < kMiniMapH; ++row) {
