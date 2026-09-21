@@ -60,8 +60,7 @@ std::string buildTipText(const GameState& state, uint16_t id) {
         s += kBuildingNames[11 + (es.level < 6 ? es.level : 0)];
         // 费用 = estate +32 + 2*level（u16，原版 sub_452793 显示）
         const int lv = es.level < 6 ? es.level : 0;
-        const uint16_t fee =
-            static_cast<uint16_t>(es.pad28[4 + 2 * lv] | (es.pad28[5 + 2 * lv] << 8));
+        const uint16_t fee = es.fees[lv];
         s += "\n$";
         s += std::to_string(fee);
         return s;

@@ -98,7 +98,9 @@ struct Estate {
     uint8_t owner = 0;          // +25 拥有者（玩家号+1）
     uint8_t level = 0;          // +26 等级
     uint8_t dir = 0;            // +27 朝向
-    uint8_t pad28[16] = {};     // +28..+43
+    uint16_t priceAdd = 0;      // +28 u16 地价附加（购地价 = level*priceBase + priceAdd）
+    uint16_t priceBase = 0;     // +30 u16 地价基数（RE 0x41982D loc_41A013: level*word[+30]+word[+28]）
+    uint16_t fees[6] = {};      // +32..+43 各等级费用/租金（u16 × 6，原版 sub_452793 显示 +32+2*level）
     int32_t price = 0;          // +44 收购价（sub_41982D）
     uint32_t expireDate = 0;    // +48 到期日期（dword_497160 比较，sub_41CF67）
 };
