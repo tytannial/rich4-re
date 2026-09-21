@@ -296,12 +296,11 @@ void handleLeftButtonUp(Application& app, int x, int y) {
     state.dragMiniMap = false;
     if (state.pendingAction == 1) {
         // [RE 0x417E26] byte_48BE28==1: dword_499088 = (dir - 1) & 7
+        //   仅旋转朝向，不切换视角模式（原版不改 dword_48BE18，视口仍跟随当前玩家）
         state.mapRotation = (state.mapRotation - 1) & 7;
-        state.manualView = true;
         renderGameFrame(app);
     } else if (state.pendingAction == 2) {
         state.mapRotation = (state.mapRotation + 1) & 7;
-        state.manualView = true;
         renderGameFrame(app);
     } else if (state.pendingAction >= 100) {
         handleTopBarButton(app, state.pendingAction - 100);
