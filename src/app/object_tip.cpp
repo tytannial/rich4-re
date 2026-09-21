@@ -110,6 +110,9 @@ std::string buildTipText(const GameState& state, uint16_t id) {
 } // namespace
 
 // [RE 0x417559] showObjectTip：命中测试（取最上层 = 最后绘制）+ 文本生成
+// 依据: 0x417559 反编译; sub_40A9D7 拾取（重写用渲染记录的 mapHitRegions 代替）;
+//       文本分支 cellEnt 名/estate 地主+等级/corp 公司+等级/specPt 名/evtCell 名/
+//       cellTable 类型名/玩家名; 框 = data.mkf[517] 帧 0..3（四方向）
 void showObjectTip(Application& app, int x, int y) {
     GameState& state = app.gameState();
     for (auto it = state.mapHitRegions.rbegin(); it != state.mapHitRegions.rend(); ++it) {
