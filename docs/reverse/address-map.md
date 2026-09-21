@@ -2,7 +2,7 @@
 
 > 由 `python tools/re_map.py` 自动生成，勿手改。
 
-## RE 映射（126 条）
+## RE 映射（123 条）
 
 | 地址 | 原符号 | 重写位置 | 依据 |
 |------|--------|----------|------|
@@ -41,13 +41,11 @@
 | `0x40B93B` | loadWalkResources | `src/app/turn_system.cpp:117` | 0x40B93B 反编译; 普通玩家(0..3): v1 = 21*charIndex + 128 state37 → 组5: slot0=v1+16, slot2=v1+17, slot4=v1+2 cellEnt+39 最高位（有路）→ 组1: slot1=v1+13, slot3=v1+14, slot5=v1+15 travel → slot0=3*travel+v1, slot2=+1, slot4=+2, slot6=+3（travel==3） 差异: 槽 4..8（事件槽）分支待补 |
 | `0x40C05C` | moveOneStep | `src/app/turn_system.cpp:299` | 0x40C05C 反编译; 普通玩家: 从当前 cellEnt 的 exits[4] 中排除来向 （word_496B76）与占用出口，随机选下一格；占用掩码 256<<player； 速度 = byte_4749D8[travel&3]（或 flt_4631DC），浮点插值 g_playerSpriteX/Y； 到达后 byte_496B78 = sub_407A8C(上一步, 当前)，sub_40FC00 更新携带物件 差异: 载具状态 alive&0x30 的上下车分支、AI 槽 4..8 分支、占用位 0x40000000 判定待补 |
 | `0x40C912` | checkPlayerAction | `src/app/turn_system.cpp:403` | 0x40C912 反编译; a1=1 时返回可行动标志（alive）； a1=0 时有状态效果则 sub_40DD1F（自动移动）或显示状态文本；g_playerState37 → -1 差异: 状态文本/语音（sub_44808A/sub_452946/sprintf/sub_440CAC/sub_44EF41）M2 接入 |
-| `0x40CD87` | eliminatePlayer | `include/game/app/economy.h:32` | 0x40CD87 反编译; 玩家破产/淘汰： cellEnt 占用位标记 → alive=0 → 释放携带物件 → 清空地产/公司/特殊点 → 全灭时 sceneRequest（原版 1/2/3 = 失败流程/回主菜单） 差异: 股票清仓（sub_428E23）、事件槽 NPC 清理、FLC 555 播放、defeatFlow 未实现 |
 | `0x40CD87` | eliminatePlayer | `src/app/economy.cpp:150` | 0x40CD87 反编译; 详见 economy.h 注释 |
 | `0x40D293` | bitScanPlayer | `src/app/economy.cpp:23` | 0x40D293 反编译; 掩码低 8 位中第一个置位的玩家号 |
 | `0x40D7C4` | updateGameState | `src/app/turn_system.cpp:697` | 0x40D7C4 反编译; byte_498EA2 状态机: 0 = 收尾倒计时（byte_498EA5）→ sub_418E7F 重算 / 负数则 sub_418EBD 1 = 移动中: sub_40C05C 走一格，byte_48BB00 → onPlayerActionPhase，dword_48BAF8 递减 2 = 掷骰动画: 结束设 dword_48BAF8 = sub_419572() 并转状态 1 3 = 特殊移动（遥控骰子/传送） 差异: sub_416E6D 小地图刷新（迁移为每 tick 全量重绘）、移动音效、状态 3 收租部分待补 |
 | `0x40DD1F` | startPlayerMove | `src/app/turn_system.cpp:504` | 0x40DD1F 反编译; 人类(<4): alive&0x30 → dword_48BAF8=1,state=1； byte_496BA0 → state=0,wait=2；byte_496BA1 → dword_48BAF8=1,state=1； 否则 state=2（掷骰）。AI(4..7): dword_48BAF8=rand()%9+2,state=1。 玩家 8: dword_48BAF8=9,state=1。末尾 byte_498EA3=0, byte_46CAFB=1 |
 | `0x40E033` | createMapObject（神明/商店等物件写入 | `src/app/map_render.cpp:553` | 0x40E033 反编译; 槽结构 +0 类型、+1 朝向、+2 cellEnt u16、+4 a3、+5 a4； cellEnt 占用位 \|= (槽+1)<<16 |
-| `0x40E14D` | releaseCellTableSlot | `include/game/app/economy.h:25` | 0x40E14D 反编译; slot 为 1-based cellTable 槽： 占用者属性回退（word_4749E2/474A06/474A2A）→ 清槽（cellEnt/+4/+5） → 前 12 槽（cellEnt 物件）重新随机放置 createMapObject(slot' , randomCellEnt(...)) 差异: byte_497321/497322/497323 类型计数未建模 |
 | `0x40E14D` | releaseCellTableSlot | `src/app/economy.cpp:108` | 0x40E14D 反编译; 详见 economy.h 注释 |
 | `0x40FD49` | 滑块单位帧与复选标记帧。 | `src/app/settings_dialog.cpp:96` | 元素偏移 = 12 + 12*i；dword_48BB60+72 → 帧 5（15x16 滑块单位）; dword_48BB60+120 → 帧 9（16x16 复选标记） |
 | `0x4103A3` | settingsWndProc | `src/app/settings_dialog.cpp:367` | 0x4103A3 反编译; WM_MOUSEMOVE(515) 查找控件矩形 dword_474B92 并处理; WM_LBUTTONDOWN(513) 分发控件操作; WM_USER+1 重置悬停并复制设置 |
@@ -73,7 +71,6 @@
 | `0x41982D` | landingEvent | `src/app/turn_system.cpp:270` | 0x41982D 反编译; 按 cellEnt 物件 ID（2000+ 地产 / 4000+ 公司 / 6000+ 特殊点）与 cellEnt+36 格子类型（1..18）处理购地/升级/收租/税/卡片/机会 差异: M2 实现；M1 返回 0x80（-128），等价于"无可执行事件，进入下一位" |
 | `0x41B42D` | onPlayerActionPhase | `src/app/turn_system.cpp:81` | 0x41B42D 反编译; 161 基本块，购地/收租/税/卡片/机会等 |
 | `0x41CF67` | advanceDay | `src/app/turn_system.cpp:549` | 0x41CF67 反编译; byte_46CB06 音乐淡出；sub_452117 日期推进；++g_dayCount； checkVictory(0) 未结束则每日处理（股票/月度事件/地产公司到期） 差异: 音乐淡出（sub_454ACB/sub_454D91）、checkVictory（M3）、 stockTick/sub_423ACF/sub_428475/sub_452444/sub_42BA97/sub_431712/sub_439BFA 待接入； 当前实现日期推进 + 地产/公司到期回收 + 小地图标记刷新 |
-| `0x41D2C6` | transferMoney | `include/game/app/economy.h:16` | 0x41D2C6 反编译; from 付给 to： from: 0..7 玩家（flags&4 从银行扣，否则从现金扣，不足由另一账户补， 仍不足 → 实付额裁剪 + sub_40CD87 淘汰） to:   -1 = 银行/系统，0..7 = 玩家（flags&1 进现金，否则进银行）， >100 = 特殊点（索引 = to-101，记入 +40/+44 资金） 差异: 原版 dword_496BC4/dword_496BC8 收支统计与 sub_41D433 UI 刷新未建模 |
 | `0x41D2C6` | transferMoney | `src/app/economy.cpp:37` | 0x41D2C6 反编译; 详见 economy.h 注释 |
 | `0x41DA61` | aiDialogDrawRatio（比例条 | `src/app/ai_dialog.cpp:108` | 0x41DA61 反编译; 画布 (208,265) 80x57 → (310,327); 现金格 y=328、股票格 y=361, 格 x = 311+8i 7x22, 填充格数 = 比例/10（0xFF0000） |
 | `0x41DB91` | aiDialogRedraw（整框重绘） | `src/app/ai_dialog.cpp:131` | 0x41DB91 反编译; blit 画布 → 玩家槽（选中：高亮框帧1 + 棋子帧0 覆盖头像帧6+charIndex； 托管：勾选框帧3）→ 选项勾选（卡片/道具/个性）→ sub_41DA61 比例条 |
