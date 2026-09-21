@@ -206,6 +206,15 @@ void handleMouseMove(Application& app, int x, int y) {
 void handleLeftButtonDown(Application& app, int x, int y) {
     GameState& state = app.gameState();
     state.objectTipText.clear(); // [RE 0x417559] 左键操作清除物件提示
+    // [RE 0x4186BE] 非玩家控制期（AI 回合/掷骰/移动/结算）：仅保留地图区物件提示，
+    //   其余点击（工具条/日历/面板）忽略（原版 0x4186BE 在 byte_46CAFD 检查之前）
+    if (!state.gamePlayerControl) {
+        if (x < 440 && y >= kTopBarH) {
+            showObjectTip(app, x, y);
+            renderGameFrame(app);
+        }
+        return;
+    }
     // [RE 0x417E26] 前进面板命中：panel[8] 字节控件图，ctrl = 像素值 + 10
     //   （13=GO、11=骰子数、12=拖动）；面板矩形 advancePanelX/Y/W/H
     if (state.gamePlayerControl && !state.panel8Mask.empty()) {
@@ -398,6 +407,16 @@ bool gameEventHandler(const SDL_Event* event, void* user) {
     {
         GameState& st = app.gameState();
         if ((st.pendingSpawnPlayer != 0 || st.parachuteActive) && event->type != SDL_EVENT_QUIT) {
+            return true;
+        }
+    }
+    // [RE 0x4186CB/0x41889D/0x418910/0x418B93] byte_46CAFD==0（AI 回合/掷骰/移动/结算）
+    //   期间锁定交互（原版 cmp byte_46CAFD,0 → jz 出口）：鼠标移动/抬起/右键直接消费；
+    //   左键按下保留（地图区物件提示 0x4186BE 在 byte_46CAFD 检查之前）；键盘由各分支自检
+    {
+        GameState& st = app.gameState();
+        if (!st.gamePlayerControl && event->type != SDL_EVENT_QUIT &&
+            event->type != SDL_EVENT_KEY_DOWN && event->type != SDL_EVENT_MOUSE_BUTTON_DOWN) {
             return true;
         }
     }
