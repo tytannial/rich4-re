@@ -225,8 +225,10 @@ void drawMiniMap(Application& app) {
         }
         const int v2 = ((5696 * static_cast<int>(p.spriteX)) >> 16) + 440;
         const int v3 = ((5696 * static_cast<int>(p.spriteY)) >> 16) + v1;
-        if (state.pieceSprites[i].frameCount() > 7) {
-            blitElement(dst, state.pieceSprites[i].frame(7), v2, v3, false);
+        // [RE 0x416E6D] 小地图标记 = g_pieceSprites[13*i]+84 = 帧 6
+        //   （帧头公式 基址+12+12*帧号：84 = 12+12*6；资源共 7 帧 0..6）
+        if (state.pieceSprites[i].frameCount() > 6) {
+            blitElement(dst, state.pieceSprites[i].frame(6), v2, v3, false);
         }
         if (i == state.currentPlayer) {
             markX = v2;
