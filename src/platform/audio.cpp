@@ -29,6 +29,10 @@ const char* const kSceneMusicTracks[17] = {
     "MIDI13.MID", "MIDI14-1.MID", "MIDI14-2.MID", "MIDI15.MID", "MIDI16.MID",
 };
 
+// [RE 0x48234A] dword_48234A 游戏音效槽→Effect.mkf 索引（原版 {idx,buf} 对数组，-1 结束）
+const int kEffectSlotIndex[24] = {7,  9,  10, 32, 33, 34, 35, 36, 37, 38, 43, 44,
+                                  45, 46, 53, 47, 48, 49, 50, 54, 55, 56, 15, 62};
+
 namespace {
 
 // 音量增益（原版 DirectSound 音量 0/-2000/-1000/-316/0 百分之一分贝 → 16 分制线性）
@@ -331,6 +335,13 @@ bool Audio::playEffect(int effectId) {
     return true;
 }
 
+bool Audio::playEffectSlot(int slot) {
+    if (slot < 0 || slot >= 24) {
+        return false;
+    }
+    return playEffect(kEffectSlotIndex[slot]);
+}
+
 bool Audio::playMusic(int trackIndex) {
     // [RE 0x454D91] 原版 if (byte_49715A)：音乐音量为 0 时不播放
     if (!m_impl->stream || m_musicDir.empty() || m_musicVolume <= 0) {
@@ -354,6 +365,11 @@ bool Audio::playMusic(int trackIndex) {
     m_impl->sceneIndex = -1;
     RICH4_LOGI("playMusic: track %d (%s) (RE 0x454D91)", m_impl->track, name);
     return true;
+}
+
+bool Audio::playNextMusic() {
+    const int cur = (m_impl->track >= 1 && m_impl->track <= 8) ? (m_impl->track - 1) : -1;
+    return playMusic((cur + 1) & 7);
 }
 
 bool Audio::playSceneMusic(int sceneIndex) {

@@ -426,6 +426,10 @@ bool gameEventHandler(const SDL_Event* event, void* user) {
 void enterGameLoop(Application& app) {
     // [RE 0x401981] 依据: sub_401981(0) 压入 sub_417E26 并 PostMessage(0x401) 进入游戏内循环
     RICH4_LOGI("enter game loop (RE 0x401981)");
+    // [RE 0x4019C8] 进游戏切可选曲目（sub_454D91(0) = 切下一首），替换选人场景音乐
+    app.audio().playNextMusic();
+    // [RE 0x452444] 游戏内音乐切换计时器初值（0x33 = 3 天；事件中设 0x33/0x11）
+    app.gameState().musicTimer = 0x33;
     initTurnState(app);
     runModal(app, &gameEventHandler, &app, 16);
 }

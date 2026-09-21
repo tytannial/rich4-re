@@ -312,9 +312,10 @@ bool moveOneStep(Application& app) {
         }
         // [RE 0x40C05C] 每步开始重载行走资源（原版 sub_40B93B）
         loadWalkResources(st, p);
-        // [RE 0x4540D8] 每步开始播放移动音效（moveSoundIndex = 载具/步行 11..15 → Effect.mkf）
+        // [RE 0x4542CE + 0x48234A] 每步开始播放移动音效（moveSoundIndex 为游戏音效槽 11..15，
+        //   经 dword_48234A 映射到 Effect.mkf）
         if (st.moveSoundIndex > 0) {
-            app.audio().playEffect(st.moveSoundIndex);
+            app.audio().playEffectSlot(st.moveSoundIndex);
         }
         const int startX = st.cellEnts[pl.cellEntId].x;
         const int startY = st.cellEnts[pl.cellEntId].y;
@@ -588,6 +589,14 @@ void advanceDay(Application& app) {
     }
     (void)newMonth;
     (void)refreshed;
+    // [RE 0x41CF67] 音乐切换计时器（byte_46CB06）：低4位递减到0 → 切下一首可选曲目
+    if ((st.musicTimer & 0xF) != 0) {
+        --st.musicTimer;
+        if ((st.musicTimer & 0xF) == 0) {
+            app.audio().playNextMusic();
+            st.musicTimer = 0x33; // 重置（原版由事件 sub_452444 设 0x33/0x11）
+        }
+    }
     RICH4_LOGI("advance day: %d/%d/%d dayCount=%d (RE 0x41CF67)",
                static_cast<int>((st.gameDate >> 16) & 0xFFFF),
                static_cast<int>((st.gameDate >> 8) & 0xFF), static_cast<int>(st.gameDate & 0xFF),
@@ -767,6 +776,11 @@ void updateGameState(Application& app) {
                 if (st.playerMoveFrame[p] < perDir - 1) {
                     ++st.playerMoveFrame[p]; // 逐帧播扔骰动作
                 } else {
+                    // [RE 0x40D7C4 case2] 帧到 perDir 时播放掷骰音效：
+                    //   音效槽 = 特殊组?15 : (载具&3)+11（原版 dword_4749D4 → dword_48234A）
+                    const int diceSfx =
+                        st.playerMoveGroup[p] ? 15 : (st.players[p].travel & 3) + 11;
+                    app.audio().playEffectSlot(diceSfx);
                     st.dicePhase = 1; // 停在末帧（松手），不重置回第0帧
                 }
                 break; // map_render 按 playerMoveFrame 画角色扔骰帧

@@ -203,6 +203,10 @@ struct GameState {
     //       x∈[448,474]→0、x∈[478,504]→1（日历区左右箭头切换），切换后 sub_4169BC(1) 重绘
     int calendarMode = 0;
 
+    // [RE 0x46CB06] byte_46CB06 游戏内音乐切换计时器（高4位=目标天数 / 低4位=当前；
+    //   过天递减，低4位到0 → sub_454ACB + sub_454D91(0) 切下一首可选曲目）
+    int musicTimer = 0;
+
     // [RE 0x48A354] dword_48A354 地图预览缓冲（614400 = 640*480*2 全屏 RGB555）
     // 依据: 0x406DE7 分配 0x96000 字节并由 JUMP.MKF 地图图填充
     std::vector<uint8_t> mapPreview;
