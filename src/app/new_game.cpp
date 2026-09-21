@@ -8,6 +8,7 @@
 #include "game/app/save_data.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/render/raw_bitmap.h"
 #include "game/render/surface.h"
 
 #include <cstdio>
@@ -56,12 +57,12 @@ void applyCharTemplate(Player& p, int charId) {
     p.spriteX = readU16(t + 0);  // +8
     p.spriteY = readU16(t + 2);  // +10
     p.cellEntId = readU16(t + 4); // +12
-    p.facing = readU16(t + 6);   // +14
+    p.prevCellEnt = readU16(t + 6); // +14
     p.dir = t[8];                // +16
     p.travel = t[9];             // +17
-    p.pad18 = t[10];             // +18
+    p.diceCount = t[10];         // +18
     p.charIndex = t[11];         // +19
-    p.pad20 = t[12];             // +20
+    p.byte20 = t[12];            // +20
     p.alive = t[13];             // +21
     p.aiAssetPct = t[17];        // +25
     p.cash = readI32(t + 20);    // +28
@@ -224,6 +225,8 @@ bool newGameInit(Application& app, bool mode1) {
             state.players[k].bank = state.startMoneyVal - cash;
         }
         state.players[k].travel = static_cast<uint8_t>(state.newGameConfig.travelMode);
+        // [RE 0x406DE7] 玩家存活标志（g_charData +21 = 0，进入游戏时置 1）
+        state.players[k].alive = 1;
     }
 
     // [RE 0x47ECEC] g_miscTable80 = unk_47ECEC（10 x 2）
@@ -267,11 +270,17 @@ bool newGameInit(Application& app, bool mode1) {
 //       memcpy 到 dword_48A08C 后 BltFast 显示
 void showLoading(Application& app) {
     auto blob = app.gameState().data.read(601);
-    if (!blob || blob->size() < 614400) {
+    if (!blob) {
         RICH4_LOGW("showLoading: Data.mkf[601] unavailable");
         return;
     }
-    std::memcpy(app.surface().pixels(), blob->data(), 614400);
+    const RawBitmap raw = decodeRawBitmap(*blob);
+    if (!raw.valid()) {
+        RICH4_LOGW("showLoading: Data.mkf[601] not a known RAW size (%zu B)", blob->size());
+        return;
+    }
+    std::memcpy(app.surface().pixels(), raw.pixels,
+                static_cast<size_t>(raw.width) * raw.height * 2);
 }
 
 // [RE 0x407AD2] loadMap
@@ -373,9 +382,8 @@ void loadPanelUi(Application& app) {
     loadUiImage(state.panelFrame3, state.panel, 3);
     loadUiImage(state.panelFrame7, state.panel, 7);
     loadUiImage(state.panelFrame8, state.panel, 8);
-    for (int i = 0; i < 3; ++i) {
-        loadUiImage(state.panelFrames456[i], state.panel, static_cast<size_t>(i + 4));
-    }
+    // panel.mkf[4/5/6] 是骰子滚动 FLC 动画（非 UiImage），由 turn_system 状态2 按需
+    // 以 FliDecoder 播放（原版 sub_419572 → sub_45144F），此处不加载。
     state.panelLoaded = true;
     RICH4_LOGI("panel UI loaded (RE 0x4190CF)");
 }

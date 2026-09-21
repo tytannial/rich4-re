@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <cstring>
 #include <vector>
 
 #include "game/app/map_tables.h"
@@ -20,6 +21,13 @@ constexpr int kViewCenterX = 220;  // [RE 0x40829D] v130 += 220
 constexpr int kViewCenterY = 260;  // [RE 0x40829D] v125 += 260
 constexpr int kViewHalf = 14;      // [RE 0x40829D] (row+14)/(col+14)
 constexpr int kOrderCount = 296;   // [RE 0x473610] 每方向有效遍历项
+
+// [RE 0x475224/0x475228] 骰子面板位置表（8 方向，交错 int32 对）
+constexpr int kDicePosX[8] = {4, 12, 8, -4, -12, -24, -20, -12};
+constexpr int kDicePosY[8] = {12, 12, 6, -6, -12, -12, -6, 6};
+
+// [RE 0x48B2B4] unk_48B2B4 越界地块空白纹理（32x32 8bit）
+const uint8_t kBlankTile[1024] = {};
 
 // [RE 0x40829D] 物件精灵绘制项（对应原版 dword_48A44C/48A84C/word_48A850/854/856 列表）
 // 原版按 dword_48A44C[m] 低 16 位（16*y）排序（sub_457E6C + sub_4079F9）
@@ -73,16 +81,24 @@ void renderMap(Application& app, int centerX, int centerY) {
         const Player& p = state.players[state.currentPlayer];
         centerX = p.spriteX;
         centerY = p.spriteY;
+        // [RE 0x40829D] 跳伞期间玩家未落地（spriteX/Y=0）：用出生 cellEnt 坐标
+        if (centerX == 0 && centerY == 0 && p.cellEntId > 0 &&
+            p.cellEntId < state.cellEnts.size()) {
+            centerX = state.cellEnts[p.cellEntId].x;
+            centerY = state.cellEnts[p.cellEntId].y;
+        }
     }
-    if (state.currentPlayer < 4 && centerX == 0 && centerY == 0) {
+    if (state.currentPlayer < 4 && centerX == 0 && centerY == 0 &&
+        state.pendingSpawnPlayer == 0) {
         const int ce = pickSpawnCellEnt(state);
         Player& p = state.players[state.currentPlayer];
         p.cellEntId = static_cast<uint16_t>(ce);
-        p.spriteX = static_cast<uint16_t>(state.cellEnts[ce].x);
-        p.spriteY = static_cast<uint16_t>(state.cellEnts[ce].y);
+        p.prevCellEnt = 0;
         state.cellEnts[ce].occMask |= (256u << state.currentPlayer);
-        centerX = p.spriteX;
-        centerY = p.spriteY;
+        // [RE 0x475114] 标记待入场（跳伞动画由 sub_418C55 播放，落地后设 spriteX/Y）
+        state.pendingSpawnPlayer = state.currentPlayer + 1;
+        centerX = state.cellEnts[ce].x;
+        centerY = state.cellEnts[ce].y;
         RICH4_LOGI("spawn: player %d cellEnt %d at (%d,%d) (RE 0x40829D)", state.currentPlayer, ce,
                    centerX, centerY);
     }
@@ -114,9 +130,7 @@ void renderMap(Application& app, int centerX, int centerY) {
         const int colOff = kIsoDrawOrder[dir][i][1];
         const int gx = colOff + cellX;
         const int gy = rowOff + cellY;
-        if (gx < 0 || gx >= kGridSize || gy < 0 || gy >= kGridSize) {
-            continue;
-        }
+        const bool inBounds = gx >= 0 && gx < kGridSize && gy >= 0 && gy < kGridSize;
         const int idx = 3364 * dir + 116 * (rowOff + kViewHalf) + 4 * (colOff + kViewHalf);
         const int idx2 = idx + 116;
         int16_t quad[4][2];
@@ -135,10 +149,14 @@ void renderMap(Application& app, int centerX, int centerY) {
             yMax = std::max(yMax, static_cast<int>(quad[k][1]));
         }
         if (yMax < 40 || yMin > 479) {
-            continue;
+            continue; // 视口外跳过（原版 sub_4557A1 内部裁剪）
         }
-        const uint16_t tileIndex = state.gndCellIndex[kGridSize * gy + gx];
-        const uint8_t* tile = state.gndBitmaps + (static_cast<size_t>(tileIndex) << 10);
+        // [RE 0x40829D] 越界地块用空白纹理（unk_48B2B4）填充，避免上一帧残留
+        const uint8_t* tile = kBlankTile;
+        if (inBounds) {
+            const uint16_t tileIndex = state.gndCellIndex[kGridSize * gy + gx];
+            tile = state.gndBitmaps + (static_cast<size_t>(tileIndex) << 10);
+        }
         isoBlitQuad(dst, tile, quad, state.gndPalette, true);
     }
 
@@ -195,13 +213,33 @@ void renderMap(Application& app, int centerX, int centerY) {
         items.push_back({spr, frame, sx, sy, colorIdx, id});
     };
 
-    // 玩家棋子（data.mkf 棋子动画，帧 0；朝向/行走动画阶段 3 接入）
+    // [RE 0x40829D] 玩家棋子：资源 = walkRes[j][2*state + group]，
+    //   帧 = byte_498EA3 + ((8 - dword_499088 + byte_496B78) & 7) * 每方向帧数
     for (int j = 0; j < state.playerCount && j < 9; ++j) {
         const Player& p = state.players[j];
         if (p.spriteX == 0 && p.spriteY == 0) {
             continue;
         }
-        addItem(&state.pieceAnim[j], 0, p.spriteX, p.spriteY, -1,
+        const int slot = 2 * state.playerActionState[j] + state.playerMoveGroup[j];
+        const UiImage* res = nullptr;
+        if (slot >= 0 && slot < 13 && state.walkRes[j][slot].frameCount() > 0) {
+            res = &state.walkRes[j][slot];
+        } else if (state.pieceAnim[j].frameCount() > 0) {
+            res = &state.pieceAnim[j];
+        }
+        if (!res) {
+            continue;
+        }
+        const int dir = (8 - state.mapRotation + p.dir) & 7;
+        const int perDir = res->frameCount() / 8;
+        int frame = 0;
+        if (perDir > 0) {
+            frame = state.playerMoveFrame[j] + dir * perDir;
+        }
+        if (frame >= res->frameCount()) {
+            frame = res->frameCount() - 1;
+        }
+        addItem(res, frame, p.spriteX, p.spriteY, -1,
                 static_cast<uint16_t>(0x8000u | (1u << j)));
     }
 
@@ -260,6 +298,69 @@ void renderMap(Application& app, int centerX, int centerY) {
     }
 
     setClipRect(0, 0, 640, 480);
+
+    // [RE 0x40829D] 移动计步器（剩余步数 dword_48BAF8；定义见 renderMap 头）
+    // 说明: sprintf("%d", dword_48BAF8) → dword_48BAD8 帧 (ch-40)，y=400
+    if (state.remainingSteps > 0) {
+        char text[8];
+        std::snprintf(text, sizeof(text), "%d", state.remainingSteps);
+        const int len = static_cast<int>(std::strlen(text));
+        int x = 245 - 50 * len / 2;
+        for (int i = 0; i < len; ++i) {
+            const int frame = text[i] - 40; // '0'=48 → 帧 8
+            if (frame >= 0 && frame < state.estateTiles.frameCount()) {
+                blitElement(dst, state.estateTiles.frame(frame), x, 400, false);
+            }
+            x += 50;
+        }
+    }
+
+    // [RE 0x419572] 骰子：状态2 播放滚动 FLC（panel[骰子数+3]，色键绿透明），
+    //   滚动结束后的停留期显示最终点数精灵（panel.mkf[3] 帧 = 点数 + 6*j - 1）
+    //   位置 = 136/48 + dword_475224/228[方向]
+    {
+        const int p = state.currentPlayer;
+        if (p >= 0 && p < 9) {
+            const int n = std::max(1, std::min(3, static_cast<int>(state.players[p].diceCount)));
+            const int v6 = (state.players[p].dir + 8 - state.mapRotation) & 7;
+            const int dx = 136 + kDicePosX[v6];
+            const int dy = 48 + kDicePosY[v6];
+            if (state.diceAnimActive && state.diceAnim.valid()) {
+                const int w = state.diceAnim.width();
+                const int h = state.diceAnim.height();
+                const uint16_t* src = state.diceAnim.pixels();
+                uint16_t* d = dst.pixels();
+                for (int row = 0; row < h; ++row) {
+                    const int py = dy + row;
+                    if (py < 0 || py >= Surface::kHeight) {
+                        continue;
+                    }
+                    for (int col = 0; col < w; ++col) {
+                        const int px = dx + col;
+                        if (px < 0 || px >= Surface::kWidth) {
+                            continue;
+                        }
+                        const uint16_t c = src[static_cast<size_t>(row) * w + col];
+                        const int cr = (c >> 10) & 0x1F;
+                        const int cg = (c >> 5) & 0x1F;
+                        const int cb = c & 0x1F;
+                        if (cg >= 20 && cr <= 10 && cb <= 10) {
+                            continue; // 色键：亮绿透明
+                        }
+                        d[static_cast<size_t>(py) * Surface::kWidth + px] = c;
+                    }
+                }
+            } else if (state.showDice) {
+                for (int j = 0; j < n; ++j) {
+                    const int frame = state.diceValues[j] + 6 * j - 1;
+                    if (frame >= 0 && frame < state.panelFrame3.frameCount()) {
+                        blitSpriteFrameClipped(dst, state.panelFrame3, frame, dx + 85, dy + 145,
+                                               false);
+                    }
+                }
+            }
+        }
+    }
 }
 
 // [RE 0x456384] 彩色掩码绘制（把 src 非零像素画成 color 到目标缓冲）
