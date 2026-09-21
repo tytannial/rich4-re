@@ -38,7 +38,9 @@ struct SpriteDraw {
     int x = 0;
     int y = 0;
     int colorIdx = -1; // 调色板索引（-1 无）
-    uint16_t id = 0;   // 物件 ID（10000+=玩家 / 2000+=estate / 4000+=corp / 6000+=specPt / 8000+=evtCell）
+    uint16_t id = 0;   // 物件 ID（0xF000+=玩家 / 2000+=estate / 4000+=corp / 6000+=specPt / 8000+=evtCell）
+    const UiImage* hitSpr = nullptr; // [RE 0x409B18] 拾取形状（null = 用 spr）
+    int hitFrame = 0;
 };
 
 // [RE 0x407A2C] 像素坐标 -> 等距屏幕偏移
@@ -201,8 +203,10 @@ void renderMap(Application& app, int centerX, int centerY) {
         }
         const UiFrameView& f = state.cellEntTiles.frame(frame);
         blitElement(dst, f, sx, sy, true);
+        // [RE 0x409B18] 拾取形状 = g_pickMask 帧 4（51x51）
+        const UiFrameView& pf = state.flagTiles.frameCount() > 4 ? state.flagTiles.frame(4) : f;
         state.mapHitRegions.push_back(
-            {sx - f.offsetX, sy - f.offsetY, f.width, f.height, static_cast<uint16_t>(i)});
+            {sx - pf.offsetX, sy - pf.offsetY, pf.width, pf.height, static_cast<uint16_t>(i)});
     }
 
     // 物件精灵收集（对应 sub_40829D 的 dword_48A44C 列表，按 y 排序后绘制）
@@ -222,19 +226,23 @@ void renderMap(Application& app, int centerX, int centerY) {
         sy = baseY + isoAt(idx) - oy;
         return true;
     };
-    auto addItem = [&](const UiImage* spr, int frame, int px, int py, int colorIdx, uint16_t id) {
+    auto addItem = [&](const UiImage* spr, int frame, int px, int py, int colorIdx, uint16_t id,
+                       const UiImage* hitSpr = nullptr, int hitFrame = 0) {
         if (!spr || spr->frameCount() <= 0) {
             return;
         }
         if (frame < 0 || frame >= spr->frameCount()) {
             frame = 0; // 帧数不足时回退首帧（防越界）
         }
+        if (hitSpr && (hitFrame < 0 || hitFrame >= hitSpr->frameCount())) {
+            hitFrame = 0;
+        }
         int sx = 0;
         int sy = 0;
         if (!projectItem(px, py, sx, sy)) {
             return;
         }
-        items.push_back({spr, frame, sx, sy, colorIdx, id});
+        items.push_back({spr, frame, sx, sy, colorIdx, id, hitSpr, hitFrame});
     };
 
     // [RE 0x40829D] 玩家棋子：资源 = walkRes[j][2*state + group]，
@@ -273,8 +281,9 @@ void renderMap(Application& app, int centerX, int centerY) {
             continue;
         }
         const int frame = (8 - (state.mapRotation + sp.dir)) & 7;
+        const int pickFrame = ((8 - (state.mapRotation + sp.dir)) & 1) + 2;
         addItem(&state.specTiles[sp.sprite], frame, sp.x, sp.y, sp.owner,
-                static_cast<uint16_t>(6000 + i));
+                static_cast<uint16_t>(6000 + i), &state.flagTiles, pickFrame);
     }
 
     // 事件格（图块 = dword_48AE4C[sprite] = map.mkf[sprite+38]；帧 = 8 方向；色 = 原图）
@@ -311,8 +320,9 @@ void renderMap(Application& app, int centerX, int centerY) {
             continue;
         }
         const int frame = (8 - (state.mapRotation + es.dir)) & 7;
+        const int pickFrame = ((8 - (state.mapRotation + es.dir)) & 1) + 2;
         addItem(&state.estateFlag, frame, es.x, es.y, es.owner,
-                static_cast<uint16_t>(2000 + i));
+                static_cast<uint16_t>(2000 + i), &state.flagTiles, pickFrame);
     }
 
     // 公司（无主时不绘制；图块 = dword_48AE64[sub]，颜色 = 拥有者）
@@ -322,8 +332,9 @@ void renderMap(Application& app, int centerX, int centerY) {
             continue;
         }
         const int frame = (8 - (state.mapRotation + cp.dir)) & 7;
+        const int pickFrame = ((8 - (state.mapRotation + cp.dir)) & 1) + 2;
         addItem(&state.corpTiles[cp.sub], frame, cp.x, cp.y, cp.owner,
-                static_cast<uint16_t>(4000 + i));
+                static_cast<uint16_t>(4000 + i), &state.flagTiles, pickFrame);
     }
 
     // 按 y 排序（原版 sub_457E6C + sub_4079F9 按 16*y）
@@ -331,10 +342,13 @@ void renderMap(Application& app, int centerX, int centerY) {
               [](const SpriteDraw& a, const SpriteDraw& b) { return a.y < b.y; });
 
     for (const SpriteDraw& it : items) {
-        const UiFrameView& f = it.spr->frame(it.frame);
-        // [RE 0x417559] 记录命中矩形（blit 目标 = x - offsetX, y - offsetY）
+        // [RE 0x409B18] 命中矩形用拾取形状（g_pickMask 帧），无则用绘制帧
+        const UiImage* hs = it.hitSpr ? it.hitSpr : it.spr;
+        const int hf = it.hitSpr ? it.hitFrame : it.frame;
+        const UiFrameView& hfView = hs->frame(hf);
         state.mapHitRegions.push_back(
-            {it.x - f.offsetX, it.y - f.offsetY, f.width, f.height, it.id});
+            {it.x - hfView.offsetX, it.y - hfView.offsetY, hfView.width, hfView.height, it.id});
+        const UiFrameView& f = it.spr->frame(it.frame);
         if (it.spr->isSprite()) {
             // [RE 0x40986A] 调色板[255] = 拥有者颜色（0=黑轮廓、1..8=玩家色、-1=原图）
             if (it.colorIdx < 0) {
