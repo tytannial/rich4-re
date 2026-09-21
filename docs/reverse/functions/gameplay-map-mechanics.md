@@ -110,9 +110,13 @@
 - [x] 数据：`Estate` 补 `+28 priceAdd` / `+30 priceBase` / `+32..+43 fees[6]` / `name[19]`（+4..+22 BIG5）
 - [x] `confirmDialog` 支持文本与坐标（对齐 `askDialog`：文本居中 (cx,140) + 框 (cx,cy)）
 - [x] `landingEvent` case 0 无主地产购地（守卫/算价/现金检查/询问/神明阻止/owner/音效槽 17/小地图/期限/扣款）
-- [ ] 音效槽 `dword_4823D2` = 槽 17 已确认并播放 ✅
-- [ ] 验收：实机走到无主地产 → 弹"地产名"询问框（原版 `%s\n\n` 仅名称）→ 确定后地块变色/扣款/小地图更新；取消无变化
-- 差异（待补）：AI 决策 `sub_41D7D4`、现金不足提示（0x41A159）、神明阻止文本（`showMessage`）、提示框背景（`g_tipFrame+72`）
+- [x] 询问文本核对（0x4639E1，BIG5）：`"%s\n\n費用:%d元\n\n是否買下此地?"`（IDA get_string 在 \n 处截断，须用 get_bytes 核对）
+- [x] 空地"信物"（0x40829D @0x4091DF）：**level==0 有主 → 棋子图 pieceTiles（0x48AEA8）+ 帧=角色 ID**、不调色板；
+      level>0 → `dword_48AE48[level]` 建筑表（type==0）/ `dword_48AE60`（estateFlag，type!=0），owner 调色板；无主不绘制
+- [x] 回合缓冲：case 0 有 objId 路径统一返回 **0x88**（loc_41B111，等 8 帧后下一位）；objId==0 → 0x80
+- [x] 吐槽机制（0x44F627）：同名地产 ≥3 时 `sub_44EF41` 角色语音/表情（买地后必定、升级后 1/3 概率）→ **P4 待实现**
+- 差异（待补）：AI 决策 `sub_41D7D4`；现金不足提示（`byte_46398B`="現金不夠支付！" + `showMessage` 1500ms）；
+  神明阻止文本；提示框背景（`g_tipFrame+72`）；落地后处理 `sub_40F381`/`sub_448A7E`；连锁奖励 `sub_44101D`
 
 ### P1 升级 + 收租（同链路）
 

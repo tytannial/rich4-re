@@ -302,29 +302,35 @@ int landingEvent(Application& app, uint16_t cellEntId) {
         RICH4_LOGI("landingEvent: cellType %u objId %u (RE 0x41982D, P2 TODO)", cellType, objId);
         return 0x80;
     }
-    // case 0：普通格，按 objId 分
+    // case 0：普通格，按 objId 分（objId == 0 → 无事件返回 0x80；
+    //   有 objId 的地产/公司/特殊点路径统一在 loc_41B111 返回 0x88 = 等待 8 帧后下一位）
+    if (objId == 0) {
+        return 0x80;
+    }
     if (objId > 2000 && objId < 4000) {
         const int idx = static_cast<int>(objId) - 2000;
         if (idx <= 0 || idx >= static_cast<int>(st.estates.size())) {
-            return 0x80;
+            return 0x88;
         }
         Estate& es = st.estates[idx];
         Player& pl = st.players[p];
         if (es.owner == 0) {
             // ---- 无主地产购地（loc_41A013）----
             if (pl.state37 != 0 || pl.cellTableIdx == 12) {
-                return 0x80;
+                return 0x88;
             }
             const int32_t price =
                 (static_cast<int32_t>(es.level) * es.priceBase + es.priceAdd) * st.moneyMul;
             if (price > pl.cash) {
-                // [RE 0x41A159] 现金不足（原版提示待补）
-                RICH4_LOGI("buy land: cash %d < price %d (RE 0x41A159 TODO)", pl.cash, price);
-                return 0x80;
+                // [RE 0x41A159] 现金不足：showMessage(byte_46398B, 1500) → loc_41B111(0x88)
+                RICH4_LOGI("buy land: cash %d < price %d (RE 0x41A159)", pl.cash, price);
+                return 0x88;
             }
             const std::string label = big5ToUtf8(es.name, sizeof(es.name));
             char text[160];
-            std::snprintf(text, sizeof(text), "%s\n\n", label.c_str()); // 原版 %s\n\n
+            // [RE 0x4639E1] 原版格式串（BIG5）："%s\n\n費用:%d元\n\n是否買下此地?"
+            std::snprintf(text, sizeof(text), "%s\n\n費用:%d元\n\n是否買下此地?", label.c_str(),
+                          price);
             bool buy = false;
             if ((pl.alive & 6) != 0) {
                 buy = false; // TODO [RE 0x41D7D4] AI 决策 sub_41D7D4(price)
@@ -333,13 +339,13 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                 buy = confirmDialog(app, text, 220, 320);
             }
             if (!buy) {
-                return 0x80;
+                return 0x88;
             }
             // [RE 0x40FA61] 携带神明（槽 7/8/15）阻止（原版显示神明名 1500ms）
             const uint8_t carried = pl.cellTableIdx;
             if (carried == 7 || carried == 8 || carried == 15) {
                 RICH4_LOGI("buy land blocked by carried god %u (RE 0x40FA61, text TODO)", carried);
-                return 0x80;
+                return 0x88;
             }
             es.owner = static_cast<uint8_t>(p + 1);
             // [RE 0x41D476(0,0,1)] UI/地图刷新（重写每帧重绘，无需显式）
@@ -356,11 +362,14 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                 es.expireDate = static_cast<uint32_t>(d);
             }
             pl.cash -= price;
+            // [RE 0x41A13E] sub_44F627(estate.name, 0)：同名地产 ≥3 时角色感想
+            //   （sub_44EF41 角色语音/表情，P4 待实现）
             RICH4_LOGI("buy land: estate %d price %d owner %d (RE 0x41982D/0x41A013)", idx, price,
                        p + 1);
         }
     }
-    return 0x80;
+    // loc_41B077 → sub_40F381/sub_448A7E/refreshGameUi → loc_41B111：等 8 帧（0x88）
+    return 0x88;
 }
 
 // [RE 0x419572] rollDice
