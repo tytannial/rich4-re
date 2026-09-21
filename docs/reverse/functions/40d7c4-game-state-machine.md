@@ -80,10 +80,23 @@ while (!PeekMessageA(...)) {
 落地初始化（`g_playerSpriteX/Y = cellEnt 坐标`、`g_playerAlive = g_playerKind`、
 `loadWalkResources`、`dword_475114 = 0`）。
 
-**交互屏蔽**：`flcOpen`（0x450CED）中 `g_flcInterruptible = flags & 2`；跳伞 `flags=1` → **0
-（不可中断）**，播放期间 `PeekMessage` 只取走消息不派发 → **落地初始化完成前无法交互**
-（骰子 `flags=0x1E000001` 同样不可中断）。重写：`pendingSpawnPlayer/parachuteActive`
-期间 `gameEventHandler` 消费键鼠事件（保留 QUIT 与 tick，tick 继续推进动画）。
+**不可中断**：`flcOpen`（0x450CED）中 `g_flcInterruptible = flags & 2`；跳伞 `flags=1` → 0，
+播放期间 `PeekMessage` 只取走消息不派发 → 落地初始化完成前无任何交互
+（骰子 `flags=0x1E000001` 同样不可中断）。
+
+### 交互锁定（`g_playerControl` 0x46CAFD）
+
+`enablePlayerControl`(0x4196F1) / `disablePlayerControl`(0x419703) 控制 `byte_46CAFD`；
+`gameWndProc` 中多处 `cmp byte_46CAFD, 0 → jz 出口` 锁定交互
+（0x4186CB/0x41889D/0x418910/0x418B93/0x418151）：
+
+- **人类回合等待输入** → `enablePlayerControl`（=1，可交互）
+- **按 GO / 开始移动** → `disablePlayerControl`（=0）→ **掷骰、移动、结算全程锁定**
+- **AI 回合**：`beginPlayerTurn` 未 enable → 保持 0 → 锁定
+- **例外**：地图区物件提示（0x4186BE）在 `byte_46CAFD` 检查**之前**，锁定期间仍可按住查看
+
+重写：`gameEventHandler` 在 `!gamePlayerControl` 期间消费鼠标移动/抬起/右键
+（左键按下仅保留地图区物件提示）；跳伞期间（`pendingSpawnPlayer/parachuteActive`）全屏蔽。
 
 ## 开始移动 `sub_40DD1F`（0x40DD1F）
 
