@@ -369,7 +369,47 @@ int landingEvent(Application& app, uint16_t cellEntId) {
             //   （sub_44EF41 角色语音/表情，P4 待实现）
             RICH4_LOGI("buy land: estate %d price %d owner %d (RE 0x41982D/0x41A013)", idx, price,
                        p + 1);
+        } else if (es.owner == static_cast<uint8_t>(p + 1)) {
+            // ---- 自己的地产：升级/加盖（0x419911..0x419A52）----
+            // 守卫: level >= 5 / type != 0（大地块走建造菜单）/ state37 != 0 → 无操作
+            // 费用 = word[estate+30](priceBase) * g_moneyMul；现金不足 → showMessage("現金不夠支付！")
+            // 人类 askDialog 询问（AI alive&6 自动升级）→ checkCarriedGod 阻止 → level++
+            //   → 音效槽 18（dword_4823DA）；level==5 → 角色语音（sub_44EF41 索引 0）
+            //   → 否则 estateChainSpeech(name, 1)（1/3 概率感想，P4）
+            // 差异: 原版询问文本 sprintf("%s\n\n", name)（无费用），重写补费用行便于阅读；
+            //       角色语音/吐槽（P4）、showMessage 提示待接入
+            if (es.level >= 5 || es.type != 0 || pl.state37 != 0) {
+                return kLandingWait;
+            }
+            const int32_t cost = static_cast<int32_t>(es.priceBase) * st.moneyMul;
+            if (cost > pl.cash) {
+                RICH4_LOGI("upgrade: cash %d < cost %d (RE 0x419A52)", pl.cash, cost);
+                return kLandingWait;
+            }
+            const std::string label = big5ToUtf8(es.name, sizeof(es.name));
+            char text[160];
+            std::snprintf(text, sizeof(text), "%s\n\n費用:%d元\n\n是否加蓋?", label.c_str(), cost);
+            bool upgrade = false;
+            if ((pl.alive & 6) != 0) {
+                upgrade = true; // [RE 0x41997D] AI 直接升级
+            } else if (pl.alive == 1) {
+                upgrade = confirmDialog(app, text, 220, 320); // [RE 0x419996] askDialog
+            }
+            if (!upgrade) {
+                return kLandingWait;
+            }
+            const uint8_t carried = pl.cellTableIdx;
+            if (carried == 7 || carried == 8 || carried == 15) {
+                // [RE 0x4199AE] checkCarriedGod 阻止（显示神明名 1500ms，重写仅日志）
+                RICH4_LOGI("upgrade blocked by carried god %u (RE 0x40FA61, text TODO)", carried);
+                return kLandingWait;
+            }
+            pl.cash -= cost;
+            ++es.level;                          // [RE 0x4199D1] inc byte ptr [esi+1Ah]
+            app.audio().playEffectSlot(18);      // [RE 0x4823DA] 升级音效
+            RICH4_LOGI("upgrade: estate %d level %d cost %d (RE 0x419911)", idx, es.level, cost);
         }
+        // 他人地产：无操作（收租在状态机 case 3，RE 0x40DA4B）
     }
     // loc_41B077 → sub_40F381/sub_448A7E/refreshGameUi → loc_41B111：等待 kLandingWait 帧
     return kLandingWait;
