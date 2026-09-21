@@ -34,7 +34,13 @@ struct ConfirmState {
 void redrawConfirm(ConfirmState& st) {
     Surface& dst = st.app->surface();
     if (st.text != nullptr) {
-        // [RE 0x440BA8] 文本居中于 (cx, 140)，setTextFont(16, 0xF0F0F0, 0x101010, 3, 1)
+        // [RE 0x440BA8] askDialog：先画提示框背景 = g_tipFrame 帧 5（sub_456418 → blitElement
+        //   色键 blit）于 (220,140)，再以同坐标居中画文本（drawText 标志 4）
+        const UiImage& tip = st.app->gameState().estateTiles; // [RE 0x48BAD8] data.mkf[517]
+        if (tip.frameCount() > 5) {
+            blitElement(dst, tip.frame(5), st.cx, 140, false);
+        }
+        // 文本居中于 (cx, 140)，setTextFont(16, 0xF0F0F0, 0x101010, 3, 1)
         st.app->text().setFont(16, 0xF0F0F0, 0x101010, kTextStyleShadow | kTextStyleBold, 1);
         st.app->text().drawText(dst, st.text, st.cx, 140, 4);
     }
