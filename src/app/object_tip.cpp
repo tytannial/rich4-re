@@ -45,26 +45,27 @@ std::string buildTipText(const GameState& state, uint16_t id) {
         }
         return {};
     }
-    if (id < 4000) { // 地产：省份/城市名（+4）+ 地主 + 建筑名 + 等级名
+    if (id < 4000) { // 地产：地主 + 建筑名 + 等级名 + 费用（原版 0x417559）
         const int i = id - 2000;
         if (i <= 0 || i >= static_cast<int>(state.estates.size())) {
             return {};
         }
         const Estate& es = state.estates[i];
-        std::string s = nameAt(es.pad4, 19);
+        std::string s;
         const std::string owner = ownerName(state, es.owner);
         if (!owner.empty()) {
-            if (!s.empty()) {
-                s += "\n";
-            }
             s += owner;
-        }
-        if (!s.empty()) {
             s += "\n";
         }
         s += kBuildingNames[es.type < 11 ? es.type : 0];
-        s += " ";
+        s += "\n";
         s += kBuildingNames[11 + (es.level < 6 ? es.level : 0)];
+        // 费用 = estate +32 + 2*level（u16，原版 sub_452793 显示）
+        const int lv = es.level < 6 ? es.level : 0;
+        const uint16_t fee =
+            static_cast<uint16_t>(es.pad28[4 + 2 * lv] | (es.pad28[5 + 2 * lv] << 8));
+        s += "\n$";
+        s += std::to_string(fee);
         return s;
     }
     if (id < 6000) { // 公司：名称（+4）+ 地主 + 公司类型名 + 等级名

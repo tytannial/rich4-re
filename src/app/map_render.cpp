@@ -313,16 +313,27 @@ void renderMap(Application& app, int centerX, int centerY) {
                 static_cast<uint16_t>((slot + 1) << 8));
     }
 
-    // 地产（无主 = 黑色轮廓：原版 sub_40829D 无 owner 检查 + 调色板[255]=0；有主 = 玩家色）
+    // 地产：有主绘制旗帜（玩家色）；无主空地不绘制（地形自带虚线框），仅记录命中
     for (size_t i = 1; i < state.estates.size(); ++i) {
         const Estate& es = state.estates[i];
         const int frame = (8 - (state.mapRotation + es.dir)) & 7;
         const int pickFrame = ((8 - (state.mapRotation + es.dir)) & 1) + 2;
+        if (es.owner == 0) {
+            // [RE 0x409B18] 无主空地仍可拾取（点击显示 空地/等级/费用）
+            int sx = 0;
+            int sy = 0;
+            if (state.flagTiles.frameCount() > pickFrame && projectItem(es.x, es.y, sx, sy)) {
+                const UiFrameView& pf = state.flagTiles.frame(pickFrame);
+                state.mapHitRegions.push_back({sx - pf.offsetX, sy - pf.offsetY, pf.width,
+                                               pf.height, static_cast<uint16_t>(2000 + i)});
+            }
+            continue;
+        }
         addItem(&state.estateFlag, frame, es.x, es.y, es.owner,
                 static_cast<uint16_t>(2000 + i), &state.flagTiles, pickFrame);
     }
 
-    // 公司（无主 = 黑色轮廓；有主 = 玩家色；图块 = dword_48AE64[sub]）
+    // 公司：有主绘制（玩家色）；无主不绘制，仅记录命中
     for (size_t i = 1; i < state.corps.size(); ++i) {
         const Corp& cp = state.corps[i];
         if (cp.sub >= 17) {
@@ -330,6 +341,16 @@ void renderMap(Application& app, int centerX, int centerY) {
         }
         const int frame = (8 - (state.mapRotation + cp.dir)) & 7;
         const int pickFrame = ((8 - (state.mapRotation + cp.dir)) & 1) + 2;
+        if (cp.owner == 0) {
+            int sx = 0;
+            int sy = 0;
+            if (state.flagTiles.frameCount() > pickFrame && projectItem(cp.x, cp.y, sx, sy)) {
+                const UiFrameView& pf = state.flagTiles.frame(pickFrame);
+                state.mapHitRegions.push_back({sx - pf.offsetX, sy - pf.offsetY, pf.width,
+                                               pf.height, static_cast<uint16_t>(4000 + i)});
+            }
+            continue;
+        }
         addItem(&state.corpTiles[cp.sub], frame, cp.x, cp.y, cp.owner,
                 static_cast<uint16_t>(4000 + i), &state.flagTiles, pickFrame);
     }
