@@ -13,11 +13,11 @@ namespace rich4 {
 
 namespace {
 
-// 结构 +4 的 20 字节 BIG5 名字 → UTF-8
-std::string nameAt(const uint8_t* p) {
+// 结构 +4 的 BIG5 名字（最多 maxLen 字节）→ UTF-8
+std::string nameAt(const uint8_t* p, int maxLen) {
     char buf[24] = {};
     int n = 0;
-    while (n < 20 && p[n]) {
+    while (n < maxLen && n < 23 && p[n]) {
         buf[n] = static_cast<char>(p[n]);
         ++n;
     }
@@ -41,17 +41,24 @@ std::string buildTipText(const GameState& state, uint16_t id) {
     }
     if (id < 2000) { // cellEnt 名称（+4）
         if (id < state.cellEnts.size()) {
-            return nameAt(state.cellEnts[id].pad4);
+            return nameAt(state.cellEnts[id].pad4, 20);
         }
         return {};
     }
-    if (id < 4000) { // 地产：地主 + 建筑名 + 等级名
+    if (id < 4000) { // 地产：省份/城市名（+4）+ 地主 + 建筑名 + 等级名
         const int i = id - 2000;
         if (i <= 0 || i >= static_cast<int>(state.estates.size())) {
             return {};
         }
         const Estate& es = state.estates[i];
-        std::string s = ownerName(state, es.owner);
+        std::string s = nameAt(es.pad4, 19);
+        const std::string owner = ownerName(state, es.owner);
+        if (!owner.empty()) {
+            if (!s.empty()) {
+                s += "\n";
+            }
+            s += owner;
+        }
         if (!s.empty()) {
             s += "\n";
         }
@@ -60,13 +67,20 @@ std::string buildTipText(const GameState& state, uint16_t id) {
         s += kBuildingNames[11 + (es.level < 6 ? es.level : 0)];
         return s;
     }
-    if (id < 6000) { // 公司：地主 + 公司名 + 等级名
+    if (id < 6000) { // 公司：名称（+4）+ 地主 + 公司类型名 + 等级名
         const int i = id - 4000;
         if (i <= 0 || i >= static_cast<int>(state.corps.size())) {
             return {};
         }
         const Corp& cp = state.corps[i];
-        std::string s = ownerName(state, cp.owner);
+        std::string s = nameAt(cp.pad4, 20);
+        const std::string owner = ownerName(state, cp.owner);
+        if (!owner.empty()) {
+            if (!s.empty()) {
+                s += "\n";
+            }
+            s += owner;
+        }
         if (!s.empty()) {
             s += "\n";
         }
@@ -85,7 +99,7 @@ std::string buildTipText(const GameState& state, uint16_t id) {
         if (!s.empty()) {
             s += "\n";
         }
-        s += nameAt(sp.pad4);
+        s += nameAt(sp.pad4, 20);
         return s;
     }
     if (id < 10000) { // 事件格名称
@@ -93,7 +107,7 @@ std::string buildTipText(const GameState& state, uint16_t id) {
         if (i <= 0 || i >= static_cast<int>(state.evtCells.size())) {
             return {};
         }
-        return nameAt(state.evtCells[i].pad4);
+        return nameAt(state.evtCells[i].pad4, 20);
     }
     if ((id & 0xFF) == 0) { // cellTable 物件（槽号<<8）→ 神明/商店名
         const int slot = (id >> 8) & 0x7F;
