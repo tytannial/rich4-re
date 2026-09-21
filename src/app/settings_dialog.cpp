@@ -109,6 +109,7 @@ struct SettingsState {
     int originY = 0;           // dword_48BB78 对话框 y
     int page = 0;              // dword_48BB58 当前页
     int currentTrack = 1;      // sub_454F5B 当前曲目（1-8）
+    int musicVolumeBefore = 4; // [RE 0x49715A] 进入设置时的音乐音量（舊值，確定时判断 0↔非0）
     // 进入设置前的音乐状态（取消时恢复，原版 0x4109DA 恢复播放）
     int musicTrackBefore = 0;  // 1-8；0 = 非可选曲目
     int musicSceneBefore = -1; // 场景音乐索引；-1 = 无
@@ -293,21 +294,28 @@ void applyControl(SettingsState& state, int control, int rx, int ry) {
             }
             break;
         }
-        case 7: // 取消（不保存）
-            // [RE 0x4109DA] 恢复进入设置前的音乐
-            restoreMusic(state);
+        case 7: // 取消（不保存；原版不改动音乐，保持当前播放，避免"从头播放"）
+            // [RE 0x4106D9] 取消音效：dword_482332 = Effect.mkf[4]
+            state.app->audio().playEffect(4);
             state.app->events().requestExit(0);
             break;
         case 8: // 確定：memcpy(byte_497158) + sub_411F80 写 RICH4.CFG
             std::memcpy(state.app->gameState().settings, state.settings, sizeof(state.settings));
             saveCfg(state.app->gameDir() + "/RICH4.CFG", state.settings,
                     state.app->input().bindings());
-            // [RE 0x49715A/0x49715B] 应用音乐/音效音量（原版 DirectSound 音量表 / MCI 音量）
+            // [RE 0x4106D9] 確定音效：dword_48232A = Effect.mkf[2]
+            state.app->audio().playEffect(2);
+            // [RE 0x410991] 原版音乐处理：仅音量 0↔非0 时停止/重播，非0 之间变化只调音量
             state.app->audio().setEffectVolume(state.settings[3]);
+            if (state.settings[2] == 0 && state.musicVolumeBefore != 0) {
+                state.app->audio().stopMusic();
+            } else if (state.settings[2] != 0 && state.musicVolumeBefore == 0) {
+                restoreMusic(state); // 从静音恢复 → 重播当前曲目
+            }
             state.app->audio().setMusicVolume(state.settings[2]);
             RICH4_LOGI("settings saved (RE 0x411F80)");
             // [RE 0x410A15] 確定 → postModalExit(0)；布局 byte_49715D 变化时原版返回 0x8000
-            //   （外层刷新），这里统一返回 0，避免被游戏内菜单误当作"重新遊戲(1)"
+            //   （这里统一返回 0，避免被游戏内菜单误当作"重新遊戲(1)"）
             state.app->events().requestExit(0);
             break;
         case 9: // byte_48BB49 ^= 1（動畫過程开关）
@@ -390,8 +398,8 @@ bool settingsEventHandler(const SDL_Event* event, void* user) {
     }
 
     if (event->type == SDL_EVENT_MOUSE_BUTTON_UP && event->button.button == SDL_BUTTON_RIGHT) {
-        // [RE 0x4103A3] WM_RBUTTONUP(0x205)：取消（postModalExit(0)）
-        restoreMusic(state);
+        // [RE 0x4103A3] WM_RBUTTONUP(0x205)：取消（postModalExit(0)；原版不改动音乐）
+        state.app->audio().playEffect(4); // [RE 0x4106D9] 取消音效 Effect.mkf[4]
         state.app->events().requestExit(0);
         return true;
     }
@@ -455,6 +463,7 @@ int settingsDialog(Application& app, int page) {
     state.currentTrack = app.audio().currentTrack();
     state.musicTrackBefore = state.currentTrack;
     state.musicSceneBefore = app.audio().currentSceneIndex();
+    state.musicVolumeBefore = app.audio().musicVolume();
 
     redrawSettings(state);
     RICH4_LOGI("settings dialog: page=%d at (%d,%d) (RE 0x411B53)", page, state.originX,

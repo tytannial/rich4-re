@@ -655,11 +655,11 @@ void handleSelectEvent(DialogState& st, const SDL_Event& event) {
                 toggleAvatar(st);
             } else if (hit >= 1 && hit <= 8) {
                 st.pressedCtrl = hit;
-                // [RE 0x404E44] 確定(1)/取消(2) 按下无音效（原版在进入阶段 0x405D03 播
-                //   unk_46CCD0 = Effect.mkf[5]）；选项(3-8) 按下播放点击音效
-                if (hit >= 3) {
-                    st.app->audio().playEffect(1);
-                }
+                // [RE 0x404E44] 按下音效 = sub_4542CE(&dword_48231A + 8*hit + 8, 0)：
+                //   控件1(確定) → dword_48232A = Effect.mkf[2]（確定音效）
+                //   控件2(取消) → dword_482332 = Effect.mkf[4]（取消音效）
+                //   控件3-8(选项) → dword_48231A = Effect.mkf[0]（选项音效）
+                st.app->audio().playEffect(hit == 1 ? 2 : (hit == 2 ? 4 : 0));
                 redrawAll(st);
             } else if (hit >= 9) {
                 switchMap(st, hit - 9);
