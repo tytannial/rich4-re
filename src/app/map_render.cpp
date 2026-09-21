@@ -177,6 +177,8 @@ void renderMap(Application& app, int centerX, int centerY) {
     }
 
     // cellEnts 物件（图块 = map.mkf[24] 帧 sprite-1）
+    // [RE 0x417559] 记录命中矩形（ID = cellEnt 索引 → 提示显示 +4 名称：醫院/銀行/命運/…）
+    state.mapHitRegions.clear();
     for (size_t i = 1; i < state.cellEnts.size(); ++i) {
         const CellEnt& ce = state.cellEnts[i];
         if (ce.sprite == 0) {
@@ -197,7 +199,10 @@ void renderMap(Application& app, int centerX, int centerY) {
         if (frame < 0 || frame >= state.cellEntTiles.frameCount()) {
             continue;
         }
-        blitElement(dst, state.cellEntTiles.frame(frame), sx, sy, true);
+        const UiFrameView& f = state.cellEntTiles.frame(frame);
+        blitElement(dst, f, sx, sy, true);
+        state.mapHitRegions.push_back(
+            {sx - f.offsetX, sy - f.offsetY, f.width, f.height, static_cast<uint16_t>(i)});
     }
 
     // 物件精灵收集（对应 sub_40829D 的 dword_48A44C 列表，按 y 排序后绘制）
@@ -325,7 +330,6 @@ void renderMap(Application& app, int centerX, int centerY) {
     std::sort(items.begin(), items.end(),
               [](const SpriteDraw& a, const SpriteDraw& b) { return a.y < b.y; });
 
-    state.mapHitRegions.clear();
     for (const SpriteDraw& it : items) {
         const UiFrameView& f = it.spr->frame(it.frame);
         // [RE 0x417559] 记录命中矩形（blit 目标 = x - offsetX, y - offsetY）

@@ -300,6 +300,11 @@ void handleLeftButtonUp(Application& app, int x, int y) {
     (void)x;
     (void)y;
     GameState& state = app.gameState();
+    // [RE 0x417559] 松开左键 → 物件提示消失
+    if (!state.objectTipText.empty()) {
+        state.objectTipText.clear();
+        renderGameFrame(app);
+    }
     // [RE 0x417E26] 结束小地图拖拽（原版无条件 byte_48BE29 = 0）
     state.dragMiniMap = false;
     if (state.pendingAction == 1) {
