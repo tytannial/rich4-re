@@ -46,13 +46,19 @@
 
 ## 子文件类型 (按数据魔数)
 
-| 魔数 | 类型 | 文档 |
-|------|------|------|
-| `SPR\0` | 8bit 索引精灵 | [spr.md](spr.md) |
-| `SMP\0` | 16bit 高彩位图 | [smp.md](smp.md) |
-| `RIFF` | WAV 音频 (PCM) | 标准 RIFF/WAVE |
-| `GND\0` | 地图地面数据 | [map.md](map.md) |
-| 其它 | 原始数据 / BIG5 文本 | [text.md](text.md) |
+| 魔数 | 位置 | 类型 | 文档 |
+|------|------|------|------|
+| `SPR\0` | +0 | 8bit 索引精灵 | [spr.md](spr.md) |
+| `SMP\0` | +0 | 16bit 高彩位图 | [smp.md](smp.md) |
+| `RIFF` | +0 | WAV 音频 (PCM) | 标准 RIFF/WAVE |
+| `GND\0` | +0 | 地图地面数据 | [map.md](map.md) |
+| `0xAF12` | +4 | FLC 帧动画 | [flc.md](flc.md) |
+| 无（16bit 像素） | — | RAW 裸位图（尺寸按 index 硬编码） | [raw_bitmap.md](raw_bitmap.md) |
+| 其它 | — | BIG5 文本 / 结构·数据表 / 占位 | [text.md](text.md) |
+
+> `sub_450441` 读资源后：解压 → 若 `data_length!=0` 调 `convertPixelFormat` 转 16bit 像素 →
+> **仅当**前 3 字节为 `SPR`/`SMP` 才调 `relocateFrames`。FLC 与 RAW 均不走 `relocateFrames`；
+> FLC 由独立播放器 `sub_450CED`/`sub_450F04` 解码，RAW 由调用方按 index 已知尺寸直接使用。
 
 ## C 结构草稿
 
