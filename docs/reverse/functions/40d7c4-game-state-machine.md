@@ -74,6 +74,17 @@ while (!PeekMessageA(...)) {
 `sub_40C912` 内：有状态（`dword_496B9A`/`byte_496B9E`）且 `alive&0x30` → `sub_40DD1F()`；
 `g_playerState37` → `sub_40DD1F(); return -1`。
 
+### 跳伞入场（`dword_475114`）
+
+待入场玩家（`dword_475114`）→ `sub_45144F(资源, 0, 40, flags=1)` **阻塞播放**跳伞 FLC →
+落地初始化（`g_playerSpriteX/Y = cellEnt 坐标`、`g_playerAlive = g_playerKind`、
+`loadWalkResources`、`dword_475114 = 0`）。
+
+**交互屏蔽**：`flcOpen`（0x450CED）中 `g_flcInterruptible = flags & 2`；跳伞 `flags=1` → **0
+（不可中断）**，播放期间 `PeekMessage` 只取走消息不派发 → **落地初始化完成前无法交互**
+（骰子 `flags=0x1E000001` 同样不可中断）。重写：`pendingSpawnPlayer/parachuteActive`
+期间 `gameEventHandler` 消费键鼠事件（保留 QUIT 与 tick，tick 继续推进动画）。
+
 ## 开始移动 `sub_40DD1F`（0x40DD1F）
 
 - 人类（<4）无状态效果 → `byte_498EA2 = 2`（进入掷骰）
