@@ -408,6 +408,10 @@ struct GameState {
     bool gamePauseMenu = false;
     // [RE 0x46CAFF] byte_46CAFF 取消键触发跳过回合
     bool gameSkipRequest = false;
+    // [NEW] 调试模式（命令行 --debug 启用；测试辅助，无原版对应）
+    // 用途: Ctrl+1..8 修改地块所属/等级/连锁店、批量铺地、加现金、打印地块详情
+    bool debugMode = false;
+
     // [RE 0x475110] dword_475110 脏区标志（bit1=地图区）
     uint8_t dirtyFlags = 0;
     // [RE 0x475118] dword_475118 工具条资源已加载（游戏内标志）

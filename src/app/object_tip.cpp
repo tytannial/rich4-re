@@ -113,6 +113,32 @@ std::string buildTipText(const GameState& state, uint16_t id) {
 
 } // namespace
 
+// [RE 0x40A9D7] 地图物件拾取：取最上层（最后绘制）命中项
+// 依据: 0x40A9D7 拾取缓冲（重写用渲染记录的 mapHitRegions）;
+//       命中用拾取形状的 SPR 像素掩码（原版拾取缓冲语义），无形状时用矩形
+uint16_t pickMapObject(const GameState& state, int x, int y) {
+    for (auto it = state.mapHitRegions.rbegin(); it != state.mapHitRegions.rend(); ++it) {
+        if (it->shape) {
+            const UiFrameView& sf = it->shape->frame(it->shapeFrame);
+            const int lx = x - (it->anchorX - sf.offsetX);
+            const int ly = y - (it->anchorY - sf.offsetY);
+            if (lx < 0 || ly < 0 || lx >= sf.width || ly >= sf.height) {
+                continue;
+            }
+            const uint8_t* px = it->shape->frameBytes(it->shapeFrame);
+            if (!px || px[static_cast<size_t>(ly) * sf.width + lx] == 0) {
+                continue;
+            }
+        } else if (x < it->x || x >= it->x + it->w || y < it->y || y >= it->y + it->h) {
+            continue;
+        }
+        if (it->id != 0) {
+            return it->id;
+        }
+    }
+    return 0;
+}
+
 // [RE 0x417559] showObjectTip：命中测试（取最上层 = 最后绘制）+ 文本生成
 // 依据: 0x417559 反编译; sub_40A9D7 拾取（重写用渲染记录的 mapHitRegions 代替）;
 //       命中用拾取形状的 SPR 像素掩码（原版拾取缓冲语义），无形状时用矩形;

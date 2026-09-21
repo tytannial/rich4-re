@@ -52,10 +52,13 @@ int main(int argc, char** argv) {
     int gameClick3Y = -1;
     int gameClick3Frame = 0;
     int gameEscFrame = -1;
+    bool debugMode = false;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--game" && i + 1 < argc) {
             gameDir = argv[++i];
+        } else if (arg == "--debug") {
+            debugMode = true;
         } else if (arg == "--shot" && i + 1 < argc) {
             shotPath = argv[++i];
         } else if (arg == "--shot-frame" && i + 1 < argc) {
@@ -149,6 +152,8 @@ int main(int argc, char** argv) {
         RICH4_LOGE("Application init failed");
         return 1;
     }
+    // [NEW] 调试模式（--debug）：启用 Ctrl+1..8 测试热键
+    app.gameState().debugMode = debugMode;
     app.setAutoEsc(autoEsc, autoEscFrame);
     if (!autoKey.empty()) {
         app.setAutoKey(autoKey);

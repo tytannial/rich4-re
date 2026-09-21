@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "game/app/ai_dialog.h"
+#include "game/app/debug_keys.h"
 #include "game/app/event_stack.h"
 #include "game/app/game_panel.h"
 #include "game/app/help_dialog.h"
@@ -426,6 +427,15 @@ bool gameEventHandler(const SDL_Event* event, void* user) {
     // [RE 0x401010] 全局键盘钩子 fn 的游戏内功能键（word_49717C 前進指令 / 49717E 選擇骰子數）
     if (event->type == SDL_EVENT_KEY_DOWN) {
         GameState& st = app.gameState();
+        // [NEW] 调试热键（--debug 启用）：Ctrl+1..8（测试辅助，无原版对应；
+        //   不受 gamePlayerControl 限制，AI 回合/移动中亦可改地块）
+        if (st.debugMode && (SDL_GetModState() & SDL_KMOD_CTRL) && event->key.key >= SDLK_1 &&
+            event->key.key <= SDLK_8) {
+            if (handleDebugKey(app, static_cast<int>(event->key.key - SDLK_1) + 1)) {
+                renderGameFrame(app);
+                return true;
+            }
+        }
         const uint8_t vk = sdlKeycodeToVk(event->key.key);
         const uint16_t* bind = app.input().bindings();
         if (st.gamePlayerControl && vk != 0 && vk == (bind[10] & 0xFF)) {
