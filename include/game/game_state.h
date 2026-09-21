@@ -260,9 +260,11 @@ struct GameState {
     std::vector<uint8_t> panel8Mask;
     // [RE 0x48BDF8/0x48BDF4] 骰子滚动动画 panel.mkf[4/5/6]（FLC，按骰子数 1/2/3）
     //   原版 sub_419572 用 sub_45144F 播放；非 UiImage（无 SPR/SMP 魔数，loadUiImage 会失败）
+    // [RE 0x40D7C4 case2] 掷骰三阶段：0=角色扔骰动画, 1=骰子滚动FLC, 2=点数停留
+    int dicePhase = 0;
     FliDecoder diceAnim;          // 当前掷骰滚动动画（panel[骰子数+3]）
-    bool diceAnimActive = false;  // 状态2 滚动播放中
-    uint64_t diceHoldStartMs = 0; // 点数停留起始（原版 sub_45285E(500)）
+    bool diceAnimActive = false;  // 阶段1 滚动播放中
+    uint64_t diceHoldStartMs = 0; // 阶段2 点数停留起始（原版 sub_45285E(500)）
 
     // [RE 0x496D08] g_cellTable 每项 24 字节（+0 = 类型）
     std::vector<uint8_t> cellTable;
