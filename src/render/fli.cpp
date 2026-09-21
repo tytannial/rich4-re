@@ -252,7 +252,10 @@ bool FliDecoder::decodeChunk(const uint8_t* p, int size) {
 }
 
 bool FliDecoder::nextFrame() {
-    if (!m_valid) {
+    // 用声明帧数 m_frameCount 封顶：部分 FLC 数据尾部含超出 frameCount 的 chunk
+    //   （回绕/占位，解码即得第 0 帧内容），若只靠数据末尾判断会多播一帧，
+    //   导致骰子滚动末尾闪出第 0 帧（0004_000）。原版 sub_450F04 按帧数停。
+    if (!m_valid || m_frame >= m_frameCount) {
         return false;
     }
     const uint8_t* base = m_data.data();
