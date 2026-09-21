@@ -258,6 +258,20 @@ void handleLeftButtonDown(Application& app, int x, int y) {
         renderGameFrame(app);
         return;
     }
+    // [RE 0x417E26] 日历点击切换显示模式（byte_497164）：
+    //   日历顶栏 y∈[280,314]，左箭头 x∈[448,474]→大数字(0)、右箭头 x∈[478,504]→月历网格(1)
+    if (y >= 280 && y <= 314) {
+        if (x >= 448 && x <= 474) {
+            state.calendarMode = 0;
+            renderGameFrame(app);
+            return;
+        }
+        if (x >= 478 && x <= 504) {
+            state.calendarMode = 1;
+            renderGameFrame(app);
+            return;
+        }
+    }
     // 工具条按钮
     if (x < 440 && y < kTopBarH) {
         state.pendingAction = x / 40 + 100;

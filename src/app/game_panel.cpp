@@ -225,7 +225,26 @@ bool isSpecialDate(uint32_t date) {
     return wd == 0;
 }
 
+// [RE 0x4521F0] 节日查询：命中返回节日索引(0..23)，否则 -1
+// 差异: 节日表 byte_47FF4A..4E（24条×8组×12B）待提取，暂返回 -1
+int findHoliday(uint32_t date) {
+    (void)date;
+    return -1;
+}
+
+// [RE 0x4169BC] 节日专属背景（资源索引 = 节日idx + kCalendarRes[4*gameMode+mapIndex]）
+// 差异: 背景资源来源 dword_48A0E4 待确认，暂空实现
+void drawHolidayBackground(Application& app, int holiday) {
+    (void)app;
+    (void)holiday;
+}
+
 // [RE 0x4169BC] 日历（440,280-640,480；panel.mkf[2]）
+// 依据: 0x4169BC 反编译; byte_497164 二选一：
+//   !=0 月历网格（背景帧 kMonthFrame[月-1]+4，1..N 数字，节日红字 sub_4523D5，当日画框）
+//    ==0 大数字（背景帧 kMonthFrame[月-1]；sub_4521F0 命中节日→专属背景 kCalendarRes[base]+idx；
+//         装饰帧 + 星期名 off_47511C[wd] at 454,352 + 大号「日」at 500,376）
+//   两模式共有 LABEL_28：年 at 580,288（24号）、月 at 500,328（28号）
 void drawCalendar(Application& app) {
     GameState& state = app.gameState();
     Surface& dst = app.surface();
@@ -236,52 +255,72 @@ void drawCalendar(Application& app) {
     if (month < 1 || month > 12) {
         return;
     }
-    const int frame = kMonthFrame[month - 1] + 4;
-    if (state.panelFrame2.frameCount() > frame) {
-        blitElementOpaque(dst, state.panelFrame2.frame(frame), 440, 280);
-    }
-    // [RE 0x4169BC] 帧 8/11：星期/日期标签装饰（原版 dword_48BE10 + 108/144）
-    if (state.panelFrame2.frameCount() > 11) {
-        blitElement(dst, state.panelFrame2.frame(8), 462, 300, false);
-        blitElement(dst, state.panelFrame2.frame(11), 492, 301, false);
-    }
-    // 日历网格（列宽 23，行高 14，起点 = 月首星期）
     const int firstWd = firstWeekday(year, month);
     const int totalDays = daysInMonth(year, month);
-    int col = 470 + 23 * firstWd;
-    int row = 378;
     const uint32_t ym = date & 0xFFFFFF00u;
-    for (int d = 1; d <= totalDays; ++d) {
-        char text[8];
-        std::snprintf(text, sizeof(text), "%d", d);
-        if (d == day) {
-            drawRectBorder(dst, col - 10, row - 6, 0x14, 14, 0xF800);
-        }
-        // [RE 0x4523D5] 特殊日期（星期日/节日）→ 红字
-        const bool special = isSpecialDate(ym | static_cast<uint32_t>(d));
-        app.text().setFont(12, special ? kTextRed : kTextDark, 0, 2, 1);
-        app.text().drawText(dst, text, col, row, 2);
-        if (col == 608) {
-            col = 447;
-            row += 14;
-        }
-        col += 23;
-    }
-    // 星期名（当前日期的星期，原版 off_47511C[星期] at 454,352）
-    const int curWd = (firstWd + day - 1) % 7;
-    app.text().setFont(16, kTextDark, 0xFFFFFF, 6, 1);
-    app.text().drawText(dst, kMonthName[curWd], 454, 352, 3);
-    // 年 / 月 / 日
-    app.text().setFont(24, kTextDark, 0xFFFFFF, 6, 1);
     char text[8];
+
+    if (state.calendarMode != 0) {
+        // —— 月历网格模式 ——
+        const int frame = kMonthFrame[month - 1] + 4;
+        if (state.panelFrame2.frameCount() > frame) {
+            blitElementOpaque(dst, state.panelFrame2.frame(frame), 440, 280);
+        }
+        int col = 470 + 23 * firstWd;
+        int row = 378;
+        for (int d = 1; d <= totalDays; ++d) {
+            std::snprintf(text, sizeof(text), "%d", d);
+            if (d == day) {
+                drawRectBorder(dst, col - 10, row - 6, 0x14, 14, 0xF800);
+            }
+            const bool special = isSpecialDate(ym | static_cast<uint32_t>(d));
+            app.text().setFont(12, special ? kTextRed : kTextDark, 0, 2, 1);
+            app.text().drawText(dst, text, col, row, 2);
+            if (col == 608) {
+                col = 447;
+                row += 14;
+            }
+            col += 23;
+        }
+    } else {
+        // —— 大数字日历模式 ——
+        const int holiday = findHoliday(date); // [RE 0x4521F0] 节日索引，-1=无
+        int v6 = 0;
+        if (holiday < 0) {
+            const int frame = kMonthFrame[month - 1];
+            if (state.panelFrame2.frameCount() > frame) {
+                blitElementOpaque(dst, state.panelFrame2.frame(frame), 440, 280);
+            }
+        } else {
+            drawHolidayBackground(app, holiday); // 节日专属背景（kCalendarRes[base]+idx）
+            v6 = 1;
+        }
+        if (state.panelFrame2.frameCount() > 11) {
+            blitElement(dst, state.panelFrame2.frame(8), 462, 300, false);
+            blitElement(dst, state.panelFrame2.frame(11), 492, 301, false);
+        }
+        const int curWd = (firstWd + day - 1) % 7;
+        if (v6) {
+            app.text().setFont(16, kTextRed, kTextDark, 6, 1);
+        } else {
+            app.text().setFont(16, kTextDark, 0xFFFFFF, 6, 1);
+        }
+        app.text().drawText(dst, kMonthName[curWd], 454, 352, 3);
+        if (v6) {
+            app.text().setFont(60, kTextRed, kTextDark, 6, 1);
+        } else {
+            app.text().setFont(60, kTextDark, 0xFFFFFF, 6, 1);
+        }
+        std::snprintf(text, sizeof(text), "%d", day);
+        app.text().drawText(dst, text, 500, 376, 2);
+    }
+    // LABEL_28：年 / 月（两模式共有）
+    app.text().setFont(24, kTextDark, 0xFFFFFF, 6, 1);
     std::snprintf(text, sizeof(text), "%d", year);
     app.text().drawText(dst, text, 580, 288, 0);
     app.text().setFont(28, kTextDark, 0xFFFFFF, 6, 1);
     std::snprintf(text, sizeof(text), "%d", month);
     app.text().drawText(dst, text, 500, 328, 2);
-    app.text().setFont(60, kTextRed, 0x101010, 6, 1);
-    std::snprintf(text, sizeof(text), "%d", day);
-    app.text().drawText(dst, text, 500, 376, 2);
 }
 
 // [RE 0x417191] 前进面板（panel.mkf[7] = dword_48BE04）

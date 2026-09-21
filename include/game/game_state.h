@@ -198,6 +198,11 @@ struct GameState {
     // 依据: 0x4119E3 中日期更改确认后写入 dword_48BB50/dword_497160
     uint32_t gameDate = 0;
 
+    // [RE 0x497164] byte_497164 日历显示模式（0=大数字日历, 1=月历网格）
+    // 依据: 0x411E8F loadConfig 读 cfg 第12字节(默认0); 0x417E26 gameWndProc 点击
+    //       x∈[448,474]→0、x∈[478,504]→1（日历区左右箭头切换），切换后 sub_4169BC(1) 重绘
+    int calendarMode = 0;
+
     // [RE 0x48A354] dword_48A354 地图预览缓冲（614400 = 640*480*2 全屏 RGB555）
     // 依据: 0x406DE7 分配 0x96000 字节并由 JUMP.MKF 地图图填充
     std::vector<uint8_t> mapPreview;
