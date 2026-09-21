@@ -43,5 +43,7 @@ extern const uint16_t kListBgFrame[6];
 extern const uint8_t kChannelHalf[32];
 // [RE 0x485AE8] 通道缩放表 -20（亮度 1/3）
 extern const uint8_t kChannelThird[32];
+// [RE 0x485BE8] 通道缩放表 -12（按钮按下变暗）
+extern const uint8_t kChannelDim[32];
 
 } // namespace rich4

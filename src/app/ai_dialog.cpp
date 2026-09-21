@@ -1,10 +1,12 @@
 #include "game/app/ai_dialog.h"
 
 #include "game/app/event_stack.h"
+#include "game/app/new_game_tables.h"
 #include "game/application.h"
 #include "game/core/log.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
+#include "game/render/text.h"
 #include "game/render/ui_image.h"
 
 #include <algorithm>
@@ -138,6 +140,25 @@ void drawAiDialog(AiDialogState& st) {
         return;
     }
     blitElementOpaque(dst, ui.frame(kCanvasFrame), kDialogX, kDialogY);
+    // [RE 0x41E345] 文本（原版 drawText 预渲染到画布帧 0：20/16 号浅字深底+阴影粗体）
+    TextRenderer& text = app.text();
+    text.setFont(20, 0xF0F0F0, 0x101010, kTextStyleShadow | kTextStyleBold, 1);
+    text.drawText(dst, "託管AI", kDialogX + 173, kDialogY + 26, 2);
+    text.drawText(dst, "個  性", kDialogX + 173, kDialogY + 114, 2);
+    text.drawText(dst, "資金運用比例", kDialogX + 249, kDialogY + 246, 2);
+    text.setFont(16, 0xF0F0F0, 0x101010, kTextStyleShadow | kTextStyleBold, 1);
+    text.drawText(dst, "使用卡片", kDialogX + 244, kDialogY + 53, 2);
+    text.drawText(dst, "使用道具", kDialogX + 244, kDialogY + 84, 2);
+    text.drawText(dst, "乖寶寶", kDialogX + 244, kDialogY + 141, 2);
+    text.drawText(dst, "普通人", kDialogX + 244, kDialogY + 173, 2);
+    text.drawText(dst, "大老奸", kDialogX + 244, kDialogY + 206, 2);
+    text.drawText(dst, "現金", kDialogX + 191, kDialogY + 277, 6);
+    text.drawText(dst, "存款", kDialogX + 305, kDialogY + 277, 5);
+    text.drawText(dst, "股票", kDialogX + 191, kDialogY + 310, 6);
+    text.drawText(dst, "資金", kDialogX + 305, kDialogY + 310, 5);
+    text.setFont(20, 0x101010, 0, kTextStyleBold, 1);
+    text.drawText(dst, "確定", kDialogX + 397, kDialogY + 125, 3);
+    text.drawText(dst, "取消", kDialogX + 397, kDialogY + 213, 3);
     for (int i = 0; i < st.slotCount; ++i) {
         const int y = kSlotY + i * kSlotStep;
         const uint8_t* s = st.slots[i];
@@ -183,6 +204,18 @@ void drawAiDialog(AiDialogState& st) {
         }
     }
     drawRatioBars(st);
+    // [RE 0x41DDA9] 按下效果：±按钮画布帧 4/5 到 (rect+1)；確定/取消 -12 变暗 40x56
+    if (st.pressed >= 7 && st.pressed <= 10) {
+        const ControlRect& r = kControls[st.pressed - 2];
+        const int frame = 4 + ((st.pressed - 7) & 1);
+        if (ui.frameCount() > frame) {
+            blitElement(dst, ui.frame(frame), r.left + 1, r.top + 1, false);
+        }
+    } else if (st.pressed == 11) {
+        scaleSurfaceChannels(dst, 479, 159, 40, 56, kChannelDim);
+    } else if (st.pressed == 12) {
+        scaleSurfaceChannels(dst, 479, 247, 40, 56, kChannelDim);
+    }
 }
 
 // 玩家槽命中（0x41DDA9 WM_LBUTTONDOWN 中 x∈(110,226)、y∈(70+83i, +83)）
