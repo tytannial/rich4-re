@@ -4,6 +4,27 @@
 > （地址、公式、常量、字段偏移）。执行前请阅读 AGENTS.md 与
 > `docs/reverse/functions/gameplay-map-mechanics.md`（机制总览与验收检查表）。
 
+## 执行进度（2026-09-21 会话）
+
+- ✅ **任务 A** `e0c5ac5`：`--debug` 工具集（Ctrl+1..8；Ctrl+4 连锁店待 F3）
+- ✅ **任务 B** `00bf29d`：大地图填色（`bigMapBuffer`；标记帧 26/28/28、11392 缩放）
+- ✅ **任务 C** `c60ab5b`：买地面板背景（`g_tipFrame` 帧 5 @ (220,140)，色键 blit）
+- ✅ **任务 D** `36c3392`：收租（状态机 case 3 = `30 * g_moneyMul`，transferMoney 现金→现金 + 面向目标）
+  - **调研修正**：`landAfterMove`(0x40F381) 槽 9/10/12 实为**神明效果**——槽 12 = 土地公
+    「強佔土地」（无主自动占领 / 他人地付 `moneyMul*priceAdd*(level+2)/5`）、槽 10 = 小恶魔
+    「拆毀一層房屋」（付 `30*moneyMul` + FLC 526）；依赖神明携带系统 → 延后 P4。
+    **普通收租就是状态机 case 3**
+  - 待实机对照：原版 case 3 仅调 `sub_40DF69` 累加 `dword_496BB4` 欠款矩阵（不直接扣现金），
+    结算时机未定位；重写简化为立即转账
+- ✅ **任务 E** `a491b8a`：升级/加盖（`landingEvent` 自己地产分支 0x419911：守卫 level<5 &&
+  type==0 && state37==0，费用 `priceBase * moneyMul`，AI 自动升级，音效槽 18）
+- ⬜ **任务 F：建造菜单（未开始，下一会话继续）**——IDA 结论：
+  - `sub_423B3B(player, tab)` 5 页签筛选：0=我的地产+公司 / 1=我的地产 / 2=我的公司 /
+    **3=普通地块（owner=me && level≠0 && type==0）** / **4=大地块（owner=me && level≠0 && type≠0）**
+  - `sub_4225A3(player, dir)` 列表绘制（地产名/建筑名/费用 `moneyMul*(priceAdd + priceBase*level)`/到期日）
+  - `sub_423CF3` 外层对话框（页签/翻页/确认）；**入口待查**（疑似工具栏按钮）
+  - 大地块判定：`estate.type(+24) != 0`；5 类特殊建筑 = `kBuildingNames[6..10]`
+
 ## 0. 上下文与工作流
 
 - **分支**：`feat/m2-game-logic`（M1 已合入 `main`；P0 买地闭环完成，最近提交 `e004eb5`）
