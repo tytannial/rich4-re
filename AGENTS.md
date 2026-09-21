@@ -67,6 +67,15 @@ cmake --build build
 ./build/rich4.exe --game resources/game
 ```
 
+## 调试
+
+```powershell
+./build/rich4.exe --game resources/game --debug
+```
+
+`--debug` 启用 **Ctrl+1..8** 测试热键（改地块所属/等级、批量铺地、加现金、打印地块详情），
+完整键位与测试流程见 `docs/debug-keys.md`。
+
 ## 测试
 
 当前骨架阶段以手动运行为主。后续加入单元测试（格式解析往返）后在此补充命令。
