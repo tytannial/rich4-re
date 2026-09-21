@@ -778,17 +778,8 @@ void updateGameState(Application& app) {
                     perDir = 1;
                 }
                 if (st.playerMoveFrame[p] < perDir - 1) {
-                    ++st.playerMoveFrame[p]; // 逐帧播扔骰动作
+                    ++st.playerMoveFrame[p]; // 逐帧播扔骰动作（原版此阶段无音效）
                 } else {
-                    // [RE 0x40D7C4 case2] 帧到 perDir 时播放音效：
-                    //   1) 载具/移动槽 = 特殊组?15 : (载具&3)+11（dword_4749D4 → dword_48234A）
-                    //   2) 掷骰音效槽 3（dword_482362，当前玩家<4 且 cellNo 非0）
-                    const int diceSfx =
-                        st.playerMoveGroup[p] ? 15 : (st.players[p].travel & 3) + 11;
-                    app.audio().playEffectSlot(diceSfx);
-                    if (p < 4 && st.players[p].cellNo != 0) {
-                        app.audio().playEffectSlot(3);
-                    }
                     st.dicePhase = 1; // 停在末帧（松手），不重置回第0帧
                 }
                 break; // map_render 按 playerMoveFrame 画角色扔骰帧
@@ -810,6 +801,8 @@ void updateGameState(Application& app) {
                 if (st.diceAnimActive) {
                     if (!st.diceAnim.nextFrame()) {
                         st.diceAnimActive = false;
+                        // [RE 0x41962F] 骰子滚动结束（落地）→ 播放落地音效槽 2（dword_48235A）
+                        app.audio().playEffectSlot(2);
                         st.remainingSteps = rollDice(app); // 滚动结束 → 最终点数
                         st.diceHoldStartMs = SDL_GetTicks();
                         st.dicePhase = 2;
@@ -820,6 +813,14 @@ void updateGameState(Application& app) {
             // 阶段2：点数停留 500ms（sub_45285E），角色仍保持扔骰末帧
             st.showDice = true;
             if (SDL_GetTicks() - st.diceHoldStartMs >= 500) {
+                // [RE 0x40D7C4 case2] 骰子动画结束、转移动前播放：
+                //   ① 载具/移动槽 = 特殊组?15 : (载具&3)+11（dword_4749D4）
+                //   ② 音效槽 3（dword_482362，当前玩家<4 且 cellNo 非0）
+                const int moveSfx = st.playerMoveGroup[p] ? 15 : (st.players[p].travel & 3) + 11;
+                app.audio().playEffectSlot(moveSfx);
+                if (p < 4 && st.players[p].cellNo != 0) {
+                    app.audio().playEffectSlot(3);
+                }
                 st.showDice = false; // 移动开始，骰子消失（原版转状态1 后不再显示骰子）
                 st.playerMoveFrame[p] = 0;
                 st.dicePhase = 0;
