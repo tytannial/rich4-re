@@ -23,7 +23,8 @@ void redrawMap(MapDialogState& st) {
     if (state.miniMapRaw.frameCount() > 1) {
         blitElementOpaque(dst, state.miniMapRaw.frame(1), 20, 60);
     }
-    // 玩家标记（帧 6，11392/65536 缩放）
+    // [RE 0x40A801] 玩家标记 = g_pieceSprites[13*i]+72 = 帧 5（72 = 12+12*5），
+    //   11392/65536 缩放；注意与小地图标记（sub_416E6D 用 +84 = 帧 6）不是同一帧
     for (int i = 0; i < state.playerCount && i < 9; ++i) {
         const Player& p = state.players[i];
         if (p.spriteX == 0 && p.spriteY == 0) {
@@ -31,8 +32,8 @@ void redrawMap(MapDialogState& st) {
         }
         const int x = ((11392 * static_cast<int>(p.spriteX)) >> 16) + 20;
         const int y = ((11392 * static_cast<int>(p.spriteY)) >> 16) + 60;
-        if (state.pieceSprites[i].frameCount() > 6) {
-            blitElement(dst, state.pieceSprites[i].frame(6), x, y, false);
+        if (state.pieceSprites[i].frameCount() > 5) {
+            blitElement(dst, state.pieceSprites[i].frame(5), x, y, false);
         }
     }
 }
