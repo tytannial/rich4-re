@@ -215,8 +215,9 @@ void TextRenderer::drawText(Surface& dst, const char* text, int x, int y, int al
     SetTextCharacterExtra(impl->dc, impl->spacing - 1);
 
     // DT_CALCRECT 计算文本尺寸, 再加边距 10（原版 rc.right/bottom += 10）
+    // 多行：原版 DrawTextA 无 DT_SINGLELINE（0x44FABC），\n 显式换行；rc 宽度 = 缓冲宽
     RECT rc = {0, 0, kBufferWidth, kBufferHeight};
-    DrawTextW(impl->dc, wide.c_str(), -1, &rc, DT_CALCRECT | DT_SINGLELINE);
+    DrawTextW(impl->dc, wide.c_str(), -1, &rc, DT_CALCRECT);
     rc.right += 10;
     rc.bottom += 10;
     if (align == 3) {
@@ -258,7 +259,7 @@ void TextRenderer::drawText(Surface& dst, const char* text, int x, int y, int al
         drawVertical(0, 0);
     } else {
         const bool centered = (align == 4 || align == 7);
-        const UINT flags = (centered ? DT_CENTER : DT_LEFT) | DT_SINGLELINE;
+        const UINT flags = centered ? DT_CENTER : DT_LEFT; // 多行（原版无 DT_SINGLELINE）
         if (impl->style & kTextStyleShadow) {
             SetTextColor(impl->dc, toColorRef(impl->bgRgb));
             RECT r = rc;

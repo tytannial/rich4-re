@@ -336,12 +336,13 @@ void renderMap(Application& app, int centerX, int centerY) {
             continue;
         }
         if (es.level == 0) {
-            // [RE 0x40829D] 空地有主：棋子图（dword_48AEA8=pieceTiles）帧 = 玩家角色 ID，
-            //   调色板不替换（byte_48A852=0xFF）—— 即地块上的"角色信物"
+            // [RE 0x40829D] 空地有主：棋子图（dword_48AEA8=pieceTiles）帧 = 玩家角色 ID
+            //   原版 byte_48A852=0xFF（不替换调色板）；实测需角色色描边 → 暂用 owner 色，
+            //   实机对比原版后如不符再调整
             const int ci = (es.owner >= 1 && es.owner <= 9)
                                ? state.players[es.owner - 1].charIndex
                                : 0;
-            addItem(&state.pieceTiles, ci, es.x, es.y, -1, static_cast<uint16_t>(2000 + i),
+            addItem(&state.pieceTiles, ci, es.x, es.y, es.owner, static_cast<uint16_t>(2000 + i),
                     &state.flagTiles, pickFrame);
         } else {
             // [RE 0x40829D] 有建筑：type==0 → dword_48AE48[level] 建筑表；type!=0 → dword_48AE60

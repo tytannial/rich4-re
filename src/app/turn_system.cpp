@@ -303,28 +303,30 @@ int landingEvent(Application& app, uint16_t cellEntId) {
         return 0x80;
     }
     // case 0：普通格，按 objId 分（objId == 0 → 无事件返回 0x80；
-    //   有 objId 的地产/公司/特殊点路径统一在 loc_41B111 返回 0x88 = 等待 8 帧后下一位）
+    //   有 objId 的地产/公司/特殊点路径统一在 loc_41B111 返回等待值后下一位）
+    // 差异: 原版 0x88 = 8 帧；重写帧率更高（约 2 倍），暂用 0x90 = 16 帧对齐观感
+    constexpr int kLandingWait = 0x90;
     if (objId == 0) {
         return 0x80;
     }
     if (objId > 2000 && objId < 4000) {
         const int idx = static_cast<int>(objId) - 2000;
         if (idx <= 0 || idx >= static_cast<int>(st.estates.size())) {
-            return 0x88;
+            return kLandingWait;
         }
         Estate& es = st.estates[idx];
         Player& pl = st.players[p];
         if (es.owner == 0) {
             // ---- 无主地产购地（loc_41A013）----
             if (pl.state37 != 0 || pl.cellTableIdx == 12) {
-                return 0x88;
+                return kLandingWait;
             }
             const int32_t price =
                 (static_cast<int32_t>(es.level) * es.priceBase + es.priceAdd) * st.moneyMul;
             if (price > pl.cash) {
                 // [RE 0x41A159] 现金不足：showMessage(byte_46398B, 1500) → loc_41B111(0x88)
                 RICH4_LOGI("buy land: cash %d < price %d (RE 0x41A159)", pl.cash, price);
-                return 0x88;
+                return kLandingWait;
             }
             const std::string label = big5ToUtf8(es.name, sizeof(es.name));
             char text[160];
@@ -339,13 +341,13 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                 buy = confirmDialog(app, text, 220, 320);
             }
             if (!buy) {
-                return 0x88;
+                return kLandingWait;
             }
             // [RE 0x40FA61] 携带神明（槽 7/8/15）阻止（原版显示神明名 1500ms）
             const uint8_t carried = pl.cellTableIdx;
             if (carried == 7 || carried == 8 || carried == 15) {
                 RICH4_LOGI("buy land blocked by carried god %u (RE 0x40FA61, text TODO)", carried);
-                return 0x88;
+                return kLandingWait;
             }
             es.owner = static_cast<uint8_t>(p + 1);
             // [RE 0x41D476(0,0,1)] UI/地图刷新（重写每帧重绘，无需显式）
@@ -368,8 +370,8 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                        p + 1);
         }
     }
-    // loc_41B077 → sub_40F381/sub_448A7E/refreshGameUi → loc_41B111：等 8 帧（0x88）
-    return 0x88;
+    // loc_41B077 → sub_40F381/sub_448A7E/refreshGameUi → loc_41B111：等待 kLandingWait 帧
+    return kLandingWait;
 }
 
 // [RE 0x419572] rollDice
