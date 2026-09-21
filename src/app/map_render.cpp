@@ -492,52 +492,65 @@ void blitColorMask(std::vector<uint16_t>& dst, int dstW, int dstH, const UiFrame
     }
 }
 
-// [RE 0x40A4E1] sub_40A4E1(0)：小地图原图拷贝 + 地产/公司/特殊点玩家颜色标记
-// 依据: 0x40A4E1 反编译; blitBackground 拷贝 dword_48BAD0 → dword_48BADC,
-//       再对 estates/corps/specPts 用 sub_456384 画 g_playerColor 标记
-//       （5696/65536 缩放，帧 = (dir&1) + 22/24/24；specPts 小地图用 +24，见 a1=0 分支）
-void buildMiniMapMarks(Application& app) {
-    GameState& state = app.gameState();
-    constexpr int kSize = 200;
-    if (state.miniMapRaw.frameCount() <= 0) {
+// [RE 0x40A4E1] 单份工作副本重建（a1=0 小地图 / a1=1 大地图）
+// 依据: 0x40A4E1 反编译; 底图 = g_miniMapRaw 帧 a1（尺寸即缓冲尺寸）→ g_miniMapWork 帧 a1;
+//       标记 = sub_456384(目标, g_tipFrame 帧, (scale*x)>>16, (scale*y)>>16, g_playerColor[owner-1])
+void rebuildMiniMapCopy(GameState& state, int a1, int scale, int esFrame, int cpFrame, int spFrame,
+                        std::vector<uint16_t>& out) {
+    const UiFrameView& src = state.miniMapRaw.frame(a1);
+    const int w = src.width;
+    const int h = src.height;
+    if (w <= 0 || h <= 0) {
+        out.clear();
         return;
     }
-    const UiFrameView& src = state.miniMapRaw.frame(0);
-    state.miniMapBuffer.assign(static_cast<size_t>(kSize) * kSize, 0);
-    for (int y = 0; y < kSize; ++y) {
-        for (int x = 0; x < kSize; ++x) {
-            if (x < src.width && y < src.height) {
-                state.miniMapBuffer[y * kSize + x] = src.pixels[y * src.width + x];
-            }
+    out.assign(static_cast<size_t>(w) * h, 0);
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x) {
+            out[static_cast<size_t>(y) * w + x] = src.pixels[y * src.width + x];
         }
     }
     auto mark = [&](int frame, int px, int py, uint16_t color) {
         if (frame < 0 || frame >= state.estateTiles.frameCount()) {
             return;
         }
-        blitColorMask(state.miniMapBuffer, kSize, kSize, state.estateTiles.frame(frame),
-                      (5696 * px) >> 16, (5696 * py) >> 16, color);
+        blitColorMask(out, w, h, state.estateTiles.frame(frame), (scale * px) >> 16,
+                      (scale * py) >> 16, color);
     };
     for (size_t i = 1; i < state.estates.size(); ++i) {
         const Estate& es = state.estates[i];
         if (es.owner == 0) {
             continue;
         }
-        mark((es.dir & 1) + 22, es.x, es.y, rgb888To555(state.players[es.owner - 1].color));
+        mark((es.dir & 1) + esFrame, es.x, es.y, rgb888To555(state.players[es.owner - 1].color));
     }
     for (size_t i = 1; i < state.corps.size(); ++i) {
         const Corp& cp = state.corps[i];
         if (cp.owner == 0) {
             continue;
         }
-        mark((cp.dir & 1) + 24, cp.x, cp.y, rgb888To555(state.players[cp.owner - 1].color));
+        mark((cp.dir & 1) + cpFrame, cp.x, cp.y, rgb888To555(state.players[cp.owner - 1].color));
     }
     for (size_t i = 1; i < state.specPts.size(); ++i) {
         const SpecPt& sp = state.specPts[i];
         if (sp.owner == 0) {
             continue;
         }
-        mark((sp.dir & 1) + 24, sp.x, sp.y, rgb888To555(state.players[sp.owner - 1].color));
+        mark((sp.dir & 1) + spFrame, sp.x, sp.y, rgb888To555(state.players[sp.owner - 1].color));
+    }
+}
+
+// [RE 0x40A4E1] sub_40A4E1(0)/sub_40A4E1(1)：小地图/大地图工作副本重建
+// 依据: 0x40A4E1 反编译; a1=0 小地图（5696 缩放，标记帧 22/24/24）,
+//       a1=1 大地图（11392 缩放，标记帧 26/28/28）
+void buildMiniMapMarks(Application& app) {
+    GameState& state = app.gameState();
+    if (state.miniMapRaw.frameCount() <= 0) {
+        return;
+    }
+    rebuildMiniMapCopy(state, 0, 5696, 22, 24, 24, state.miniMapBuffer);
+    if (state.miniMapRaw.frameCount() > 1) {
+        rebuildMiniMapCopy(state, 1, 11392, 26, 28, 28, state.bigMapBuffer);
     }
 }
 

@@ -1,10 +1,12 @@
 #include "game/app/map_dialog.h"
 
 #include "game/app/event_stack.h"
+#include "game/app/map_render.h"
 #include "game/application.h"
 #include "game/core/log.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
+#include "game/render/ui_image.h"
 
 namespace rich4 {
 
@@ -19,8 +21,26 @@ void redrawMap(MapDialogState& st) {
     Application& app = *st.app;
     GameState& state = app.gameState();
     Surface& dst = app.surface();
-    // 大地图帧 1（400x400）到 (20,60)
-    if (state.miniMapRaw.frameCount() > 1) {
+    // [RE 0x40A4E1] 大地图底图 = 工作副本（miniMapRaw 帧 1 + 地产/公司/特殊点玩家色块，
+    //   11392 缩放、标记帧 26/28/28）；原版由 sub_40A9BD 打开前 rebuildMiniMap(1) 生成，
+    //   重写按需重建（面板绘制时已重建，此处兜底）
+    if (state.bigMapBuffer.empty()) {
+        buildMiniMapMarks(app);
+    }
+    if (!state.bigMapBuffer.empty() && state.miniMapRaw.frameCount() > 1) {
+        const UiFrameView& bf = state.miniMapRaw.frame(1);
+        const int w = bf.width;
+        const int h = bf.height;
+        if (w > 0 && h > 0 && state.bigMapBuffer.size() == static_cast<size_t>(w) * h) {
+            uint16_t* d = dst.pixels() + static_cast<size_t>(60) * Surface::kWidth + 20;
+            for (int y = 0; y < h; ++y) {
+                for (int x = 0; x < w; ++x) {
+                    d[static_cast<size_t>(y) * Surface::kWidth + x] =
+                        state.bigMapBuffer[static_cast<size_t>(y) * w + x];
+                }
+            }
+        }
+    } else if (state.miniMapRaw.frameCount() > 1) {
         blitElementOpaque(dst, state.miniMapRaw.frame(1), 20, 60);
     }
     // [RE 0x40A801] 玩家标记 = g_pieceSprites[13*i]+72 = 帧 5（72 = 12+12*5），

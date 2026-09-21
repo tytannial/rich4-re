@@ -262,6 +262,9 @@ struct GameState {
     UiImage miniMapRaw;           // [RE 0x48BAD0] map.mkf[map+4*mode+16]
     // [RE 0x48BADC] dword_48BADC 小地图工作副本（200x200，叠加地产/公司标记）
     std::vector<uint16_t> miniMapBuffer;
+    // [RE 0x48BADC] dword_48BADC 大地图工作副本（= g_miniMapWork 帧 1，400x400；
+    //   原版 rebuildMiniMap(1) 的产物，帧 26/28/28 标记 + 11392 缩放）
+    std::vector<uint16_t> bigMapBuffer;
     UiImage specPointTiles[5];    // [RE 0x48AE4C] map.mkf[n+5*(map+4*mode)+39]
     // [RE 0x48AE4C] 特殊点/事件格图块缓存（索引 = sprite 值 134..259）
     //   原版 dword_48AE4C[sprite] = map.mkf[sprite + 38]（loadMapData 按需加载）

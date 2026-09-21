@@ -2,7 +2,7 @@
 
 > 由 `python tools/re_map.py` 自动生成，勿手改。
 
-## RE 映射（124 条）
+## RE 映射（125 条）
 
 | 地址 | 原符号 | 重写位置 | 依据 |
 |------|--------|----------|------|
@@ -35,7 +35,8 @@
 | `0x407A8C` | 朝向 | `src/app/turn_system.cpp:263` | 0x407A8C→0x454FB4（atan2(-dy,dx) 量化）→byte_482414[2,3,4,5,6,7,0,1] |
 | `0x407AD2` | loadMap | `src/app/new_game.cpp:307` | 0x407AD2 反编译; sub_4502FE("MAP.MKF") + sub_450441(handle, 2*(4*mode+map)) 取 GND 地图数据; +1 取 MAPDAT（本作无独立 MAPDAT.MKF，走 fallback 分支）; 加载图块/棋子精灵并初始化格子表 差异: 玩家地图数据（10008B/玩家）与 sub_42915A/sub_428CAF 待后续 |
 | `0x40829D` | 等距地图渲染 | `include/game/app/map_render.h:10` | 0x40829D 反编译; 视口中心 = 当前玩家像素坐标（centerX/centerY = -1 时用上次值）, 遍历 kIsoDrawOrder 绘制地面等距地块（sub_4557A1）, 再按等距表定位 cellEnts 物件与玩家棋子; 首次进入时随机选择出生点 cellEnt |
-| `0x40A4E1` | sub_40A4E1(0) | `src/app/map_render.cpp:495` | 0x40A4E1 反编译; blitBackground 拷贝 dword_48BAD0 → dword_48BADC, 再对 estates/corps/specPts 用 sub_456384 画 g_playerColor 标记 （5696/65536 缩放，帧 = (dir&1) + 22/24/24；specPts 小地图用 +24，见 a1=0 分支） |
+| `0x40A4E1` | 单份工作副本重建（a1=0 | `src/app/map_render.cpp:495` | 0x40A4E1 反编译; 底图 = g_miniMapRaw 帧 a1（尺寸即缓冲尺寸）→ g_miniMapWork 帧 a1; 标记 = sub_456384(目标, g_tipFrame 帧, (scale*x)>>16, (scale*y)>>16, g_playerColor[owner-1]) |
+| `0x40A4E1` | sub_40A4E1(0)/sub_40A4E1(1) | `src/app/map_render.cpp:543` | 0x40A4E1 反编译; a1=0 小地图（5696 缩放，标记帧 22/24/24）, a1=1 大地图（11392 缩放，标记帧 26/28/28） |
 | `0x40A9BD` | mapDialog（大地圖界面） | `include/game/app/map_dialog.h:7` | 0x40A9BD → runModal(sub_40A801) + sub_415E70(1); sub_40A801 WM_PAINT 绘制大地图（dword_48BADC 帧 1，400x400）到 (20,60) + 玩家标记（g_pieceSprites 帧 6，11392/65536 缩放）; WM_RBUTTONUP → postModalExit(0) |
 | `0x40A9D7` | 地图物件拾取 | `src/app/object_tip.cpp:116` | 0x40A9D7 拾取缓冲（重写用渲染记录的 mapHitRegions）; 命中用拾取形状的 SPR 像素掩码（原版拾取缓冲语义），无形状时用矩形 |
 | `0x40B8D8` | releaseWalkResources | `src/app/turn_system.cpp:108` | 0x40B8D8 反编译; 释放玩家 a1 的动画组 a2（slot = a2 + 2*i, i<4）， 并清 byte_498EA0 的动画组位（a2=1 → 低 4 位；a2=0 → 高 4 位） |
@@ -46,7 +47,7 @@
 | `0x40D293` | bitScanPlayer | `src/app/economy.cpp:23` | 0x40D293 反编译; 掩码低 8 位中第一个置位的玩家号 |
 | `0x40D7C4` | updateGameState | `src/app/turn_system.cpp:794` | 0x40D7C4 反编译; byte_498EA2 状态机: 0 = 收尾倒计时（byte_498EA5）→ sub_418E7F 重算 / 负数则 sub_418EBD 1 = 移动中: sub_40C05C 走一格，byte_48BB00 → onPlayerActionPhase，dword_48BAF8 递减 2 = 掷骰动画: 结束设 dword_48BAF8 = sub_419572() 并转状态 1 3 = 特殊移动（遥控骰子/传送） 差异: sub_416E6D 小地图刷新（迁移为每 tick 全量重绘）、移动音效、状态 3 收租部分待补 |
 | `0x40DD1F` | startPlayerMove | `src/app/turn_system.cpp:601` | 0x40DD1F 反编译; 人类(<4): alive&0x30 → dword_48BAF8=1,state=1； byte_496BA0 → state=0,wait=2；byte_496BA1 → dword_48BAF8=1,state=1； 否则 state=2（掷骰）。AI(4..7): dword_48BAF8=rand()%9+2,state=1。 玩家 8: dword_48BAF8=9,state=1。末尾 byte_498EA3=0, byte_46CAFB=1 |
-| `0x40E033` | createMapObject（神明/商店等物件写入 | `src/app/map_render.cpp:565` | 0x40E033 反编译; 槽结构 +0 类型、+1 朝向、+2 cellEnt u16、+4 a3、+5 a4； cellEnt 占用位 \|= (槽+1)<<16 |
+| `0x40E033` | createMapObject（神明/商店等物件写入 | `src/app/map_render.cpp:578` | 0x40E033 反编译; 槽结构 +0 类型、+1 朝向、+2 cellEnt u16、+4 a3、+5 a4； cellEnt 占用位 \|= (槽+1)<<16 |
 | `0x40E14D` | releaseCellTableSlot | `src/app/economy.cpp:108` | 0x40E14D 反编译; 详见 economy.h 注释 |
 | `0x40FD49` | 滑块单位帧与复选标记帧。 | `src/app/settings_dialog.cpp:96` | 元素偏移 = 12 + 12*i；dword_48BB60+72 → 帧 5（15x16 滑块单位）; dword_48BB60+120 → 帧 9（16x16 复选标记） |
 | `0x4103A3` | settingsWndProc | `src/app/settings_dialog.cpp:367` | 0x4103A3 反编译; WM_MOUSEMOVE(515) 查找控件矩形 dword_474B92 并处理; WM_LBUTTONDOWN(513) 分发控件操作; WM_USER+1 重置悬停并复制设置 |
