@@ -362,18 +362,23 @@ bool moveOneStep(Application& app) {
         st.stepDeltaX = static_cast<float>(static_cast<double>(dx) / f);
         st.stepDeltaY = static_cast<float>(static_cast<double>(dy) / f);
     }
-    // [RE 0x40C05C] 行走动画帧（byte_498EA3）每帧递增，按当前行走资源每方向帧数回绕，
-    //   否则棋子移动时动画静止在第 0 帧（map_render 帧 = playerMoveFrame + dir*perDir）
+    // [RE 0x40C05C] 行走动画帧（byte_498EA3）递增，按当前资源每方向帧数回绕。
+    //   原版游戏循环帧率低，走路动画约 11fps；此处按真实时间门控换帧，
+    //   避免 16ms tick（~60fps）下动画循环偏快。
     {
-        const int slot = 2 * st.playerActionState[p] + st.playerMoveGroup[p];
-        int perDir = 8;
-        if (slot >= 0 && slot < 13 && st.walkRes[p][slot].frameCount() > 0) {
-            perDir = st.walkRes[p][slot].frameCount() / 8;
+        const uint64_t now = SDL_GetTicks();
+        if (now - st.walkAnimLastMs >= 90) {
+            st.walkAnimLastMs = now;
+            const int slot = 2 * st.playerActionState[p] + st.playerMoveGroup[p];
+            int perDir = 8;
+            if (slot >= 0 && slot < 13 && st.walkRes[p][slot].frameCount() > 0) {
+                perDir = st.walkRes[p][slot].frameCount() / 8;
+            }
+            if (perDir <= 0) {
+                perDir = 1;
+            }
+            st.playerMoveFrame[p] = (st.playerMoveFrame[p] + 1) % perDir;
         }
-        if (perDir <= 0) {
-            perDir = 1;
-        }
-        st.playerMoveFrame[p] = (st.playerMoveFrame[p] + 1) % perDir;
     }
     --st.stepFrames;
     if (st.stepFrames <= 0) {

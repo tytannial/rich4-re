@@ -266,6 +266,7 @@ struct GameState {
     bool diceAnimActive = false;  // 阶段1 滚动播放中
     bool diceAnimOpened = false;  // 阶段1 已 open（防每 tick 重载；角色保持扔骰末帧）
     uint64_t diceHoldStartMs = 0; // 阶段2 点数停留起始（原版 sub_45285E(500)）
+    uint64_t walkAnimLastMs = 0;  // 走路动画换帧计时（限帧率，避免 60fps tick 下偏快）
 
     // [RE 0x496D08] g_cellTable 每项 24 字节（+0 = 类型）
     std::vector<uint8_t> cellTable;
