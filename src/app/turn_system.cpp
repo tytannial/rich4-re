@@ -787,6 +787,7 @@ void updateGameState(Application& app) {
             if (st.dicePhase == 1) {
                 if (!st.diceAnimOpened) {
                     st.diceAnimOpened = true;
+                    st.diceLandPlayed = false;
                     const int n = std::max(1, std::min(3, static_cast<int>(st.players[p].diceCount)));
                     auto blob = st.panel.read(static_cast<size_t>(n + 3));
                     st.diceAnimActive = blob && st.diceAnim.open(std::move(*blob));
@@ -801,11 +802,16 @@ void updateGameState(Application& app) {
                 if (st.diceAnimActive) {
                     if (!st.diceAnim.nextFrame()) {
                         st.diceAnimActive = false;
-                        // [RE 0x41962F] 骰子滚动结束（落地）→ 播放落地音效槽 2（dword_48235A）
+                        // [RE 0x41962F] FLC 结束 → 第二次落地音效槽 2（dword_48235A）
                         app.audio().playEffectSlot(2);
                         st.remainingSteps = rollDice(app); // 滚动结束 → 最终点数
                         st.diceHoldStartMs = SDL_GetTicks();
                         st.dicePhase = 2;
+                    } else if (!st.diceLandPlayed && st.diceAnim.frameIndex() == 30) {
+                        // [RE 0x451387] FLC 第30帧（落地瞬间）→ 第一次落地音效槽 2
+                        //   （sub_450F04 用 dword_48C850=0x1E 触发帧 + dword_48C840=槽2）
+                        app.audio().playEffectSlot(2);
+                        st.diceLandPlayed = true;
                     }
                     break;
                 }
