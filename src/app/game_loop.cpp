@@ -348,12 +348,12 @@ bool gameEventHandler(const SDL_Event* event, void* user) {
         // [RE 0x401B9C] 内层循环检测场景切换/退出请求（游戏内菜单结果）
         GameState& st = app.gameState();
         if (st.quitGame) {
-            // [RE 0x411B46 + 0x401B9C LABEL_27] 结束游戏：原版 saveConfig 后 g_quitGame=1 → 直接退出程序；
-            //   当前保留"回主菜单"行为（与原版的差异，按需求保留）
-            RICH4_LOGI("system menu: quit -> back to main menu (RE 0x411B46; 原版为直接退出)");
+            // [RE 0x411B46 + 0x401B9C LABEL_27] 结束游戏：saveConfig 后 g_quitGame=1 → 直接退出程序
+            RICH4_LOGI("system menu: quit -> exit application (RE 0x411B46/0x401B9C)");
             st.quitGame = false;
             st.sceneRequest = 0;
             app.events().requestExit(0);
+            app.quit();
             return true;
         }
         if (st.sceneRequest != 0) {

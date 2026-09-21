@@ -655,8 +655,11 @@ void handleSelectEvent(DialogState& st, const SDL_Event& event) {
                 toggleAvatar(st);
             } else if (hit >= 1 && hit <= 8) {
                 st.pressedCtrl = hit;
-                // [RE 0x4542CE] 按下音效 id = 控件索引（確定=1 / 取消=2 / 选项=1）
-                st.app->audio().playEffect(hit <= 2 ? hit : 1);
+                // [RE 0x404E44] 確定(1)/取消(2) 按下无音效（原版在进入阶段 0x405D03 播
+                //   unk_46CCD0 = Effect.mkf[5]）；选项(3-8) 按下播放点击音效
+                if (hit >= 3) {
+                    st.app->audio().playEffect(1);
+                }
                 redrawAll(st);
             } else if (hit >= 9) {
                 switchMap(st, hit - 9);
