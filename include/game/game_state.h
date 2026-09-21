@@ -300,8 +300,13 @@ struct GameState {
         int w = 0;
         int h = 0;
         // 同原版拾取缓冲 ID：cellEnt 1..N、2000+ 地产、4000+ 公司、6000+ 特殊点、
-        // 8000+ 事件格、槽号<<8 cellTable 物件、0x8000| 玩家
+        // 8000+ 事件格、槽号<<8 cellTable 物件、0xF000| 玩家
         uint16_t id = 0;
+        // [RE 0x409B18] 拾取形状（SPR 像素掩码，精确命中；null = 用矩形近似）
+        const UiImage* shape = nullptr;
+        int shapeFrame = 0;
+        int anchorX = 0; // 形状绘制锚点（blit 的 x/y）
+        int anchorY = 0;
     };
     std::vector<MapHitRegion> mapHitRegions;
     std::string objectTipText; // 非空时显示提示框

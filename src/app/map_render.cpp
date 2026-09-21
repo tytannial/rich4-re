@@ -205,8 +205,8 @@ void renderMap(Application& app, int centerX, int centerY) {
         blitElement(dst, f, sx, sy, true);
         // [RE 0x409B18] 拾取形状 = g_pickMask 帧 4（51x51）
         const UiFrameView& pf = state.flagTiles.frameCount() > 4 ? state.flagTiles.frame(4) : f;
-        state.mapHitRegions.push_back(
-            {sx - pf.offsetX, sy - pf.offsetY, pf.width, pf.height, static_cast<uint16_t>(i)});
+        state.mapHitRegions.push_back({sx - pf.offsetX, sy - pf.offsetY, pf.width, pf.height,
+                                       static_cast<uint16_t>(i), &state.flagTiles, 4, sx, sy});
     }
 
     // 物件精灵收集（对应 sub_40829D 的 dword_48A44C 列表，按 y 排序后绘制）
@@ -324,8 +324,9 @@ void renderMap(Application& app, int centerX, int centerY) {
             int sy = 0;
             if (state.flagTiles.frameCount() > pickFrame && projectItem(es.x, es.y, sx, sy)) {
                 const UiFrameView& pf = state.flagTiles.frame(pickFrame);
-                state.mapHitRegions.push_back({sx - pf.offsetX, sy - pf.offsetY, pf.width,
-                                               pf.height, static_cast<uint16_t>(2000 + i)});
+                state.mapHitRegions.push_back(
+                    {sx - pf.offsetX, sy - pf.offsetY, pf.width, pf.height,
+                     static_cast<uint16_t>(2000 + i), &state.flagTiles, pickFrame, sx, sy});
             }
             continue;
         }
@@ -346,8 +347,9 @@ void renderMap(Application& app, int centerX, int centerY) {
             int sy = 0;
             if (state.flagTiles.frameCount() > pickFrame && projectItem(cp.x, cp.y, sx, sy)) {
                 const UiFrameView& pf = state.flagTiles.frame(pickFrame);
-                state.mapHitRegions.push_back({sx - pf.offsetX, sy - pf.offsetY, pf.width,
-                                               pf.height, static_cast<uint16_t>(4000 + i)});
+                state.mapHitRegions.push_back(
+                    {sx - pf.offsetX, sy - pf.offsetY, pf.width, pf.height,
+                     static_cast<uint16_t>(4000 + i), &state.flagTiles, pickFrame, sx, sy});
             }
             continue;
         }
@@ -364,8 +366,10 @@ void renderMap(Application& app, int centerX, int centerY) {
         const UiImage* hs = it.hitSpr ? it.hitSpr : it.spr;
         const int hf = it.hitSpr ? it.hitFrame : it.frame;
         const UiFrameView& hfView = hs->frame(hf);
-        state.mapHitRegions.push_back(
-            {it.x - hfView.offsetX, it.y - hfView.offsetY, hfView.width, hfView.height, it.id});
+        state.mapHitRegions.push_back({it.x - hfView.offsetX, it.y - hfView.offsetY,
+                                       hfView.width, hfView.height, it.id,
+                                       it.hitSpr ? it.hitSpr : nullptr,
+                                       it.hitSpr ? it.hitFrame : 0, it.x, it.y});
         const UiFrameView& f = it.spr->frame(it.frame);
         if (it.spr->isSprite()) {
             // [RE 0x40986A] 调色板[255] = 拥有者颜色（0=黑轮廓、1..8=玩家色、-1=原图）

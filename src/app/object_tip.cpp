@@ -6,6 +6,7 @@
 #include "game/render/blit.h"
 #include "game/render/surface.h"
 #include "game/render/text.h"
+#include "game/render/ui_image.h"
 
 #include <string>
 
@@ -126,12 +127,25 @@ std::string buildTipText(const GameState& state, uint16_t id) {
 
 // [RE 0x417559] showObjectTip：命中测试（取最上层 = 最后绘制）+ 文本生成
 // 依据: 0x417559 反编译; sub_40A9D7 拾取（重写用渲染记录的 mapHitRegions 代替）;
-//       文本分支 cellEnt 名/estate 地主+等级/corp 公司+等级/specPt 名/evtCell 名/
+//       命中用拾取形状的 SPR 像素掩码（原版拾取缓冲语义），无形状时用矩形;
+//       文本分支 cellEnt 名/estate 地主+建筑名+等级+费用/corp/specPt/evtCell/
 //       cellTable 类型名/玩家名; 框 = data.mkf[517] 帧 0..3（四方向）
 void showObjectTip(Application& app, int x, int y) {
     GameState& state = app.gameState();
     for (auto it = state.mapHitRegions.rbegin(); it != state.mapHitRegions.rend(); ++it) {
-        if (x < it->x || x >= it->x + it->w || y < it->y || y >= it->y + it->h) {
+        if (it->shape) {
+            // [RE 0x409B18] 像素级命中：形状 SPR 非零像素处才算命中（避免矩形误盖道路格）
+            const UiFrameView& sf = it->shape->frame(it->shapeFrame);
+            const int lx = x - (it->anchorX - sf.offsetX);
+            const int ly = y - (it->anchorY - sf.offsetY);
+            if (lx < 0 || ly < 0 || lx >= sf.width || ly >= sf.height) {
+                continue;
+            }
+            const uint8_t* px = it->shape->frameBytes(it->shapeFrame);
+            if (!px || px[static_cast<size_t>(ly) * sf.width + lx] == 0) {
+                continue;
+            }
+        } else if (x < it->x || x >= it->x + it->w || y < it->y || y >= it->y + it->h) {
             continue;
         }
         const std::string text = buildTipText(state, it->id);
@@ -174,8 +188,21 @@ void drawObjectTip(Application& app) {
     const int a2 = (v5 & 2) ? -(base.width / 2 + 9) : (base.width / 2 + 9);
     const int a1 = (v5 & 1) ? -96 : 42;
     app.text().setFont(16, 0xF0F0F0, 0x101010, kTextStyleShadow | kTextStyleBold, 1);
-    app.text().drawText(dst, state.objectTipText.c_str(), state.objectTipX + a2,
-                        state.objectTipY + a1 + 27, 2);
+    // [RE 0x417559] 多行文本逐行绘制（原版多次 drawText，行距 18）
+    int ty = state.objectTipY + a1 + 27;
+    size_t start = 0;
+    const std::string& text = state.objectTipText;
+    while (start <= text.size()) {
+        const size_t end = text.find('\n', start);
+        const std::string line =
+            text.substr(start, end == std::string::npos ? std::string::npos : end - start);
+        app.text().drawText(dst, line.c_str(), state.objectTipX + a2, ty, 2);
+        ty += 18;
+        if (end == std::string::npos) {
+            break;
+        }
+        start = end + 1;
+    }
 }
 
 } // namespace rich4
