@@ -40,6 +40,10 @@ public:
 
     // SPR 调色板（256 x RGB555，位于 data_offset 处）；非 SPR 返回 nullptr
     const uint16_t* palette() const { return m_palette; }
+    // [RE 0x40986A] 图块调色板末项（索引 255）= 拥有者颜色：
+    //   无主 = 0（黑，形成黑色轮廓）、有主 = 玩家色；-1（evtCell）保持原色
+    void setPaletteEntry(int index, uint16_t color) const;
+    uint16_t basePaletteEntry(int index) const;
     // 帧像素起始（SPR 为 8bit 索引；SMP 为 16bit，见 frame().pixels）
     const uint8_t* frameBytes(int index) const { return m_frameBytes[static_cast<size_t>(index)]; }
     // 帧像素字节数（SPR = w*h；SMP = w*h*2，即原版帧头 size 字段）
@@ -51,6 +55,7 @@ private:
     std::vector<const uint8_t*> m_frameBytes;
     std::vector<uint32_t> m_frameSizes;
     const uint16_t* m_palette = nullptr;
+    uint16_t m_basePalette[256] = {}; // 原始调色板副本（供恢复）
     bool m_isSprite = false;
 };
 

@@ -48,6 +48,7 @@ bool UiImage::load(std::vector<uint8_t> data) {
     if (isSpr) {
         // [RE 0x45663E] 调色板 = 资源基址 + data_offset（256 x RGB555）
         m_palette = reinterpret_cast<const uint16_t*>(m_data.data() + dataOffset);
+        std::memcpy(m_basePalette, m_palette, sizeof(m_basePalette));
     }
 
     // [RE 0x450069] 依据: 帧 0 指针 = 基址 + data_offset (+512 SPR 调色板);
@@ -71,6 +72,21 @@ bool UiImage::load(std::vector<uint8_t> data) {
         pixels += header.size;
     }
     return true;
+}
+
+void UiImage::setPaletteEntry(int index, uint16_t color) const {
+    // [RE 0x40986A] 图块绘制前替换调色板项（索引 255 = 拥有者颜色/黑色轮廓）
+    if (!m_isSprite || !m_palette || index < 0 || index >= 256) {
+        return;
+    }
+    const_cast<uint16_t*>(m_palette)[index] = color;
+}
+
+uint16_t UiImage::basePaletteEntry(int index) const {
+    if (!m_isSprite || index < 0 || index >= 256) {
+        return 0;
+    }
+    return m_basePalette[index];
 }
 
 } // namespace rich4

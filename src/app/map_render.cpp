@@ -221,6 +221,9 @@ void renderMap(Application& app, int centerX, int centerY) {
         if (!spr || spr->frameCount() <= 0) {
             return;
         }
+        if (frame < 0 || frame >= spr->frameCount()) {
+            frame = 0; // 帧数不足时回退首帧（防越界）
+        }
         int sx = 0;
         int sy = 0;
         if (!projectItem(px, py, sx, sy)) {
@@ -258,23 +261,25 @@ void renderMap(Application& app, int centerX, int centerY) {
         addItem(res, frame, p.spriteX, p.spriteY, -1, static_cast<uint16_t>(0xF000u | j));
     }
 
-    // 特殊点（图块 = dword_48AE4C[sprite] = map.mkf[sprite+38]，颜色 = 拥有者）
+    // 特殊点（图块 = dword_48AE4C[sprite] = map.mkf[sprite+38]；帧 = 8 方向；色 = 拥有者/黑）
     for (size_t i = 1; i < state.specPts.size(); ++i) {
         const SpecPt& sp = state.specPts[i];
         if (sp.sprite == 0 || sp.sprite >= state.specTiles.size()) {
             continue;
         }
-        addItem(&state.specTiles[sp.sprite], 0, sp.x, sp.y, sp.owner ? sp.owner - 1 : -1,
+        const int frame = (8 - (state.mapRotation + sp.dir)) & 7;
+        addItem(&state.specTiles[sp.sprite], frame, sp.x, sp.y, sp.owner,
                 static_cast<uint16_t>(6000 + i));
     }
 
-    // 事件格（图块 = dword_48AE4C[sprite] = map.mkf[sprite+38]）
+    // 事件格（图块 = dword_48AE4C[sprite] = map.mkf[sprite+38]；帧 = 8 方向；色 = 原图）
     for (size_t i = 1; i < state.evtCells.size(); ++i) {
         const EvtCell& ec = state.evtCells[i];
         if (ec.sprite == 0 || ec.sprite >= state.specTiles.size()) {
             continue;
         }
-        addItem(&state.specTiles[ec.sprite], 0, ec.x, ec.y, -1,
+        const int frame = (8 - (state.mapRotation + ec.dir)) & 7;
+        addItem(&state.specTiles[ec.sprite], frame, ec.x, ec.y, -1,
                 static_cast<uint16_t>(8000 + i));
     }
 
@@ -301,7 +306,7 @@ void renderMap(Application& app, int centerX, int centerY) {
             continue;
         }
         const int frame = (8 - (state.mapRotation + es.dir)) & 7;
-        addItem(&state.estateFlag, frame, es.x, es.y, es.owner - 1,
+        addItem(&state.estateFlag, frame, es.x, es.y, es.owner,
                 static_cast<uint16_t>(2000 + i));
     }
 
@@ -312,7 +317,7 @@ void renderMap(Application& app, int centerX, int centerY) {
             continue;
         }
         const int frame = (8 - (state.mapRotation + cp.dir)) & 7;
-        addItem(&state.corpTiles[cp.sub], frame, cp.x, cp.y, cp.owner - 1,
+        addItem(&state.corpTiles[cp.sub], frame, cp.x, cp.y, cp.owner,
                 static_cast<uint16_t>(4000 + i));
     }
 
@@ -327,6 +332,14 @@ void renderMap(Application& app, int centerX, int centerY) {
         state.mapHitRegions.push_back(
             {it.x - f.offsetX, it.y - f.offsetY, f.width, f.height, it.id});
         if (it.spr->isSprite()) {
+            // [RE 0x40986A] 调色板[255] = 拥有者颜色（0=黑轮廓、1..8=玩家色、-1=原图）
+            if (it.colorIdx < 0) {
+                it.spr->setPaletteEntry(255, it.spr->basePaletteEntry(255));
+            } else if (it.colorIdx == 0) {
+                it.spr->setPaletteEntry(255, 0);
+            } else if (it.colorIdx <= state.playerCount) {
+                it.spr->setPaletteEntry(255, state.players[it.colorIdx - 1].color);
+            }
             blitSpriteFrameClipped(dst, *it.spr, it.frame, it.x, it.y, true);
         } else {
             blitElement(dst, it.spr->frame(it.frame), it.x, it.y, true);
