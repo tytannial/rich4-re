@@ -37,3 +37,4 @@ __pycache__/
 /rich4.exe
 /rich4_R.exe
 /SDL3.dll
+build.cmd
