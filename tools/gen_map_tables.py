@@ -48,6 +48,7 @@ MONTH_FRAME_VA, MONTH_FRAME_N = 0x475218, 12
 MINIMAP_Y_VA, MINIMAP_Y_N = 0x4752AA, 4
 TAB_TEXT_VA, TAB_TEXT_N = 0x475274, 4
 MONTH_NAME_VA, MONTH_NAME_N = 0x47511C, 12
+HOLIDAY_VA, HOLIDAY_GROUPS, HOLIDAY_N, HOLIDAY_STRIDE = 0x47FF4A, 8, 24, 12
 MONEY_PREFIX_VA, MONEY_PREFIX_LEN = 0x415D1D, 20
 CHAR_DATA_VA, CHAR_DATA_N, CHAR_DATA_SIZE = 0x47E80C, 12, 104
 
@@ -129,6 +130,9 @@ def main(argv: list[str]) -> int:
 
     tab_text = [r.cstr_big5(r.u32(TAB_TEXT_VA, i)) for i in range(TAB_TEXT_N)]
     month_name = [r.cstr_big5(r.u32(MONTH_NAME_VA, i)) for i in range(MONTH_NAME_N)]
+    holiday_raw = r.bytes_at(HOLIDAY_VA, HOLIDAY_GROUPS * HOLIDAY_N * HOLIDAY_STRIDE)
+    holiday = [[[holiday_raw[g * HOLIDAY_N * HOLIDAY_STRIDE + i * HOLIDAY_STRIDE + f]
+                 for f in range(5)] for i in range(HOLIDAY_N)] for g in range(HOLIDAY_GROUPS)]
     money_prefix = list(r.bytes_at(MONEY_PREFIX_VA, MONEY_PREFIX_LEN))
 
     char_color = []
@@ -235,6 +239,16 @@ def main(argv: list[str]) -> int:
     w("")
     w("// [RE 0x47511C] off_47511C 月份名")
     w("const char* const kMonthName[12] = {" + ", ".join('"%s"' % s for s in month_name) + "};")
+    w("")
+    w("// [RE 0x47FF4A] byte_47FF4A.. 节日表 [组=4*mode+map][24]{flag,type,month,day,weekday}")
+    w("// 依据: 0x4521F0; type 0=固定月日 1=每年同月日 2=第N个星期X(用 weekday)")
+    w("const uint8_t kHoliday[8][24][5] = {")
+    for g in range(HOLIDAY_GROUPS):
+        w(f"  {{ // base={g}")
+        for i in range(HOLIDAY_N):
+            w("    {" + ", ".join(str(v) for v in holiday[g][i]) + "},")
+        w("  },")
+    w("};")
     w("")
     w("// [RE 0x415D1D] byte_415D1D 金额前缀模板 u8[20]（'$' + 预留数字位）")
     w("const uint8_t kMoneyPrefix[20] = {" + ", ".join("0x%02X" % v for v in money_prefix) + "};")

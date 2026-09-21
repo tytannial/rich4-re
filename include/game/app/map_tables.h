@@ -32,6 +32,8 @@ extern const uint32_t kMiscTable80[10][2];
 
 // [RE 0x475208] word_475208 日历背景资源索引（4*mode+map）
 extern const uint16_t kCalendarRes[8];
+// [RE 0x47FF4A] byte_47FF4A.. 节日表 [组=4*mode+map][24]{flag,type,month,day,weekday}
+extern const uint8_t kHoliday[8][24][5];
 // [RE 0x475218] byte_475218 月份->背景帧组
 extern const uint8_t kMonthFrame[12];
 // [RE 0x4752AA] dword_4752AA 小地图 y 位置（按 byte_49715D 布局索引）

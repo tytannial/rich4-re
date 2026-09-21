@@ -215,28 +215,80 @@ void drawMiniMap(Application& app) {
     }
 }
 
-// [RE 0x4523D5] 特殊日期判断（星期日 或 节日表）
-// 差异: 节日表 byte_47FF4A（8 地图 x 1152B）待提取；当前仅星期日
-bool isSpecialDate(uint32_t date) {
+// [RE 0x4521F0] 节日查询：组 base=4*gameMode+mapIndex，遍历 24 条，命中返回索引(0..23)否则 -1
+// 依据: 0x4521F0; type 0=固定(月,日)、2=第N个星期X；1=浮动(需 dword_47639C 表)
+// 差异: type1 浮动节日暂未实现（跳过）
+int findHoliday(const GameState& st, uint32_t date) {
+    const int base = 4 * st.gameMode + st.mapIndex;
+    const int year = static_cast<int>((date >> 16) & 0xFFFF);
+    const int month = static_cast<int>((date >> 8) & 0xFF);
+    const int day = static_cast<int>(date & 0xFF);
+    const int v2 = (month << 8) | day;
+    for (int i = 0; i < 24; ++i) {
+        const uint8_t* h = kHoliday[base][i];
+        const int type = h[1];
+        int a1 = -1;
+        if (type == 0) {
+            a1 = (h[2] << 8) | h[3];
+        } else if (type == 2) {
+            if (h[2] != month) {
+                continue;
+            }
+            const int firstWd = firstWeekday(year, month);
+            const int totalDays = daysInMonth(year, month);
+            int wd = h[4];
+            if (wd < firstWd) {
+                wd = 7;
+            }
+            const int d = 7 * (h[3] - 1) + wd - firstWd + 1;
+            if (d > totalDays) {
+                continue;
+            }
+            a1 = (month << 8) | d;
+        } else {
+            continue; // type1 浮动，暂不支持
+        }
+        if (v2 == a1 && h[0] < 0x80) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// [RE 0x4523D5] 特殊日期判断：星期日 或 命中节日且 flag 非0 → 红字
+bool isSpecialDate(const GameState& st, uint32_t date) {
     const int year = static_cast<int>((date >> 16) & 0xFFFF);
     const int month = static_cast<int>((date >> 8) & 0xFF);
     const int day = static_cast<int>(date & 0xFF);
     const int wd = (firstWeekday(year, month) + day - 1) % 7;
-    return wd == 0;
+    if (wd == 0) {
+        return true; // 星期日
+    }
+    const int idx = findHoliday(st, date);
+    if (idx >= 0) {
+        const int base = 4 * st.gameMode + st.mapIndex;
+        if (kHoliday[base][idx][0] != 0) {
+            return true;
+        }
+    }
+    return false;
 }
 
-// [RE 0x4521F0] 节日查询：命中返回节日索引(0..23)，否则 -1
-// 差异: 节日表 byte_47FF4A..4E（24条×8组×12B）待提取，暂返回 -1
-int findHoliday(uint32_t date) {
-    (void)date;
-    return -1;
-}
-
-// [RE 0x4169BC] 节日专属背景（资源索引 = 节日idx + kCalendarRes[4*gameMode+mapIndex]）
-// 差异: 背景资源来源 dword_48A0E4 待确认，暂空实现
+// [RE 0x4169BC] 节日专属背景：data.mkf[kCalendarRes[base]+idx]，缓存到 holidayBg（原版 dword_48BDD0）
 void drawHolidayBackground(Application& app, int holiday) {
-    (void)app;
-    (void)holiday;
+    GameState& st = app.gameState();
+    const int base = 4 * st.gameMode + st.mapIndex;
+    const int resIdx = kCalendarRes[base] + holiday;
+    if (st.holidayBgIdx != resIdx) {
+        auto blob = st.data.read(static_cast<size_t>(resIdx));
+        if (blob) {
+            st.holidayBg.load(std::move(*blob));
+        }
+        st.holidayBgIdx = resIdx;
+    }
+    if (st.holidayBg.frameCount() > 0) {
+        blitElementOpaque(app.surface(), st.holidayBg.frame(0), 440, 280);
+    }
 }
 
 // [RE 0x4169BC] 日历（440,280-640,480；panel.mkf[2]）
@@ -273,7 +325,7 @@ void drawCalendar(Application& app) {
             if (d == day) {
                 drawRectBorder(dst, col - 10, row - 6, 0x14, 14, 0xF800);
             }
-            const bool special = isSpecialDate(ym | static_cast<uint32_t>(d));
+            const bool special = isSpecialDate(state, ym | static_cast<uint32_t>(d));
             app.text().setFont(12, special ? kTextRed : kTextDark, 0, 2, 1);
             app.text().drawText(dst, text, col, row, 2);
             if (col == 608) {
@@ -284,7 +336,7 @@ void drawCalendar(Application& app) {
         }
     } else {
         // —— 大数字日历模式 ——
-        const int holiday = findHoliday(date); // [RE 0x4521F0] 节日索引，-1=无
+        const int holiday = findHoliday(state, date); // [RE 0x4521F0] 节日索引，-1=无
         int v6 = 0;
         if (holiday < 0) {
             const int frame = kMonthFrame[month - 1];

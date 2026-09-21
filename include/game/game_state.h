@@ -259,6 +259,9 @@ struct GameState {
     UiImage panelTopBar;          // [RE 0x475118] panel.mkf[1]
     UiImage panelFrame2;          // [RE 0x48BE10] panel.mkf[2]
     UiImage panelFrame3;          // [RE 0x48BE14] panel.mkf[3]
+    // [RE 0x48BDD0] 节日背景缓存（data.mkf[kCalendarRes[base]+idx]），idx 变化才重载
+    UiImage holidayBg;
+    int holidayBgIdx = -1;
     UiImage panelFrame7;          // [RE 0x48BE04] panel.mkf[7]
     // [RE 0x48BE08] panel.mkf[8] 是 72x67 无头字节控件图（非 SPR/SMP），
     //   命中 ctrl = 像素值 + 10：11=骰子数、12=拖动、13=GO
