@@ -179,13 +179,11 @@ void renderMap(Application& app, int centerX, int centerY) {
     }
 
     // cellEnts 物件（图块 = map.mkf[24] 帧 sprite-1）
-    // [RE 0x417559] 记录命中矩形（ID = cellEnt 索引 → 提示显示 +4 名称：醫院/銀行/命運/…）
+    // [RE 0x409B18] 所有 cellEnt（占用掩码高 16 位为 0）都可拾取——包括无图块的道路格；
+    //   命中形状 = g_pickMask 帧 4（51x51）
     state.mapHitRegions.clear();
     for (size_t i = 1; i < state.cellEnts.size(); ++i) {
         const CellEnt& ce = state.cellEnts[i];
-        if (ce.sprite == 0) {
-            continue;
-        }
         const int cr = (ce.y >> 5) - cellY + kViewHalf;
         const int cc = (ce.x >> 5) - cellX + kViewHalf;
         if (cr < 0 || cr > 28 || cc < 0 || cc > 28) {
@@ -197,16 +195,20 @@ void renderMap(Application& app, int centerX, int centerY) {
         const int idx = 3364 * dir + 116 * cr + 4 * cc;
         const int sx = baseX + isoAt(idx + 2) - px;
         const int sy = baseY + isoAt(idx) - py;
+        if ((ce.occMask & 0xFFFF00u) == 0 && state.flagTiles.frameCount() > 4) {
+            const UiFrameView& pf = state.flagTiles.frame(4);
+            state.mapHitRegions.push_back({sx - pf.offsetX, sy - pf.offsetY, pf.width, pf.height,
+                                           static_cast<uint16_t>(i), &state.flagTiles, 4, sx,
+                                           sy});
+        }
+        if (ce.sprite == 0) {
+            continue;
+        }
         const int frame = ce.sprite - 1;
         if (frame < 0 || frame >= state.cellEntTiles.frameCount()) {
             continue;
         }
-        const UiFrameView& f = state.cellEntTiles.frame(frame);
-        blitElement(dst, f, sx, sy, true);
-        // [RE 0x409B18] 拾取形状 = g_pickMask 帧 4（51x51）
-        const UiFrameView& pf = state.flagTiles.frameCount() > 4 ? state.flagTiles.frame(4) : f;
-        state.mapHitRegions.push_back({sx - pf.offsetX, sy - pf.offsetY, pf.width, pf.height,
-                                       static_cast<uint16_t>(i), &state.flagTiles, 4, sx, sy});
+        blitElement(dst, state.cellEntTiles.frame(frame), sx, sy, true);
     }
 
     // 物件精灵收集（对应 sub_40829D 的 dword_48A44C 列表，按 y 排序后绘制）

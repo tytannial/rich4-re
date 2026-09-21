@@ -188,15 +188,23 @@ void drawObjectTip(Application& app) {
     const int a2 = (v5 & 2) ? -(base.width / 2 + 9) : (base.width / 2 + 9);
     const int a1 = (v5 & 1) ? -96 : 42;
     app.text().setFont(16, 0xF0F0F0, 0x101010, kTextStyleShadow | kTextStyleBold, 1);
-    // [RE 0x417559] 多行文本逐行绘制（原版多次 drawText，行距 18）
-    int ty = state.objectTipY + a1 + 27;
-    size_t start = 0;
+    // [RE 0x417559] 逐行绘制（原版多次 drawText，行距 18）：
+    //   单行（cellEnt/specPt 名）首行 = v9+27；多行（estate 3-4 行）自 v9 起
     const std::string& text = state.objectTipText;
+    int lineCount = 1;
+    for (char ch : text) {
+        if (ch == '\n') {
+            ++lineCount;
+        }
+    }
+    const int tx = state.objectTipX + a2;
+    int ty = state.objectTipY + a1 + (lineCount > 1 ? 0 : 27);
+    size_t start = 0;
     while (start <= text.size()) {
         const size_t end = text.find('\n', start);
         const std::string line =
             text.substr(start, end == std::string::npos ? std::string::npos : end - start);
-        app.text().drawText(dst, line.c_str(), state.objectTipX + a2, ty, 2);
+        app.text().drawText(dst, line.c_str(), tx, ty, 2);
         ty += 18;
         if (end == std::string::npos) {
             break;
