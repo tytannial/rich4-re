@@ -255,7 +255,9 @@ struct GameState {
     UiImage panelFrame2;          // [RE 0x48BE10] panel.mkf[2]
     UiImage panelFrame3;          // [RE 0x48BE14] panel.mkf[3]
     UiImage panelFrame7;          // [RE 0x48BE04] panel.mkf[7]
-    UiImage panelFrame8;          // [RE 0x48BE08] panel.mkf[8]
+    // [RE 0x48BE08] panel.mkf[8] 是 72x67 无头字节控件图（非 SPR/SMP），
+    //   命中 ctrl = 像素值 + 10：11=骰子数、12=拖动、13=GO
+    std::vector<uint8_t> panel8Mask;
     // [RE 0x48BDF8/0x48BDF4] 骰子滚动动画 panel.mkf[4/5/6]（FLC，按骰子数 1/2/3）
     //   原版 sub_419572 用 sub_45144F 播放；非 UiImage（无 SPR/SMP 魔数，loadUiImage 会失败）
     FliDecoder diceAnim;          // 当前掷骰滚动动画（panel[骰子数+3]）
@@ -378,8 +380,10 @@ struct GameState {
     // [RE 0x4749D4] dword_4749D4 当前移动音效索引
     int moveSoundIndex = 0;
     // [RE 0x475284] qword_475284 前进面板屏幕位置
-    int advancePanelX = 0;
-    int advancePanelY = 0;
+    int advancePanelX = 180;   // [RE 0x475284] 前进面板左上角初值 (180,120)
+    int advancePanelY = 120;
+    int advancePanelW = 72;    // [RE 0x48BDD8] 面板宽 = panel[7] 帧0 宽
+    int advancePanelH = 67;    // [RE 0x48BDDC] 面板高 = panel[7] 帧0 高
     // [RE 0x48BDD4] dword_48BDD4 前进面板闪烁帧（0/1，GO 金色高亮）
     int advancePanelBlink = 0;
     // [RE 0x419572] 骰子点数（最多 3 个）与显示标志

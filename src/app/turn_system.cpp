@@ -796,9 +796,9 @@ void initTurnState(Application& app) {
     st.gamePanelReady = true;
     st.gameStateActive = true;
     st.playerActionFlags[0] |= 0x80;
-    // [RE 0x475284] 前进面板初始位置（原版动态确定，当前默认地图区中上）
-    st.advancePanelX = 60;
-    st.advancePanelY = 160;
+    // [RE 0x475284] 前进面板初始位置（原版 .data 初值 180,120）
+    st.advancePanelX = 180;
+    st.advancePanelY = 120;
     st.advancePanelBlink = 0;
 }
 

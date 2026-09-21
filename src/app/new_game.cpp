@@ -381,7 +381,10 @@ void loadPanelUi(Application& app) {
     loadUiImage(state.panelFrame2, state.panel, 2);
     loadUiImage(state.panelFrame3, state.panel, 3);
     loadUiImage(state.panelFrame7, state.panel, 7);
-    loadUiImage(state.panelFrame8, state.panel, 8);
+    // panel[8] 是 72x67 无头字节控件图（非 SPR/SMP），直接取原始字节供命中
+    if (auto b8 = state.panel.read(8)) {
+        state.panel8Mask = std::move(*b8);
+    }
     // panel.mkf[4/5/6] 是骰子滚动 FLC 动画（非 UiImage），由 turn_system 状态2 按需
     // 以 FliDecoder 播放（原版 sub_419572 → sub_45144F），此处不加载。
     state.panelLoaded = true;

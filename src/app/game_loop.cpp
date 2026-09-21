@@ -205,25 +205,35 @@ void handleMouseMove(Application& app, int x, int y) {
 // [RE 0x417E26] WM_LBUTTONDOWN
 void handleLeftButtonDown(Application& app, int x, int y) {
     GameState& state = app.gameState();
-    // [RE 0x417E26] 前进面板命中：仅 GO 控件（panel.mkf[8] 像素 +10 == 13）触发；
-    //   其余区域继续正常交互（工具条/地图），不再整体拦截
-    if (state.gamePlayerControl && state.panelFrame8.frameCount() > 0) {
-        const UiFrameView& hit = state.panelFrame8.frame(0);
+    // [RE 0x417E26] 前进面板命中：panel[8] 字节控件图，ctrl = 像素值 + 10
+    //   （13=GO、11=骰子数、12=拖动）；面板矩形 advancePanelX/Y/W/H
+    if (state.gamePlayerControl && !state.panel8Mask.empty()) {
         const int lx = x - state.advancePanelX;
         const int ly = y - state.advancePanelY;
-        if (lx >= 0 && ly >= 0 && lx < hit.width && ly < hit.height && hit.pixels) {
-            const int ctrl =
-                static_cast<int>(hit.pixels[static_cast<size_t>(ly) * hit.width + lx] & 0xFF) + 10;
-            if (ctrl == 13) { // GO → sub_40DD1F
+        if (lx >= 0 && ly >= 0 && lx < state.advancePanelW && ly < state.advancePanelH) {
+            const int ctrl = static_cast<int>(
+                state.panel8Mask[static_cast<size_t>(ly) * state.advancePanelW + lx]) + 10;
+            if (ctrl == 13) { // GO → sub_419703 + sub_41D546 + sub_40DD1F
+                state.manualView = false;
                 disablePlayerControl(app);
                 startPlayerMove(app);
                 return;
             }
-            if (ctrl == 11) { // 選擇骰子數
+            if (ctrl == 11) { // 选择骰子数：按点击的骰子图标行设数量
                 Player& pl = state.players[state.currentPlayer];
-                const int maxDice = (pl.travel == 2) ? 3 : (pl.travel == 1 ? 2 : 1);
-                if (maxDice > 1) {
-                    pl.diceCount = static_cast<uint8_t>(pl.diceCount % maxDice + 1);
+                const int travel = pl.travel & 3;
+                if (travel == 1) {
+                    for (int i = 0; i < 2; ++i) {
+                        if (ly >= 19 * i + 16 && ly <= 19 * i + 32) {
+                            pl.diceCount = static_cast<uint8_t>(i + 1);
+                        }
+                    }
+                } else if (travel == 2) {
+                    for (int j = 0; j < 3; ++j) {
+                        if (ly >= 16 * j + 9 && ly <= 16 * j + 25) {
+                            pl.diceCount = static_cast<uint8_t>(j + 1);
+                        }
+                    }
                 }
                 return;
             }
