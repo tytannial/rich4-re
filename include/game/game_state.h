@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include "game/render/fli.h"
@@ -287,6 +288,22 @@ struct GameState {
 
     // [RE 0x496D08] g_cellTable 每项 24 字节（+0 = 类型）
     std::vector<uint8_t> cellTable;
+
+    // [RE 0x417559] 右键物件提示：每帧渲染记录物件屏幕矩形（已含 offset），右键命中后
+    //   显示名称/地主/价值等；左键或其他操作清除
+    struct MapHitRegion {
+        int x = 0;
+        int y = 0;
+        int w = 0;
+        int h = 0;
+        // 同原版拾取缓冲 ID：cellEnt 1..N、2000+ 地产、4000+ 公司、6000+ 特殊点、
+        // 8000+ 事件格、槽号<<8 cellTable 物件、0x8000| 玩家
+        uint16_t id = 0;
+    };
+    std::vector<MapHitRegion> mapHitRegions;
+    std::string objectTipText; // 非空时显示提示框
+    int objectTipX = 0;
+    int objectTipY = 0;
 
     // ===== 经济/回合全局 =====
     int32_t startMoneyVal = 0; // [RE 0x49908C] g_startMoneyVal

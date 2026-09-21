@@ -10,6 +10,7 @@
 #include "game/app/map_dialog.h"
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
+#include "game/app/object_tip.h"
 #include "game/app/save_dialog.h"
 #include "game/app/settings_dialog.h"
 #include "game/app/turn_system.h"
@@ -72,6 +73,8 @@ void renderGameFrame(Application& app) {
     if (state.parachuteActive && state.parachute.valid()) {
         drawParachuteFrame(app);
     }
+    // [RE 0x417559] 右键物件提示框（地图区之上、面板之下）
+    drawObjectTip(app);
     renderGamePanel(app);
 }
 
@@ -202,6 +205,7 @@ void handleMouseMove(Application& app, int x, int y) {
 // [RE 0x417E26] WM_LBUTTONDOWN
 void handleLeftButtonDown(Application& app, int x, int y) {
     GameState& state = app.gameState();
+    state.objectTipText.clear(); // [RE 0x417559] 左键操作清除物件提示
     // [RE 0x417E26] 前进面板命中：panel[8] 字节控件图，ctrl = 像素值 + 10
     //   （13=GO、11=骰子数、12=拖动）；面板矩形 advancePanelX/Y/W/H
     if (state.gamePlayerControl && !state.panel8Mask.empty()) {
@@ -316,16 +320,19 @@ void handleLeftButtonUp(Application& app, int x, int y) {
 // 见 0x417E26 反编译; if (dword_48BE18 && 布局 && 鼠标在小地图区) dword_48BE18 = 0
 void handleRightButtonUp(Application& app, int x, int y) {
     GameState& state = app.gameState();
-    if (!state.manualView) {
-        return;
-    }
     int mx = 0;
     int my = 0;
-    if (!miniMapHitRegion(state, x, y, mx, my)) {
+    if (miniMapHitRegion(state, x, y, mx, my)) {
+        // 小地图：取消手动视角（原版 dword_48BE18 = 0）
+        if (state.manualView) {
+            state.manualView = false;
+            state.viewScrolling = false;
+            renderGameFrame(app);
+        }
         return;
     }
-    state.manualView = false;
-    state.viewScrolling = false;
+    // [RE 0x417559] 地图区右键 → 物件提示信息
+    showObjectTip(app, x, y);
     renderGameFrame(app);
 }
 

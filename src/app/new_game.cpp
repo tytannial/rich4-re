@@ -382,7 +382,12 @@ bool loadMap(Application& app) {
         state.cellTable[24 * j] = kCellTypeInit[j];
     }
 
-    // TODO(RE 0x40E033/0x40AA6C): 随机地图物件放置（sub_40E033 系列）
+    // [RE 0x407D6A] 初始物件放置：类型 1,3,5,7,9,11（神明）+ 13/14，位置随机 cellEnt
+    for (int t = 1; t <= 11; t += 2) {
+        createMapObject(state, t, randomCellEnt(state, 0), 0, 0);
+    }
+    createMapObject(state, 13, randomCellEnt(state, 0), 0, 0);
+    createMapObject(state, 14, randomCellEnt(state, 0), 0, 0);
     // [RE 0x407AD2] 棋子动画资源初始化
     initMapEntities(app);
     // TODO(RE 0x40A4E1): 小地图背景绘制（叠加地产/公司标记）

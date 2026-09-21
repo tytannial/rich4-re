@@ -50,6 +50,8 @@ TAB_TEXT_VA, TAB_TEXT_N = 0x475274, 4
 MONTH_NAME_VA, MONTH_NAME_N = 0x47511C, 12
 HOLIDAY_VA, HOLIDAY_GROUPS, HOLIDAY_N, HOLIDAY_STRIDE = 0x47FF4A, 8, 24, 12
 MONEY_PREFIX_VA, MONEY_PREFIX_LEN = 0x415D1D, 20
+OBJECT_NAME_VA, OBJECT_NAME_N = 0x47ED76, 19
+BUILDING_NAME_VA, BUILDING_NAME_N = 0x475138, 16
 CHAR_DATA_VA, CHAR_DATA_N, CHAR_DATA_SIZE = 0x47E80C, 12, 104
 
 FLT_AI_ASSET_VA = 0x463190   # 100.0f
@@ -130,6 +132,8 @@ def main(argv: list[str]) -> int:
 
     tab_text = [r.cstr_big5(r.u32(TAB_TEXT_VA, i)) for i in range(TAB_TEXT_N)]
     month_name = [r.cstr_big5(r.u32(MONTH_NAME_VA, i)) for i in range(MONTH_NAME_N)]
+    object_name = [r.cstr_big5(r.u32(OBJECT_NAME_VA, i)) for i in range(OBJECT_NAME_N)]
+    building_name = [r.cstr_big5(r.u32(BUILDING_NAME_VA, i)) for i in range(BUILDING_NAME_N)]
     holiday_raw = r.bytes_at(HOLIDAY_VA, HOLIDAY_GROUPS * HOLIDAY_N * HOLIDAY_STRIDE)
     holiday = [[[holiday_raw[g * HOLIDAY_N * HOLIDAY_STRIDE + i * HOLIDAY_STRIDE + f]
                  for f in range(5)] for i in range(HOLIDAY_N)] for g in range(HOLIDAY_GROUPS)]
@@ -236,6 +240,13 @@ def main(argv: list[str]) -> int:
     w("")
     w("// [RE 0x475274] off_475274 玩家信息页签文本")
     w("const char* const kTabText[4] = {" + ", ".join('"%s"' % s for s in tab_text) + "};")
+    w("")
+    w("// [RE 0x47ED76] off_47ED76 物件/神明名（19 项，cellTable 类型 0..18）")
+    w("const char* const kObjectNames[19] = {" + ", ".join('"%s"' % s for s in object_name) + "};")
+    w("")
+    w("// [RE 0x475138] off_475138 建筑/费用名（16 项：0-10 建筑等级、11-15 费用；"
+      "off_475150 = +6 公司名、off_475164 = +11 费用名）")
+    w("const char* const kBuildingNames[16] = {" + ", ".join('"%s"' % s for s in building_name) + "};")
     w("")
     w("// [RE 0x47511C] off_47511C 月份名")
     w("const char* const kMonthName[12] = {" + ", ".join('"%s"' % s for s in month_name) + "};")

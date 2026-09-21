@@ -42,6 +42,10 @@ extern const int32_t kMiniMapY[4];
 extern const char* const kTabText[4];
 // [RE 0x47511C] off_47511C 月份名/星期名
 extern const char* const kMonthName[12];
+// [RE 0x47ED76] off_47ED76 物件/神明名（19 项，cellTable 类型 0..18）
+extern const char* const kObjectNames[19];
+// [RE 0x475138] off_475138 建筑/费用名（0-10 建筑等级、11-15 费用）
+extern const char* const kBuildingNames[16];
 // [RE 0x415D1D] byte_415D1D 金额前缀模板
 extern const uint8_t kMoneyPrefix[20];
 

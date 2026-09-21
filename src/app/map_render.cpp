@@ -255,8 +255,7 @@ void renderMap(Application& app, int centerX, int centerY) {
         if (frame >= res->frameCount()) {
             frame = res->frameCount() - 1;
         }
-        addItem(res, frame, p.spriteX, p.spriteY, -1,
-                static_cast<uint16_t>(0x8000u | (1u << j)));
+        addItem(res, frame, p.spriteX, p.spriteY, -1, static_cast<uint16_t>(0xF000u | j));
     }
 
     // 特殊点（图块 = dword_48AE4C[sprite]，颜色 = 拥有者）
@@ -277,6 +276,22 @@ void renderMap(Application& app, int centerX, int centerY) {
         }
         addItem(&state.specPointTiles[ec.sprite], 0, ec.x, ec.y, -1,
                 static_cast<uint16_t>(8000 + i));
+    }
+
+    // [RE 0x40E033] cellTable 物件（神明/商店等；图块 = cellTypeSprites[类型]，ID = 槽号<<8）
+    for (int slot = 0; slot < 46; ++slot) {
+        const int type = state.cellTable[24 * slot];
+        if (type <= 0 || type > 20) {
+            continue;
+        }
+        const int cellEntId =
+            state.cellTable[24 * slot + 2] | (state.cellTable[24 * slot + 3] << 8);
+        if (cellEntId <= 0 || cellEntId >= static_cast<int>(state.cellEnts.size())) {
+            continue;
+        }
+        const CellEnt& ce = state.cellEnts[cellEntId];
+        addItem(&state.cellTypeSprites[type], 0, ce.x, ce.y, -1,
+                static_cast<uint16_t>((slot + 1) << 8));
     }
 
     // 地产（无主时不绘制；颜色 = 拥有者）
@@ -305,7 +320,12 @@ void renderMap(Application& app, int centerX, int centerY) {
     std::sort(items.begin(), items.end(),
               [](const SpriteDraw& a, const SpriteDraw& b) { return a.y < b.y; });
 
+    state.mapHitRegions.clear();
     for (const SpriteDraw& it : items) {
+        const UiFrameView& f = it.spr->frame(it.frame);
+        // [RE 0x417559] 记录命中矩形（blit 目标 = x - offsetX, y - offsetY）
+        state.mapHitRegions.push_back(
+            {it.x - f.offsetX, it.y - f.offsetY, f.width, f.height, it.id});
         if (it.spr->isSprite()) {
             blitSpriteFrameClipped(dst, *it.spr, it.frame, it.x, it.y, true);
         } else {
@@ -467,9 +487,81 @@ void initMapEntities(Application& app) {
             RICH4_LOGW("initMapEntities: piece anim data.mkf[%zu] unavailable", index);
         }
     }
-    // TODO(RE 0x40E033): 随机地图物件放置（空地/平房/店舖/商場/商業大樓）
     // [RE 0x40A4E1] 小地图背景 + 标记叠加
     buildMiniMapMarks(app);
+}
+
+// [RE 0x40E033] createMapObject（神明/商店等物件写入 cellTable 空槽）
+// 依据: 0x40E033 反编译; 槽结构 +0 类型、+1 朝向、+2 cellEnt u16、+4 a3、+5 a4；
+//       cellEnt 占用位 |= (槽+1)<<16
+int createMapObject(GameState& state, int type, int cellEntId, uint8_t a3, uint8_t a4) {
+    int lo = type - 1;
+    int hi = type;
+    if (type == 15) {
+        lo = 14;
+        hi = 16;
+    } else if (type == 16) {
+        lo = 16;
+        hi = 26;
+    } else if (type == 17) {
+        lo = 26;
+        hi = 36;
+    } else if (type == 18) {
+        lo = 36;
+        hi = 46;
+    }
+    for (int slot = lo; slot < hi && slot < 46; ++slot) {
+        uint8_t* e = &state.cellTable[24 * slot];
+        if (e[0] != 0) {
+            continue;
+        }
+        e[0] = static_cast<uint8_t>(type);
+        e[4] = a3;
+        e[5] = a4;
+        if (cellEntId > 0 && cellEntId < static_cast<int>(state.cellEnts.size())) {
+            const CellEnt& ce = state.cellEnts[cellEntId];
+            uint16_t exitId = 0;
+            for (int i = 0; i < 4; ++i) {
+                if (ce.exits[i]) {
+                    exitId = ce.exits[i];
+                    break;
+                }
+            }
+            e[1] = static_cast<uint8_t>(facingBetween(state, exitId, cellEntId));
+            e[2] = static_cast<uint8_t>(cellEntId & 0xFF);
+            e[3] = static_cast<uint8_t>((cellEntId >> 8) & 0xFF);
+            state.cellEnts[cellEntId].occMask |= static_cast<uint32_t>(slot + 1) << 16;
+        }
+        return slot + 1;
+    }
+    return hi;
+}
+
+// [RE 0x40AA6C] randomCellEnt（占用掩码空 + 有路；near>0 时距离 >300）
+int randomCellEnt(const GameState& state, int nearCellEnt) {
+    uint8_t cand[256];
+    int n = 0;
+    for (int i = 1; i < static_cast<int>(state.cellEnts.size()) && n < 256; ++i) {
+        const CellEnt& ce = state.cellEnts[i];
+        if ((ce.occMask & 0x80FFFF00u) == 0 && (ce.exits[0] || ce.exits[1])) {
+            cand[n++] = static_cast<uint8_t>(i);
+        }
+    }
+    if (n == 0) {
+        return 0;
+    }
+    for (int guard = 0; guard < 200; ++guard) {
+        const int pick = cand[std::rand() % n];
+        if (nearCellEnt <= 0) {
+            return pick;
+        }
+        const CellEnt& a = state.cellEnts[pick];
+        const CellEnt& b = state.cellEnts[nearCellEnt];
+        if (std::abs(a.x - b.x) >= 300 || std::abs(a.y - b.y) >= 300) {
+            return pick;
+        }
+    }
+    return cand[std::rand() % n];
 }
 
 } // namespace rich4
