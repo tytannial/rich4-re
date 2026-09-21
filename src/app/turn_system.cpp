@@ -67,17 +67,6 @@ int facingFromDelta(int dx, int dy) {
     return kDirTable[idx];
 }
 
-// [RE 0x407A8C] 朝向 = sub_454FB4(cellEnt[a2]-cellEnt[a1])
-int facingBetween(GameState& st, int fromId, int toId) {
-    if (fromId <= 0 || toId <= 0 || fromId >= static_cast<int>(st.cellEnts.size()) ||
-        toId >= static_cast<int>(st.cellEnts.size())) {
-        return 0;
-    }
-    const int dx = st.cellEnts[toId].x - st.cellEnts[fromId].x;
-    const int dy = st.cellEnts[toId].y - st.cellEnts[fromId].y;
-    return facingFromDelta(dx, dy);
-}
-
 // [RE 0x40FC00] sub_40FC00 玩家携带物件跟随移动（byte_496BA7 / g_playerCellNo）
 void updatePlayerCarriedObjects(GameState& st, int p) {
     Player& pl = st.players[p];
@@ -214,22 +203,9 @@ void finishParachute(Application& app) {
     if (p >= 0 && p < st.playerCount) {
         Player& pl = st.players[p];
         if (pl.cellEntId > 0 && pl.cellEntId < st.cellEnts.size()) {
+            // [RE 0x40829D] 落地仅设坐标；朝向/来向已在放置时设定，跳伞不改
             pl.spriteX = static_cast<uint16_t>(st.cellEnts[pl.cellEntId].x);
             pl.spriteY = static_cast<uint16_t>(st.cellEnts[pl.cellEntId].y);
-            // [RE 0x40829D] 初始朝向：从出生格指向随机出口（word_496B76 + sub_407A8C）
-            const CellEnt& ce = st.cellEnts[pl.cellEntId];
-            uint16_t exits[4];
-            int ne = 0;
-            for (int k = 0; k < 4; ++k) {
-                if (ce.exits[k]) {
-                    exits[ne++] = ce.exits[k];
-                }
-            }
-            if (ne > 0) {
-                const uint16_t from = exits[std::rand() % ne];
-                pl.prevCellEnt = from;
-                pl.dir = static_cast<uint8_t>(facingBetween(st, from, pl.cellEntId));
-            }
         }
         pl.alive = pl.kind;
         loadWalkResources(st, p);
@@ -276,6 +252,18 @@ void updateParachute(Application& app) {
 }
 
 } // namespace
+
+// [RE 0x407A8C] 朝向 = sub_454FB4(cellEnt[to]-cellEnt[from])，8 方向 0..7
+// 依据: 0x407A8C→0x454FB4（atan2(-dy,dx) 量化）→byte_482414[2,3,4,5,6,7,0,1]
+int facingBetween(GameState& st, int fromId, int toId) {
+    if (fromId <= 0 || toId <= 0 || fromId >= static_cast<int>(st.cellEnts.size()) ||
+        toId >= static_cast<int>(st.cellEnts.size())) {
+        return 0;
+    }
+    const int dx = st.cellEnts[toId].x - st.cellEnts[fromId].x;
+    const int dy = st.cellEnts[toId].y - st.cellEnts[fromId].y;
+    return facingFromDelta(dx, dy);
+}
 
 // [RE 0x41982D] landingEvent
 // 依据: 0x41982D 反编译; 按 cellEnt 物件 ID（2000+ 地产 / 4000+ 公司 / 6000+ 特殊点）与

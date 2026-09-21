@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "game/app/map_tables.h"
+#include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/log.h"
 #include "game/render/blit.h"
@@ -93,14 +94,29 @@ void renderMap(Application& app, int centerX, int centerY) {
         const int ce = pickSpawnCellEnt(state);
         Player& p = state.players[state.currentPlayer];
         p.cellEntId = static_cast<uint16_t>(ce);
-        p.prevCellEnt = 0;
         state.cellEnts[ce].occMask |= (256u << state.currentPlayer);
+        // [RE 0x40829D] 放置时即设来向(word_496B76=随机出口)与朝向(byte_496B78=面向格内)，
+        //   跳伞/落地不改朝向（原版仅此处设一次）
+        uint16_t ex[4];
+        int ne = 0;
+        for (int k = 0; k < 4; ++k) {
+            if (state.cellEnts[ce].exits[k]) {
+                ex[ne++] = state.cellEnts[ce].exits[k];
+            }
+        }
+        if (ne > 0) {
+            const uint16_t from = ex[std::rand() % ne];
+            p.prevCellEnt = from;
+            p.dir = static_cast<uint8_t>(facingBetween(state, from, ce));
+        } else {
+            p.prevCellEnt = 0;
+        }
         // [RE 0x475114] 标记待入场（跳伞动画由 sub_418C55 播放，落地后设 spriteX/Y）
         state.pendingSpawnPlayer = state.currentPlayer + 1;
         centerX = state.cellEnts[ce].x;
         centerY = state.cellEnts[ce].y;
-        RICH4_LOGI("spawn: player %d cellEnt %d at (%d,%d) (RE 0x40829D)", state.currentPlayer, ce,
-                   centerX, centerY);
+        RICH4_LOGI("spawn: player %d cellEnt %d at (%d,%d) prevEnt %d dir %d (RE 0x40829D)",
+                   state.currentPlayer, ce, centerX, centerY, p.prevCellEnt, p.dir);
     }
     state.viewX = centerX;
     state.viewY = centerY;

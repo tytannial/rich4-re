@@ -4,7 +4,13 @@
 
 namespace rich4 {
 
+struct GameState;
 class Application;
+
+// [RE 0x407A8C] 朝向 = sub_454FB4(cellEnt[to]-cellEnt[from])，8 方向 0..7
+// 依据: 0x407A8C→0x454FB4(atan2(-dy,dx) 量化)→byte_482414[2,3,4,5,6,7,0,1]
+// 供 map_render 首次放置（sub_40829D）与 turn_system 落地/移动复用
+int facingBetween(GameState& st, int fromId, int toId);
 
 // 游戏内回合/移动系统（严格对应原版函数边界；定义见 src/app/turn_system.cpp）。
 // 调用入口: 0x401B9C WinMain 内层循环
