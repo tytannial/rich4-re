@@ -8,6 +8,7 @@
 
 #include "game/application.h"
 #include "game/app/confirm_dialog.h"
+#include "game/app/economy.h"
 #include "game/app/map_render.h"
 #include "game/core/encoding.h"
 #include "game/core/log.h"
@@ -796,8 +797,8 @@ void nextPlayer(Application& app) {
 //   0 = 收尾倒计时（byte_498EA5）→ sub_418E7F 重算 / 负数则 sub_418EBD
 //   1 = 移动中: sub_40C05C 走一格，byte_48BB00 → onPlayerActionPhase，dword_48BAF8 递减
 //   2 = 掷骰动画: 结束设 dword_48BAF8 = sub_419572() 并转状态 1
-//   3 = 特殊移动（遥控骰子/传送）
-// 差异: sub_416E6D 小地图刷新（迁移为每 tick 全量重绘）、移动音效、状态 3 收租部分待补
+//   3 = 移动结束收租: 30*g_moneyMul + 面向目标 + FLC 526（重写简化，见 case 3）
+// 差异: sub_416E6D 小地图刷新（迁移为每 tick 全量重绘）、移动音效、case 3 的 FLC 视觉
 void updateGameState(Application& app) {
     GameState& st = app.gameState();
     st.gameFrameTick = false; // byte_46CAFA = 0
@@ -844,9 +845,9 @@ void updateGameState(Application& app) {
                 if (st.moveSoundIndex > 0) {
                     app.audio().stopEffectSlot(st.moveSoundIndex);
                 }
-                st.playerActionState[p] = 0;
+                // [RE 0x40D7C4] 移动结束 → 状态 3（收租/停留动画）
+                st.playerActionState[p] = 3;
                 st.playerMoveFrame[p] = 0;
-                st.playerActionWait[p] = 5;
                 st.showDice = false; // 移动结束隐藏骰子
                 break;
             }
@@ -933,14 +934,49 @@ void updateGameState(Application& app) {
             break;
         }
         case 3: {
+            // [RE 0x40DA4B] 移动结束收租：objId 2000..4000 地产 / 4000..6000 公司，
+            //   金额 = 30 * g_moneyMul（原版 eax=2*m; eax<<=4; eax-=ecx → 30*m），
+            //   owner != 0 且非自己 → sub_40DF69(owner-1, cur, 30*m) 记账；
+            //   随后面向目标格（sub_454FB4）并播 data.mkf[526] FLC（x-55, y-55）逐帧动画
+            // 差异: 重写简化为立即转账（原版仅累加 dword_496BB4 欠款矩阵，结算时机待实机对照）
+            //       + stepDwell 停留；FLC 视觉待接入
             if (st.stepDwell) {
                 --st.stepDwell;
                 break;
             }
-            if (st.playerMoveFrame[p] == 0) {
-                // 到达目标格后的停留动画（M2 收租/公司分红）
-                st.stepDwell = 6;
+            if (p < 9 && st.players[p].cellEntId > 0 &&
+                st.players[p].cellEntId < st.cellEnts.size()) {
+                const CellEnt& ce = st.cellEnts[st.players[p].cellEntId];
+                const uint16_t objId = ce.special;
+                const int32_t rent = 30 * st.moneyMul;
+                if (objId > 2000 && objId < 4000) {
+                    const int i = objId - 2000;
+                    if (i > 0 && i < static_cast<int>(st.estates.size())) {
+                        Estate& es = st.estates[i];
+                        if (es.owner != 0 && es.owner - 1 != p) {
+                            transferMoney(app, p, es.owner - 1, rent, 1);
+                            RICH4_LOGI("rent: player %d -> %d amount %d (estate %d, RE 0x40DA4B)",
+                                       p, es.owner - 1, rent, i);
+                        }
+                        st.players[p].dir = static_cast<uint8_t>(
+                            facingFromDelta(es.x - ce.x, es.y - ce.y)); // [RE 0x40DA4B] 面向地产
+                    }
+                } else if (objId > 4000 && objId < 6000) {
+                    const int i = objId - 4000;
+                    if (i > 0 && i < static_cast<int>(st.corps.size())) {
+                        Corp& cp = st.corps[i];
+                        if (cp.owner != 0 && cp.owner - 1 != p) {
+                            transferMoney(app, p, cp.owner - 1, rent, 1);
+                            RICH4_LOGI("rent: player %d -> %d amount %d (corp %d, RE 0x40DA4B)", p,
+                                       cp.owner - 1, rent, i);
+                        }
+                        st.players[p].dir = static_cast<uint8_t>(
+                            facingFromDelta(cp.x - ce.x, cp.y - ce.y)); // [RE 0x40DA4B] 面向公司
+                    }
+                }
             }
+            st.stepDwell = 6;
+            st.playerActionWait[p] = 5; // 转入状态 0 倒计时后 calcPlayerWait（landingEvent）
             st.playerActionState[p] = 0;
             break;
         }
