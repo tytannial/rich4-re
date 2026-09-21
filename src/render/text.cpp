@@ -57,6 +57,7 @@ struct TextRenderer::Impl {
     uint32_t bgRgb = 0;  // color
     uint32_t style = 0;  // dword_4762D8
     int spacing = 1;     // dword_4762DC
+    int fontSize = 16;   // dword_4762D4 字高（竖排行距用）
 };
 
 TextRenderer::~TextRenderer() {
@@ -133,6 +134,7 @@ void TextRenderer::setFont(int size, uint32_t fgRgb, uint32_t bgRgb, uint32_t st
     impl->bgRgb = bgRgb;
     impl->style = style;
     impl->spacing = spacing;
+    impl->fontSize = size;
 
     if (impl->font) {
         DeleteObject(impl->font);
@@ -229,32 +231,59 @@ void TextRenderer::drawText(Surface& dst, const char* text, int x, int y, int al
     }
 
     // 阴影（bit0）或描边（bit2）用背景色绘制, 主文本用前景色
-    const bool centered = (align == 4 || align == 7);
-    const UINT flags = (centered ? DT_CENTER : DT_LEFT) | DT_SINGLELINE;
-    if (impl->style & kTextStyleShadow) {
-        SetTextColor(impl->dc, toColorRef(impl->bgRgb));
-        RECT r = rc;
-        r.left += 1;
-        r.top += 1;
-        DrawTextW(impl->dc, wide.c_str(), -1, &r, flags);
-    } else if (impl->style & kTextStyleOutline) {
-        SetTextColor(impl->dc, toColorRef(impl->bgRgb));
-        static const int kDx[4] = {1, 1, 0, 2};
-        static const int kDy[4] = {0, 2, 1, 1};
-        for (int i = 0; i < 4; ++i) {
-            RECT r = rc;
-            r.left += kDx[i];
-            r.top += kDy[i];
-            DrawTextW(impl->dc, wide.c_str(), -1, &r, flags);
+    if (align == 3) {
+        // [RE 0x44F7C7] drawTextVertical：逐字符竖排（行距 = 字高 + 字距 + 描边补偿）
+        int lineH = impl->fontSize + impl->spacing;
+        if ((impl->style & 6) != 0) {
+            ++lineH;
         }
+        auto drawVertical = [&](int ox, int oy) {
+            int vy = rc.top + oy;
+            for (wchar_t ch : wide) {
+                TextOutW(impl->dc, rc.left + ox, vy, &ch, 1);
+                vy += lineH;
+            }
+        };
+        if (impl->style & kTextStyleShadow) {
+            SetTextColor(impl->dc, toColorRef(impl->bgRgb));
+            drawVertical(1, 1);
+        } else if (impl->style & kTextStyleOutline) {
+            SetTextColor(impl->dc, toColorRef(impl->bgRgb));
+            drawVertical(1, 0);
+            drawVertical(1, 2);
+            drawVertical(0, 1);
+            drawVertical(2, 1);
+        }
+        SetTextColor(impl->dc, toColorRef(impl->fgRgb));
+        drawVertical(0, 0);
+    } else {
+        const bool centered = (align == 4 || align == 7);
+        const UINT flags = (centered ? DT_CENTER : DT_LEFT) | DT_SINGLELINE;
+        if (impl->style & kTextStyleShadow) {
+            SetTextColor(impl->dc, toColorRef(impl->bgRgb));
+            RECT r = rc;
+            r.left += 1;
+            r.top += 1;
+            DrawTextW(impl->dc, wide.c_str(), -1, &r, flags);
+        } else if (impl->style & kTextStyleOutline) {
+            SetTextColor(impl->dc, toColorRef(impl->bgRgb));
+            static const int kDx[4] = {1, 1, 0, 2};
+            static const int kDy[4] = {0, 2, 1, 1};
+            for (int i = 0; i < 4; ++i) {
+                RECT r = rc;
+                r.left += kDx[i];
+                r.top += kDy[i];
+                DrawTextW(impl->dc, wide.c_str(), -1, &r, flags);
+            }
+        }
+        SetTextColor(impl->dc, toColorRef(impl->fgRgb));
+        RECT mainRc = rc;
+        if (impl->style & kTextStyleOutline) {
+            mainRc.left += 1;
+            mainRc.top += 1;
+        }
+        DrawTextW(impl->dc, wide.c_str(), -1, &mainRc, flags);
     }
-    SetTextColor(impl->dc, toColorRef(impl->fgRgb));
-    RECT mainRc = rc;
-    if (impl->style & kTextStyleOutline) {
-        mainRc.left += 1;
-        mainRc.top += 1;
-    }
-    DrawTextW(impl->dc, wide.c_str(), -1, &mainRc, flags);
     GdiFlush();
     SelectObject(impl->dc, oldFont);
 
