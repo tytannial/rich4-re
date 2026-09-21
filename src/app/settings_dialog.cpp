@@ -306,7 +306,9 @@ void applyControl(SettingsState& state, int control, int rx, int ry) {
             state.app->audio().setEffectVolume(state.settings[3]);
             state.app->audio().setMusicVolume(state.settings[2]);
             RICH4_LOGI("settings saved (RE 0x411F80)");
-            state.app->events().requestExit(1);
+            // [RE 0x410A15] 確定 → postModalExit(0)；布局 byte_49715D 变化时原版返回 0x8000
+            //   （外层刷新），这里统一返回 0，避免被游戏内菜单误当作"重新遊戲(1)"
+            state.app->events().requestExit(0);
             break;
         case 9: // byte_48BB49 ^= 1（動畫過程开关）
             state.settings[1] ^= 1;

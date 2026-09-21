@@ -347,20 +347,30 @@ bool gameEventHandler(const SDL_Event* event, void* user) {
     if (event->type == kModalTimerEvent) {
         // [RE 0x401B9C] 内层循环检测场景切换/退出请求（游戏内菜单结果）
         GameState& st = app.gameState();
-        if (st.quitGame || st.sceneRequest != 0) {
-            RICH4_LOGI("system menu: scene=%d quit=%d -> exit game loop (RE 0x401B9C)",
-                       st.sceneRequest, st.quitGame ? 1 : 0);
+        if (st.quitGame) {
+            // [RE 0x411B46 + 0x401B9C LABEL_27] 结束游戏：saveConfig 后 g_quitGame=1 → 退出程序
+            RICH4_LOGI("system menu: quit -> exit application (RE 0x401B9C)");
             st.quitGame = false;
+            st.sceneRequest = 0;
+            app.events().requestExit(0);
+            app.quit();
+            return true;
+        }
+        if (st.sceneRequest != 0) {
+            // [RE 0x401B9C] 重新游戏（sceneRequest=1）→ 回主菜单（LABEL_5 重置后 mainMenuScene）
+            RICH4_LOGI("system menu: scene=%d -> back to main menu (RE 0x401B9C)", st.sceneRequest);
             st.sceneRequest = 0;
             app.events().requestExit(0);
             return true;
         }
         if (st.surrenderRequest) {
-            // [RE 0x411AE0] 認輸投降：当前玩家出局
+            // [RE 0x411AE0] 認輸投降：当前玩家出局并交棒（原版 sub_41906A(1) 轮换）
             st.surrenderRequest = false;
             if (st.currentPlayer >= 0 && st.currentPlayer < st.playerCount) {
                 st.players[st.currentPlayer].alive &= ~1;
+                st.playerActionState[st.currentPlayer] = 0;
             }
+            nextPlayer(app);
             renderGameFrame(app);
             return true;
         }
