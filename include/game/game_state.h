@@ -70,6 +70,9 @@ struct Player {
     uint8_t cellNo = 0;         // +64 g_playerCellNo 0x496BA8
     uint8_t vehicle = 0;        // +65 g_playerVehicle 0x496BA9
     uint8_t byte66 = 0;         // +66 byte_496BAA
+    int16_t bonusAtk = 0;       // +68 word_496BAC（神明属性加成，sub_40EAD7 加 / sub_40E14D 减）
+    int16_t bonusDef = 0;       // +70 word_496BAE
+    int16_t bonusMove = 0;      // +72 word_496BB0
     uint8_t kind = 0;           // +100 g_playerKind 0x496BCC（1=人类 2=AI）
 };
 
@@ -126,7 +129,9 @@ struct SpecPt {
     uint8_t dir = 0;            // +27
     uint8_t pad28[4] = {};      // +28..+31
     uint16_t sprite = 0;        // +32 图块索引
-    uint8_t pad34[14] = {};     // +34..+47
+    uint8_t pad34[6] = {};      // +34..+39
+    int32_t fund = 0;           // +40 特殊点资金（sub_41D2C6 收支累加）
+    int32_t fundPaid = 0;       // +44
     int32_t price = 0;          // +48
 };
 
