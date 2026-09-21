@@ -55,8 +55,10 @@ sub_40E033(14, sub_40AA6C(0), 0, 0);
   cellEnt 用帧 4（51x51）、estate/corp/specPt 用帧 `((8-(rot+dir))&1)+2`（143x103，
   覆盖整个地块）；重写记录该形状的 **SPR 像素掩码**（非零像素处才命中），
   与原版拾取缓冲语义一致——避免矩形包围盒把相邻道路格误判为地块。
-- 提示文本**逐行绘制**（原版多次 `drawText`，行距 18）：estate 为
-  `地主 / 建筑名 / 等级 / 费用`，cellEnt 为名称（城市/机构）
+- **所有 cellEnt 均可拾取**（占用掩码高 16 位为 0，`sub_409B18` 条件）——包括无图块的
+  道路格；点击道路格显示城市/机构名
+- 提示文本**逐行绘制**（原版多次 `drawText`，行距 18）：单行（cellEnt/specPt 名）
+  首行 = `v9+27`；多行（estate 地主/建筑名/等级/费用）自 `v9` 起
 - ID 空间：1..1999 cellEnt、2000+ estate、4000+ corp、6000+ specPt、8000+ evtCell、
   低字节 0 且非上述 → cellTable 物件（槽号<<8）、玩家棋子
 - 命中后：`audioPlayEffect(g_uiSoundClick)` + 提示框（`data.mkf[517]` 帧 0..3 = 4 方向 189x116）
