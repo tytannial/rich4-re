@@ -625,12 +625,24 @@ void nextPlayer(Application& app) {
         const int v2 = cur + 1;
         cur = v2;
         if (v2 == st.playerCount) {
-            // 越过玩家数 → 进入事件槽 4（LABEL_19）
-            cur = 4;
-            if (!st.slotBusy2[cur - 4]) {
-                break; // 未占用 → LABEL_20 → cur>=4 → 返回
+            // 玩家轮完 → 事件槽 4..7（流氓/间谍/小偷/强盗等特殊 NPC，M2）。
+            //   原版 byte_498DF2 默认为 0 会选中空闲槽 4，但原版该槽有 NPC 数据；
+            //   本作未实现这些 NPC，槽无数据 → 直接进入会导致 currentPlayer 指向空槽、
+            //   渲染回左上角并错误掷骰。故仅当事件槽有激活 NPC 才进入，否则回绕过天。
+            int npc = -1;
+            for (int s = st.playerCount; s < 8; ++s) {
+                if (st.players[s].alive != 0) {
+                    npc = s;
+                    break;
+                }
             }
-            continue; // 占用 → 继续找
+            if (npc >= 0) {
+                cur = npc;
+                break;
+            }
+            cur = 0;
+            dayPassed = true;
+            break;
         }
         if (v2 == 8) {
             // 事件槽走完 → 回绕到 0 并过天
@@ -781,7 +793,8 @@ void updateGameState(Application& app) {
             // 阶段2：点数停留 500ms（sub_45285E），角色仍保持扔骰末帧
             st.showDice = true;
             if (SDL_GetTicks() - st.diceHoldStartMs >= 500) {
-                st.playerMoveFrame[p] = 0; // 转移动阶段才回起始帧
+                st.showDice = false; // 移动开始，骰子消失（原版转状态1 后不再显示骰子）
+                st.playerMoveFrame[p] = 0;
                 st.dicePhase = 0;
                 st.diceAnimOpened = false;
                 st.playerActionState[p] = 1;
