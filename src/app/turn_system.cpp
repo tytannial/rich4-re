@@ -168,10 +168,10 @@ void loadWalkResources(GameState& st, int p) {
             loadWalkRes(st, p, 3, static_cast<size_t>(v1 + 14));
             loadWalkRes(st, p, 5, static_cast<size_t>(v1 + 15));
         }
-        st.playerMoveGroup[p] = 1;
-        if (st.playerMoveFrame[p] == 1) {
-            st.playerMoveFrame[p] = 0;
+        if (st.playerMoveGroup[p] == 0) {
+            st.playerMoveFrame[p] = 0; // 从普通组切入渡水/特殊组时重置动画帧
         }
+        st.playerMoveGroup[p] = 1;
         return;
     }
     const int travel = pl.travel & 3;
@@ -187,10 +187,12 @@ void loadWalkResources(GameState& st, int p) {
             loadWalkRes(st, p, 6, static_cast<size_t>(v10 + 3));
         }
     }
-    st.playerMoveGroup[p] = 0;
-    if (st.playerMoveFrame[p] == 1) {
+    // 仅在从特殊移动组(渡水/机车 group=1)切回普通组时重置动画帧；
+    //   同组内跨格保持连续，避免每格走路动画重启（原版 sub_40B93B 组0 末尾逻辑）
+    if (st.playerMoveGroup[p] == 1) {
         st.playerMoveFrame[p] = 0;
     }
+    st.playerMoveGroup[p] = 0;
     st.moveSoundIndex = travel + 11;
 }
 
@@ -338,6 +340,9 @@ bool moveOneStep(Application& app) {
         st.cellEnts[pl.cellEntId].occMask &= ~mask;
         st.cellEnts[nextId].occMask |= mask;
         pl.cellEntId = nextId;
+        // [RE 0x40C05C] 移动中即朝本步方向（原版每帧设 byte_496B78=sub_407A8C(来向,当前)），
+        //   否则角色朝上一步方向走、到新格才转向 → 转角混乱
+        pl.dir = static_cast<uint8_t>(facingBetween(st, pl.prevCellEnt, pl.cellEntId));
         updatePlayerCarriedObjects(st, p);
 
         st.stepTargetX = st.cellEnts[nextId].x;
@@ -363,11 +368,11 @@ bool moveOneStep(Application& app) {
         st.stepDeltaY = static_cast<float>(static_cast<double>(dy) / f);
     }
     // [RE 0x40C05C] 行走动画帧（byte_498EA3）递增，按当前资源每方向帧数回绕。
-    //   原版游戏循环帧率低，走路动画约 11fps；此处按真实时间门控换帧，
+    //   原版游戏循环帧率低，走路动画约 16fps；按真实时间门控换帧，
     //   避免 16ms tick（~60fps）下动画循环偏快。
     {
         const uint64_t now = SDL_GetTicks();
-        if (now - st.walkAnimLastMs >= 90) {
+        if (now - st.walkAnimLastMs >= 60) {
             st.walkAnimLastMs = now;
             const int slot = 2 * st.playerActionState[p] + st.playerMoveGroup[p];
             int perDir = 8;
