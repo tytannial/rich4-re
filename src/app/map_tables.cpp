@@ -841,7 +841,7 @@ const uint8_t kHoliday[8][24][5] = {
 const uint8_t kMoneyPrefix[20] = {0x83, 0xFB, 0x10, 0x0F, 0x8D, 0x24, 0xFB, 0xFF, 0xFF, 0x89, 0xD8, 0xC1, 0xE0, 0x03, 0x66, 0x83, 0xB8, 0x44, 0xBC, 0x48};
 
 // [RE 0x47E80C] g_charData 角色模板：+4 颜色 u16[12]
-const uint16_t kCharColor[12] = {24870, 50118, 12859, 9923, 47152, 40349, 61496, 65440, 31752, 6688, 6142, 48573};
+const uint32_t kCharColor[12] = {9724198, 12436422, 4272699, 12986051, 12957744, 15572381, 61496, 16777120, 15170568, 13376032, 2103294, 966077};
 
 // [RE 0x47E80C] g_charData 角色模板：+8..+103（96 字节/角色）
 const uint8_t kCharTemplate[12][96] = {

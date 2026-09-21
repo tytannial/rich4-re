@@ -336,13 +336,12 @@ void renderMap(Application& app, int centerX, int centerY) {
             continue;
         }
         if (es.level == 0) {
-            // [RE 0x40829D] 空地有主：棋子图（dword_48AEA8=pieceTiles）帧 = 玩家角色 ID
-            //   原版 byte_48A852=0xFF（不替换调色板）；实测需角色色描边 → 暂用 owner 色，
-            //   实机对比原版后如不符再调整
+            // [RE 0x40829D] 空地有主：棋子图（dword_48AEA8=map.mkf[25]）帧 = 玩家角色 ID，
+            //   调色板不改（原版 g_drawListPal=0xFF 走 0x40985C 跳过分支）
             const int ci = (es.owner >= 1 && es.owner <= 9)
                                ? state.players[es.owner - 1].charIndex
                                : 0;
-            addItem(&state.pieceTiles, ci, es.x, es.y, es.owner, static_cast<uint16_t>(2000 + i),
+            addItem(&state.pieceTiles, ci, es.x, es.y, -1, static_cast<uint16_t>(2000 + i),
                     &state.flagTiles, pickFrame);
         } else {
             // [RE 0x40829D] 有建筑：type==0 → dword_48AE48[level] 建筑表；type!=0 → dword_48AE60
@@ -397,7 +396,7 @@ void renderMap(Application& app, int centerX, int centerY) {
             } else if (it.colorIdx == 0) {
                 it.spr->setPaletteEntry(255, 0);
             } else if (it.colorIdx <= state.playerCount) {
-                it.spr->setPaletteEntry(255, state.players[it.colorIdx - 1].color);
+                it.spr->setPaletteEntry(255, rgb888To555(state.players[it.colorIdx - 1].color));
             }
             blitSpriteFrameClipped(dst, *it.spr, it.frame, it.x, it.y, true);
         } else {
@@ -524,21 +523,21 @@ void buildMiniMapMarks(Application& app) {
         if (es.owner == 0) {
             continue;
         }
-        mark((es.dir & 1) + 22, es.x, es.y, state.players[es.owner - 1].color);
+        mark((es.dir & 1) + 22, es.x, es.y, rgb888To555(state.players[es.owner - 1].color));
     }
     for (size_t i = 1; i < state.corps.size(); ++i) {
         const Corp& cp = state.corps[i];
         if (cp.owner == 0) {
             continue;
         }
-        mark((cp.dir & 1) + 24, cp.x, cp.y, state.players[cp.owner - 1].color);
+        mark((cp.dir & 1) + 24, cp.x, cp.y, rgb888To555(state.players[cp.owner - 1].color));
     }
     for (size_t i = 1; i < state.specPts.size(); ++i) {
         const SpecPt& sp = state.specPts[i];
         if (sp.owner == 0) {
             continue;
         }
-        mark((sp.dir & 1) + 24, sp.x, sp.y, state.players[sp.owner - 1].color);
+        mark((sp.dir & 1) + 24, sp.x, sp.y, rgb888To555(state.players[sp.owner - 1].color));
     }
 }
 

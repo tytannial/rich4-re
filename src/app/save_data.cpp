@@ -26,7 +26,9 @@ uint16_t readU16(const uint8_t* p) {
 void serializePlayer(uint8_t out[kPlayerSize], const Player& p) {
     std::memset(out, 0, kPlayerSize);
     out[4] = static_cast<uint8_t>(p.color & 0xFF);
-    out[5] = static_cast<uint8_t>(p.color >> 8);
+    out[5] = static_cast<uint8_t>((p.color >> 8) & 0xFF);
+    out[6] = static_cast<uint8_t>((p.color >> 16) & 0xFF);
+    out[7] = static_cast<uint8_t>((p.color >> 24) & 0xFF);
     std::memcpy(out + 8, &p.spriteX, 2);
     std::memcpy(out + 10, &p.spriteY, 2);
     std::memcpy(out + 12, &p.cellEntId, 2);

@@ -37,7 +37,7 @@ struct NewGameConfig {
 //       0x417E26/0x40829D/0x415F69 等以 g_playerCash/g_playerSpriteX/... 偏移访问
 struct Player {
     const char* name = nullptr; // +0  角色名（BIG5→UTF-8）
-    uint16_t color = 0;         // +4  g_playerColor 0x496B6C
+    uint32_t color = 0;         // +4  g_playerColor 0x496B6C（u32 RGB888，绘制前经 convertColor 转 555）
     uint16_t spriteX = 0;       // +8  g_playerSpriteX 0x496B70（52 步进 word 数组）
     uint16_t spriteY = 0;       // +10 g_playerSpriteY 0x496B72
     uint16_t cellEntId = 0;     // +12 g_playerCellEntId 0x496B74

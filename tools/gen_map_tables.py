@@ -143,7 +143,7 @@ def main(argv: list[str]) -> int:
     char_tmpl = []
     for c in range(CHAR_DATA_N):
         t = r.bytes_at(CHAR_DATA_VA + CHAR_DATA_SIZE * c, CHAR_DATA_SIZE)
-        char_color.append(struct.unpack_from("<H", t, 4)[0])
+        char_color.append(struct.unpack_from("<I", t, 4)[0])
         char_tmpl.append(list(t[8:104]))
 
     ai_ratio = r.f32(FLT_AI_ASSET_VA)
@@ -265,7 +265,7 @@ def main(argv: list[str]) -> int:
     w("const uint8_t kMoneyPrefix[20] = {" + ", ".join("0x%02X" % v for v in money_prefix) + "};")
     w("")
     w("// [RE 0x47E80C] g_charData 角色模板：+4 颜色 u16[12]")
-    w("const uint16_t kCharColor[12] = {" + ", ".join(str(v) for v in char_color) + "};")
+    w("const uint32_t kCharColor[12] = {" + ", ".join(str(v) for v in char_color) + "};")
     w("")
     w("// [RE 0x47E80C] g_charData 角色模板：+8..+103（96 字节/角色）")
     w("const uint8_t kCharTemplate[12][96] = {")

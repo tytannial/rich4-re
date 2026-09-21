@@ -96,7 +96,7 @@ void drawPlayerBar(Application& app) {
 
     // 颜色条 + 棋子图标
     dst.fillRect(529, 33, 0x6A, 4, 0);
-    dst.fillRect(528, 32, 0x6A, 4, p.color);
+        dst.fillRect(528, 32, 0x6A, 4, rgb888To555(p.color));
     if (state.pieceSprites[idx].frameCount() > 0) {
         blitElement(dst, state.pieceSprites[idx].frame(0), 482, 40, false);
     }

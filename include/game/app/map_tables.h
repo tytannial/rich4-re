@@ -49,8 +49,8 @@ extern const char* const kBuildingNames[16];
 // [RE 0x415D1D] byte_415D1D 金额前缀模板
 extern const uint8_t kMoneyPrefix[20];
 
-// [RE 0x47E80C] g_charData 角色模板 +4 颜色
-extern const uint16_t kCharColor[12];
+// [RE 0x47E80C] g_charData 角色模板 +4 颜色（u32 RGB888，写入调色板前经 convertColor 转 555）
+extern const uint32_t kCharColor[12];
 // [RE 0x47E80C] g_charData 角色模板 +8..+103
 extern const uint8_t kCharTemplate[12][96];
 
