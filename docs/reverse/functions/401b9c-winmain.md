@@ -46,8 +46,12 @@ switch (v8):
   PeekMessage 空转时:
     byte_46CB01(窗口激活) -> sub_4192F7() 等定时任务
     byte_46CAFA -> sub_40D7C4()
-    byte_46CAF8(场景切换请求) -> 按值跳回外层(1)/执行 sub_4075C1+goto LABEL_6(2,3,4)
-    byte_46CAF9 -> 退出游戏: sub_451B36(); sub_401815(); DestroyWindow
+     byte_46CAF8(场景切换请求) -> switch:
+         1 -> LABEL_5（重置 word_4991B6/4991B8/g_clearedMaps/byte_46CAFC + 回主菜单）
+         2 -> gameClearFlow(); 若 g_quitGame 退出否则回主菜单
+         3 -> gameClearFlow(); 回主菜单
+         4 -> loadDialog(0) 后进入游戏
+     byte_46CAF9(g_quitGame) -> sub_451B36(); sub_401815(); DestroyWindow（退出程序）
   WM_QUIT(18) -> return
 ```
 
@@ -77,10 +81,12 @@ WORD word_4991B6;       // 新游戏模式（case 4 设置）
   每次回主菜单前重置 `word_4991B6/4991B8`、`byte_46CAFC`；
   `case 0/4` 新游戏取消（`newGameInit` 返回 0）时 `continue` 回主菜单
   （原版 `if (!newGameInit(...)) continue`），修复了此前"取消即退出程序"的问题
-- 游戏内菜单事件（`byte_46CAF8` = `GameState.sceneRequest`：重新开始/回主菜单）与
-  `byte_46CAF9` = `GameState.quitGame` 退出路径已接入：`settingsDialog(1)` 返回值设置后，
-  由 `game_loop.cpp` 的 16ms timer 检测并 `requestExit`；
-  当前"重新遊戲"重置游戏日期为系统日期后回主菜单（`byte_46CAFC` 保留选人配置）
+- 游戏内菜单事件已接入（`game_loop.cpp` 16ms timer 检测）：
+  - `GameState.sceneRequest=1`（重新遊戲）→ `requestExit(0)` 回主菜单
+    （`Application::run` 循环 continue，重置 gameMode/mapIndex/gameInited）
+  - `GameState.quitGame`（結束遊戲）→ `requestExit(0)` + `app.quit()` **直接退出程序**
+    （对齐原版 `sub_411B46` + LABEL_27）
+  - 重新遊戲时 `newGameInit` 重置 `mapRotation`/骰子/回合/音乐计时器等残留状态
 
 ## 验证方式
 

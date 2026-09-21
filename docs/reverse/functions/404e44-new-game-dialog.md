@@ -111,7 +111,13 @@ g_mapPreview/Raw     0x48A354/0x48A358  暗化(-16)滚动源 / JUMP.MKF 原图
   `WM_RBUTTONUP(0x205)`→`UP(RIGHT)`（关闭列表或退出）。
 - **全量重绘**：原版用 `saveBackground` 保存按下态背景逐区域恢复 + 画布离屏元素；
   重写统一"状态变化 → redrawAll 全量重绘"，不需要保存区域。
-- **音效**：`sub_4542CE(unk_48231A/482322/46CCD0)` 调用点保留 TODO（本轮跳过）。
+- **音效**（`sub_4542CE`，已实现）：
+  - 头像选择/取消、地图切换 → `dword_482322` = Effect.mkf[1]（点击）
+  - 头像悬停 → `dword_48231A` = Effect.mkf[0]
+  - 选项下拉（控件 3-8）→ `dword_48231A` = Effect.mkf[0]
+  - **確定（控件1）→ `dword_48232A` = Effect.mkf[2]**；**取消（控件2）→ `dword_482332` = Effect.mkf[4]**
+    （按下音效 = `sub_4542CE(&dword_48231A + 8*控件 + 8, 0)`）
+  - 进入阶段（补齐完成）→ `unk_46CCD0` = Effect.mkf[5]（0x405D03）
 - **颜色变换**：`convertImageChannels`（-16 暗化，32 字节查表 `kChannelHalf`）、
   `scaleSurfaceChannels`（-20 `kChannelThird`）、`grayscaleImage`。
 - **已知差异**：原版状态 2 用 `dword_48A3D8`（恒 0，无写入者）判断自动退出，
