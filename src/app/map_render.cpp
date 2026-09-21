@@ -317,7 +317,9 @@ void renderMap(Application& app, int centerX, int centerY) {
 
     // [RE 0x40829D] 移动计步器（剩余步数 dword_48BAF8；定义见 renderMap 头）
     // 说明: sprintf("%d", dword_48BAF8) → dword_48BAD8 帧 (ch-40)，y=400
-    if (state.remainingSteps > 0) {
+    //   点数停留期（showDice，sub_419572 已 blit 骰子+sub_45285E(500) 停留）不显示计步器，
+    //   停留结束转移动（showDice=false）后才出现行进数字
+    if (state.remainingSteps > 0 && !state.showDice) {
         char text[8];
         std::snprintf(text, sizeof(text), "%d", state.remainingSteps);
         const int len = static_cast<int>(std::strlen(text));
