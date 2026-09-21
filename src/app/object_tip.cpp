@@ -52,12 +52,9 @@ std::string buildTipText(const GameState& state, uint16_t id) {
             return {};
         }
         const Estate& es = state.estates[i];
-        std::string s;
-        const std::string owner = ownerName(state, es.owner);
-        if (!owner.empty()) {
-            s += owner;
-            s += "\n";
-        }
+        // [RE 0x417559] 行位固定：第 1 行 = 地主（为空则留空行），建筑名恒在第 2 行
+        std::string s = ownerName(state, es.owner);
+        s += "\n";
         s += kBuildingNames[es.type < 11 ? es.type : 0];
         s += "\n";
         s += kBuildingNames[11 + (es.level < 6 ? es.level : 0)];
@@ -75,17 +72,9 @@ std::string buildTipText(const GameState& state, uint16_t id) {
             return {};
         }
         const Corp& cp = state.corps[i];
-        std::string s = nameAt(cp.pad4, 20);
-        const std::string owner = ownerName(state, cp.owner);
-        if (!owner.empty()) {
-            if (!s.empty()) {
-                s += "\n";
-            }
-            s += owner;
-        }
-        if (!s.empty()) {
-            s += "\n";
-        }
+        // [RE 0x417559] 行位固定：第 1 行 = 地主（为空则留空行）
+        std::string s = ownerName(state, cp.owner);
+        s += "\n";
         s += kBuildingNames[6 + (cp.type < 5 ? cp.type : 0)];
         s += " ";
         s += kBuildingNames[11 + (cp.sub < 6 ? cp.sub : 0)];
@@ -204,7 +193,9 @@ void drawObjectTip(Application& app) {
         const size_t end = text.find('\n', start);
         const std::string line =
             text.substr(start, end == std::string::npos ? std::string::npos : end - start);
-        app.text().drawText(dst, line.c_str(), tx, ty, 2);
+        if (!line.empty()) {
+            app.text().drawText(dst, line.c_str(), tx, ty, 2);
+        }
         ty += 18;
         if (end == std::string::npos) {
             break;
