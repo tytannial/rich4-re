@@ -256,6 +256,9 @@ struct GameState {
     // [RE 0x48BADC] dword_48BADC 小地图工作副本（200x200，叠加地产/公司标记）
     std::vector<uint16_t> miniMapBuffer;
     UiImage specPointTiles[5];    // [RE 0x48AE4C] map.mkf[n+5*(map+4*mode)+39]
+    // [RE 0x48AE4C] 特殊点/事件格图块缓存（索引 = sprite 值 134..259）
+    //   原版 dword_48AE4C[sprite] = map.mkf[sprite + 38]（loadMapData 按需加载）
+    std::vector<UiImage> specTiles;
     UiImage estateFlag;           // [RE 0x48AE60] map.mkf[map+79+4*mode]
     UiImage corpTiles[17];        // [RE 0x48AE64] 公司图块组 1
     UiImage corpTiles2[17];       // [RE 0x48AE78] 公司图块组 2

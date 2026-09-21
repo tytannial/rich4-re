@@ -348,6 +348,21 @@ bool loadMap(Application& app) {
         loadUiImage(state.specPointTiles[n], state.map,
                     static_cast<size_t>(n + 5 * base + 39));
     }
+    // [RE 0x407ECE] 特殊点/事件格图块：dword_48AE4C[sprite] = map.mkf[sprite + 38]
+    state.specTiles.assign(300, UiImage{});
+    const auto loadSpecTile = [&](uint16_t sprite) {
+        if (sprite == 0 || sprite >= state.specTiles.size() ||
+            state.specTiles[sprite].frameCount() > 0) {
+            return;
+        }
+        loadUiImage(state.specTiles[sprite], state.map, static_cast<size_t>(sprite) + 38);
+    };
+    for (size_t i = 1; i < state.specPts.size(); ++i) {
+        loadSpecTile(state.specPts[i].sprite);
+    }
+    for (size_t i = 1; i < state.evtCells.size(); ++i) {
+        loadSpecTile(state.evtCells[i].sprite);
+    }
     loadUiImage(state.estateFlag, state.map, static_cast<size_t>(base + 79));
     if (state.gameMode) {
         for (int i = 0; i < 17; ++i) {
