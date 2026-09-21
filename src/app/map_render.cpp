@@ -294,25 +294,22 @@ void renderMap(Application& app, int centerX, int centerY) {
                 static_cast<uint16_t>((slot + 1) << 8));
     }
 
-    // 地产（无主时不绘制；颜色 = 拥有者）
+    // 地产（原版无主也绘制 —— sub_40829D 0x4090E7 无 owner 检查；颜色 = 拥有者）
     for (size_t i = 1; i < state.estates.size(); ++i) {
         const Estate& es = state.estates[i];
-        if (es.owner == 0) {
-            continue;
-        }
         const int frame = (8 - (state.mapRotation + es.dir)) & 7;
-        addItem(&state.estateFlag, frame, es.x, es.y, es.owner - 1,
+        addItem(&state.estateFlag, frame, es.x, es.y, es.owner ? es.owner - 1 : -1,
                 static_cast<uint16_t>(2000 + i));
     }
 
-    // 公司（无主时不绘制；图块 = dword_48AE64[sub]，颜色 = 拥有者）
+    // 公司（原版无主也绘制；图块 = dword_48AE64[sub]，颜色 = 拥有者）
     for (size_t i = 1; i < state.corps.size(); ++i) {
         const Corp& cp = state.corps[i];
-        if (cp.owner == 0 || cp.sub >= 17) {
+        if (cp.sub >= 17) {
             continue;
         }
         const int frame = (8 - (state.mapRotation + cp.dir)) & 7;
-        addItem(&state.corpTiles[cp.sub], frame, cp.x, cp.y, cp.owner - 1,
+        addItem(&state.corpTiles[cp.sub], frame, cp.x, cp.y, cp.owner ? cp.owner - 1 : -1,
                 static_cast<uint16_t>(4000 + i));
     }
 

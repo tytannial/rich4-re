@@ -287,9 +287,10 @@ void handleLeftButtonDown(Application& app, int x, int y) {
         app.audio().playEffect(1); // [RE 0x418482] 工具条/页签点击音效（dword_482322）
         return;
     }
-    // 地图区（sub_417559 物件信息框阶段 3 接入）
+    // [RE 0x4186BE] 地图区左键按下 → 物件提示（原版 x<440 && y>40 → sub_417559）
     if (x < 440 && y >= kTopBarH) {
-        RICH4_LOGI("map click (%d,%d) TODO sub_417559 (RE 0x417E26)", x, y);
+        showObjectTip(app, x, y);
+        renderGameFrame(app);
         return;
     }
 }
@@ -320,19 +321,16 @@ void handleLeftButtonUp(Application& app, int x, int y) {
 // 见 0x417E26 反编译; if (dword_48BE18 && 布局 && 鼠标在小地图区) dword_48BE18 = 0
 void handleRightButtonUp(Application& app, int x, int y) {
     GameState& state = app.gameState();
-    int mx = 0;
-    int my = 0;
-    if (miniMapHitRegion(state, x, y, mx, my)) {
-        // 小地图：取消手动视角（原版 dword_48BE18 = 0）
-        if (state.manualView) {
-            state.manualView = false;
-            state.viewScrolling = false;
-            renderGameFrame(app);
-        }
+    if (!state.manualView) {
         return;
     }
-    // [RE 0x417559] 地图区右键 → 物件提示信息
-    showObjectTip(app, x, y);
+    int mx = 0;
+    int my = 0;
+    if (!miniMapHitRegion(state, x, y, mx, my)) {
+        return;
+    }
+    state.manualView = false;
+    state.viewScrolling = false;
     renderGameFrame(app);
 }
 

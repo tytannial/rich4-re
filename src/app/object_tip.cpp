@@ -124,8 +124,8 @@ void showObjectTip(Application& app, int x, int y) {
             continue;
         }
         state.objectTipText = text;
-        state.objectTipX = it->x + it->w / 2;
-        state.objectTipY = it->y;
+        state.objectTipX = x;
+        state.objectTipY = y;
         app.audio().playEffect(1); // [RE 0x4175CB] g_uiSoundClick
         return;
     }
@@ -142,40 +142,25 @@ void drawObjectTip(Application& app) {
     if (ui.frameCount() <= 0) {
         return;
     }
-    // [RE 0x417559] 方向 v5（0..3）：y < 框高 → +1；x > 440-框宽 → +2
+    // [RE 0x417559] 方向 v5（0..3）：y-40 < 框高 → +1；x > 440-框宽 → +2；
+    //   框画在点击点（帧图形自带方向偏移），文本 = 点击点 + (a2, a1+27)
     const UiFrameView& base = ui.frame(0);
+    const int vy = state.objectTipY - 40;
     int v5 = 0;
-    if (state.objectTipY < static_cast<int>(base.height)) {
+    if (vy < static_cast<int>(base.height)) {
         v5 += 1;
     }
     if (state.objectTipX > 440 - static_cast<int>(base.width)) {
         v5 += 2;
     }
-    const UiFrameView& f = ui.frame(v5 < ui.frameCount() ? v5 : 0);
     Surface& dst = app.surface();
-    int x = state.objectTipX;
-    int y = state.objectTipY;
-    if (v5 & 2) {
-        x -= f.width;
-    }
-    if (v5 & 1) {
-        y -= f.height;
-    }
-    if (x < 0) {
-        x = 0;
-    }
-    if (y < 40) {
-        y = 40;
-    }
-    if (x + f.width > 440) {
-        x = 440 - f.width;
-    }
-    if (y + f.height > 480) {
-        y = 480 - f.height;
-    }
-    blitElement(dst, f, x, y, false);
+    blitElement(dst, ui.frame(v5 < ui.frameCount() ? v5 : 0), state.objectTipX, state.objectTipY,
+                false);
+    const int a2 = (v5 & 2) ? -(base.width / 2 + 9) : (base.width / 2 + 9);
+    const int a1 = (v5 & 1) ? -96 : 42;
     app.text().setFont(16, 0xF0F0F0, 0x101010, kTextStyleShadow | kTextStyleBold, 1);
-    app.text().drawText(dst, state.objectTipText.c_str(), x + f.width / 2, y + 27, 2);
+    app.text().drawText(dst, state.objectTipText.c_str(), state.objectTipX + a2,
+                        state.objectTipY + a1 + 27, 2);
 }
 
 } // namespace rich4
