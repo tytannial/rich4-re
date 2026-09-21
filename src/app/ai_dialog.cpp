@@ -168,13 +168,13 @@ void drawAiDialog(AiDialogState& st) {
         }
         const int charIndex = state.players[playerId].charIndex;
         if (i == st.selected) {
-            // 选中槽：高亮框 + 棋子（覆盖画布预渲染的头像）
+            // 选中槽：高亮框 + 棋子（覆盖画布预渲染的头像；棋子按玩家索引）
             if (ui.frameCount() > kSelectFrame) {
                 blitElement(dst, ui.frame(kSelectFrame), kSlotX, y, false);
             }
-            const UiImage& piece = state.pieceSprites[charIndex];
-            if (charIndex >= 0 && charIndex < 9 && piece.frameCount() > 0) {
-                blitSpriteFrame(dst, piece, 0, kPortraitX, y + kPortraitDy);
+            if (playerId < 9 && state.pieceSprites[playerId].frameCount() > 0) {
+                blitElement(dst, state.pieceSprites[playerId].frame(0), kPortraitX, y + kPortraitDy,
+                            false);
             }
         } else {
             if (ui.frameCount() > kPlayerBoxFrame) {
