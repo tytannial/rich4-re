@@ -46,11 +46,13 @@ struct Player {
     uint8_t diceCount = 1;      // +18 byte_496B7A（骰子个数）
     uint8_t charIndex = 0;      // +19 g_playerCharIndex 0x496B7B（角色 ID）
     uint8_t byte20 = 0;         // +20
-    uint8_t alive = 0;          // +21 g_playerAlive 0x496B7D（bit0 存活，0x10/0x20/0x30 状态）
-    uint8_t byte22 = 0;         // +22
-    uint8_t byte23 = 0;         // +23
-    uint8_t byte24 = 0;         // +24
-    uint8_t aiAssetPct = 0;     // +25 byte_496B81（AI 初始资金百分比）
+    uint8_t alive = 0;          // +21 g_playerAlive 0x496B7D（bit0 人类/bit1 电脑/bit2 托管/0x10,0x20 状态）
+    uint8_t aiCardItem = 0;     // +22 byte_496B7E（bit0 使用卡片、bit1 使用道具）
+    uint8_t aiPersonality = 0;  // +23 byte_496B7F（0=乖寶寶 1=普通人 2=大老奸）
+    uint8_t aiLoanPct = 0;      // +24 byte_496B80（AI 贷款比例，总资产 %）
+    uint8_t aiCashPct = 0;      // +25 byte_496B81（AI 现金比例，余额 %）
+    uint8_t aiStockPct = 0;     // +26 byte_496B82（AI 股票比例，总资产 %）
+    uint8_t byte27 = 0;         // +27 byte_496B83（状态恢复朝向）
     int32_t cash = 0;           // +28 g_playerCash 0x496B84
     int32_t bank = 0;           // +32 g_playerBank 0x496B88
     int32_t loan = 0;           // +36 g_playerLoan 0x496B8C

@@ -621,7 +621,7 @@ void nextPlayer(Application& app) {
     // 有状态效果 0x30 分支
     if (cur < 4 && (st.players[cur].alive & 0x30) != 0) {
         if ((st.players[cur].alive & 0x10) != 0) {
-            const uint8_t v0 = st.players[cur].byte24 & 0xF;
+            const uint8_t v0 = st.players[cur].byte27 & 0xF;
             if (v0 != 15) {
                 st.players[cur].dir = v0;
             }

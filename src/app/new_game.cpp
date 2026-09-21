@@ -64,7 +64,12 @@ void applyCharTemplate(Player& p, int charId) {
     p.charIndex = t[11];         // +19
     p.byte20 = t[12];            // +20
     p.alive = t[13];             // +21
-    p.aiAssetPct = t[17];        // +25
+    p.aiCardItem = t[14];        // +22 使用卡片/道具开关
+    p.aiPersonality = t[15];     // +23 个性（0/1/2）
+    p.aiLoanPct = t[16];         // +24 贷款比例
+    p.aiCashPct = t[17];         // +25 现金比例
+    p.aiStockPct = t[18];        // +26 股票比例
+    p.byte27 = t[19];            // +27 状态恢复朝向
     p.cash = readI32(t + 20);    // +28
     p.bank = readI32(t + 24);    // +32
     p.vehicle = t[57];           // +65
@@ -236,7 +241,7 @@ bool newGameInit(Application& app, bool mode1) {
         } else {
             // v8 = (u8)byte_496B81[104*k] * (g_startMoneyVal / 100)
             const int cash =
-                state.players[k].aiAssetPct * (state.startMoneyVal / 100);
+                state.players[k].aiCashPct * (state.startMoneyVal / 100);
             state.players[k].cash = cash;
             state.players[k].bank = state.startMoneyVal - cash;
         }

@@ -37,7 +37,12 @@ void serializePlayer(uint8_t out[kPlayerSize], const Player& p) {
     out[19] = p.charIndex;
     out[20] = p.byte20;
     out[21] = p.alive;
-    out[25] = p.aiAssetPct;
+    out[22] = p.aiCardItem;
+    out[23] = p.aiPersonality;
+    out[24] = p.aiLoanPct;
+    out[25] = p.aiCashPct;
+    out[26] = p.aiStockPct;
+    out[27] = p.byte27;
     std::memcpy(out + 28, &p.cash, 4);
     std::memcpy(out + 32, &p.bank, 4);
     std::memcpy(out + 36, &p.loan, 4);
