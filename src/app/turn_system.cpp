@@ -733,7 +733,7 @@ void updateGameState(Application& app) {
             const int group = st.playerMoveGroup[p];
             if (st.dicePhase == 0) {
                 // 阶段0：角色扔骰动画（walkRes slot=2*state+group），帧数=每方向帧数
-                //   原版 byte_498EA3 递增到 dword_498EC4[组]>>3 后掷骰
+                //   原版 byte_498EA3 递增到 dword_498EC4[组]>>3；末帧=松手，需保持
                 const int slot = 2 * 2 + group;
                 int perDir = 4;
                 if (slot >= 0 && slot < 13 && st.walkRes[p][slot].frameCount() > 0) {
@@ -742,18 +742,19 @@ void updateGameState(Application& app) {
                 if (perDir <= 0) {
                     perDir = 1;
                 }
-                if (++st.playerMoveFrame[p] >= perDir) {
-                    st.playerMoveFrame[p] = 0;
-                    st.dicePhase = 1;
+                if (st.playerMoveFrame[p] < perDir - 1) {
+                    ++st.playerMoveFrame[p]; // 逐帧播扔骰动作
+                } else {
+                    st.dicePhase = 1; // 停在末帧（松手），不重置回第0帧
                 }
                 break; // map_render 按 playerMoveFrame 画角色扔骰帧
             }
             if (st.dicePhase == 1) {
-                if (st.playerMoveFrame[p] == 0) {
+                if (!st.diceAnimOpened) {
+                    st.diceAnimOpened = true;
                     const int n = std::max(1, std::min(3, static_cast<int>(st.players[p].diceCount)));
                     auto blob = st.panel.read(static_cast<size_t>(n + 3));
                     st.diceAnimActive = blob && st.diceAnim.open(std::move(*blob));
-                    st.playerMoveFrame[p] = 1; // 标记已 open，避免每 tick 重载（死循环）
                     if (st.diceAnimActive) {
                         st.diceAnim.nextFrame();
                     } else {
@@ -772,11 +773,12 @@ void updateGameState(Application& app) {
                     break;
                 }
             }
-            // 阶段2：点数停留 500ms（sub_45285E）
+            // 阶段2：点数停留 500ms（sub_45285E），角色仍保持扔骰末帧
             st.showDice = true;
             if (SDL_GetTicks() - st.diceHoldStartMs >= 500) {
-                st.playerMoveFrame[p] = 0;
+                st.playerMoveFrame[p] = 0; // 转移动阶段才回起始帧
                 st.dicePhase = 0;
+                st.diceAnimOpened = false;
                 st.playerActionState[p] = 1;
             }
             break;

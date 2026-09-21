@@ -264,6 +264,7 @@ struct GameState {
     int dicePhase = 0;
     FliDecoder diceAnim;          // 当前掷骰滚动动画（panel[骰子数+3]）
     bool diceAnimActive = false;  // 阶段1 滚动播放中
+    bool diceAnimOpened = false;  // 阶段1 已 open（防每 tick 重载；角色保持扔骰末帧）
     uint64_t diceHoldStartMs = 0; // 阶段2 点数停留起始（原版 sub_45285E(500)）
 
     // [RE 0x496D08] g_cellTable 每项 24 字节（+0 = 类型）
