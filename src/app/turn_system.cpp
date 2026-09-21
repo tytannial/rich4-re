@@ -172,6 +172,9 @@ void loadWalkResources(GameState& st, int p) {
             st.playerMoveFrame[p] = 0; // 从普通组切入渡水/特殊组时重置动画帧
         }
         st.playerMoveGroup[p] = 1;
+        // [RE 0x40B93B] 特殊移动（水上/渡水，cellEnt+39 bit31）→ 音效槽 15
+        //   （原版 dword_4749D4 = 15 + audioPlayEffect(&dword_482382[16])）
+        st.moveSoundIndex = 15;
         return;
     }
     const int travel = pl.travel & 3;
