@@ -283,7 +283,8 @@ void renderMap(Application& app, int centerX, int centerY) {
             continue;
         }
         const int frame = (8 - (state.mapRotation + sp.dir)) & 7;
-        const int pickFrame = ((8 - (state.mapRotation + sp.dir)) & 1) + 2;
+        // 同 estate：拾取形状改用帧 4（51x51）
+        const int pickFrame = 4;
         addItem(&state.specTiles[sp.sprite], frame, sp.x, sp.y, sp.owner,
                 static_cast<uint16_t>(6000 + i), &state.flagTiles, pickFrame);
     }
@@ -319,7 +320,9 @@ void renderMap(Application& app, int centerX, int centerY) {
     for (size_t i = 1; i < state.estates.size(); ++i) {
         const Estate& es = state.estates[i];
         const int frame = (8 - (state.mapRotation + es.dir)) & 7;
-        const int pickFrame = ((8 - (state.mapRotation + es.dir)) & 1) + 2;
+        // 原版拾取形状 = g_pickMask 帧 2/3（143x103 菱形，覆盖约 3x3 格）；
+        //   实机体感范围过大易误盖道路格 → 改用帧 4（51x51，约一个地块）
+        const int pickFrame = 4;
         if (es.owner == 0) {
             // [RE 0x409B18] 无主空地仍可拾取（点击显示 空地/等级/费用）
             int sx = 0;
@@ -343,7 +346,8 @@ void renderMap(Application& app, int centerX, int centerY) {
             continue;
         }
         const int frame = (8 - (state.mapRotation + cp.dir)) & 7;
-        const int pickFrame = ((8 - (state.mapRotation + cp.dir)) & 1) + 2;
+        // 同 estate：拾取形状改用帧 4（51x51）
+        const int pickFrame = 4;
         if (cp.owner == 0) {
             int sx = 0;
             int sy = 0;
