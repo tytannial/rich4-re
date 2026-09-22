@@ -1,6 +1,7 @@
 #include "game/app/object_tip.h"
 
 #include "game/app/map_tables.h"
+#include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/encoding.h"
 #include "game/render/blit.h"
@@ -46,7 +47,7 @@ std::string buildTipText(const GameState& state, uint16_t id) {
         }
         return {};
     }
-    if (id < 4000) { // 住宅用地：地主 + 建筑名 + 等级名 + 费用（原版 0x417559）
+    if (id < 4000) { // 住宅用地：地主 + 建筑名 + 等级名 + 应收租金（原版 0x417559）
         const int i = id - 2000;
         if (i <= 0 || i >= static_cast<int>(state.estates.size())) {
             return {};
@@ -55,12 +56,33 @@ std::string buildTipText(const GameState& state, uint16_t id) {
         // [RE 0x417559] 行位固定：第 1 行 = 地主（为空则留空行），建筑名恒在第 2 行
         std::string s = ownerName(state, es.owner);
         s += "\n";
-        s += kBuildingNames[es.type < 11 ? es.type : 0];
+        // [RE 0x41783C] 建筑名：level==0 → "空  地"；type==0 → 建筑等级名；type!=0 → "連鎖店"
+        if (es.level == 0) {
+            s += "空  地";
+        } else if (es.type == 0) {
+            s += kBuildingNames[es.level < 6 ? es.level : 0];
+        } else {
+            s += "連鎖店";
+        }
         s += "\n";
         s += kBuildingNames[11 + (es.level < 6 ? es.level : 0)];
-        // 费用 = estate +32 + 2*level（u16，原版 sub_452793 显示）
+        // [RE 0x4178A7] 应收租金：owner==0 → fees[level]；type==0 → 同街联合租金（estateRouteRent）；
+        //   type!=0 → 连锁店数量 × 2000 × M（原版 sub_41970F 取数量后按 "$单价×数量" 显示）
         const int lv = es.level < 6 ? es.level : 0;
-        const uint16_t fee = es.fees[lv];
+        int32_t fee = 0;
+        if (es.owner == 0) {
+            fee = es.fees[lv];
+        } else if (es.type == 0) {
+            fee = estateRouteRent(state, es.owner, es);
+        } else {
+            int n = 0;
+            for (size_t j = 1; j < state.estates.size(); ++j) {
+                if (state.estates[j].type != 0 && state.estates[j].owner == es.owner) {
+                    ++n;
+                }
+            }
+            fee = n * 2000 * state.moneyMul;
+        }
         s += "\n$";
         s += std::to_string(fee);
         return s;
@@ -74,9 +96,13 @@ std::string buildTipText(const GameState& state, uint16_t id) {
         // [RE 0x417559] 行位固定：第 1 行 = 地主（为空则留空行）
         std::string s = ownerName(state, cp.owner);
         s += "\n";
-        s += kBuildingNames[6 + (cp.type < 5 ? cp.type : 0)];
-        s += " ";
-        s += kBuildingNames[11 + (cp.sub < 6 ? cp.sub : 0)];
+        if (cp.sub == 0) {
+            s += "空  地"; // [RE 0x41799F] 买下未建设施
+        } else {
+            s += kBuildingNames[6 + (cp.type < 5 ? cp.type : 0)];
+            s += " ";
+            s += kBuildingNames[11 + (cp.sub < 6 ? cp.sub : 0)];
+        }
         return s;
     }
     if (id < 8000) { // 特殊点：地主 + 名称

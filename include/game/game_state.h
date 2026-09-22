@@ -278,9 +278,10 @@ struct GameState {
     //   原版 dword_48AE4C[sprite] = map.mkf[sprite + 38]（loadMapData 按需加载）
     std::vector<UiImage> specTiles;
     UiImage estateFlag;           // [RE 0x48AE60] map.mkf[map+79+4*mode]
-    UiImage corpTiles[17];        // [RE 0x48AE64] 商業用地图块组 1
-    UiImage corpTiles2[17];       // [RE 0x48AE78] 商業用地图块组 2
-    UiImage corpTiles3[17];       // [RE 0x48AE90] 商業用地图块组 3
+    // [RE 0x48AE64] 商業用地图块组（17 项 = map.mkf[87..103]；mode1 = 17*map+104..120）
+    //   注意 dword_48AE78/0x48AE90 不是独立数组，而是本数组 +5/+11 项别名：
+    //   購物中心用 [5+sub]、加油站用 [11]、研究所用 [11+sub]（见 map_render 绘制）
+    UiImage corpTiles[17];
     UiImage pieceSprites[9];      // [RE 0x498EB0] map.mkf[charIndex+27]
     UiImage pieceAnim[9];         // [RE 0x498EB4] data.mkf[21*charIndex+128+3*travel]
     UiImage cellTypeSprites[46];  // [RE 0x49692C] data.mkf[cellType+395]（索引 1-20 有效）

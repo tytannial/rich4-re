@@ -360,7 +360,13 @@ void renderMap(Application& app, int centerX, int centerY) {
         }
     }
 
-    // 商業用地：有主绘制（玩家色）；无主不绘制，仅记录命中
+    // 商業用地绘制（[RE 0x4093F3..0x409484] sub_40829D）：
+    //   sub==0 有主 → 角色标记 pieceTiles（map.mkf[25]），帧 = 角色 ID，调色板不改（0xFF）；
+    //   sub!=0 → 按 type 选图块（switch 0..4；dword_48AE78/90 实为 dword_48AE64 的偏移别名）：
+    //     type0 公園 → corpTiles[0] / type1 旅館 → corpTiles[sub] /
+    //     type2 購物中心 → corpTiles[5+sub] / type3 加油站 → corpTiles[11] /
+    //     type4 研究所 → corpTiles[11+sub]；owner 调色板
+    //   无主不绘制（仅记录命中）
     for (size_t i = 1; i < state.corps.size(); ++i) {
         const Corp& cp = state.corps[i];
         if (cp.sub >= 17) {
@@ -380,7 +386,29 @@ void renderMap(Application& app, int centerX, int centerY) {
             }
             continue;
         }
-        addItem(&state.corpTiles[cp.sub], frame, cp.x, cp.y, cp.owner,
+        if (cp.sub == 0) {
+            // [RE 0x409464] 买下未建设施：角色标记（帧 = 角色 ID），不调色板
+            const int ci = (cp.owner >= 1 && cp.owner <= 9)
+                               ? state.players[cp.owner - 1].charIndex
+                               : 0;
+            addItem(&state.pieceTiles, ci, cp.x, cp.y, -1, static_cast<uint16_t>(4000 + i),
+                    &state.flagTiles, pickFrame);
+            continue;
+        }
+        // [RE 0x409402] 有设施：按 type 分派图块组（子索引 = sub，别名偏移见上）
+        int tileIndex = 0;
+        switch (cp.type) {
+            case 0: tileIndex = 0; break;                        // 公園
+            case 1: tileIndex = cp.sub; break;                   // 旅館
+            case 2: tileIndex = 5 + cp.sub; break;               // 購物中心（dword_48AE78）
+            case 3: tileIndex = 11; break;                       // 加油站（dword_48AE90[0]）
+            case 4: tileIndex = 11 + cp.sub; break;              // 研究所（dword_48AE90[sub]）
+            default: tileIndex = 0; break;
+        }
+        if (tileIndex >= 17) {
+            tileIndex = 0;
+        }
+        addItem(&state.corpTiles[tileIndex], frame, cp.x, cp.y, cp.owner,
                 static_cast<uint16_t>(4000 + i), &state.flagTiles, pickFrame);
     }
 

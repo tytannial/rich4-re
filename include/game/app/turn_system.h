@@ -5,7 +5,12 @@
 namespace rich4 {
 
 struct GameState;
+struct Estate;
 class Application;
+
+// [RE 0x419744] estateRouteRent：同路段/连锁店联合租金（object_tip 显示应收租金复用）
+// 依据: 0x419744；普通住宅用地 = 同 owner 同名地块 fees[level] 之和；连锁店 = 数量 × 2000；× M
+int32_t estateRouteRent(const GameState& st, uint8_t owner, const Estate& es);
 
 // [RE 0x407A8C] 朝向 = sub_454FB4(cellEnt[to]-cellEnt[from])，8 方向 0..7
 // 依据: 0x407A8C→0x454FB4(atan2(-dy,dx) 量化)→byte_482414[2,3,4,5,6,7,0,1]

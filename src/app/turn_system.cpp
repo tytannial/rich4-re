@@ -268,19 +268,7 @@ void updateParachute(Application& app) {
 
 } // namespace
 
-// [RE 0x407A8C] 朝向 = sub_454FB4(cellEnt[to]-cellEnt[from])，8 方向 0..7
-// 依据: 0x407A8C→0x454FB4（atan2(-dy,dx) 量化）→byte_482414[2,3,4,5,6,7,0,1]
-int facingBetween(GameState& st, int fromId, int toId) {
-    if (fromId <= 0 || toId <= 0 || fromId >= static_cast<int>(st.cellEnts.size()) ||
-        toId >= static_cast<int>(st.cellEnts.size())) {
-        return 0;
-    }
-    const int dx = st.cellEnts[toId].x - st.cellEnts[fromId].x;
-    const int dy = st.cellEnts[toId].y - st.cellEnts[fromId].y;
-    return facingFromDelta(dx, dy);
-}
-
-// [RE 0x419744] estateRouteRent：同路段/连锁店联合租金
+// [RE 0x419744] estateRouteRent：同路段/连锁店联合租金（导出：landingEvent 收租 + object_tip 显示）
 // 依据: 0x419744 反编译; 普通住宅用地（type==0）→ 遍历全部地产，owner 相同且地名相同
 //       （strcmp）的 fees[level]（+32+2*level）累加；连锁店（type!=0）→ owner 相同的
 //       连锁店每处 +2000；返回 g_moneyMul × 总和
@@ -309,6 +297,20 @@ int32_t estateRouteRent(const GameState& st, uint8_t owner, const Estate& es) {
                owner, curName.c_str(), es.type, count, sum, sum * st.moneyMul, st.moneyMul);
     return sum * st.moneyMul;
 }
+
+// [RE 0x407A8C] 朝向 = sub_454FB4(cellEnt[to]-cellEnt[from])，8 方向 0..7
+// 依据: 0x407A8C→0x454FB4（atan2(-dy,dx) 量化）→byte_482414[2,3,4,5,6,7,0,1]
+int facingBetween(GameState& st, int fromId, int toId) {
+    if (fromId <= 0 || toId <= 0 || fromId >= static_cast<int>(st.cellEnts.size()) ||
+        toId >= static_cast<int>(st.cellEnts.size())) {
+        return 0;
+    }
+    const int dx = st.cellEnts[toId].x - st.cellEnts[fromId].x;
+    const int dy = st.cellEnts[toId].y - st.cellEnts[fromId].y;
+    return facingFromDelta(dx, dy);
+}
+
+// [RE 0x419744] estateRouteRent 定义见文件后部（导出供 object_tip 复用）
 
 // [RE 0x43F7C6] rouletteValue：轮盘读数（主题表 byte_475D0C[12*theme + 格]，0xFF = 无效格）
 // 依据: 0x43F7C6 动画结束返回 byte_475D0C[12*theme + 终格]（有效格）；
