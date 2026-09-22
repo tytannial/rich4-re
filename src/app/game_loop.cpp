@@ -411,11 +411,17 @@ bool gameEventHandler(const SDL_Event* event, void* user) {
     // [RE 0x401010] 全局键盘钩子 fn 的游戏内功能键（word_49717C 前進指令 / 49717E 選擇骰子數）
     if (event->type == SDL_EVENT_KEY_DOWN) {
         GameState& st = app.gameState();
-        // [NEW] 调试热键（--debug 启用）：Ctrl+1..9（测试辅助，无原版对应；
-        //   不受 gamePlayerControl 限制，AI 回合/移动中亦可改地块）
-        if (st.debugMode && (SDL_GetModState() & SDL_KMOD_CTRL) && event->key.key >= SDLK_1 &&
-            event->key.key <= SDLK_9) {
-            if (handleDebugKey(app, static_cast<int>(event->key.key - SDLK_1) + 1)) {
+        // [NEW] 调试热键（--debug 启用）：Ctrl+1..9 / Ctrl+Shift+1..5 / Ctrl+Shift+字母
+        //   （测试辅助，无原版对应；不受 gamePlayerControl 限制，AI 回合/移动中亦可操作）
+        if (st.debugMode && (SDL_GetModState() & SDL_KMOD_CTRL)) {
+            const bool dbgShift = (SDL_GetModState() & SDL_KMOD_SHIFT) != 0;
+            int dbgCode = 0;
+            if (event->key.key >= SDLK_1 && event->key.key <= SDLK_9) {
+                dbgCode = static_cast<int>(event->key.key - SDLK_1) + 1;
+            } else if (dbgShift && event->key.key >= SDLK_A && event->key.key <= SDLK_Z) {
+                dbgCode = static_cast<int>(event->key.key); // 'a'..'z'
+            }
+            if (dbgCode != 0 && handleDebugKey(app, dbgCode, dbgShift)) {
                 renderGameFrame(app);
                 return true;
             }

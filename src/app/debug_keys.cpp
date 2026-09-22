@@ -4,8 +4,11 @@
 #include <string>
 
 #include "game/app/facility_dialog.h"
+#include "game/app/game_loop.h"
 #include "game/app/map_render.h"
+#include "game/app/map_tables.h"
 #include "game/app/object_tip.h"
+#include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/encoding.h"
 #include "game/core/log.h"
@@ -39,10 +42,136 @@ std::string nameAt(const uint8_t* p, int maxLen) {
 } // namespace
 
 // [NEW] 调试热键（--debug 启用；测试辅助，无原版依据）
-bool handleDebugKey(Application& app, int digit) {
+bool handleDebugKey(Application& app, int code, bool shift) {
     GameState& st = app.gameState();
     const int cur = st.currentPlayer;
-    switch (digit) {
+    if (shift) {
+        // ===== Ctrl+Shift+数字：商業用地设施一键布置（owner=当前玩家、sub=1）=====
+        if (code >= 1 && code <= 5) {
+            const uint16_t id = pointedObject(app);
+            if (id >= 4000 && id < 6000) {
+                const int i = id - 4000;
+                if (i > 0 && i < static_cast<int>(st.corps.size())) {
+                    Corp& cp = st.corps[i];
+                    cp.owner = static_cast<uint8_t>(cur + 1);
+                    cp.type = static_cast<uint8_t>(code - 1); // 1..5 → type 0..4
+                    cp.sub = 1;
+                    buildMiniMapMarks(app);
+                    RICH4_LOGI("debug: corp[%d] -> %s owner=%d sub=1 (Ctrl+Shift+%d)", i,
+                               kBuildingNames[6 + code - 1], cur + 1, code);
+                }
+            } else {
+                RICH4_LOGW("debug: Ctrl+Shift+%d no corp under cursor (id=%u)", code, id);
+            }
+            return true;
+        }
+        // ===== Ctrl+Shift+字母：难测机制快捷构造 =====
+        switch (code) {
+            case 'g': { // 瞬移到指向地块并立即触发落地结算（landingEvent）
+                const uint16_t id = pointedObject(app);
+                if (id == 0) {
+                    RICH4_LOGW("debug: Ctrl+Shift+G no object under cursor");
+                    return true;
+                }
+                uint16_t cellId = 0;
+                if (id < 2000) {
+                    cellId = id; // 直接指向 cellEnt（道路格）
+                } else {
+                    for (size_t i = 1; i < st.cellEnts.size(); ++i) {
+                        if (st.cellEnts[i].special == id) {
+                            cellId = static_cast<uint16_t>(i);
+                            break;
+                        }
+                    }
+                }
+                if (cellId == 0 || cellId >= st.cellEnts.size()) {
+                    RICH4_LOGW("debug: Ctrl+Shift+G no cellEnt for id=%u", id);
+                    return true;
+                }
+                Player& pl = st.players[cur];
+                if (pl.cellEntId > 0 && pl.cellEntId < st.cellEnts.size()) {
+                    st.cellEnts[pl.cellEntId].occMask &= ~(256u << cur);
+                }
+                pl.cellEntId = cellId;
+                pl.spriteX = static_cast<uint16_t>(st.cellEnts[cellId].x);
+                pl.spriteY = static_cast<uint16_t>(st.cellEnts[cellId].y);
+                st.cellEnts[cellId].occMask |= (256u << cur);
+                buildMiniMapMarks(app);
+                RICH4_LOGI("debug: Ctrl+Shift+G teleport player %d -> cellEnt %u (id=%u)", cur,
+                           cellId, id);
+                // 立即结算（买地/升级/收租/转盘/事件；内部可能阻塞弹窗）
+                const int wait = landingEvent(app, cellId);
+                RICH4_LOGI("debug: Ctrl+Shift+G landingEvent -> wait=%d", wait);
+                renderGameFrame(app);
+                return true;
+            }
+            case 'v': { // 切换载具（步行→機車→汽車），骰子数同步（travel+1）
+                Player& pl = st.players[cur];
+                pl.travel = static_cast<uint8_t>((pl.travel + 1) % 3);
+                pl.diceCount = static_cast<uint8_t>(pl.travel + 1); // [RE 0x407236]
+                // 清行走资源组标志 → 下次移动 loadWalkResources 重载（travel 已变）
+                st.playerActionFlags[cur] &= 0xF0;
+                RICH4_LOGI("debug: Ctrl+Shift+V player %d travel=%u dice=%u", cur, pl.travel,
+                           pl.diceCount);
+                return true;
+            }
+            case 't': { // 循环携带神明（cellTableIdx = 槽号；类型=槽号 1..15）
+                static const uint8_t kGodSlots[8] = {0, 1, 2, 5, 6, 7, 8, 15};
+                Player& pl = st.players[cur];
+                int idx = 0;
+                for (int i = 0; i < 8; ++i) {
+                    if (kGodSlots[i] == pl.cellTableIdx) {
+                        idx = i;
+                        break;
+                    }
+                }
+                pl.cellTableIdx = kGodSlots[(idx + 1) % 8];
+                RICH4_LOGI("debug: Ctrl+Shift+T player %d god=%u (%s)", cur, pl.cellTableIdx,
+                           pl.cellTableIdx ? kObjectNames[pl.cellTableIdx] : "无");
+                return true;
+            }
+            case 's': { // 循环玩家状态（无→住宿→出國→監獄→醫院→冬眠→夢遊）
+                static int s_state = 0;
+                s_state = (s_state + 1) % 7;
+                Player& pl = st.players[cur];
+                pl.stateFlags = 0;
+                pl.byte54 = 0;
+                pl.state37 = 0;
+                switch (s_state) {
+                    case 1: pl.stateFlags |= 3u; break;        // BYTE0 住宿
+                    case 2: pl.stateFlags |= 3u << 8; break;   // BYTE1 出國
+                    case 3: pl.stateFlags |= 3u << 16; break;  // BYTE2 監獄
+                    case 4: pl.stateFlags |= 3u << 24; break;  // BYTE3 醫院
+                    case 5: pl.byte54 = 3; break;              // 冬眠
+                    case 6: pl.state37 = 3; break;             // 夢遊
+                    default: break;                            // 0 = 无状态
+                }
+                RICH4_LOGI("debug: Ctrl+Shift+S player %d state=%d flags=%08X byte54=%u state37=%u",
+                           cur, s_state, pl.stateFlags, pl.byte54, pl.state37);
+                return true;
+            }
+            case 'b': // 银行存款 +100000
+                st.players[cur].bank += 100000;
+                RICH4_LOGI("debug: Ctrl+Shift+B player %d bank=%d", cur, st.players[cur].bank);
+                return true;
+            case 'd': // 过一天（advanceDay：日期/到期/每日事件）
+                advanceDay(app);
+                RICH4_LOGI("debug: Ctrl+Shift+D advanceDay dayCount=%d", st.dayCount);
+                return true;
+            case 'c': { // 清空玩家全部状态 + 携带神明
+                Player& pl = st.players[cur];
+                pl.stateFlags = 0;
+                pl.byte54 = 0;
+                pl.state37 = 0;
+                pl.cellTableIdx = 0;
+                RICH4_LOGI("debug: Ctrl+Shift+C player %d states cleared", cur);
+                return true;
+            }
+            default:
+                return false;
+        }
+    }
+    switch (code) {
         case 1: { // 指向地块 owner = 当前回合玩家
             const uint16_t id = pointedObject(app);
             if (id >= 2000 && id < 4000) {
@@ -74,7 +203,7 @@ bool handleDebugKey(Application& app, int digit) {
         case 2:
         case 3: { // 等级 ±1（地产 level / 公司 sub，范围 0..5）
             const uint16_t id = pointedObject(app);
-            const int delta = (digit == 2) ? 1 : -1;
+            const int delta = (code == 2) ? 1 : -1;
             if (id >= 2000 && id < 4000) {
                 const int i = id - 2000;
                 if (i > 0 && i < static_cast<int>(st.estates.size())) {
@@ -90,7 +219,7 @@ bool handleDebugKey(Application& app, int digit) {
                     RICH4_LOGI("debug: corp[%d] sub -> %d", i, cp.sub);
                 }
             } else {
-                RICH4_LOGW("debug: Ctrl+%d no estate/corp under cursor (id=%u)", digit, id);
+                RICH4_LOGW("debug: Ctrl+%d no estate/corp under cursor (id=%u)", code, id);
             }
             return true;
         }

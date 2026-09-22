@@ -29,6 +29,30 @@
 | `Ctrl+8` | **打印指向地块详情**（日志） | estate：名字/type/owner/level/flag/dir/priceAdd/priceBase/fees/price/expire；corp/specPt/evtCell/cellEnt 类似 |
 | `Ctrl+9` | 指向地块的 **联动组归当前回合玩家** | 住宅用地 = 同街同名全部；连锁店 = 全部连锁店（对齐原版收租联动组定义）|
 
+### Ctrl+Shift（难测机制快捷构造）
+
+**`Ctrl+Shift+数字`：商業用地一键布置**（指向 corp；owner=当前玩家、sub=1）
+
+| 键 | 设施 |
+|----|------|
+| `Ctrl+Shift+1` | 公園（type0，不收过路费） |
+| `Ctrl+Shift+2` | 旅館（type1，收费走**转盘**天数 + 住宿状态） |
+| `Ctrl+Shift+3` | 購物中心（type2，收费走**转盘**倍数） |
+| `Ctrl+Shift+4` | 加油站（type3，载具×步数；需先 `Ctrl+Shift+V` 切载具） |
+| `Ctrl+Shift+5` | 研究所（type4，owner 停留研发入口） |
+
+**`Ctrl+Shift+字母`**
+
+| 键 | 功能 | 细节 |
+|----|------|------|
+| `Ctrl+Shift+G` | **瞬移到指向地块并立即结算** | 指向道路格/任何物件 → 传送到对应 cellEnt → 直接调用 `landingEvent`（买地/升级/收租/转盘/事件一次性触发，省去走路） |
+| `Ctrl+Shift+V` | **切换载具** | 步行→機車→汽車→步行；骰子数同步 `travel+1`（测试加油站/汽车/石油收费） |
+| `Ctrl+Shift+T` | **循环携带神明** | 无→小財神→大財神→小窮神→大窮神→小衰神→大衰神→死神（测试神明调整租金/阻止购地/地主死神免收） |
+| `Ctrl+Shift+S` | **循环玩家状态** | 无→住宿→出國→監獄→醫院→冬眠→夢遊（测试 `ownerCanCollectRent` 免收租） |
+| `Ctrl+Shift+B` | 银行存款 +100000 | 测试收款入银行/贷款 |
+| `Ctrl+Shift+D` | 过一天 | `advanceDay`（日期/到期回收/每日事件） |
+| `Ctrl+Shift+C` | 清空玩家状态+神明 | `stateFlags`/`byte54`/`state37`/`cellTableIdx` 归零 |
+
 拾取与右键物件提示同一套：鼠标位置 → `pickMapObject`（复用渲染期 `mapHitRegions`，
 含 SPR 像素掩码精确命中）。日志前缀 `debug:`。
 
@@ -40,6 +64,20 @@
 - 部分操作会写入 `RICH4_LOGI` 日志（`logs/`），`Ctrl+8` 是主要诊断手段。
 
 ## 典型测试流程
+
+**一键测试任意地块机制**（推荐，省去走路与等待）：
+1. 布置场景：`Ctrl+1`（指向地块归当前玩家）/ `Ctrl+9`（整条街）/ `Ctrl+Shift+2..5`（corp 一键设施）
+2. 鼠标指向目标地块 → **`Ctrl+Shift+G`** → 立即触发结算（买地/升级/收租/转盘/事件）
+3. 日志核对：`debug: Ctrl+Shift+G landingEvent -> wait=N`
+
+**商業用地快速流程**（转盘/住宿/加油站/神明/免收）：
+1. 指向無主城市地块 → `Ctrl+Shift+2`（直接建成**旅館** 1 级且归自己）
+2. 轮到 AI 时指向该地块 → `Ctrl+1`（归 AI）
+3. 指向该地块 → `Ctrl+Shift+G` → 立即收租：**转盘动画** → 「休息N天 費用N元！」→ 住宿 N 天
+4. 加油站：先 `Ctrl+Shift+V` 切到機車/汽車 → `Ctrl+Shift+4` 建加油站 → `Ctrl+Shift+G`
+5. 神明调整：`Ctrl+Shift+T` 携带小財神 → `Ctrl+Shift+G` → 租金减半提示（大財神免付/小窮神+50%/大窮神加倍）
+6. 免收租：`Ctrl+Shift+S` 设地主状态（住宿/出國/監獄/醫院/冬眠/夢遊）→ `Ctrl+Shift+G` → 免收提示
+7. 購物中心同 1-3（`Ctrl+Shift+3`）；公園/研究所不收费（对照验证）
 
 **收租·整条街联动**（停留结算 `landingEvent` 0x419A67；金额 = 同街 `fees[level]` 之和 × `moneyMul`）：
 1. `Ctrl+5` 全图归自己 → `Ctrl+6` 全图 level=1（建筑可见）
