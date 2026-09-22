@@ -440,6 +440,14 @@ void drawAdvancePanel(Application& app) {
     if (!state.gamePlayerControl || state.panelFrame7.frameCount() <= 0) {
         return;
     }
+    // [RE 0x417191] 状态效果中（住宿/出國/監獄/醫院/冬眠/夢遊）不显示前进面板：
+    //   原版状态中玩家回合被跳过（checkPlayerAction 返回 0），不会进入 enablePlayerControl
+    if (state.currentPlayer >= 0 && state.currentPlayer < 9) {
+        const Player& cp = state.players[state.currentPlayer];
+        if (cp.stateFlags != 0 || cp.byte54 != 0 || cp.state37 != 0 || (cp.alive & 0x30) != 0) {
+            return;
+        }
+    }
     Surface& dst = app.surface();
     const Player& p = state.players[state.currentPlayer];
     const int x = state.advancePanelX;
