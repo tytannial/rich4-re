@@ -354,10 +354,19 @@ struct GameState {
     int32_t cfgTravel = 0;     // [RE 0x499118] g_cfgTravel
     int32_t cfgLandPerm = 0;   // [RE 0x499110] g_cfgLandPerm
 
-    int32_t stocks[12][9] = {};      // [RE 0x496980] g_stocks
+    // [RE 0x496980] g_stocks（= flt_49698C..flt_4969A0 的 2D 视图，每支 9 字段）：
+    //   [0] 名称 VA  [1] specPt 索引（sub_428CAF 反查）  [2] 面值(10000)
+    //   [3] 基准价  [4] 昨收  [5] 当前价  [6] 波动率  [7] 动量  [8] 扰动
+    float stocks[12][9] = {};
     uint8_t propStock[30] = {};      // [RE 0x499198] g_propStock
-    int32_t playerShares[4][12] = {}; // [RE 0x4971A0] g_playerShares
-    int32_t stockHistory[12][144] = {}; // [RE 0x497328] g_stockHistory
+    int32_t playerShares[4][12] = {}; // [RE 0x4971A0] g_playerShares（持股数）
+    // [RE 0x4971A4] flt_4971A4 持股均价（买入加权平均）
+    float playerAvgCost[4][12] = {};
+    int32_t stockHistory[12][144] = {}; // [RE 0x497328] g_stockHistory（int32 存 float 位模式）
+    uint8_t stockHalted[12] = {};    // [RE 0x496986] byte_496986 停牌标志
+    uint8_t stockNews[12] = {};      // [RE 0x496987] byte_496987 新闻影响（bit4=涨否则跌）
+    int32_t marketIndex = 0;         // [RE 0x499078] dword_499078 大盘指数（Σ价格×10）
+    float stockGlobalDrift = 0.0f;   // [RE 0x4990EC] dword_4990EC 全局扰动
     uint8_t cardState60[60] = {};    // [RE 0x499120] g_cardState60
     uint8_t cardPool60[60] = {};     // [RE 0x49915C] byte_49915C
     uint8_t cardShuffle[36] = {};    // [RE 0x499090] g_miscTable36B

@@ -18,6 +18,8 @@
 #include "game/app/map_tables.h"
 #include "game/app/message_dialog.h"
 #include "game/app/roulette_dialog.h"
+#include "game/app/spec_pt_dialog.h"
+#include "game/app/stock_system.h"
 #include "game/core/encoding.h"
 #include "game/core/log.h"
 
@@ -926,7 +928,8 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                     }
                 }
             }
-            // TODO(RE 0x41D1A9): 认购股份对话框（阶段 2 股票系统接入）
+            // [RE 0x41D1A9] 认购股份对话框（有主/无主均可；守卫在函数内：sharesLeft != 0）
+            specPtBuyStockDialog(app, si);
         }
     }
     // loc_41B077 → sub_40F381/sub_448A7E/refreshGameUi → loc_41B111：等待 kLandingWait 帧
@@ -1412,6 +1415,8 @@ void advanceDay(Application& app) {
     }
     (void)newMonth;
     (void)refreshed;
+    // [RE 0x41CF67] stockTick：每日股票行情（12 支随机涨跌 + 历史 + 大盘）
+    stockTick(app);
     // [RE 0x41CF67] 音乐切换计时器（byte_46CB06）：低4位递减到0 → 切下一首可选曲目
     if ((st.musicTimer & 0xF) != 0) {
         --st.musicTimer;

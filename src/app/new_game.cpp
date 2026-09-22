@@ -6,6 +6,7 @@
 #include "game/app/new_game_dialog.h"
 #include "game/app/new_game_tables.h"
 #include "game/app/save_data.h"
+#include "game/app/stock_system.h"
 #include "game/application.h"
 #include "game/core/log.h"
 #include "game/render/raw_bitmap.h"
@@ -272,7 +273,14 @@ bool newGameInit(Application& app, bool mode1) {
     // TODO(RE 0x49907C): dword_49907C = sum(flt_49698C[9*i]) * flt_463194（股票总市值）
 
     std::memset(state.playerShares, 0, sizeof(state.playerShares));
+    std::memset(state.playerAvgCost, 0, sizeof(state.playerAvgCost));
     std::memset(state.stockHistory, 0, sizeof(state.stockHistory));
+    std::memset(state.stockHalted, 0, sizeof(state.stockHalted));
+    std::memset(state.stockNews, 0, sizeof(state.stockNews));
+    state.marketIndex = 0;
+    state.stockGlobalDrift = 0.0f;
+    // [RE 0x428CAF] 股票→specPt 映射（按 specPt.index 反查）
+    refreshStockSpecPtMap(app);
 
     // [RE 0x448B81/0x44BAEA] 卡片/事件洗牌
     shuffleIndices(state.cardShuffle, 36);
