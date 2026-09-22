@@ -29,7 +29,7 @@ void specPtBuyStockDialog(Application& app, int specPtIdx) {
     if (st.players[p].state37 != 0 || st.players[p].alive == 0 || sp.sharesLeft == 0) {
         return;
     }
-    const int per = sp.feeBase / 10000;
+    const int per = sp.capital / 10000; // [RE 0x41D1A9] 每股价格 = 股本(+36) / 10000
     if (per <= 0) {
         return;
     }

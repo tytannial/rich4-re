@@ -279,13 +279,15 @@ bool newGameInit(Application& app, bool mode1) {
     std::memset(state.stockNews, 0, sizeof(state.stockNews));
     state.marketIndex = 0;
     state.stockGlobalDrift = 0.0f;
+    // [RE 0x407AD2] specPt+48（sharesLeft）= 10000 - word_496988[18*index]（运行时股票字段）
+    // 差异: 重写简化为固定总股本 10000（word_496988 运行时语义未精确还原）
+    for (size_t i = 1; i < state.specPts.size(); ++i) {
+        state.specPts[i].sharesLeft = 10000;
+        state.specPts[i].fund = 0;
+        state.specPts[i].fundPaid = 0;
+    }
     // [RE 0x428CAF] 股票→specPt 映射（按 specPt.index 反查）
     refreshStockSpecPtMap(app);
-    // [RE 0x496988/0x42915A] 银行股发行/可售股数初始化
-    for (int i = 0; i < 12; ++i) {
-        state.stockBankIssued[i] = static_cast<uint16_t>(state.stocks[i][2]);
-    }
-    refreshBankStockShares(app);
 
     // [RE 0x448B81/0x44BAEA] 卡片/事件洗牌
     shuffleIndices(state.cardShuffle, 36);
@@ -372,15 +374,6 @@ bool loadMap(Application& app) {
     };
     for (size_t i = 1; i < state.specPts.size(); ++i) {
         loadSpecTile(state.specPts[i].sprite);
-    }
-    // [RE 0x407AD2] specPt 一级市场可售股数 = 10000 - 该股票发行股数（stocks[index][2]）
-    //   依据: loadMapData "*(g_specPts+52*m+48) = 10000 - word_496988[18*specPt.index]"
-    //   （MAPDAT 原始值为 0，必须在此填充，否则认购对话框被 sharesLeft==0 守卫拦截）
-    for (size_t i = 1; i < state.specPts.size(); ++i) {
-        const int idx = state.specPts[i].index;
-        const int issued =
-            (idx >= 0 && idx < 12) ? static_cast<int>(state.stocks[idx][2]) : 0;
-        state.specPts[i].sharesLeft = 10000 - issued;
     }
     for (size_t i = 1; i < state.evtCells.size(); ++i) {
         loadSpecTile(state.evtCells[i].sprite);

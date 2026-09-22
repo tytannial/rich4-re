@@ -353,9 +353,9 @@ bool handleDebugKey(Application& app, int code, bool shift) {
                     const SpecPt& sp = st.specPts[i];
                     const std::string nm = nameAt(sp.pad4, 20);
                     RICH4_LOGI("debug: specPt[%d] id=%u name=%s owner=%u index=%u sprite=%u "
-                               "fund=%d feeBase=%u sharesLeft=%d",
+                               "fund=%d feeBase=%u capital=%d sharesLeft=%d",
                                i, id, nm.c_str(), sp.owner, sp.index, sp.sprite, sp.fund,
-                               sp.feeBase, sp.sharesLeft);
+                               sp.feeBase, sp.capital, sp.sharesLeft);
                 }
             } else if (id >= 8000 && id < 10000) {
                 const int i = id - 8000;
