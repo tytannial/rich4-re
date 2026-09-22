@@ -279,15 +279,7 @@ bool newGameInit(Application& app, bool mode1) {
     std::memset(state.stockNews, 0, sizeof(state.stockNews));
     state.marketIndex = 0;
     state.stockGlobalDrift = 0.0f;
-    // [RE 0x407AD2] specPt+48（sharesLeft）= 10000 - word_496988[18*index]（运行时股票字段）
-    // 差异: 重写简化为固定总股本 10000（word_496988 运行时语义未精确还原）
-    for (size_t i = 1; i < state.specPts.size(); ++i) {
-        state.specPts[i].sharesLeft = 10000;
-        state.specPts[i].fund = 0;
-        state.specPts[i].fundPaid = 0;
-    }
-    // [RE 0x428CAF] 股票→specPt 映射（按 specPt.index 反查）
-    refreshStockSpecPtMap(app);
+    // 注: specPt 初始化与股票→specPt 映射在 loadMap（parseMapDat）之后执行（见下方）
 
     // [RE 0x448B81/0x44BAEA] 卡片/事件洗牌
     shuffleIndices(state.cardShuffle, 36);
@@ -352,6 +344,15 @@ bool loadMap(Application& app) {
                "evtCells=%zu (Map.mkf[%zu/%zu])",
                state.gnd.size(), state.cellEnts.size(), state.estates.size(), state.corps.size(),
                state.specPts.size(), state.evtCells.size(), gndIndex, gndIndex + 1);
+    // [RE 0x407AD2] specPt+48（sharesLeft）= 10000 - word_496988[18*index]（运行时股票字段）
+    // 差异: 重写简化为固定总股本 10000（word_496988 运行时语义未精确还原）
+    for (size_t i = 1; i < state.specPts.size(); ++i) {
+        state.specPts[i].sharesLeft = 10000;
+        state.specPts[i].fund = 0;
+        state.specPts[i].fundPaid = 0;
+    }
+    // [RE 0x428CAF] 股票→specPt 映射（按 specPt.stockNo 反查）
+    refreshStockSpecPtMap(app);
 
     // [RE 0x407AD2] 图块资源
     loadUiImage(state.miniMapRaw, state.map, static_cast<size_t>(base + 16));
