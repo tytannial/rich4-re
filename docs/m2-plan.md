@@ -4,9 +4,19 @@
 > （地址、公式、常量、字段偏移）。执行前请阅读 AGENTS.md 与
 > `docs/reverse/functions/gameplay-map-mechanics.md`（机制总览与验收检查表）。
 
-## 执行进度（2026-09-21 会话）
+## 执行进度（2026-09-21/22 会话）
 
-- ✅ **任务 A** `e0c5ac5`：`--debug` 工具集（Ctrl+1..8；Ctrl+4 连锁店待 F3）
+- ✅ **P0 收租补全（2026-09-22 会话）**：住宅用地联动 + 连锁店
+  - 联动诊断：`estateRouteRent` 打印匹配明细（`matched/sum/total`）+ `Ctrl+9`（联动组归当前玩家，
+    住宅=同街同名 / 连锁店=全部连锁店），用于定位"整条街未联动"
+  - 联动高亮：`highlightBlink`(0x451985) 还原——16 帧 `g_highlightLut`(0x476380) 亮度闪烁 +
+    `markPickBuffer`(0x456C0A) 标记联动组（30ms/帧 + 400ms 停留）；重写用 `mapHitRegions` 区域做
+    RGB555 亮度偏移（`drawEstateHighlight`，非阻塞）
+  - 连锁店：`Ctrl+4`（改建卡 `cardRebuildEffect` 0x44309B：`level!=0` 时 `type^=1`，变连锁店
+    `level>1`→1）+ 收费（同地主数量×2000，跨街道高亮）；完整卡片流程 P4
+  - 顺带修：`kBuildingNames` 补第 17 项"五級"（原 16 项越界）；`kMonthName` 误名 → `kWeekdayNames[7]`
+    （原表 0x47511C 实为星期名）
+- ✅ **任务 A** `e0c5ac5`：`--debug` 工具集（Ctrl+1..9；Ctrl+4 连锁店已接入）
 - ✅ **任务 B** `00bf29d`：大地图填色（`bigMapBuffer`；标记帧 26/28/28、11392 缩放）
 - ✅ **任务 C** `c60ab5b`：买地面板背景（`g_tipFrame` 帧 5 @ (220,140)，色键 blit）
 - ✅ **任务 D** `36c3392` + 本次修正：收租
@@ -143,11 +153,16 @@
 - 购买路径同普通地块（`loc_41A013` 无 type 检查）→ "无法购买"用 **`Ctrl+8`** 打印现场诊断
 - 可能修复点：重写 `landingEvent` 的 objId 范围 / 价格计算 / `estates.size()` 边界
 
-### F3 连锁店（改建卡）
+### F3 连锁店（改建卡）—— ✅ 已逆向并接入 Ctrl+4
 
-- 用户描述：**小空地（level 0）使用改建卡 → 连锁店；过路费 = 数量 × 2000**
-- 探索线索：卡片系统（`givePlayerCard` 0x445A4D、`sub_445ADA` 抽卡、卡片名表 `off_47FEDA`）；`estate.flag`(+23) 或 `estate.type`(+24) 取值；过路费公式中的"数量×2000"
-- 结论回填文档 + IDB；随后接入 `Ctrl+4`
+- **原版结论**（`cardRebuildEffect` 0x44309B，卡片 7；效果表 `g_cardEffectFuncs` 0x475D5C）：
+  - 守卫：**`estate.level(+26) != 0`（必须有建筑）**；用户原描述"小空地 level 0"有误，以 IDA 为准
+  - `type(+24) ^= 1`（0=住宅 ↔ 1=连锁店）；变连锁店且 `level > 1` → `level = 1`
+  - 消耗卡片 `sub_441343(player, 7)`；corp 分支 = `selectFacilityDialog(1)` 变更设施类型
+  - 使用流程 `useCardFlow` 0x441BAA（人类 `sub_4416F0` 选卡 / AI `sub_41E69E` 可用判定）
+- **收费**：`estateRouteRent(owner, 0)` = 同地主**全部连锁店数量 × 2000 × M**（不与同路段联合）；
+  收租时高亮全部连锁店（跨街道）
+- **重写**：`Ctrl+4` 实现切换逻辑；收费已随 `estateRouteRent` 生效；完整卡片流程留 P4
 
 ## 7. 关键原版依据速查
 
@@ -165,6 +180,8 @@
 | 地主免收 | `ownerCanCollectRent` 0x41D559：查封/與付款人同盟(+65)/死神顯靈(槽15)/住宿/消失/坐牢/住院/冬眠/夢遊 |
 | 神明调整 | `applyGodRentModifier` 0x41D709：小財神减半 / 大財神免付 / 小窮神 +50% / 大窮神加倍 |
 | 收租消息 | 0x4639B3 `"%s\n\n此地屬%s\n\n請付%d元%s"`（%s=地名/地主/金额/"過路費"）；同盟分账用 0x46399A `"%s\n\n屬%s與%s\n\n請付%d元%s"` |
+| 收租联动高亮 | `highlightBlink` 0x451985：16 帧 `g_highlightLut`(0x476380) 亮度偏移 + `markPickBuffer`(0x456C0A) 标记联动组（住宅=同 owner+同名 / 连锁店=同 owner+type≠0）；标记数>1 触发，30ms/帧+400ms |
+| 连锁店创建 | 改建卡 `cardRebuildEffect` 0x44309B：`level!=0` 时 `type^=1`（0住宅↔1连锁店），变连锁店 `level>1`→1；效果表 `g_cardEffectFuncs` 0x475D5C、流程 `useCardFlow` 0x441BAA |
 | 移动结束 case 3 | `sub_448A7E` 触发（步行 travel&0x83==3 + 他人有建筑）；`addPlayerDebt(owner-1, cur, 30*moneyMul)` **仅记账** + 面向 + FLC 526（不转账）|
 | 记账 | `sub_40DF69`（`addPlayerDebt`）→ `dword_496BB4[26*a1+a2]`（**a1 应收 a2**，不直接扣钱）|
 | 转账 | `sub_41D2C6`（重写 `transferMoney`）：flags&4 付款银行优先 / flags&1 收款入现金（否则入银行）；收租用 **flags=0**（地主入银行）|

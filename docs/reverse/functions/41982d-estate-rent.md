@@ -135,15 +135,50 @@ return g_moneyMul * 总和
 - 费用名：corp `g_costNames[byte_475284[type+7]]`、specPt `g_costNames[g_specPtCostMap[index]]`。
 - `ownerCanCollectRent` / `applyGodRentModifier` / 免費卡（`[HELP 60]`）/ 嫁禍卡（`[HELP 80]`）/ 死神代付与 estate 同构。
 
+## 4.1 连锁店（改建卡创建 + 收费）
+
+- **创建**（改建卡 card[7] → `cardRebuildEffect` 0x44309B）：
+  ```
+  estate 分支（要求 level(+26) != 0，必须有建筑）:
+      wasChain = (type(+24) == 1)
+      type ^= 1                    // 0=住宅 ↔ 1=连锁店
+      if (!wasChain && level > 1) level = 1   // 变连锁店时等级固定 1
+      sub_441343(player, 7)        // 消耗卡片
+  corp 分支: selectFacilityDialog(1) 变更设施类型（公園/加油站时 sub 降为 1）
+  ```
+  - 卡片表 `off_47FDEA`（card[7]=改建卡）；效果函数表 `g_cardEffectFuncs`（0x475D5C，30 项）
+  - 使用流程 `useCardFlow`（0x441BAA）：人类 `sub_4416F0` 选卡 / AI `sub_41E69E` 可用判定 → 效果函数
+- **收费**：`estateRouteRent(owner, 0)` = 同 owner **全部连锁店数量 × 2000 × M**（不与同路段联合）；
+  `flag(+23)` 翻倍、神明调整、地主状态免收、转账 flags=0 与住宅一致；不可加盖（升级守卫 `type!=0`）
+- **外观**：`type != 0` → `estateFlag`（map.mkf[79+4*mode]）+ owner 色（0x4091DF）
+
+## 4.2 收租联动高亮（整条街/连锁店闪烁）
+
+- **标记**：收租时遍历全部地块，将联动组在 `g_pickBuffer` 标为 `0xFFFF`（`markPickBuffer` 0x456C0A，
+  缓冲 440×440，`193600` 字节）：
+  - 住宅用地 = 同 owner + 同名 + `type==0`
+  - 连锁店 = 同 owner + `type!=0`（**跨街道全部连锁店**）
+  - 同盟地块（`v140`）也标记 → P4
+- **闪烁**（`highlightBlink` 0x451985，仅标记数 `v141 > 1` 时）：
+  - 16 帧亮度偏移 `g_highlightLut`（0x476380）= `{4,8,12,16,12,8,4,0,-4,-8,-12,-16,-12,-8,-4,0}`
+  - 每帧 30ms（`sub_4528B9(30)`），用 `blitHighlightedMap`（0x4554FC）按标记 + 亮度调色板重绘
+  - 循环后 `sub_4528B9(400)` 停留（最后一帧偏移 0 = 正常画面）
+- **重写**：`startRouteHighlight`（turn_system.cpp）收集联动组 → `drawEstateHighlight`（map_render.cpp）
+  对 `mapHitRegions` 中 estate 区域/像素掩码做 RGB555 亮度偏移（8bit 量 >>2），非阻塞与
+  `showMessage` 并行；`Ctrl+9` 可一键把联动组归当前回合玩家（测试用）
+
 ## 5. 重写差异与 P4 待办
 
 - **已实现**：音效槽 20、地主状态免收、联合租金（同路段/連鎖店）、flag 翻倍、付款方神明调整、
-  showMessage 提示、`transferMoney(p, owner, rent, 0)`、`estate.price = rent`。
+  showMessage 提示、`transferMoney(p, owner, rent, 0)`、`estate.price = rent`、
+  **联动高亮**（`highlightBlink` 还原）、**连锁店收费 + Ctrl+4 创建**（debug）、`estateRouteRent` 诊断日志。
 - **未实现（P4）**：
   - 同盟分账（`g_playerAlly` 双方按 `v134/(v8+v134)` 拆分；重写字段已建模）
   - 死神/恶魔代付（`findDeathGodCarrier`）
-  - 免費卡/嫁禍卡检查（依赖卡片系统 `sub_444E1A`）
-  - 同路段高亮（`rebuildPickBuffer` + `sub_456C0A`）与浮动数字（`sub_44F354`）
+  - 免費卡/嫁禍卡检查（依赖卡片系统 `useCardFlow`）
+  - 浮动数字（`sub_44F354`）
   - 商業用地 / 行業設施點收費（0x41A168，公式已逆向 → `pricing-formulas.md` §4/§5）
 - **case 3 语义修正**：早期重写在 case 3 立即转账 30×`moneyMul`，与 landingEvent 收租重复；
   已移除（保留面向 + 记账日志 + `stepDwell`）。
+- **调试**：`estateRouteRent` 打印每个匹配地块明细 + 联动块数/总额（定位"整条街未联动"类问题）；
+  `Ctrl+9` 指向地块所在联动组归当前玩家；`Ctrl+4` 住宅↔连锁店切换（`type^=1`、`level=1`）。

@@ -249,8 +249,14 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
   5. `showMessage("%s\n\n此地屬%s\n\n請付%d元過路費", 1500)` → `transferMoney(p, owner, rent, 0)`
      （**flags=0：收款入银行**）→ `estate.price(+44) = 本次租金`
 - [x] 連鎖店收費（`estateRouteRent` 的 type≠0 分支：數量×2000，不并入路段联合计算）`[HELP 21]`
-- 差异（待 P4）：同盟分账（`g_playerAlly` 双方按比例拆分）、死神/恶魔代付（`findDeathGodCarrier` 0x40FBB8）、
-  免費卡/嫁禍卡（`sub_4413AD`/`sub_444A60`/`sub_44476A`）、同路段高亮（`rebuildPickBuffer`+`sub_456C0A`）、
+- [x] **收租联动高亮**（`highlightBlink` 0x451985 + `markPickBuffer` 0x456C0A）：收租时标记联动组
+      （住宅=同 owner+同名；连锁店=同 owner+type≠0 跨街道）→ 标记数>1 播放 16 帧亮度闪烁
+      （`g_highlightLut` 0x476380，30ms/帧 + 400ms 停留）；重写用 `mapHitRegions` 区域做 RGB555 亮度偏移
+- [x] **連鎖店创建**（改建卡 `cardRebuildEffect` 0x44309B：`level!=0` 时 `type^=1`，变连锁店 `level>1`→1；
+      卡片 7、效果表 `g_cardEffectFuncs` 0x475D5C）；调试 `Ctrl+4` 支持；完整卡片流程（选卡/消耗）→ P4
+- [x] 收租诊断日志（`estateRouteRent` 打印匹配明细 + `matched/sum/total`，定位联动问题）+ `Ctrl+9` 一键联动组
+- 差异（待 P4）：同盟分账（`g_playerAlly` 双方按比例拆分，高亮含同盟地块）、死神/恶魔代付
+  （`findDeathGodCarrier` 0x40FBB8）、免費卡/嫁禍卡（`sub_4413AD`/`sub_444A60`/`sub_44476A`）、
   浮动数字（`sub_44F354`）
 - [x] **全部收费公式逆向归档** → `pricing-formulas.md`（物價指數/輪盤/本次步數/載具倍率、住宅用地/商業用地/行業設施點
   三类对象的购买/建设/升级/收费/到期公式、费用名表与映射表、MAPDAT 实测数值）
