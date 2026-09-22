@@ -290,6 +290,6 @@ owner 自己停留：index4 → 轮盘(3) 免费投保；index11 → 施工抽�
 | 研究所（corp type4）研发 `labDevelopDialog` | ❌ 本文 §4（P4 道具系统依赖；入口条件已实现为日志） |
 | 行業設施點（specPt）收费 + 出國 n 天 | ❌ 本文 §5（依赖 `sub_40D375` 出国状态） |
 | `g_moneyMul` 月度更新 + `playerTotalAssets` | ❌ 本文 §1.1（当前重写恒 1） |
-| 轮盘/老虎机读数（3/4 位） | 🟡 数值已实现（`rouletteValue` 按 `byte_475D0C` 表随机取有效值）；UI 动画 ❌（本文 §1.5） |
+| 轮盘/老虎机读数（3/4 位） | ✅ **完整转盘 UI**（`roulette_dialog.cpp` `roulettePrompt`）：panel.mkf[68+theme] 14 帧 + 指针逐格步进（40ms/帧）+ 减速停止（间隔 1..5）+ 停留 40 帧；读数 = `byte_475D0C` 终格值。神明轮盘（`slotMachineValue` 4 滚轮）❌ 未接入 |
 | 到期处理 `sub_40AC7B` | 🟡 期限写入已有（`g_landPermDays`），到期清算 ❌ |
 | 事件格金额 | 见 `41982d-p2-events.md` |

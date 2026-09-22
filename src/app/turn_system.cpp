@@ -17,6 +17,7 @@
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
 #include "game/app/message_dialog.h"
+#include "game/app/roulette_dialog.h"
 #include "game/core/encoding.h"
 #include "game/core/log.h"
 
@@ -312,31 +313,7 @@ int facingBetween(GameState& st, int fromId, int toId) {
 
 // [RE 0x419744] estateRouteRent 定义见文件后部（导出供 object_tip 复用）
 
-// [RE 0x43F7C6] rouletteValue：轮盘读数（主题表 byte_475D0C[12*theme + 格]，0xFF = 无效格）
-// 依据: 0x43F7C6 动画结束返回 byte_475D0C[12*theme + 终格]（有效格）；
-//   主题 0=出國天數 {1,0,1,2,3,2} / 1=旅館天數 {1,4,3,2} / 2=購物倍數 {1,6,5,4,3,2}
-//   / 3=投保天數 {5,3,30,20,15,10}（0x476380 附近表；0xFF 为无效格占位）
-// 差异: 重写暂以"随机取有效值"等价（滚轮/转盘 UI 动画后续接入）
-int rouletteValue(int theme) {
-    static const uint8_t kTable[4][12] = {
-        {1, 0xFF, 0, 0xFF, 1, 0xFF, 2, 0xFF, 3, 0xFF, 2, 0xFF},
-        {0xFF, 0xFF, 1, 0xFF, 0xFF, 4, 0xFF, 3, 0xFF, 0xFF, 2, 0xFF},
-        {1, 0xFF, 6, 0xFF, 5, 0xFF, 4, 0xFF, 3, 0xFF, 2, 0xFF},
-        {5, 0xFF, 3, 0xFF, 30, 0xFF, 20, 0xFF, 15, 0xFF, 10, 0xFF},
-    };
-    const int t = theme & 3;
-    uint8_t values[12];
-    int n = 0;
-    for (int i = 0; i < 12; ++i) {
-        if (kTable[t][i] != 0xFF) {
-            values[n++] = kTable[t][i];
-        }
-    }
-    if (n == 0) {
-        return 0;
-    }
-    return values[std::rand() % n];
-}
+// [RE 0x43F7C6] 轮盘读数与 UI 已移至 src/app/roulette_dialog.cpp（roulettePrompt，完整转盘动画）
 
 // [RE 0x419A67] startRouteHighlight：收租联动高亮收集与启动
 // 依据: 0x419A67 高亮循环（rebuildPickBuffer(1) + sub_456C0A 标记同组地块 →
@@ -808,15 +785,15 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                 int32_t rent = 0;
                 int hotelDays = 0;
                 if (cp.type == 1) {
-                    // 旅館：休息天數 = 轮盘(1)；rent = base × days
-                    hotelDays = rouletteValue(1); // [RE 0x41A458]
+                    // 旅館：休息天數 = 转盘(1)（完整 UI：panel[69] + 减速停止）；rent = base × days
+                    hotelDays = roulettePrompt(app, 1, ownerName); // [RE 0x41A458/0x44090E]
                     rent = base * hotelDays;
                     // [RE 0x4639FF] "休息%d天\n\n費用%d元！"
                     std::snprintf(text, sizeof(text), "休息%d天\n\n費用%d元！", hotelDays, rent);
                     showMessage(app, text, 1500);
                 } else if (cp.type == 2) {
-                    // 購物中心：消費倍數 = 轮盘(2)；rent = base × mult
-                    const int mult = rouletteValue(2); // [RE 0x41A4B4]
+                    // 購物中心：消費倍數 = 转盘(2)（完整 UI：panel[70] + 减速停止）
+                    const int mult = roulettePrompt(app, 2, ownerName); // [RE 0x41A4B4/0x44090E]
                     rent = base * mult;
                     // [RE 0x463A14] "您的消費金額為\n\n%dx%d倍=%d元"
                     std::snprintf(text, sizeof(text), "您的消費金額為\n\n%dx%d倍=%d元", base, mult,

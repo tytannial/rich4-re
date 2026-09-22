@@ -283,8 +283,11 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
       購物中心 = `×rouletteValue(2)`（"您的消費金額為\n\n%dx%d倍=%d元"）、
       加油站 = `500×载具倍率×diceValue×M`（"加油站\n\n董事長%s\n\n請付%d元%s"，步行免付）；
       `flag(+28)` 翻倍、神明调整、`transferMoney(flags=0)`、`corp+48=最近收费`
-- [x] **轮盘数值**（`rouletteValue`，0x43F7C6 表 `byte_475D0C`）：出國 {1,0,1,2,3,2} / 旅館 {1,4,3,2} /
-      購物 {1,6,5,4,3,2} / 保險 {5,3,30,20,15,10}；UI 动画待接入
+- [x] **转盘 UI**（`roulettePrompt` 0x44090E，新文件 `roulette_dialog.cpp`）：panel.mkf[68+theme] 14 帧
+      （帧 0 底盘/帧 1 中心/帧 2..13 十二格）+ 提示文本 `off_475CF8[theme]` + 指针逐格步进
+      （`sub_43F127`，40ms/帧，12 格循环）+ 减速停止（间隔 1..5 每 3 步 +1，落在有效格）+ 停留 40 帧；
+      读数表 `byte_475D0C`：出國 {1,0,1,2,3,2} / 旅館 {1,4,3,2} / 購物 {1,6,5,4,3,2} / 保險 {5,3,30,20,15,10}；
+      音效 Effect.mkf[52]；旅館/購物中心收费已接入（转盘在收费提示前）
 - [x] **旅館住宿状态**（0x41A761）：`stateFlags` BYTE0 = days-1（0→0x80，`ownerCanCollectRent` 住宿中免收租）、
       `byte66 += days`；住宿欠款 20×M×days 与保险理赔 2000×M×days 仅日志（欠款矩阵/保险期 P4）
 - [x] `diceValue`（0x48BAFC 本次步数，掷骰定格记录）供加油站/汽车/石油计费
