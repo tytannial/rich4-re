@@ -366,27 +366,35 @@ void startRouteHighlight(GameState& st, const Estate& es) {
 // [RE 0x451985] playHighlightBlink：阻塞播放联动闪烁（先闪烁、后弹收费提示）
 // 依据: 0x451985 逐帧 byte_476380[i] 重绘（sub_4554FC），每帧 sub_4528B9(30)，
 //       循环后 sub_4528B9(400) 停留；原版在 showMessage(收费) 之前完成
-// 迁移: 逐帧 renderGameFrame（画 surface）+ renderFrame（present/音频）+ SDL_Delay(30)，
+// 迁移: 逐帧 renderGameFrame（画 surface）+ renderFrame（present/音频）+ 分段延时，
 //       期间 pumpEvents 保持窗口响应（收租时 gamePlayerControl=0，事件被吞/仅物件提示）
+// [PORT] 音频续喂：kTargetQueued=1024 字节（8bit mono @44.1kHz ≈ 23ms）——阻塞循环的
+//       30ms 间隔会超过缓冲导致音乐 underrun（卡顿）→ 延时拆为 5ms 小段逐段 audio.update()
 void playHighlightBlink(Application& app) {
     GameState& st = app.gameState();
     if (st.highlightFrame < 0) {
         return; // 联动组 ≤ 1（原版 v141 > 1 才播放）
     }
     RICH4_LOGI("route highlight: %zu estates blink (RE 0x451985)", st.highlightEstates.size());
+    auto waitAudio = [&app](int ms) {
+        for (int t = 0; t < ms; t += 5) {
+            app.audio().update();
+            SDL_Delay(5);
+        }
+    };
     for (int f = 0; f < 16; ++f) {
         st.highlightFrame = f;
         renderGameFrame(app);
         app.renderFrame();
         app.pumpEvents();
-        SDL_Delay(30);
+        waitAudio(30);
     }
     // 停留期（原版 sub_4528B9(400)：最后一帧 byte_476380[15]=0 无偏移）
     st.highlightFrame = 16;
     renderGameFrame(app);
     app.renderFrame();
     app.pumpEvents();
-    SDL_Delay(400);
+    waitAudio(400);
     st.highlightFrame = -1;
     st.highlightEstates.clear();
 }
@@ -1413,14 +1421,19 @@ void updateGameState(Application& app) {
             break;
         }
         case 3: {
-            // [RE 0x40DA4B] 移动结束特殊移动（由 sub_448A7E 触发：落在他人有建筑的住宅用地/商業用地）：
-            //   保存原朝向（g_playerRestoreDir +27）→ 面向目标格（sub_454FB4）→
-            //   data.mkf[526] FLC 动画（x-55, y-55）期间保持面向 → FLC 结束后恢复朝向 → 转状态 0
-            //   同时记账 30*g_moneyMul（sub_40DF69 欠款矩阵，重写未建模，仅日志）
-            // 注意: 原版此分支**不直接转账**（实际收租在 landingEvent 0x419A67，租金按
-            //   fees[level] 联合计算）；重写早期版本曾在此立即转账 30*moneyMul，已移除
-            //   （避免与停留结算重复扣款）
-            // 差异: FLC 526 视觉未接入，用 stepDwell=30 停留近似其时长；sub_40B066 动画帧、同格音效待接入
+            // [RE 0x40DA4B] 移动结束特殊移动（**由 sub_448A7E 有条件触发**）：
+            //   触发条件（0x448A7E）：`(travel & 0x83) == 3`（临时载具计时中）且无 state37/
+            //   stateFlags.BYTE0 且落在他人有建筑的住宅用地/商業用地
+            //   → 保存原朝向（g_playerRestoreDir +27）→ 面向目标格（sub_454FB4）→
+            //   FLC 526 画在建筑屏幕坐标（sub_40B066 取绘制列表坐标，x-55/y-55）→
+            //   结束后恢复朝向 → 转状态 0；同时记账 30*g_moneyMul（欠款矩阵，仅日志）
+            // travel(+17) 编码：低2位=载具类型（0=步行/1=機車/2=汽車）、bit2-7=载具剩余回合；
+            //   4n+3 = 临时载具计时中（sub_41C84F 每回合 -4，归零恢复默认载具）
+            // 注意: 普通步行/機車/汽車（travel=0/1/2）**不满足条件 → 不面向/不停留**，
+            //   直接转状态 0（等价原版 sub_448A7E 不设 state=3）
+            // 差异: FLC 526 视觉未接入（载具计时系统未实现，触发路径暂不可达）；
+            //   面向停留用 stepDwell=30 近似 FLC 时长
+            const bool routeChargeAnim = ((st.players[p].travel & 0x83) == 3);
             if (st.stepDwell > 0) {
                 --st.stepDwell;
                 if (st.stepDwell == 0) {
@@ -1432,7 +1445,7 @@ void updateGameState(Application& app) {
                 break;
             }
             bool faced = false;
-            if (p < 9 && st.players[p].cellEntId > 0 &&
+            if (routeChargeAnim && p < 9 && st.players[p].cellEntId > 0 &&
                 st.players[p].cellEntId < st.cellEnts.size()) {
                 const CellEnt& ce = st.cellEnts[st.players[p].cellEntId];
                 const uint16_t objId = ce.special;

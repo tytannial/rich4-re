@@ -10,7 +10,7 @@
 
 | 时机 | 原版 | 说明 |
 |------|------|------|
-| 移动结束 | `sub_448A7E` → state=3（0x40DA4B） | 条件：`travel & 0x83 == 3`（步行）+ 无 state37/stateFlags BYTE0 + 落在他人有建筑（`estate.level!=0` / `corp.sub!=0`）的住宅用地/商業用地 → `addPlayerDebt(owner-1, cur, 30*g_moneyMul)` **仅记账** + 面向目标（`sub_454FB4`）+ FLC 526（x-55,y-55）|
+| 移动结束 | `sub_448A7E` → state=3（0x40DA4B） | 条件：`(travel & 0x83) == 3`（**临时载具计时中**，非步行）+ 无 state37/stateFlags BYTE0 + 落在他人有建筑（`estate.level!=0` / `corp.sub!=0`）的住宅用地/商業用地 → `addPlayerDebt(owner-1, cur, 30*g_moneyMul)` **仅记账** + 面向目标（`sub_454FB4`）+ FLC 526 画在**建筑屏幕坐标**（`sub_40B066` 取绘制列表 x/y，x-55/y-55）|
 | 停留结算 | `sub_418E7F` → `landingEvent`（0x41982D）case 0 → **loc_419A67** | 实际收租：音效槽 20 → 状态免收 → 联合租金 → 神明调整 → showMessage → 转账 |
 
 - case 0 分派：objId 2000..3999 = **住宅用地 estate**、4000..5999 = **商業用地 corp**（0x41A168 起，
@@ -18,6 +18,13 @@
   8000+ = evtCell（仅提示）。
 - 重写中 `landingEvent` 由 `calcPlayerWait`（0x418E7F）在**移动后 case 0 倒计时结束**时调用，
   返回值 = 等待帧数（`kLandingWait=0x90`，原版 0x88）。
+- **`travel`（+17 `g_playerVehicle`）编码**（0x40721F/0x41C84F 实测）：低 2 位 = 载具类型
+  （0=步行 / 1=機車 / 2=汽車）、bit2-7 = 载具剩余回合；**`4n+3` = 临时载具计时中**
+  （`sub_41C84F` 每回合 `-4`，归零后恢复默认载具或步行）。
+  加油站免付条件 `(travel & 3) == 0`（步行）印证此编码。
+  → **普通步行/機車/汽車（travel=0/1/2）不满足 `(travel & 0x83) == 3`**：
+  收过路费**不面向、不停留**（原版 `sub_448A7E` 不设 state=3）；
+  case 3 的面向 + FLC 526 仅出现在临时载具计时场景（重写载具计时未实现，路径暂不可达）。
 
 ## 1. 他人住宅用地收租（0x419A67..0x41A00E）
 
