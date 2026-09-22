@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <cstring>
 
 #include "game/app/map_render.h"
+#include "game/app/map_tables.h"
 #include "game/application.h"
 #include "game/core/log.h"
 
@@ -54,14 +56,32 @@ float stockPriceUpdate(float prev, float momentum) {
 } // namespace
 
 // [RE 0x428CAF] refreshStockSpecPtMap
-// 依据: 0x428CAF 反编译; 遍历 12 支股票，对已有映射者（stocks[s][1] != 0）按
-//       specPt.index == 股票号 反查 specPt 索引并回写
+// 依据: 0x428CAF 反编译; 遍历 12 支股票，对"上市公司"（kStockInit[s][1] != 0）按
+//       specPt.stockNo == 股票号 反查 specPt 索引并回写 stocks[s][1]
+// 迁移: 上市判断改用 kStockInit 表（不依赖运行时初值，幂等）；
+//       股票表未初始化（如读档路径未经过 newGameInit）时用 kStockInit 重建
 void refreshStockSpecPtMap(Application& app) {
     GameState& st = app.gameState();
+    const auto& init = kStockInit[st.gameMode * 4 + st.mapIndex];
+    // 确保股票表已初始化（基准价 [3] 全 0 视为未初始化）
+    bool empty = true;
     for (int s = 0; s < 12; ++s) {
-        if (static_cast<int>(st.stocks[s][1]) == 0) {
-            continue; // 非上市公司
+        if (st.stocks[s][3] != 0.0f) {
+            empty = false;
+            break;
         }
+    }
+    if (empty) {
+        std::memcpy(st.stocks, init, sizeof(st.stocks));
+        RICH4_LOGI("stock table rebuilt from kStockInit (mode=%d map=%d)", st.gameMode,
+                   st.mapIndex);
+    }
+    for (int s = 0; s < 12; ++s) {
+        if (init[s][1] == 0) {
+            st.stocks[s][1] = 0.0f; // 非上市公司：无 specPt 映射
+            continue;
+        }
+        st.stocks[s][1] = 0.0f;
         for (size_t i = 1; i < st.specPts.size(); ++i) {
             if (st.specPts[i].stockNo == s) {
                 st.stocks[s][1] = static_cast<float>(i);
