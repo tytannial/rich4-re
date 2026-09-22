@@ -270,7 +270,14 @@ bool newGameInit(Application& app, bool mode1) {
     // [RE 0x47F072] g_stocks = off_47F072[432*mode + 108*map]（12 股票 x 9 字段）
     std::memcpy(state.stocks, kStockInit[state.gameMode * 4 + state.mapIndex],
                 sizeof(state.stocks));
-    // TODO(RE 0x49907C): dword_49907C = sum(flt_49698C[9*i]) * flt_463194（股票总市值）
+    // [RE 0x40744D] dword_49907C = Σ(stocks[i][3] 基准价) × flt_463194(10.0)（股票总市值）
+    {
+        double total = 0.0;
+        for (int i = 0; i < 12; ++i) {
+            total += state.stocks[i][3];
+        }
+        state.stockTotalValue = static_cast<int32_t>(total * 10.0);
+    }
 
     std::memset(state.playerShares, 0, sizeof(state.playerShares));
     std::memset(state.playerAvgCost, 0, sizeof(state.playerAvgCost));
@@ -344,12 +351,19 @@ bool loadMap(Application& app) {
                "evtCells=%zu (Map.mkf[%zu/%zu])",
                state.gnd.size(), state.cellEnts.size(), state.estates.size(), state.corps.size(),
                state.specPts.size(), state.evtCells.size(), gndIndex, gndIndex + 1);
-    // [RE 0x407AD2] specPt+48（sharesLeft）= 10000 - word_496988[18*index]（运行时股票字段）
-    // 差异: 重写简化为固定总股本 10000（word_496988 运行时语义未精确还原）
-    for (size_t i = 1; i < state.specPts.size(); ++i) {
-        state.specPts[i].sharesLeft = 10000;
-        state.specPts[i].fund = 0;
-        state.specPts[i].fundPaid = 0;
+    // [RE 0x407AD2] specPt+48（sharesLeft）= 10000 - word_496988[18*stockNo]
+    //   word_496988（g_stocks +4）初值 = kStockInit[stockNo][2]（银行渠道初始发行量）
+    //   总股本固定 10000；现金认购剩余 = 10000 - 银行渠道发行量
+    //   （如臺灣人壽 face=5000 → 5000；中國信託/大宇百貨 face=10000 → 0，仅银行渠道）
+    {
+        const auto& stockInit = kStockInit[state.gameMode * 4 + state.mapIndex];
+        for (size_t i = 1; i < state.specPts.size(); ++i) {
+            const int sn = state.specPts[i].stockNo;
+            const int issued = (sn >= 0 && sn < 12) ? stockInit[sn][2] : 0;
+            state.specPts[i].sharesLeft = 10000 - issued;
+            state.specPts[i].fund = 0;
+            state.specPts[i].fundPaid = 0;
+        }
     }
     // [RE 0x428CAF] 股票→specPt 映射（按 specPt.stockNo 反查）
     refreshStockSpecPtMap(app);

@@ -366,6 +366,7 @@ struct GameState {
     uint8_t stockHalted[12] = {};    // [RE 0x496986] byte_496986 停牌标志
     uint8_t stockNews[12] = {};      // [RE 0x496987] byte_496987 新闻影响（bit4=涨否则跌）
     int32_t marketIndex = 0;         // [RE 0x499078] dword_499078 大盘指数（Σ价格×10）
+    int32_t stockTotalValue = 0;     // [RE 0x49907C] dword_49907C 股票总市值（Σ基准价×10）
     float stockGlobalDrift = 0.0f;   // [RE 0x4990EC] dword_4990EC 全局扰动
     uint8_t cardState60[60] = {};    // [RE 0x499120] g_cardState60
     uint8_t cardPool60[60] = {};     // [RE 0x49915C] byte_49915C
