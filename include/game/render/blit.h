@@ -48,7 +48,7 @@ bool blitSpriteFrame(Surface& dst, const UiImage& spr, int frame, int x, int y);
 // [RE 0x456770] sub_456770 SPR 帧绘制（裁剪到全局裁剪矩形 dword_4861B8..C4）
 // 依据: 0x456770 反编译; 帧头 12 字节 {w,h,offX,offY,size}, 8bit 索引 + 调色板,
 //       目标 = (x - offX, y - offY), 裁剪到 dword_4861B8/C0/BC/C4
-// 用于游戏内地图精灵（棋子/地产/公司/特殊点/事件格）
+// 用于游戏内地图精灵（棋子/住宅用地/商業用地/行業設施點/事件格）
 bool blitSpriteFrameClipped(Surface& dst, const UiImage& spr, int frame, int x, int y,
                             bool useClipRect);
 

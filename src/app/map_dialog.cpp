@@ -21,7 +21,7 @@ void redrawMap(MapDialogState& st) {
     Application& app = *st.app;
     GameState& state = app.gameState();
     Surface& dst = app.surface();
-    // [RE 0x40A4E1] 大地图底图 = 工作副本（miniMapRaw 帧 1 + 地产/公司/特殊点玩家色块，
+    // [RE 0x40A4E1] 大地图底图 = 工作副本（miniMapRaw 帧 1 + 住宅用地/商業用地/行業設施點玩家色块，
     //   11392 缩放、标记帧 26/28/28）；原版由 sub_40A9BD 打开前 rebuildMiniMap(1) 生成，
     //   重写按需重建（面板绘制时已重建，此处兜底）
     if (state.bigMapBuffer.empty()) {

@@ -24,7 +24,7 @@ void transferMoney(Application& app, int from, int to, int32_t amount, int flags
 void releaseCellTableSlot(Application& app, int slot);
 
 // [RE 0x40CD87] eliminatePlayer（定义见 src/app/economy.cpp）
-// 玩家破产/淘汰：标记占用位、释放携带物件、清空地产/公司/特殊点、全灭时 sceneRequest
+// 玩家破产/淘汰：标记占用位、释放携带物件、清空住宅用地/商業用地/行業設施點、全灭时 sceneRequest
 void eliminatePlayer(Application& app, int p);
 
 } // namespace rich4

@@ -46,7 +46,7 @@ std::string buildTipText(const GameState& state, uint16_t id) {
         }
         return {};
     }
-    if (id < 4000) { // 地产：地主 + 建筑名 + 等级名 + 费用（原版 0x417559）
+    if (id < 4000) { // 住宅用地：地主 + 建筑名 + 等级名 + 费用（原版 0x417559）
         const int i = id - 2000;
         if (i <= 0 || i >= static_cast<int>(state.estates.size())) {
             return {};
@@ -65,7 +65,7 @@ std::string buildTipText(const GameState& state, uint16_t id) {
         s += std::to_string(fee);
         return s;
     }
-    if (id < 6000) { // 公司：名称（+4）+ 地主 + 公司类型名 + 等级名
+    if (id < 6000) { // 商業用地：名称（+4）+ 地主 + 設施類別名 + 等级名
         const int i = id - 4000;
         if (i <= 0 || i >= static_cast<int>(state.corps.size())) {
             return {};

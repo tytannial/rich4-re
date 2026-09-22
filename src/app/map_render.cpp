@@ -316,7 +316,7 @@ void renderMap(Application& app, int centerX, int centerY) {
                 static_cast<uint16_t>((slot + 1) << 8));
     }
 
-    // 地产：有主绘制旗帜（玩家色）；无主空地不绘制（地形自带虚线框），仅记录命中
+    // 住宅用地：有主绘制旗帜（玩家色）；无主空地不绘制（地形自带虚线框），仅记录命中
     for (size_t i = 1; i < state.estates.size(); ++i) {
         const Estate& es = state.estates[i];
         const int frame = (8 - (state.mapRotation + es.dir)) & 7;
@@ -358,7 +358,7 @@ void renderMap(Application& app, int centerX, int centerY) {
         }
     }
 
-    // 公司：有主绘制（玩家色）；无主不绘制，仅记录命中
+    // 商業用地：有主绘制（玩家色）；无主不绘制，仅记录命中
     for (size_t i = 1; i < state.corps.size(); ++i) {
         const Corp& cp = state.corps[i];
         if (cp.sub >= 17) {

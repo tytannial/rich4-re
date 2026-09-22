@@ -95,7 +95,7 @@ bool handleDebugKey(Application& app, int digit) {
         case 4: // 连锁店（待 F3 探明后接入）
             RICH4_LOGW("debug: Ctrl+4 chain store not implemented (pending RE)");
             return true;
-        case 5: { // 全图地产归当前玩家
+        case 5: { // 全图住宅用地归当前玩家
             for (size_t i = 1; i < st.estates.size(); ++i) {
                 st.estates[i].owner = static_cast<uint8_t>(cur + 1);
             }
@@ -109,7 +109,7 @@ bool handleDebugKey(Application& app, int digit) {
             RICH4_LOGI("debug: all estates/corps/specPts owner -> %d", cur + 1);
             return true;
         }
-        case 6: { // 全图有主地产 level = 1
+        case 6: { // 全图有主住宅用地 level = 1
             int n = 0;
             for (size_t i = 1; i < st.estates.size(); ++i) {
                 if (st.estates[i].owner != 0) {

@@ -69,7 +69,7 @@
 |------|------|------|
 | +0 / +2 | i16 | 像素坐标 |
 | +23 | u8 | 旗帜（`&1`） |
-| +24 | u8 | 类型（决定公司图块组） |
+| +24 | u8 | 类型（决定商業用地图块组） |
 | +25 | u8 | 拥有者（玩家号 + 1，0=无） |
 | +26 | u8 | 等级 |
 | +27 | u8 | 朝向（`&1`） |
@@ -111,9 +111,9 @@
 - `dword_474949` = MAP.MKF[24]（cellEnt 图块集）；`dword_47494D` = MAP.MKF[26]（旗帜）。
 - `dword_48AE4C[5]` = MAP.MKF[n + 5*base + 39]（特殊点图块组）。
 - `dword_48AE60` = MAP.MKF[base + 79]（地产标志）。
-- `dword_48AE64[17]` = 公司图块组（mode 0/1 索引不同）。
+- `dword_48AE64[17]` = 商業用地图块组（mode 0/1 索引不同）。
 - `dword_49692C[cellType]` = data.mkf[cellType + 395]（cellType 1-20；`dword_496930 = &dword_49692C[1]`）。
-- `dword_48BAD8` = data.mkf[517]（地产/公司标记图块集）；`dword_48BAD4` = data.mkf[519]。
+- `dword_48BAD8` = data.mkf[517]（住宅用地/商業用地标记图块集）；`dword_48BAD4` = data.mkf[519]。
 
 ## 待逆向
 

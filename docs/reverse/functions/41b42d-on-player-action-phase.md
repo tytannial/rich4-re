@@ -28,7 +28,7 @@ v61 = v63 ? g_cellTable[24*v63-24] : 0;  // cellTable 类型（1..18）
 | 分支 | 处理 |
 |------|------|
 | 玩家 8 | `sub_40FAFD(v63,…)` + `sub_40E14D(v63)`（AI 事件槽） |
-| 玩家 4..7（事件槽 NPC） | `switch(v61)`：case 1..10/12 → `sub_40EAD7`；case 11/13/14/16/17/18 → FLC/卡片；**LABEL_88 收租/抢钱**（读 `cellEnt+32` objId：2000+ 地产 / 4000+ 公司 / 6000+ 特殊点，`sub_41D2C6` 转账） |
+| 玩家 4..7（事件槽 NPC） | `switch(v61)`：case 1..10/12 → `sub_40EAD7`；case 11/13/14/16/17/18 → FLC/卡片；**LABEL_88 收租/抢钱**（读 `cellEnt+32` objId：2000+ 住宅用地 / 4000+ 商業用地 / 6000+ 行業設施點，`sub_41D2C6` 转账） |
 | 玩家 0..3 | 见下 |
 
 ### 玩家 0..3
@@ -38,20 +38,20 @@ v61 = v63 ? g_cellTable[24*v63-24] : 0;  // cellTable 类型（1..18）
      付 `1000*moneyMul` 破产金（文本 `unk_463AB1`）给银行（`sub_41D2C6(p,-1,…)`）+ `sub_40CC56`
    - `g_playerCellNo[p]` 非 0（在医院/监狱）：
      - `byte_496D0C[24*cellNo-24] -= 1`，到 0 → 停音效 + `sub_40E14D` + FLC 525 +
-       `sub_43EC3F(p,5)`（出院/出狱）
+       `hospitalizePlayer(p,5)`（出院/出狱）
      - 同格有其他存活玩家且其无 cellNo → 转移 cellNo（传染，`byte_496D0D` 占用表）
 2. **switch(v61)**（cellTable 类型）
    - case 1..10/12：停留且玩家 <4 → `sub_40EAD7(p, v0, v63)`（神明/事件效果）
-   - case 11：`sub_40E14D(11)` + FLC 532/552 + `sub_43EC3F(p,3)`
+   - case 11：`sub_40E14D(11)` + FLC 532/552 + `hospitalizePlayer(p,3)`
    - case 13：`sub_445ADA(p)` 抽卡 + `off_47FEDA` 卡名 + `sub_44F230` 给卡
    - case 14：点数 +500（音效 `dword_482382`，文本 `byte_463AD3`）
    - case 16：`givePlayerCard(p,2)`
-   - case 17：FLC 525 + `sub_43EC3F(p,3)`
+   - case 17：FLC 525 + `hospitalizePlayer(p,3)`
    - case 18：`g_playerCellNo[p] = v63` + `byte_496D0C = 38` + `byte_496D0D = p+1`
      （进入特殊格，如加油站/监狱）
 3. **LABEL_145**（玩家 4..7 的收尾也在其中）
-   - `(byte_498DF3[p] & 0x7F) == 1 && v62 == 4` → 状态位 `|0x80` 或 `sub_43D593(p,0)`
-   - `(byte_498DF3[p] & 0x7F) == 2 && v62 == 5` → 状态位 `|0x80` 或 `sub_43EC3F(p,0)`
+   - `(byte_498DF3[p] & 0x7F) == 1 && v62 == 4` → 状态位 `|0x80` 或 `jailPlayer(p,0)`
+   - `(byte_498DF3[p] & 0x7F) == 2 && v62 == 5` → 状态位 `|0x80` 或 `hospitalizePlayer(p,0)`
 
 ## 依赖函数
 
@@ -66,7 +66,7 @@ v61 = v63 ? g_cellTable[24*v63-24] : 0;  // cellTable 类型（1..18）
 
 ## 收租不在本函数
 
-普通玩家踩他人**地产/公司**的过路费在 `playerActionStateMachine`（0x40D7C4）**case 3**
+普通玩家踩他人**住宅用地/商業用地**的过路费在 `playerActionStateMachine`（0x40D7C4）**case 3**
 （0x40DA90..0x40DB3E）：读 `cellEnt+32` objId 2000..4000 → `g_estates + 52*(id-2000)`，
 无主跳过，有主按等级计算金额（`g_moneyMul` 系数）→ `sub_41D2C6`。
 

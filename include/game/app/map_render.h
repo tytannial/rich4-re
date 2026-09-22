@@ -23,7 +23,7 @@ int randomCellEnt(const GameState& state, int nearCellEnt);
 // 每玩家棋子动画 = data.mkf[21*charIndex + 128 + 3*travel]
 void initMapEntities(Application& app);
 
-// [RE 0x40A4E1] 重建小地图工作副本（底图 + 地产/公司/特殊点玩家颜色标记）
+// [RE 0x40A4E1] 重建小地图工作副本（底图 + 住宅用地/商業用地/行業設施點玩家颜色标记）
 //   原版在物件变化时反复调用（loadMapData/买地/advanceDay/玩家行动等），
 //   重写为小地图每次绘制时重建，保证标记随物件变化更新
 void buildMiniMapMarks(Application& app);
