@@ -66,7 +66,7 @@ void drawNumber(NumberInputCtx& ctx) {
         if (ch >= 32) {
             const int frame = ch - 32;
             if (frame >= 0 && frame < ctx.panel.frameCount()) {
-                blitElement(dst, ctx.panel.frame(static_cast<size_t>(frame)), px, py, false);
+                blitElementOpaque(dst, ctx.panel.frame(static_cast<size_t>(frame)), px, py);
             }
         }
         px -= 12;
@@ -76,7 +76,7 @@ void drawNumber(NumberInputCtx& ctx) {
     }
     // 滑块按钮（帧 1）+ 位置条
     if (ctx.panel.frameCount() > 1) {
-        blitElement(dst, ctx.panel.frame(1), x + 10, y + 42, false);
+        blitElementOpaque(dst, ctx.panel.frame(1), x + 10, y + 42);
     }
     const int value = std::atoi(ctx.text);
     if (value > 0 && ctx.maxValue > 0) {
@@ -88,10 +88,11 @@ void drawNumber(NumberInputCtx& ctx) {
         if (step > 33) {
             step = 33;
         }
-        // 原版用 blitOpaqueToBackbuffer 恢复背景 + 档位宽度条（简化为宽度指示）
+        // [RE 0x45297E] 原版：blitOpaqueToBackbuffer 从离屏背景恢复 (x+10,y+42) 处 w×12
+        //   （效果 = 擦除轨道左段表示已选比例）；重写用帧 0 背景对应区域等价覆盖
         const int w = kSliderSteps[step];
         if (w > 0) {
-            dst.fillRect(x + 10, y + 42, w, 12, 0x001F); // 蓝色高亮条（占位）
+            blitElementRegionOpaque(dst, ctx.panel.frame(0), x + 10, y + 42, 10, 42, w, 12, false);
         }
     }
 }
@@ -101,7 +102,7 @@ void drawAll(NumberInputCtx& ctx) {
     Surface& dst = app.surface();
     renderGameFrame(app);
     if (ctx.panel.frameCount() > 0) {
-        blitElement(dst, ctx.panel.frame(0), kPanelX, kPanelY, false);
+        blitElementOpaque(dst, ctx.panel.frame(0), kPanelX, kPanelY);
     }
     drawNumber(ctx);
 }
@@ -164,6 +165,7 @@ bool numberInputHandler(const SDL_Event* event, void* user) {
             return true;
         }
         const uint8_t key = ctx.indexMap[ry * kPanelW + rx];
+        RICH4_LOGI("number input click: rx=%d ry=%d key=%u", rx, ry, key);
         switch (key) {
             case 1:
                 break; // 拖动区（简化：固定位置）

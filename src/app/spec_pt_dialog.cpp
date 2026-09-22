@@ -7,6 +7,7 @@
 #include "game/app/number_input_dialog.h"
 #include "game/app/stock_system.h"
 #include "game/application.h"
+#include "game/core/encoding.h"
 #include "game/core/log.h"
 
 namespace rich4 {
@@ -49,17 +50,11 @@ void specPtBuyStockDialog(Application& app, int specPtIdx) {
     }
     int count = 0;
     if (st.players[p].alive == 1) {
-        // 人类：确认 → 股数输入
-        char name[24] = {};
-        int n = 0;
-        while (n < 20 && sp.pad4[n]) {
-            name[n] = static_cast<char>(sp.pad4[n]);
-            ++n;
-        }
-        name[n] = '\0';
+        // 人类：确认 → 股数输入（BIG5 名称 → UTF-8；askDialog 坐标 (220,320)）
+        const std::string name = big5ToUtf8(reinterpret_cast<const char*>(sp.pad4), 20);
         char text[192];
-        std::snprintf(text, sizeof(text), "%s\n\n每股售價%d\n\n是否認購股份？", name, per);
-        if (!confirmDialog(app, text)) {
+        std::snprintf(text, sizeof(text), "%s\n\n每股售價%d\n\n是否認購股份？", name.c_str(), per);
+        if (!confirmDialog(app, text, 220, 320)) {
             return;
         }
         const int v = numberInputDialog(app, maxBuy);

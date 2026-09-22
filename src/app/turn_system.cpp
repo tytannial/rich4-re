@@ -863,15 +863,9 @@ int landingEvent(Application& app, uint16_t cellEntId) {
         const int si = objId - 6000;
         if (si > 0 && si < static_cast<int>(st.specPts.size())) {
             SpecPt& sp = st.specPts[si];
-            char spName[24] = {};
-            {
-                int n = 0;
-                while (n < 20 && sp.pad4[n]) {
-                    spName[n] = static_cast<char>(sp.pad4[n]);
-                    ++n;
-                }
-                spName[n] = '\0';
-            }
+            // 名称 BIG5 → UTF-8（渲染字体为 UTF-8；pad4 为 20 字节 BIG5）
+            const std::string spName =
+                big5ToUtf8(reinterpret_cast<const char*>(sp.pad4), 20);
             RICH4_LOGI("specPt landing: si=%d owner=%u costType=%u stockNo=%u sharesLeft=%d "
                        "(RE 0x41A168)",
                        si, sp.owner, sp.costType, sp.stockNo, sp.sharesLeft);
@@ -885,7 +879,7 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                 int32_t fee = 0;
                 if (spIdx == 1) {
                     // 航空公司：转盘(0) 天数；0 → 不用出國
-                    const int days = roulettePrompt(app, 0, spName);
+                    const int days = roulettePrompt(app, 0, spName.c_str());
                     if (days == 0) {
                         showMessage(app, "不用出國！", 1500); // [RE 0x463A5F]
                         return kLandingWait;
@@ -897,7 +891,7 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                     fee = sp.feeBase * st.dayCount;
                 } else if (spIdx == 4) {
                     // 保險公司：转盘(3) 天数 → 保费；保险期 += days（M3）
-                    const int days = roulettePrompt(app, 3, spName);
+                    const int days = roulettePrompt(app, 3, spName.c_str());
                     fee = sp.feeBase * days * st.moneyMul;
                 } else if (spIdx == 5 || spIdx == 6) {
                     // 汽車/石油公司：载具倍率 × 本次步數（步行免付）
@@ -919,8 +913,8 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                 }
                 if (fee > 0) {
                     // [RE 0x463A31] "%s\n\n董事長%s\n\n請付%d元%s"
-                    std::snprintf(text, sizeof(text), "%s\n\n董事長%s\n\n請付%d元%s", spName,
-                                  ownerName, fee, feeName);
+                    std::snprintf(text, sizeof(text), "%s\n\n董事長%s\n\n請付%d元%s",
+                                  spName.c_str(), ownerName, fee, feeName);
                     showMessage(app, text, 1500);
                     fee = applyGodRentModifier(app, p, fee, feeName);
                     if (fee > 0) {
