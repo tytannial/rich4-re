@@ -6,6 +6,14 @@
 
 ## 执行进度（2026-09-21/22 会话）
 
+- ✅ **商業用地 corp（2026-09-22 会话二）**：landingEvent 4000..5999 分支全流程
+  - 数据：`Corp` 补 `researchItem/researchLeft/buildPrice/feeTable[6]/lastFee`；新增 `diceValue`（0x48BAFC）
+  - 无主购地 0x41A86B（`+34×M`）/ 建设施 0x41A1E0（`selectFacilityDialog` 人类选、AI `rand()%4+1`）/
+    设施升级 0x41A2B3（`+36×M`，上限 `{1,5,5,1,5}`）/ 他人收费 0x41A370（旅館轮盘天数、購物轮盘倍数、
+    加油站 `500×载具倍率×diceValue×M`）/ 旅館住宿状态 0x41A761（BYTE0 天数，住宿中免收租）
+  - 新文件 `facility_dialog.cpp`：设施选择 UI 完整还原（帧 4 图标 + 三层边框 + 名称）
+  - `rouletteValue`：轮盘数值按 `byte_475D0C` 表取有效值（UI 动画待接入）
+  - 顺带：estate 升级询问文本修正为原版 `"%s\n\n升級費用:%d元\n\n是否升級？"`（0x46396D）
 - ✅ **P0 收租补全（2026-09-22 会话）**：住宅用地联动 + 连锁店
   - 联动诊断：`estateRouteRent` 打印匹配明细（`matched/sum/total`）+ `Ctrl+9`（联动组归当前玩家，
     住宅=同街同名 / 连锁店=全部连锁店），用于定位"整条街未联动"

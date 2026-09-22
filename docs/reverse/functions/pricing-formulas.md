@@ -285,9 +285,11 @@ owner 自己停留：index4 → 轮盘(3) 免费投保；index11 → 施工抽�
 | 公式 | 重写状态 |
 |------|---------|
 | 购地/升级/联合租金/连锁/flag 翻倍/神明/转账 | ✅ `turn_system.cpp`（见 `41982d-estate-rent.md`） |
-| 商業用地（corp）购买/建设/升级/收费（type1..3）/研究所 | ❌ 本文 §4（landingEvent case 0 0x41A168..） |
+| 商業用地（corp）购买/建设/升级/收费（type1..3） | ✅ 本文 §4（landingEvent corp 分支 0x41A86B/0x41A1E0/0x41A2B3/0x41A370；`selectFacilityDialog` UI 完整还原） |
+| 旅館住宿状态（BYTE0 天数） | ✅ 收费后设置（0x41A761）；住宿欠款/保险理赔仅日志（欠款矩阵/保险期 P4） |
+| 研究所（corp type4）研发 `labDevelopDialog` | ❌ 本文 §4（P4 道具系统依赖；入口条件已实现为日志） |
 | 行業設施點（specPt）收费 + 出國 n 天 | ❌ 本文 §5（依赖 `sub_40D375` 出国状态） |
 | `g_moneyMul` 月度更新 + `playerTotalAssets` | ❌ 本文 §1.1（当前重写恒 1） |
-| 轮盘/老虎机读数（3/4 位） | ❌ 本文 §1.5（重写可用 `rand` 区间近似，UI 动画后补） |
+| 轮盘/老虎机读数（3/4 位） | 🟡 数值已实现（`rouletteValue` 按 `byte_475D0C` 表随机取有效值）；UI 动画 ❌（本文 §1.5） |
 | 到期处理 `sub_40AC7B` | 🟡 期限写入已有（`g_landPermDays`），到期清算 ❌ |
 | 事件格金额 | 见 `41982d-p2-events.md` |
