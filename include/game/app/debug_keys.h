@@ -17,6 +17,7 @@ class Application;
 //   T=循环携带神明（无→小財神→大財神→小窮神→大窮神→小衰神→大衰神→死神；测试神明调整/阻止）
 //   S=循环玩家状态（无→住宿→出國→監獄→醫院→冬眠→夢遊；测试免收租/状态显示）
 //   B=银行存款+100000  D=过一天（advanceDay）  C=清空玩家全部状态+神明
+//   K=买入指向 specPt 的股票 100 股（测试控股/经营権转移；先 Ctrl+7 备现金）
 // code: 1..9（数字键）或 'a'..'z'（字母键）；返回 true 表示已处理（调用方需重绘）
 bool handleDebugKey(Application& app, int code, bool shift);
 

@@ -8,6 +8,7 @@
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
 #include "game/app/object_tip.h"
+#include "game/app/stock_system.h"
 #include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/encoding.h"
@@ -154,6 +155,25 @@ bool handleDebugKey(Application& app, int code, bool shift) {
                 st.players[cur].bank += 100000;
                 RICH4_LOGI("debug: Ctrl+Shift+B player %d bank=%d", cur, st.players[cur].bank);
                 return true;
+            case 'k': { // 买入指向 specPt 的股票 100 股（测试控股/经营権转移）
+                const uint16_t id = pointedObject(app);
+                if (id > 6000 && id < 8000) {
+                    const int si = id - 6000;
+                    if (si > 0 && si < static_cast<int>(st.specPts.size())) {
+                        const int stock = st.specPts[si].index;
+                        if (stock >= 0 && stock < 12) {
+                            const int changed = buyStock(app, cur, stock, 100, false);
+                            RICH4_LOGI("debug: Ctrl+Shift+K buy 100 of stock %d (specPt %d) -> "
+                                       "player %d shares=%d owner=%u control=%d",
+                                       stock, si, cur, st.playerShares[cur][stock],
+                                       st.specPts[si].owner, changed);
+                        }
+                    }
+                } else {
+                    RICH4_LOGW("debug: Ctrl+Shift+K no specPt under cursor (id=%u)", id);
+                }
+                return true;
+            }
             case 'd': // 过一天（advanceDay：日期/到期/每日事件）
                 advanceDay(app);
                 RICH4_LOGI("debug: Ctrl+Shift+D advanceDay dayCount=%d", st.dayCount);

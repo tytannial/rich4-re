@@ -50,6 +50,7 @@
 | `Ctrl+Shift+T` | **循环携带神明** | 无→小財神→大財神→小窮神→大窮神→小衰神→大衰神→死神（测试神明调整租金/阻止购地/地主死神免收） |
 | `Ctrl+Shift+S` | **循环玩家状态** | 无→住宿→出國→監獄→醫院→冬眠→夢遊（测试 `ownerCanCollectRent` 免收租；每回合自动倒计时结束并恢复行动） |
 | `Ctrl+Shift+B` | 银行存款 +100000 | 测试收款入银行/贷款 |
+| `Ctrl+Shift+K` | 买入指向 specPt 的股票 100 股 | 测试控股/经营権转移（先 `Ctrl+7` 备现金；持股超过他人 → owner 变更/小地图刷新；日志含 shares/owner/control） |
 | `Ctrl+Shift+D` | 过一天 | `advanceDay`（日期/到期回收/每日事件） |
 | `Ctrl+Shift+C` | 清空玩家状态+神明 | `stateFlags`/`byte54`/`state37`/`cellTableIdx` 归零 |
 
@@ -80,6 +81,13 @@
 5. 神明调整：`Ctrl+Shift+T` 携带小財神 → `Ctrl+Shift+G` → 租金减半提示（大財神免付/小窮神+50%/大窮神加倍）
 6. 免收租：`Ctrl+Shift+S` 设地主状态（住宿/出國/監獄/醫院/冬眠/夢遊）→ `Ctrl+Shift+G` → 免收提示
 7. 購物中心同 1-3（`Ctrl+Shift+3`）；公園/研究所不收费（对照验证）
+
+**行業設施點收费 / 控股 / 股票行情**：
+1. 指向地图上的行業設施點 → `Ctrl+1` 归当前玩家 → 再 `Ctrl+1`（AI 回合时）归 AI
+2. `Ctrl+7` 备现金 → 指向该 specPt → `Ctrl+Shift+G` → 收费提示（航空/保險走**转盘**；
+   汽車/石油需先 `Ctrl+Shift+V` 切载具）→ **认购股份**确认框 → **数字输入框**（键盘/滑块/最大/确定）
+3. `Ctrl+7` + `Ctrl+Shift+K` 反复买入 → 持股超过他人 → **owner 变更**（日志 + 小地图刷新）
+4. `Ctrl+Shift+D` 过天 → 日志 `stockTick: market=...`（股价随机涨跌 + 大盘指数）
 
 **收租·整条街联动**（停留结算 `landingEvent` 0x419A67；金额 = 同街 `fees[level]` 之和 × `moneyMul`）：
 1. `Ctrl+5` 全图归自己 → `Ctrl+6` 全图 level=1（建筑可见）
