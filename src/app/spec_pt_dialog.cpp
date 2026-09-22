@@ -70,14 +70,22 @@ void specPtBuyStockDialog(Application& app, int specPtIdx) {
         }
     }
     if (count <= 0) {
+        RICH4_LOGI("specPt buy aborted: count=%d (player %d specPt %d stock %d)", count, p,
+                   specPtIdx, stock);
         return;
     }
     const int gotControl = buyStock(app, p, stock, count, false);
     if (gotControl == 1) {
         showMessage(app, (sp.costType == 12) ? "恭喜您成為幫主！" : "恭喜您獲得經營權！", 1500);
+    } else {
+        // [PORT] 原版仅在经营権变化时提示；重写补充持股反馈（便于确认购买成功）
+        char msg[96];
+        std::snprintf(msg, sizeof(msg), "持股 %d 股", st.playerShares[p][stock]);
+        showMessage(app, msg, 1500);
     }
-    RICH4_LOGI("specPt buy: player %d specPt %d stock %d count %d control=%d (RE 0x41D1A9)", p,
-               specPtIdx, stock, count, gotControl);
+    RICH4_LOGI("specPt buy: player %d specPt %d stock %d count %d control=%d shares=%d (RE "
+               "0x41D1A9)",
+               p, specPtIdx, stock, count, gotControl, st.playerShares[p][stock]);
 }
 
 } // namespace rich4
