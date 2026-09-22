@@ -49,6 +49,14 @@ public:
     // 鼠标位置（640x480 逻辑坐标，对应原版全屏坐标）
     void mouseLogicalPos(int& x, int& y) const;
 
+    // [PORT] 模态 UI 点击（原版 WM_LBUTTONUP 消息）：
+    //   转盘 sub_43F7C6 等阻塞 UI 用点击提前结束/加速；每次消费后清除
+    bool consumeUiClick() {
+        const bool clicked = m_uiClicked;
+        m_uiClicked = false;
+        return clicked;
+    }
+
     // [NEW] 调试：第 25 帧合成 ESC 按下（验证弹出层关闭/主菜单无操作）
     void setAutoEsc(bool on, int frame = 25) {
         m_shotEsc = on;
@@ -150,6 +158,7 @@ private:
     Surface m_surface;
     Cursor m_cursor;
     TextRenderer m_text;
+    bool m_uiClicked = false;
     std::string m_shotPath;
     int m_shotFrame = 0;
     int m_shotCursorX = -1;

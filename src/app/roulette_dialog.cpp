@@ -59,6 +59,10 @@ int roulettePrompt(Application& app, int theme, const char* arg) {
 
     Surface& dst = app.surface();
     int cell = std::rand() % 12; // [RE 0x43F7C6] dword_48C50C = rand()%12
+    // [RE 0x43F7C6] 点击响应仅限人类玩家（alive==1 且非夢遊；AI/夢遊走自动节奏）
+    const int cp = st.currentPlayer;
+    const bool humanCtl =
+        cp >= 0 && cp < 4 && st.players[cp].alive == 1 && st.players[cp].state37 == 0;
     // [RE 0x43F127] 绘制：帧 2+格 @(220,320)；center 时画帧 1（中心）@(265,230)
     auto draw = [&](bool center) {
         renderGameFrame(app); // 地图背景
@@ -81,11 +85,15 @@ int roulettePrompt(Application& app, int theme, const char* arg) {
     };
     app.audio().playEffect(52); // [RE 0x475D4C] 转盘音效
 
-    // 阶段 1：滚动 40 帧（原版人类/AI 均在 40 帧后转停止；点击加速未实现）
+    // 阶段 1：滚动（原版：人类无限滚动直到点击、AI 40 帧自动；重写保留 40 帧自动 + 点击提前）
     for (int f = 0; f < 40; ++f) {
         cell = (cell + 1) % 12; // [RE 0x43F127] 指针格 +1，12 格循环
         draw(false);
         app.pumpEvents();
+        if (humanCtl && app.consumeUiClick()) {
+            RICH4_LOGI("roulette: early stop at scroll frame %d (RE 0x43F7C6)", f);
+            break;
+        }
         waitAudio(kFrameMs);
     }
     // 阶段 2：停止过渡（画中心帧 1）
@@ -112,10 +120,15 @@ int roulettePrompt(Application& app, int theme, const char* arg) {
             break;
         }
     }
-    // 阶段 5：停留 40 帧（原版 v3 == 40 → 结束）
+    // 阶段 5：停留 40 帧（原版 v3 == 40 → 结束；点击立即结束，先清减速期残留点击）
+    (void)app.consumeUiClick();
     for (int f = 0; f < 40; ++f) {
         draw(true);
         app.pumpEvents();
+        if (humanCtl && app.consumeUiClick()) {
+            RICH4_LOGI("roulette: early stop at dwell frame %d (RE 0x43F7C6)", f);
+            break;
+        }
         waitAudio(kFrameMs);
     }
     const int value = table[cell];

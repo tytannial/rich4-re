@@ -822,9 +822,10 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                 }
                 // [RE 0x41A761] 旅館住宿状态：BYTE0 = days-1（0→0x80）、累计天数、住宿欠款
                 if (cp.type == 1 && hotelDays > 0 && pl.alive != 0 && st.sceneRequest == 0) {
+                    // [RE 0x40D761] 设置新状态前清除旧状态（住宿/監獄/醫院）
+                    pl.stateFlags = 0;
                     const uint8_t stay = static_cast<uint8_t>(hotelDays - 1);
-                    pl.stateFlags = (pl.stateFlags & 0xFFFFFF00u) |
-                                    static_cast<uint32_t>(stay != 0 ? stay : 0x80);
+                    pl.stateFlags = static_cast<uint32_t>(stay != 0 ? stay : 0x80);
                     pl.byte66 = static_cast<uint8_t>(pl.byte66 + hotelDays); // byte_496BAA
                     // [RE 0x41A7BC] 住宿欠款 20×M×days（addPlayerDebt 矩阵未建模，仅日志）
                     RICH4_LOGI("hotel stay: player %d days %d owe %d (RE 0x41A7F4)", p, hotelDays,
@@ -985,7 +986,30 @@ int checkPlayerAction(Application& app, int a1) {
                 if ((v2 & 0x30) != 0) {
                     startPlayerMove(app);
                 } else {
-                    RICH4_LOGI("player %d status effect active (RE 0x40C912, M2 TODO)", p);
+                    // [RE 0x40C912] 状态文本（BIG5 0x4631E0..：%s住宿中/消失中/坐牢中/住院中/
+                    //   冬眠中\n\n還剩%d天！；天数 = (编码 & 0x7F/0x3F) + 1）
+                    char text[128] = {};
+                    const char* name = st.players[p].name ? st.players[p].name : "";
+                    const uint32_t sf = st.players[p].stateFlags;
+                    if (sf & 0xFFu) {
+                        std::snprintf(text, sizeof(text), "%s住宿中\n\n還剩%d天！", name,
+                                      static_cast<int>(sf & 0x7Fu) + 1);
+                    } else if ((sf >> 8) & 0xFFu) {
+                        std::snprintf(text, sizeof(text), "%s消失中\n\n還剩%d天！", name,
+                                      static_cast<int>((sf >> 8) & 0x3Fu) + 1);
+                    } else if ((sf >> 16) & 0xFFu) {
+                        std::snprintf(text, sizeof(text), "%s坐牢中\n\n還剩%d天！", name,
+                                      static_cast<int>((sf >> 16) & 0x7Fu) + 1);
+                    } else if ((sf >> 24) & 0xFFu) {
+                        std::snprintf(text, sizeof(text), "%s住院中\n\n還剩%d天！", name,
+                                      static_cast<int>((sf >> 24) & 0x7Fu) + 1);
+                    } else if (st.players[p].byte54) {
+                        std::snprintf(text, sizeof(text), "%s冬眠中\n\n還剩%d天！", name,
+                                      static_cast<int>(st.players[p].byte54 & 0x7Fu) + 1);
+                    }
+                    if (text[0]) {
+                        showMessage(app, text, 1500);
+                    }
                 }
             } else if (st.players[p].state37) {
                 startPlayerMove(app);
@@ -1105,6 +1129,98 @@ void startPlayerMove(Application& app) {
     }
     st.playerMoveFrame[p] = 0;
     st.gameStateActive = true;
+}
+
+// [RE 0x40D6BE] endPlayerState：状态结束恢复
+// 依据: 0x40D6BE 反汇编; alive |= 0x10（状态结束标志，nextPlayer 0x30 分支据此恢复朝向并让该
+//       玩家重新开始回合）+ 朝向重算（面向所在格中心 sub_454FB4）+ 恢复格占用（cellEnt+36 bit8+p）
+// 差异: 原版不含状态字节清零（清零见 updatePlayerStates 差异说明）
+void endPlayerState(Application& app, int p) {
+    GameState& st = app.gameState();
+    if (p < 0 || p >= 4) {
+        return;
+    }
+    Player& pl = st.players[p];
+    pl.alive |= 0x10;
+    if (pl.cellEntId > 0 && pl.cellEntId < st.cellEnts.size()) {
+        const CellEnt& ce = st.cellEnts[pl.cellEntId];
+        pl.dir = static_cast<uint8_t>(
+            facingFromDelta(static_cast<int>(ce.x) - static_cast<int>(pl.spriteX),
+                            static_cast<int>(ce.y) - static_cast<int>(pl.spriteY)));
+        st.cellEnts[pl.cellEntId].occMask |= (256u << p);
+    }
+}
+
+// [RE 0x41C84F] updatePlayerStates：回合开始状态倒计时（nextPlayer 切换玩家后调用）
+// 依据: 0x41C84F 反编译; BYTE0..BYTE3 编码 = 剩余天数（1..0x7F），bit7 = 结束标志：
+//   n>0 → n-1；n==1 → (n-1)|0x80（BYTE1 出國为 (n-1)&0x3F==0 时置位）；bit7 → 结束处理：
+//   BYTE0 住宿 → sub_40D6BE / BYTE1 出國 → sub_40D4E5（清位+恢复占用+loadWalkResources）/
+//   BYTE2 監獄 → releaseJailNpc / BYTE3 醫院 → releaseHospitalNpc；
+//   byte54 冬眠 / state37 夢遊 在 stateFlags==0 时倒计时（0→0x80）
+// 差异: 原版结束分支未见状态字节清零（实测会永久卡在"住宿中"），重写在结束时清零对应 BYTE
+//       （与監獄 g_jailFlags 同模式）；出國/監獄/醫院结束的 FLC 动画与 NPC 释放 M3
+void updatePlayerStates(Application& app, int p) {
+    GameState& st = app.gameState();
+    if (p < 0 || p >= 4) {
+        return;
+    }
+    Player& pl = st.players[p];
+    if (pl.alive == 0 || st.sceneRequest != 0) {
+        return;
+    }
+    auto decay = [](uint8_t v, uint8_t lowMask) -> uint8_t {
+        if (v == 0) {
+            return 0;
+        }
+        const uint8_t n = static_cast<uint8_t>(v - 1);
+        return ((n & lowMask) == 0) ? static_cast<uint8_t>(n | 0x80) : n;
+    };
+    // BYTE0 住宿
+    const uint8_t b0 = static_cast<uint8_t>(pl.stateFlags & 0xFF);
+    if ((b0 & 0x80) != 0) {
+        pl.stateFlags &= 0xFFFFFF00u;
+        endPlayerState(app, p);
+    } else if (b0 != 0) {
+        pl.stateFlags = (pl.stateFlags & 0xFFFFFF00u) | decay(b0, 0xFF);
+    }
+    // BYTE1 出國（低 6 位天数，bit6 = 乘坐飞机标记）
+    const uint8_t b1 = static_cast<uint8_t>((pl.stateFlags >> 8) & 0xFF);
+    if ((b1 & 0x80) != 0) {
+        pl.stateFlags &= 0xFFFF00FFu;
+        if (pl.cellEntId > 0 && pl.cellEntId < st.cellEnts.size()) {
+            st.cellEnts[pl.cellEntId].occMask |= (256u << p); // [RE 0x40D4E5]
+        }
+    } else if (b1 != 0) {
+        pl.stateFlags =
+            (pl.stateFlags & 0xFFFF00FFu) | (static_cast<uint32_t>(decay(b1, 0x3F)) << 8);
+    }
+    // BYTE2 監獄
+    const uint8_t b2 = static_cast<uint8_t>((pl.stateFlags >> 16) & 0xFF);
+    if ((b2 & 0x80) != 0) {
+        pl.stateFlags &= 0xFF00FFFFu;
+    } else if (b2 != 0) {
+        pl.stateFlags =
+            (pl.stateFlags & 0xFF00FFFFu) | (static_cast<uint32_t>(decay(b2, 0xFF)) << 16);
+    }
+    // BYTE3 醫院
+    const uint8_t b3 = static_cast<uint8_t>((pl.stateFlags >> 24) & 0xFF);
+    if ((b3 & 0x80) != 0) {
+        pl.stateFlags &= 0x00FFFFFFu;
+    } else if (b3 != 0) {
+        pl.stateFlags =
+            (pl.stateFlags & 0x00FFFFFFu) | (static_cast<uint32_t>(decay(b3, 0xFF)) << 24);
+    }
+    // byte54 冬眠 / state37 夢遊（stateFlags 全 0 时才倒计时）
+    if (pl.stateFlags == 0) {
+        if (pl.byte54 != 0) {
+            pl.byte54 = decay(pl.byte54, 0xFF);
+        }
+        if (pl.state37 != 0) {
+            pl.state37 = decay(pl.state37, 0xFF);
+        }
+    }
+    RICH4_LOGI("player states: p=%d flags=%08X byte54=%u state37=%u (RE 0x41C84F)", p,
+               pl.stateFlags, pl.byte54, pl.state37);
 }
 
 // [RE 0x41CF67] advanceDay
@@ -1251,6 +1367,7 @@ void nextPlayer(Application& app) {
     if (dayPassed) {
         advanceDay(app);
     }
+    updatePlayerStates(app, cur); // [RE 0x41C84F] 回合开始状态倒计时（住宿/出國/監獄/醫院等）
     st.playerActionFlags[cur] |= 0x80;
     RICH4_LOGI("next player: %d day=%d (RE 0x418EBD)", cur, dayPassed ? 1 : 0);
 }

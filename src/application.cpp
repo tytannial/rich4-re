@@ -103,6 +103,11 @@ void Application::pumpEvents() {
         }
         // [PORT Win32:GetCursorPos] 鼠标事件坐标转换（定义见 transformMouseEvent）
         transformMouseEvent(event);
+        // [PORT Win32:WM_LBUTTONUP] 模态 UI 点击标志（转盘 sub_43F7C6 提前停止；
+        //   原版检测 514/517/257，重写用按下以便即时反馈）
+        if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.button == SDL_BUTTON_LEFT) {
+            m_uiClicked = true;
+        }
         // [PORT Win32:SetWindowsHookExA(WH_KEYBOARD)] 原版全局键盘钩子 fn(0x401010)
         // **先于**窗口过程无条件运行（钩子 return 0 不吞消息，故两者都处理原始按键）;
         // 迁移: 每事件先执行钩子动作（含取消键抬起→合成右键），再交给窗口过程

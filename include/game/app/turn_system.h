@@ -52,6 +52,12 @@ void disablePlayerControl(Application& app);
 // [RE 0x41CF67] advanceDay（音乐淡出 + 日期推进 + ++g_dayCount + 胜利判定 + 每日事件）
 void advanceDay(Application& app);
 
+// [RE 0x41C84F] updatePlayerStates（回合开始状态倒计时：住宿/出國/監獄/醫院/冬眠/夢遊）
+void updatePlayerStates(Application& app, int p);
+
+// [RE 0x40D6BE] endPlayerState（状态结束恢复：alive|=0x10 + 朝向重算 + 恢复格占用）
+void endPlayerState(Application& app, int p);
+
 // [RE 0x419572] rollDice（点数 = byte_496B7A 个 rand()%6+1 之和）
 int rollDice(Application& app);
 

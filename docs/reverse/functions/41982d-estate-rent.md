@@ -142,6 +142,23 @@ return g_moneyMul * 总和
 - 费用名：corp `g_costNames[byte_475284[type+7]]`、specPt `g_costNames[g_specPtCostMap[index]]`。
 - `ownerCanCollectRent` / `applyGodRentModifier` / 免費卡（`[HELP 60]`）/ 嫁禍卡（`[HELP 80]`）/ 死神代付与 estate 同构。
 
+### 4.0.1 旅館住宿生命周期（0x41A761 / 0x41C84F / 0x40D6BE）
+
+| 阶段 | 地址 | 行为 |
+|------|------|------|
+| 设置 | 0x41A761 | `sub_40D761` 清旧状态（住宿/監獄/醫院）→ `stateFlags.BYTE0 = days-1`（days==1 → `0x80`）+ `byte66 += days` + 欠款 `20×M×days` + 理赔 `2000×M×days` + `sub_40D5A5` 入住动画（当前玩家 `alive \|= 0x20` 走进旅館，他人直接传送到旅館坐标；`word_496BB2` = 旅館索引） |
+| 倒计时 | 0x41C84F（nextPlayer 切换玩家后） | BYTE0 `n>0 → n-1`；`n==1 → (n-1)\|0x80`；bit7 → `sub_40D6BE` 结束 |
+| 跳过 | 0x40C912(1) | `stateFlags != 0` → 返回 0 → `wait=-125` 跳过回合 |
+| 状态文本 | 0x40C912(0) | `"%s住宿中\n\n還剩%d天！"`（天数 = `(BYTE0 & 0x7F) + 1`）；出國/坐牢/住院/冬眠 同构（0x4631E0..0x463234） |
+| 结束 | 0x40D6BE | `alive \|= 0x10` + 朝向重算（面向格中心）+ 恢复格占用 → `nextPlayer` 0x30 分支恢复朝向（`g_playerRestoreDir`）→ `alive &= 0x0F` → **不切换玩家**（该玩家重新开始回合，可行动） |
+| 强制结束 | 0x40DFFA | corp 到期回收（`expireAssets`）时把所有玩家 BYTE0 置 `0x80`（跳到最后一天） |
+
+- **差异**：原版 `sub_41C84F` 的 bit7 分支仅调 `sub_40D6BE`（反汇编未见状态字节清零），
+  实测会永久卡在「住宿中」；重写在结束时清零对应 BYTE（`updatePlayerStates`，与監獄 `g_jailFlags` 同模式）。
+- **住宿期间**：`ownerCanCollectRent` 检查地主 BYTE0 != 0 → 免收租（8 种提示之一）。
+- 出國（BYTE1）/監獄（BYTE2）/醫院（BYTE3）/冬眠（byte54）/夢遊（state37）走同一倒计时框架；
+  出國结束 `sub_40D4E5`（清位 + 恢复占用 + `loadWalkResources` + FLC 533/558）已按简化实现。
+
 ## 4.1 连锁店（改建卡创建 + 收费）
 
 - **创建**（改建卡 card[7] → `cardRebuildEffect` 0x44309B）：
