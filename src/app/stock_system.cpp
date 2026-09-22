@@ -63,7 +63,7 @@ void refreshStockSpecPtMap(Application& app) {
             continue; // 非上市公司
         }
         for (size_t i = 1; i < st.specPts.size(); ++i) {
-            if (st.specPts[i].index == s) {
+            if (st.specPts[i].stockNo == s) {
                 st.stocks[s][1] = static_cast<float>(i);
             }
         }

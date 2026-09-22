@@ -43,7 +43,7 @@ void specPtBuyStockDialog(Application& app, int specPtIdx) {
     if (maxBuy <= 0) {
         return;
     }
-    const int stock = sp.index; // specPt.index = 股票号（word_496984[18*index] = specPt 索引）
+    const int stock = sp.stockNo; // +25 股票号（word_496984[18*stockNo] = specPt 索引）
     if (stock < 0 || stock >= 12) {
         return;
     }
@@ -79,7 +79,7 @@ void specPtBuyStockDialog(Application& app, int specPtIdx) {
     }
     const int gotControl = buyStock(app, p, stock, count, false);
     if (gotControl == 1) {
-        showMessage(app, (sp.index == 12) ? "恭喜您成為幫主！" : "恭喜您獲得經營權！", 1500);
+        showMessage(app, (sp.costType == 12) ? "恭喜您成為幫主！" : "恭喜您獲得經營權！", 1500);
     }
     RICH4_LOGI("specPt buy: player %d specPt %d stock %d count %d control=%d (RE 0x41D1A9)", p,
                specPtIdx, stock, count, gotControl);

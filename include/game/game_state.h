@@ -135,8 +135,8 @@ struct SpecPt {
     int16_t y = 0;                // +2
     uint8_t pad4[20] = {};        // +4..+23 名称（BIG5，nameAt 读取）
     uint8_t owner = 0;            // +24 经营権者（= 最大股东，sub_4294D5 更新）
-    uint8_t index = 0;            // +25 行业索引（g_specPtCostMap 分派）
-    uint8_t pad26 = 0;            // +26
+    uint8_t stockNo = 0;          // +25 股票号（0=非上市；sub_428CAF 与股票表互查）
+    uint8_t costType = 0;         // +26 收费类型（g_specPtCostMap 索引 0..15；landingEvent 分派）
     uint8_t dir = 0;              // +27
     uint8_t shareholders[4] = {}; // +28..+31 前 4 大股东（1-based 玩家号，0=空）
     uint16_t sprite = 0;          // +32 图块索引

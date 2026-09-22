@@ -872,9 +872,12 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                 }
                 spName[n] = '\0';
             }
+            RICH4_LOGI("specPt landing: si=%d owner=%u costType=%u stockNo=%u sharesLeft=%d "
+                       "(RE 0x41A168)",
+                       si, sp.owner, sp.costType, sp.stockNo, sp.sharesLeft);
             if (sp.owner != 0 && sp.owner != p + 1) {
                 // ---- 他人 specPt：收费 ----
-                const uint8_t spIdx = sp.index;
+                const uint8_t spIdx = sp.costType; // +26 收费类型（g_specPtCostMap 索引）
                 const char* ownerName =
                     st.players[sp.owner - 1].name ? st.players[sp.owner - 1].name : "";
                 const char* feeName = (spIdx < 16) ? kCostNames[kSpecPtCostMap[spIdx]] : "";
@@ -1314,8 +1317,6 @@ void updatePlayerStates(Application& app, int p) {
     if (pl.alive == 0 || st.sceneRequest != 0) {
         return;
     }
-    // [RE 0x41C84F] 开头 sub_42915A：银行可售股数每回合随机刷新（10%~30%）
-    refreshBankStockShares(app);
     auto decay = [](uint8_t v, uint8_t lowMask) -> uint8_t {
         if (v == 0) {
             return 0;

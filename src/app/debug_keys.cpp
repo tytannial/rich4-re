@@ -160,7 +160,7 @@ bool handleDebugKey(Application& app, int code, bool shift) {
                 if (id > 6000 && id < 8000) {
                     const int si = id - 6000;
                     if (si > 0 && si < static_cast<int>(st.specPts.size())) {
-                        const int stock = st.specPts[si].index;
+                        const int stock = st.specPts[si].stockNo;
                         if (stock >= 0 && stock < 12) {
                             const int changed = buyStock(app, cur, stock, 100, false);
                             RICH4_LOGI("debug: Ctrl+Shift+K buy 100 of stock %d (specPt %d) -> "
@@ -352,10 +352,10 @@ bool handleDebugKey(Application& app, int code, bool shift) {
                 if (i > 0 && i < static_cast<int>(st.specPts.size())) {
                     const SpecPt& sp = st.specPts[i];
                     const std::string nm = nameAt(sp.pad4, 20);
-                    RICH4_LOGI("debug: specPt[%d] id=%u name=%s owner=%u index=%u sprite=%u "
-                               "fund=%d feeBase=%u capital=%d sharesLeft=%d",
-                               i, id, nm.c_str(), sp.owner, sp.index, sp.sprite, sp.fund,
-                               sp.feeBase, sp.capital, sp.sharesLeft);
+                    RICH4_LOGI("debug: specPt[%d] id=%u name=%s owner=%u stockNo=%u costType=%u "
+                               "sprite=%u fund=%d feeBase=%u capital=%d sharesLeft=%d",
+                               i, id, nm.c_str(), sp.owner, sp.stockNo, sp.costType, sp.sprite,
+                               sp.fund, sp.feeBase, sp.capital, sp.sharesLeft);
                 }
             } else if (id >= 8000 && id < 10000) {
                 const int i = id - 8000;
