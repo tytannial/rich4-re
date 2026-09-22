@@ -286,6 +286,12 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
 - [x] **旅館住宿状态**（0x41A761）：`stateFlags` BYTE0 = days-1（0→0x80，`ownerCanCollectRent` 住宿中免收租）、
       `byte66 += days`；住宿欠款 20×M×days 与保险理赔 2000×M×days 仅日志（欠款矩阵/保险期 P4）
 - [x] `diceValue`（0x48BAFC 本次步数，掷骰定格记录）供加油站/汽车/石油计费
+- [x] **地图绘制**（0x4093F3 sub_40829D）：`sub==0` 有主 → **角色标记** `pieceTiles`（map.mkf[25]）
+      帧=角色 ID、不调色板（此前误画 `corpTiles[0]` 公園图块）；`sub!=0` 按 `type` 分派图块：
+      0 公園→`corpTiles[0]`、1 旅館→`[sub]`、2 購物中心→`[5+sub]`、3 加油站→`[11]`、4 研究所→`[11+sub]`
+      （`dword_48AE78/48AE90` 实为 `dword_48AE64` 的 +5/+11 项别名，无独立加载）；owner 调色板
+- [x] **右键提示对齐**（0x41783C/0x417999）：estate `level==0`→"空  地"、`type!=0`→"連鎖店"、
+      应收租金（type==0→同街联合 / type!=0→数量×2000×M / 无主→fees[level]）；corp `sub==0`→"空  地"
 - [ ] 研究所（type4）研发 `labDevelopDialog`（P4 道具系统）
 - [ ] 验收：购地/建设施（5 类图标选择）/升级（上限）/旅館·購物·加油站收费/住宿状态免收租
 
