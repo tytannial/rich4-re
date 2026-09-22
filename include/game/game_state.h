@@ -131,19 +131,20 @@ struct Corp {
 
 // [RE 0x498E7C] g_specPts 每项 52 字节
 struct SpecPt {
-    int16_t x = 0;              // +0
-    int16_t y = 0;              // +2
-    uint8_t pad4[20] = {};      // +4..+23
-    uint8_t owner = 0;          // +24
-    uint8_t index = 0;          // +25
-    uint8_t pad26 = 0;          // +26
-    uint8_t dir = 0;            // +27
-    uint8_t pad28[4] = {};      // +28..+31
-    uint16_t sprite = 0;        // +32 图块索引
-    uint8_t pad34[6] = {};      // +34..+39
-    int32_t fund = 0;           // +40 特殊点资金（sub_41D2C6 收支累加）
-    int32_t fundPaid = 0;       // +44
-    int32_t price = 0;          // +48
+    int16_t x = 0;                // +0
+    int16_t y = 0;                // +2
+    uint8_t pad4[20] = {};        // +4..+23 名称（BIG5，nameAt 读取）
+    uint8_t owner = 0;            // +24 经营権者（= 最大股东，sub_4294D5 更新）
+    uint8_t index = 0;            // +25 行业索引（g_specPtCostMap 分派）
+    uint8_t pad26 = 0;            // +26
+    uint8_t dir = 0;              // +27
+    uint8_t shareholders[4] = {}; // +28..+31 前 4 大股东（1-based 玩家号，0=空）
+    uint16_t sprite = 0;          // +32 图块索引
+    uint16_t feeBase = 0;         // +34 费用基数（收费公式 +34）
+    uint8_t pad36[4] = {};        // +36..+39
+    int32_t fund = 0;             // +40 公库资金（sub_41D2C6 收支累计，分红来源）
+    int32_t fundPaid = 0;         // +44 累计支出
+    int32_t sharesLeft = 0;       // +48 可售股数（sub_41D1A9 认购上限）
 };
 
 // [RE 0x498E78] g_evtCells 每项 28 字节

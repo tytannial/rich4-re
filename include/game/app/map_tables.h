@@ -52,6 +52,8 @@ extern const char* const kCostNames[13];
 extern const uint8_t kFacilityMaxLevel[5];
 // [RE 0x47528B] 商業用地费用名映射（按 corp.type 0..4 → kCostNames 索引）
 extern const uint8_t kCorpCostMap[5];
+// [RE 0x47528E] g_specPtCostMap 行業設施點费用名映射（specPt.index 0..15 → kCostNames 索引）
+extern const uint8_t kSpecPtCostMap[16];
 // [RE 0x415D1D] byte_415D1D 金额前缀模板
 extern const uint8_t kMoneyPrefix[20];
 

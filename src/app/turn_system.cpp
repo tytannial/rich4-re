@@ -848,6 +848,86 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                 }
             }
         }
+    } else if (objId > 6000 && objId < 8000) {
+        // ========== 行業設施點 specPt（6000..7999，0x41A168..0x41B074）==========
+        // [RE 0x41A8xx] 收费公式（pricing-formulas.md §5）：
+        //   idx1 航空 = feeBase × 轮盘(0)天数 × M（0 → "不用出國！"）
+        //   idx3 電腦 = feeBase × g_dayCount（不乘 M）
+        //   idx4 保險 = feeBase × 轮盘(3)天数 × M（保险期 += days，M3）
+        //   idx5/6 汽車/石油 = feeBase × 载具倍率 × 本次步數 × M（步行免付）
+        //   idx11 房地產 = 抽一块地按其地價 × M（简化：无地分支 1000×M；选地 UI M3）
+        //   idx12 = feeBase × 本次步數 × M；其余 index 不收費
+        // 收款方 = objId-5900 的公库（transferMoney to>100 → specPts[to-100].fund，分红来源）
+        const int si = objId - 6000;
+        if (si > 0 && si < static_cast<int>(st.specPts.size())) {
+            SpecPt& sp = st.specPts[si];
+            char spName[24] = {};
+            {
+                int n = 0;
+                while (n < 20 && sp.pad4[n]) {
+                    spName[n] = static_cast<char>(sp.pad4[n]);
+                    ++n;
+                }
+                spName[n] = '\0';
+            }
+            if (sp.owner != 0 && sp.owner != p + 1) {
+                // ---- 他人 specPt：收费 ----
+                const uint8_t spIdx = sp.index;
+                const char* ownerName =
+                    st.players[sp.owner - 1].name ? st.players[sp.owner - 1].name : "";
+                const char* feeName = (spIdx < 16) ? kCostNames[kSpecPtCostMap[spIdx]] : "";
+                char text[192];
+                int32_t fee = 0;
+                if (spIdx == 1) {
+                    // 航空公司：转盘(0) 天数；0 → 不用出國
+                    const int days = roulettePrompt(app, 0, spName);
+                    if (days == 0) {
+                        showMessage(app, "不用出國！", 1500); // [RE 0x463A5F]
+                        return kLandingWait;
+                    }
+                    fee = sp.feeBase * days * st.moneyMul;
+                    // TODO(RE 0x40D375): 付款后出國 n 天（M3 状态）
+                } else if (spIdx == 3) {
+                    // 電腦公司：+34 × g_dayCount（不乘 M）
+                    fee = sp.feeBase * st.dayCount;
+                } else if (spIdx == 4) {
+                    // 保險公司：转盘(3) 天数 → 保费；保险期 += days（M3）
+                    const int days = roulettePrompt(app, 3, spName);
+                    fee = sp.feeBase * days * st.moneyMul;
+                } else if (spIdx == 5 || spIdx == 6) {
+                    // 汽車/石油公司：载具倍率 × 本次步數（步行免付）
+                    const int travel = st.players[p].travel & 3;
+                    if (travel == 0) {
+                        return kLandingWait;
+                    }
+                    const int mult = 1 << (travel - 1);
+                    fee = sp.feeBase * mult * st.diceValue * st.moneyMul;
+                } else if (spIdx == 11) {
+                    // 房地產公司：抽一块地按其地價 × M（简化：无地分支 1000×M，选地 UI M3）
+                    fee = 1000 * st.moneyMul;
+                    RICH4_LOGI("specPt realty: simplified 1000*M (RE 0x41ADD5, pick-place UI TODO)");
+                } else if (spIdx == 12) {
+                    // 帮派/游乐：+34 × 本次步數 × M（文本用 "幫主%s"，[RE 0x463A6A]）
+                    fee = sp.feeBase * st.diceValue * st.moneyMul;
+                } else {
+                    return kLandingWait; // 其余 index 不收费
+                }
+                if (fee > 0) {
+                    // [RE 0x463A31] "%s\n\n董事長%s\n\n請付%d元%s"
+                    std::snprintf(text, sizeof(text), "%s\n\n董事長%s\n\n請付%d元%s", spName,
+                                  ownerName, fee, feeName);
+                    showMessage(app, text, 1500);
+                    fee = applyGodRentModifier(app, p, fee, feeName);
+                    if (fee > 0) {
+                        transferMoney(app, p, objId - 5900, fee, 0); // 收款入公库
+                        RICH4_LOGI("specPt fee: player %d -> fund %d amount %d (specPt %d idx %u, "
+                                   "RE 0x41A168)",
+                                   p, objId - 5900, fee, si, spIdx);
+                    }
+                }
+            }
+            // TODO(RE 0x41D1A9): 认购股份对话框（阶段 2 股票系统接入）
+        }
     }
     // loc_41B077 → sub_40F381/sub_448A7E/refreshGameUi → loc_41B111：等待 kLandingWait 帧
     return kLandingWait;

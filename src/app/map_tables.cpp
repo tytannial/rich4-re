@@ -634,6 +634,9 @@ const uint8_t kFacilityMaxLevel[5] = {1, 5, 5, 1, 5};
 //   2→12 購物費、3→2 加油費、4→6 旅遊費；0/4 不收费仅占位）
 const uint8_t kCorpCostMap[5] = {0, 5, 12, 2, 6};
 
+// [RE 0x47528E] g_specPtCostMap（specPt.index 0..15 → kCostNames 索引）
+const uint8_t kSpecPtCostMap[16] = {2, 6, 0, 8, 7, 3, 2, 0, 0, 0, 0, 9, 0, 10, 10, 10};
+
 // [RE 0x47511C] off_47511C 星期名（7 项；原表其后紧邻 off_475138 建筑名表，勿越界）
 const char* const kWeekdayNames[7] = {"星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"};
 

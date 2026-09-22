@@ -43,8 +43,8 @@ void transferMoney(Application& app, int from, int to, int32_t amount, int flags
     const int playerCount = kPlayerSlots;
 
     if (from > 100) {
-        // 特殊点付款（索引 = from - 101，原版 52*(a1-100) 表项 +40/+44）
-        const int idx = from - 101;
+        // 特殊点付款（索引 = from - 100，原版 52*(a1-100) 表项 +40/+44）
+        const int idx = from - 100;
         if (idx >= 0 && idx < static_cast<int>(st.specPts.size())) {
             st.specPts[idx].fund -= amount;
             st.specPts[idx].fundPaid -= amount;
@@ -95,7 +95,7 @@ void transferMoney(Application& app, int from, int to, int32_t amount, int flags
             }
         }
     } else {
-        const int idx = to - 101;
+        const int idx = to - 100;
         if (idx >= 0 && idx < static_cast<int>(st.specPts.size())) {
             st.specPts[idx].fund += paid;
             st.specPts[idx].fundPaid += paid;
