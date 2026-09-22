@@ -23,8 +23,8 @@
 | `Ctrl+2` | 指向地块 **等级 +1** | 地产 `level` / 公司 `sub`，上限 5 |
 | `Ctrl+3` | 指向地块 **等级 -1** | 下限 0 |
 | `Ctrl+4` | 指向地块 **设为连锁店** | **预留未实现**（待 F3 探明"改建卡→连锁店"流程） |
-| `Ctrl+5` | **全图地产归当前回合玩家** | 遍历 estates + corps + specPts |
-| `Ctrl+6` | **全图有主地产 level = 1** | 仅 `owner != 0` 的地产（便于快速铺建筑测收租） |
+| `Ctrl+5` | **全图住宅用地归当前回合玩家** | 遍历 estates + corps + specPts |
+| `Ctrl+6` | **全图有主住宅用地 level = 1** | 仅 `owner != 0` 的地产（便于快速铺建筑测收租） |
 | `Ctrl+7` | 当前回合玩家 **现金 +100000** | 直接改 `players[cur].cash` |
 | `Ctrl+8` | **打印指向地块详情**（日志） | estate：名字/type/owner/level/flag/dir/priceAdd/priceBase/fees/price/expire；corp/specPt/evtCell/cellEnt 类似 |
 
@@ -40,10 +40,16 @@
 
 ## 典型测试流程
 
-**收租**（状态机 case 3 = `30 × g_moneyMul`）：
+**收租**（停留结算 `landingEvent` 0x419A67；金额 = 同路段 `fees[level]` 之和 × `moneyMul`）：
 1. `Ctrl+5` 全图归自己 → `Ctrl+6` 全图 level=1（建筑可见）
 2. 轮到 AI 玩家时，鼠标指向某块按 `Ctrl+1`（该块归 AI）
-3. 自己回合走到该块 → 现金减少，日志出现 `rent: player 0 -> 1 amount ...`
+3. 自己回合走到该块 → 弹出「請付N元過路費」提示；**付款方现金减少、地主存款（银行）增加**
+   （原版收租 `transferMoney` flags=0 = 收款入银行）；日志出现
+   `rent: player 0 -> 1 amount ...` 与 `transferMoney: 0 -> 1 ... flags 0`
+4. 神明调整验证：AI 携带小/大財神（槽 1/2）或小/大窮神（槽 5/6）时金额变化并弹出神明提示
+
+> 状态机 case 3 仅在日志打印 `landing due: player ... owes ...`（原版只记欠款矩阵、不转账），
+> 不再直接扣款；实际收租统一在停留结算完成。
 
 **升级/加盖**（`priceBase × moneyMul`）：
 1. `Ctrl+1` 指向地块归己（或 `Ctrl+5` 全归己）

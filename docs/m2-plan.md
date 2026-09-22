@@ -9,13 +9,15 @@
 - ✅ **任务 A** `e0c5ac5`：`--debug` 工具集（Ctrl+1..8；Ctrl+4 连锁店待 F3）
 - ✅ **任务 B** `00bf29d`：大地图填色（`bigMapBuffer`；标记帧 26/28/28、11392 缩放）
 - ✅ **任务 C** `c60ab5b`：买地面板背景（`g_tipFrame` 帧 5 @ (220,140)，色键 blit）
-- ✅ **任务 D** `36c3392`：收租（状态机 case 3 = `30 * g_moneyMul`，transferMoney 现金→现金 + 面向目标）
-  - **调研修正**：`landAfterMove`(0x40F381) 槽 9/10/12 实为**神明效果**——槽 12 = 土地公
-    「強佔土地」（无主自动占领 / 他人地付 `moneyMul*priceAdd*(level+2)/5`）、槽 10 = 小恶魔
-    「拆毀一層房屋」（付 `30*moneyMul` + FLC 526）；依赖神明携带系统 → 延后 P4。
-    **普通收租就是状态机 case 3**
-  - 待实机对照：原版 case 3 仅调 `sub_40DF69` 累加 `dword_496BB4` 欠款矩阵（不直接扣现金），
-    结算时机未定位；重写简化为立即转账
+- ✅ **任务 D** `36c3392` + 本次修正：收租
+  - **调研修正（2026-09-21 二次）**：case 3（`sub_448A7E` 触发）**只记账不转账**——原版
+    `addPlayerDebt(owner-1, cur, 30*g_moneyMul)` 累加欠款矩阵 `dword_496BB4`（不扣现金）+
+    面向目标 + FLC 526；**实际收租在停留结算 `landingEvent` 他人地产分支（0x419A67）**，
+    已实现（同路段联合租金 / 连锁店数量×2000 / 地主状态免收 / 付款方神明调整 / showMessage /
+    transferMoney flags=0 收款入银行 / estate+44=本次租金）。早期 case 3 的"立即转账"已移除
+    （否则与 landingEvent 重复扣款）
+  - `landAfterMove`(0x40F381) 槽 9/10/12 实为**神明效果**——槽 12 = 土地公
+    「強佔土地」、槽 10 = 小恶魔「拆毀一層房屋」；依赖神明携带系统 → 延后 P4
 - ✅ **任务 E** `a491b8a`：升级/加盖（`landingEvent` 自己地产分支 0x419911：守卫 level<5 &&
   type==0 && state37==0，费用 `priceBase * moneyMul`，AI 自动升级，音效槽 18）
   - **外观修复** `12ea114`：`dword_48AE48[level]` 与 `g_specTiles[level-1]` **同址**
@@ -25,7 +27,7 @@
 - ⬜ **任务 F：建造菜单（未开始，下一会话继续）**——IDA 结论：
   - `sub_423B3B(player, tab)` 5 页签筛选：0=我的地产+公司 / 1=我的地产 / 2=我的公司 /
     **3=普通地块（owner=me && level≠0 && type==0）** / **4=大地块（owner=me && level≠0 && type≠0）**
-  - `sub_4225A3(player, dir)` 列表绘制（地产名/建筑名/费用 `moneyMul*(priceAdd + priceBase*level)`/到期日）
+  - `sub_4225A3(player, dir)` 列表绘制（住宅用地名/建筑名/费用 `moneyMul*(priceAdd + priceBase*level)`/到期日）
   - `sub_423CF3` 外层对话框（页签/翻页/确认）；**入口待查**（疑似工具栏按钮）
   - 大地块判定：`estate.type(+24) != 0`；5 类特殊建筑 = `kBuildingNames[6..10]`
   - 住宅外观已定位（`specPointTiles[level-1]`）；**大地块特殊建筑外观资源**需在查
@@ -41,7 +43,10 @@
 - **提交前**：`python tools/re_map.py`（校验逆向标注 + 更新 `docs/reverse/address-map.md`）
 - **逆向双落**：源码 `[RE 0xXXXXXX]` 注释（`依据:` 行只写在 `.cpp`）+ `docs/reverse/functions/` 档案 + IDB 重命名/注释并保存
 - **提交粒度**：每个可测功能一个 `wip:` 提交；实机验证由用户执行
-- **文档检查表**：`docs/reverse/functions/gameplay-map-mechanics.md`（每完成一项打勾并记录差异）
+- **文档检查表**：`docs/reverse/functions/gameplay-map-mechanics.md`（地块机制，每完成一项打勾并记录差异）；
+  `docs/help-checklist.md`（帮助文档 99 条功能实现总览，完成功能后同步更新状态）
+- **P2 事件格研究**：`docs/reverse/functions/41982d-p2-events.md`（case 2..16 原版实现、
+  数据结构、实现顺序与待深入清单；監獄/醫院/得點券/卡片/新聞/命運 已研究）
 
 ## 1. 任务 A：`--debug` 工具集（Ctrl+1..8）
 
@@ -50,7 +55,7 @@
 
 实现要点：
 - 在 `src/app/game_loop.cpp` 的 `SDL_EVENT_KEY_DOWN` 分支（约 427 行）插入处理；`SDL_GetMouseState` 取指针坐标
-- 拾取复用 `state.mapHitRegions`（与 `showObjectTip` 同款命中逻辑），id：2000+ 地产 / 4000+ 公司 / 6000+ 特殊点
+- 拾取复用 `state.mapHitRegions`（与 `showObjectTip` 同款命中逻辑），id：2000+ 住宅用地 / 4000+ 商業用地 / 6000+ 行業設施點
 - 每次操作 `RICH4_LOGI`；标注 `[NEW]`（无原版依据）
 
 | 键 | 功能 | 实现 |
@@ -59,8 +64,8 @@
 | `Ctrl+2` | level+1（≤5） | `level = min(level+1, 5)` |
 | `Ctrl+3` | level-1（≥0） | `level = max(level-1, 0)` |
 | `Ctrl+4` | 设为连锁店 | **待任务 F3 探明后接入（先留空）** |
-| `Ctrl+5` | 全图地产归当前玩家 | 遍历 `estates` |
-| `Ctrl+6` | 全图地产 level=1 | 遍历 |
+| `Ctrl+5` | 全图住宅用地归当前玩家 | 遍历 `estates` |
+| `Ctrl+6` | 全图住宅用地 level=1 | 遍历 |
 | `Ctrl+7` | 当前玩家现金 +100000 | `players[p].cash += 100000` |
 | `Ctrl+8` | 打印指向地块详情 | 日志：objId/type(+24)/owner(+25)/level(+26)/flag(+23)/priceAdd(+28)/priceBase(+30) |
 
@@ -89,7 +94,7 @@
 
 原版 `playerActionStateMachine` case 3（0x40DA4B）：
 - `byte_4749E0`（重写 `stepDwell`）等待递减；`byte_498EA3`（动画帧）非 0 时先播动画
-- 读 `cellEnt+32` objId：2000..4000 地产 / 4000..6000 公司
+- 读 `cellEnt+32` objId：2000..4000 住宅用地 / 4000..6000 商業用地
 - `owner != 0 && owner != currentPlayer+1` → **`sub_40DF69(cur, owner-1, 30 * g_moneyMul)`**
 - 之后：`g_playerRestoreDir = dir`、面向目标格（`sub_454FB4`）、后续动画
 
@@ -99,8 +104,8 @@
 - 守卫：`stateFlags(player) & 0xFF` 非 0 或未存活 → 返回
 - 按 `byte_496BA7[player]`（重写 `cellTableIdx`，携带物件槽）：
   - **槽 9**：公司相关提示（`showMessage(off_47ED9A, 1500)` + `sub_40B110`）
-  - **槽 12**：完整流程——地产/公司 owner 检查；他人 → `sub_40DF69(owner-1, player, g_moneyMul * word[+28] * (level + 2.0f) / 5.0f)`（公司用 `corp+34`）；无主 → `owner = player+1`（自动购地）；`g_cfgLandPerm` 补到期日；`rebuildMiniMap(0)`；随后 `showMessage(byte_4634F2, 1500)` + `sub_44EF41`（角色语音）
-  - **槽 10**：地产/公司 `level != 0` → `sub_40DF69(owner-1, player, 30 * g_moneyMul)` → `showMessage(byte_4634D7, 1500)` + `sub_40AB4A` + FLC 526 + 音效 `dword_4823DA`
+  - **槽 12**：完整流程——住宅用地/商業用地 owner 检查；他人 → `sub_40DF69(owner-1, player, g_moneyMul * word[+28] * (level + 2.0f) / 5.0f)`（公司用 `corp+34`）；无主 → `owner = player+1`（自动购地）；`g_cfgLandPerm` 补到期日；`rebuildMiniMap(0)`；随后 `showMessage(byte_4634F2, 1500)` + `sub_44EF41`（角色语音）
+  - **槽 10**：住宅用地/商業用地 `level != 0` → `sub_40DF69(owner-1, player, 30 * g_moneyMul)` → `showMessage(byte_4634D7, 1500)` + `sub_40AB4A` + FLC 526 + 音效 `dword_4823DA`
   - 其他槽 → 无
 - 常量：`flt_46350C = 2.0f`、`flt_463510 = 5.0f`（0x46350C/0x463510）
 
@@ -126,7 +131,7 @@
 | 原版 | 作用 |
 |------|------|
 | `sub_423B3B(player, tab)` | 5 页签筛选：0=我的地产+公司 / 1=我的地产 / 2=我的公司 / **3=普通地块（owner=me && level≠0 && type==0）** / **4=大地块（owner=me && level≠0 && type≠0）** |
-| `sub_4225A3(player, dir)` | 列表绘制（地产名/建筑名/费用 `g_moneyMul × (word[+28] + word[+30] × level)`/到期日），5 个 case 对应页签 |
+| `sub_4225A3(player, dir)` | 列表绘制（住宅用地名/建筑名/费用 `g_moneyMul × (word[+28] + word[+30] × level)`/到期日），5 个 case 对应页签 |
 | `sub_423CF3` | 外层对话框（页签/翻页/确认）；**入口待查**（疑似工具栏"锤子"按钮）|
 
 实现：新文件 `src/app/build_menu.cpp`（参照 `ai_dialog.cpp` 对话框模式）。
@@ -151,26 +156,31 @@
 | 买地流程 | `sub_41982D` case 0 → `loc_41A013`；价格 `(level*priceBase + priceAdd) * moneyMul`；返回 0x88（重写用 `kLandingWait=0x90`）|
 | 询问框 | `askDialog` 0x440BA8（文本 (220,140) 字体16/0xF0F0F0/0x101010/阴影+粗体 + `yesNoDialog(220,320)`）；`yesNoDialog` 0x453A32（data.mkf[440]）|
 | 询问文本 | 0x4639E1（BIG5）`"%s\n\n費用:%d元\n\n是否買下此地?"` |
-| 现金不足 | `showMessage(byte_46398B="現金不夠支付！", 1500)` |
+| 现金不足 | `showMessage(byte_46398B, 1500)`；实测文本 = **"您的現金不足！"**（0x46398B） |
 | 购地音效 | `g_effectSlots[17]`（0x4823D2）|
 | 格子音效表 | `g_cellTypeSound` 0x475299（17 项）|
 | estate 绘制 | 0x4091DF：`level==0` 有主 → `pieceTiles`(map.mkf[25]) 帧=角色 ID、**不改调色板**；`level>0` → `dword_48AE48[level]`（type==0）/ `estateFlag`（type≠0），owner 色 |
 | 调色板 | `g_drawListPal`(0x48A852)：0xFF=不改 / 0=黑 / 1..8=`g_playerColor[owner-1]`（u32 RGB888 → `rgb888To555`）|
-| 收租（移动结束） | case 3：`30 * g_moneyMul` |
-| 收租（落地后） | `landAfterMove` 0x40F381；公式 `g_moneyMul * word[+28] * (level + 2.0f) / 5.0f`；提示 `byte_4634D7`/`byte_4634F2`；FLC 526；音效 `dword_4823DA` |
-| 记账 | `sub_40DF69` → `dword_496BB4[26*a1+a2]`（不直接扣钱）|
-| 转账 | `sub_41D2C6`（重写 `transferMoney`）|
+| 收租（停留结算） | `landingEvent` 0x419A67：音效槽 20 → `ownerCanCollectRent`(0x41D559) → `estateRouteRent`(0x419744) 同路段 `fees[level]` 之和 / 连锁店数×2000，×`moneyMul` → flag(+23) 翻倍 → `applyGodRentModifier`(0x41D709) → showMessage → transferMoney |
+| 地主免收 | `ownerCanCollectRent` 0x41D559：查封/與付款人同盟(+65)/死神顯靈(槽15)/住宿/消失/坐牢/住院/冬眠/夢遊 |
+| 神明调整 | `applyGodRentModifier` 0x41D709：小財神减半 / 大財神免付 / 小窮神 +50% / 大窮神加倍 |
+| 收租消息 | 0x4639B3 `"%s\n\n此地屬%s\n\n請付%d元%s"`（%s=地名/地主/金额/"過路費"）；同盟分账用 0x46399A `"%s\n\n屬%s與%s\n\n請付%d元%s"` |
+| 移动结束 case 3 | `sub_448A7E` 触发（步行 travel&0x83==3 + 他人有建筑）；`addPlayerDebt(owner-1, cur, 30*moneyMul)` **仅记账** + 面向 + FLC 526（不转账）|
+| 记账 | `sub_40DF69`（`addPlayerDebt`）→ `dword_496BB4[26*a1+a2]`（**a1 应收 a2**，不直接扣钱）|
+| 转账 | `sub_41D2C6`（重写 `transferMoney`）：flags&4 付款银行优先 / flags&1 收款入现金（否则入银行）；收租用 **flags=0**（地主入银行）|
+| 收租音效 | `dword_4823EA` = 音效槽 20 |
 | 建造费用 | `g_moneyMul * (word[estate+28] + word[estate+30] * level)` |
 | 大地图 | `rebuildMiniMap` a1=0 小(5696) / a1=1 大(11392) |
-| 吐槽 | `estateChainSpeech` 0x44F627（同名地产≥3 → `sub_44EF41`）|
+| 吐槽 | `estateChainSpeech` 0x44F627（同路段住宅用地≥3 → `sub_44EF41`）|
 | 神明阻止 | `checkCarriedGod` 0x40FA61（槽 7/8/15）|
 
 ## 8. 已知差异清单（P0 遗留，随 D/E/F 一并处理）
 
 - AI 买地决策 `sub_41D7D4`（未实现，AI 不买地）
-- 现金不足/神明阻止的提示文本未显示
-- 询问框缺 `g_tipFrame` 装饰背景（任务 C）
-- 落地后处理 `sub_40F381`/`sub_448A7E`、连锁奖励 `sub_44101D`（任务 D）
+- ~~现金不足/神明阻止的提示文本未显示~~（已接入 `showMessage`）
+- ~~询问框缺 `g_tipFrame` 装饰背景~~（任务 C 已完成）
+- 落地后处理 `sub_40F381`（神明效果，P4）、连锁奖励 `sub_44101D`
+- 收租的同盟分账 / 死神代付 / 免租卡片（P4 卡片与神明系统）
 - 事件格 case 2..16（P2，未开始）
 
 ## 9. 执行顺序与待确认

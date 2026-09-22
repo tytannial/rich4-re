@@ -13,18 +13,25 @@
 **M1（基本交互）已完成**：主菜单 → 选人/选地图 → 开局（跳伞入场，期间锁定交互）→
 回合循环（掷骰三阶段：角色扔骰/骰子 FLC/点数停留 → 移动 → 过天）→
 工具条（帮助/设置/大地图/读档/存档/托管AI）→ 右侧面板（玩家信息/日历/小地图/前进面板）→
-地图物件（神明事件点/地标/地产/公司/特殊点/事件格）与**左键按住查看物件信息**。
+地图物件（神明事件点/地标/住宅用地/商業用地/行業設施點/事件格）与**左键按住查看物件信息**。
 非玩家控制期（AI 回合/掷骰/移动/结算）锁定交互（`g_playerControl`）。
 
-**M2 执行计划**：见 `docs/m2-plan.md`（Debug 工具 / 大地图填色 / 买地面板 / 收租 / 升级 / 建造菜单）
+**M2（进行中）**：P0 买地 ✅、P1 升级 ✅ / 收租 🟡（case 3 简化）、
+Debug 工具（Ctrl+1..8）✅、大地图填色 ✅、买地面板背景 ✅；
+建造菜单/连锁店 ❌（任务 F，`sub_423B3B/4225A3/423CF3` 已调研）。
+
+**功能总览**：`docs/help-checklist.md`（帮助文档 99 条 → 实现状态，当前 ✅ 8 / 🟡 6 / ❌ 85）。
+
+**M2 执行计划**：见 `docs/m2-plan.md`
 
 **M2 待办**（详见 `docs/reverse/functions/` 各档案「差异」段）：
 
-- 落地事件分发：`onPlayerActionPhase`（0x41B42D）格子类型 11..18 收租/公司分红/神明等
-- 经济系统：买卖地/银行/贷款/股票行情（`sub_4291D6` 等）、卡片与道具使用
+- P2 事件格实现（研究已完成，见 `41982d-p2-events.md`）：得點券（最简单）→ 卡片格 →
+  監獄/醫院 → 新聞/命運 → 小游戏 → 樂透/銀行/百貨/魔法屋
+- 经济系统：银行/贷款/股票行情（`sub_4291D6` 等）、卡片与道具使用（P4）
 - AI 决策：`alive & 6`（电脑/托管）自动行动（`sub_41982D` 回合主流程）
 - 存档完整恢复：`loadGameFromSlot` 目前仅恢复地图/模式/玩家数
-- 事件槽 NPC（玩家 4-7：流氓/间谍/小偷等）
+- 事件槽 NPC（玩家 4-7：流氓/间谍/小偷等）—— 保释机制/犯人表（0x498E28）已研究
 
 ## 目录结构
 
@@ -113,6 +120,10 @@ python tools/re_map.py
 - `docs/reverse/README.md` — 逆向注释规范与工作流
 - `docs/reverse/address-map.md` — 地址↔重写符号映射表（自动生成）
 - `include/game/formats.h` — 全部格式的 C 结构定义
+- `docs/help-checklist.md` — **游戏内帮助 99 条 → 功能实现检查表**（机制描述权威索引）
+- `docs/reverse/functions/gameplay-map-mechanics.md` — 地块机制总览与验收检查表
+- `docs/reverse/functions/pricing-formulas.md` — **收费/价格公式总汇**（物价指数、轮盘、住宅用地/商業用地/行業設施點、到期清算、MAPDAT 数值）
+- `docs/reverse/functions/41982d-p2-events.md` — P2 事件格（case 2..16）专项研究
 
 ## 工作经验（踩坑与约定）
 
@@ -131,6 +142,20 @@ python tools/re_map.py
   `decodeRawBitmap`（按字节数推断尺寸）；FLC 用 `FliDecoder`。
 - **单 buffer 语义**：原版每个音效槽是单 DirectSound buffer
   （`sub_4542E9` 停 + `sub_4542CE` 播）→ 重写用同槽替换，避免多声部叠加。
+- **帮助文档是第一手机制依据**：`help.mkf` 99 条（8 分类，分类/标题表 `[RE 0x4761B4]`/`0x4761B8`）
+  已提取为 `docs/help-checklist.md`；研究/实现时用 `[HELP idx]` 标注引用。
+  但**帮助文本可能错**（idx 58 冬眠卡误用红卡文本）或与实现不符
+  （医院罚款帮助写 1000/天，代码 `g_moneyMul*2000*days`）→ 以 IDA/实测为准。
+- **MAPDAT 实测定类型**：cellEnt `+4` 名称 / `+36` 低字节类型 / `+34` 图块，
+  用 Python 解析 `map.mkf[2*(4*mode+map)+1]` 逐项打印；比"猜测类型对应"可靠
+  （特殊地点 16 类与帮助页逐项吻合，一次确定）。
+- **switch case 读跳转表**：`get_bytes` 读 jpt（如 `sub_41982D` 的 `0x4197E9` 17 项）
+  比反编译 switch 更直接，能精确定位每个 case 的代码地址与合并的 default。
+- **指针表解码**：`off_XXXX`/`funcs_XXXX` 是指针数组，用 Python 读 exe 解码
+  （VA→文件偏移 = `VA - 0x401A00`，BIG5 用 cp950；`get_string` 遇 BIG5 常失败）。
+- **图块交叉验证索引**：类型/名称索引用 `data.mkf[type+395]` 图块内容验证
+  （407=土地公、408=禮物、410=死神、411=路障 → 确认 `kObjectNames[类型值]` 为 0-based，
+  而非"类型-1"）。
 
 ### 常见坑
 
@@ -144,6 +169,16 @@ python tools/re_map.py
 - **重新开局**：`newGameInit` 需重置 `mapRotation`/骰子/回合/音乐计时器等残留状态。
 - **音效 id 空间**：UI 音效（`g_uiSoundHover/Click/Confirm/Cancel` = Effect.mkf 0/1/2/4）
   与游戏音效槽（`g_effectSlots[slot]`）是两套，勿混用。
+- **多套顺序勿混用**：同一批数据可能同时存在 type 顺序 / 图块顺序 / 帮助页顺序三套
+  （特殊地点 type 7/8 = 七彩氣球/喜從天降，但图块 sprite 15/13 互换、帮助页顺序又不同）；
+  重写时按用途查对应表，不要假设一致（见 `gameplay-map-mechanics.md` §3）。
+- **帮助页标题与内容需交叉验证**：页面标题表在 exe（`[RE 0x4761B8]`），
+  与 `help.mkf` 页内容可能错位/重复（idx 58）；发现异常时在文档标注，不照抄。
+- **重写命名要对照逆向**：如 `GameState.cardShuffle` 实为**新闻事件顺序表**
+  `g_newsOrder`（0x499090，`newsEvent` 用）——错误命名会误导后续开发；
+  发现后先记文档，实现时随功能改名。
+- **PowerShell 环境**：Python 输出中文前设 `$env:PYTHONIOENCODING="utf-8"`
+  （否则 GBK 控制台报 `UnicodeEncodeError`）；本机无 `rg`，搜索用 grep/glob 工具。
 
 ### 工作流
 
@@ -152,6 +187,12 @@ python tools/re_map.py
 - 编译前确保游戏已退出（否则 `LNK1104` 文件占用）；`build.cmd` 不提交。
 - 逆向成果需**双落**：源码注释 + `docs/reverse/functions/` 档案 + IDB 重命名/注释
   （IDB 修改后保存）；改动后跑 `python tools/re_map.py` 校验。
+- **大功能先出专项研究文档再实现**：如 P2 事件格 → `41982d-p2-events.md`
+  （处理函数/数据结构/实现顺序/待深入清单），避免重复逆向与遗漏依赖。
+- **状态同步**：完成功能后更新 `help-checklist.md`（对应帮助条目状态）与
+  `gameplay-map-mechanics.md`（阶段勾选）；IDB 重命名后同步文档中的符号名。
+- IDB 批量操作：`rename`（函数/全局）、`set_comments`、`get_bytes`（表/jpt）、
+  `analyze_batch`（多函数概览）→ 完成后 `idb_save`。
 
 ## 注意事项
 
