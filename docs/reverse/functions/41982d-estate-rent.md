@@ -146,18 +146,22 @@ return g_moneyMul * 总和
 
 | 阶段 | 地址 | 行为 |
 |------|------|------|
-| 设置 | 0x41A761 | `sub_40D761` 清旧状态（住宿/監獄/醫院）→ `stateFlags.BYTE0 = days-1`（days==1 → `0x80`）+ `byte66 += days` + 欠款 `20×M×days` + 理赔 `2000×M×days` + `sub_40D5A5` 入住动画（当前玩家 `alive \|= 0x20` 走进旅館，他人直接传送到旅館坐标；`word_496BB2` = 旅館索引） |
+| 设置 | 0x41A761 | `sub_40D761` 清旧状态（住宿/監獄/醫院）→ `stateFlags.BYTE0 = days-1`（days==1 → `0x80`）+ `byte66 += days` + 欠款 `20×M×days` + 理赔 `2000×M×days` |
+| 走进 | 0x40D5A5 | 清原格占用（**"消失"**）→ `word_496BB2` = 旅館 corp 索引 + 保存朝向 `g_playerRestoreDir` + 面向旅館 + `alive \|= 0x20` → `sub_40DD1F` 启动移动（`g_stepsRemaining=1`，状态 1）。非当前玩家直接传送到旅館坐标 |
+| 走进移动 | 0x40C05C（`alive & 0x20`） | 起点 = 旅館格坐标、终点 = **旅館 corp 坐标**（慢速插值，`flt_4631DC` 系数）；**半程** `alive &= 0xF`（玩家到达旅館，住宿期间不绘制棋子） |
 | 倒计时 | 0x41C84F（nextPlayer 切换玩家后） | BYTE0 `n>0 → n-1`；`n==1 → (n-1)\|0x80`；bit7 → `sub_40D6BE` 结束 |
 | 跳过 | 0x40C912(1) | `stateFlags != 0` → 返回 0 → `wait=-125` 跳过回合 |
 | 状态文本 | 0x40C912(0) | `"%s住宿中\n\n還剩%d天！"`（天数 = `(BYTE0 & 0x7F) + 1`）；出國/坐牢/住院/冬眠 同构（0x4631E0..0x463234） |
-| 结束 | 0x40D6BE | `alive \|= 0x10` + 朝向重算（面向格中心）+ 恢复格占用 → `nextPlayer` 0x30 分支恢复朝向（`g_playerRestoreDir`）→ `alive &= 0x0F` → **不切换玩家**（该玩家重新开始回合，可行动） |
+| 结束 | 0x40D6BE | `alive \|= 0x10` + 朝向重算（面向格中心）+ 恢复格占用 → 玩家回合 `sub_40DD1F` 启动**走出移动** |
+| 走出移动 | 0x40C05C（`alive & 0x10`） | 起点 = 旅館坐标、终点 = 旅館格坐标；**半程** `stateFlags = 0`（**全部状态在此清零**，恢复行动与显示）→ 完成后**不触发落地结算**（不重复收旅館费） |
 | 强制结束 | 0x40DFFA | corp 到期回收（`expireAssets`）时把所有玩家 BYTE0 置 `0x80`（跳到最后一天） |
 
-- **差异**：原版 `sub_41C84F` 的 bit7 分支仅调 `sub_40D6BE`（反汇编未见状态字节清零），
-  实测会永久卡在「住宿中」；重写在结束时清零对应 BYTE（`updatePlayerStates`，与監獄 `g_jailFlags` 同模式）。
-- **住宿期间**：`ownerCanCollectRent` 检查地主 BYTE0 != 0 → 免收租（8 种提示之一）。
-- 出國（BYTE1）/監獄（BYTE2）/醫院（BYTE3）/冬眠（byte54）/夢遊（state37）走同一倒计时框架；
-  出國结束 `sub_40D4E5`（清位 + 恢复占用 + `loadWalkResources` + FLC 533/558）已按简化实现。
+- **状态清零位置**：不在 `sub_41C84F`/`sub_40D6BE`，而在**走出移动半程**（0x40C05C）。
+  監獄/醫院同构：`releaseJailNpc`/`releaseHospitalNpc` 调 `sub_40D6BE` 后由走出移动清 BYTE2/BYTE3。
+- **住宿期间**：`ownerCanCollectRent` 检查地主 BYTE0 != 0 → 免收租（8 种提示之一）；
+  渲染按 `stateFlags & 0xFF != 0` 跳过棋子绘制（角色"消失"）。
+- 出國（BYTE1）无"走出"：`sub_40D4E5` 自行清 BYTE1 + 恢复占用 + `loadWalkResources` + FLC 533/558。
+- 冬眠（byte54）/夢遊（state37）在 `stateFlags == 0` 时倒计时。
 
 ## 4.1 连锁店（改建卡创建 + 收费）
 

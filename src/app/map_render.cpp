@@ -256,6 +256,11 @@ void renderMap(Application& app, int centerX, int centerY) {
         if (p.spriteX == 0 && p.spriteY == 0) {
             continue;
         }
+        // [RE 0x40829D] 状态效果中（住宿/出國/監獄/醫院/冬眠）不绘制棋子（"消失"）；
+        //   走出旅館半程清 stateFlags 后恢复显示
+        if ((p.stateFlags & 0xFFu) != 0) {
+            continue;
+        }
         const int slot = 2 * state.playerActionState[j] + state.playerMoveGroup[j];
         const UiImage* res = nullptr;
         if (slot >= 0 && slot < 13 && state.walkRes[j][slot].frameCount() > 0) {

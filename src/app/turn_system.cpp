@@ -830,6 +830,21 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                     // [RE 0x41A7BC] 住宿欠款 20×M×days（addPlayerDebt 矩阵未建模，仅日志）
                     RICH4_LOGI("hotel stay: player %d days %d owe %d (RE 0x41A7F4)", p, hotelDays,
                                20 * st.moneyMul * hotelDays);
+                    // [RE 0x40D5A5] 走进旅館：清原格占用（消失）+ 保存朝向 + 面向旅館 +
+                    //   记录旅館索引（word_496BB2）+ 启动走进移动（状态 1，慢速插值到旅館坐标）
+                    if (p == st.currentPlayer && pl.cellEntId > 0 &&
+                        pl.cellEntId < st.cellEnts.size()) {
+                        st.cellEnts[pl.cellEntId].occMask &= ~(256u << p);
+                        pl.stayCorpIdx = static_cast<uint16_t>(idx);
+                        pl.byte27 = pl.dir;
+                        pl.alive |= 0x20;
+                        const CellEnt& ce = st.cellEnts[pl.cellEntId];
+                        pl.dir = static_cast<uint8_t>(facingFromDelta(
+                            static_cast<int>(cp.x) - static_cast<int>(ce.x),
+                            static_cast<int>(cp.y) - static_cast<int>(ce.y)));
+                        startPlayerMove(app); // [RE 0x40DD1F] alive&0x30 → 走进移动（含音效）
+                        RICH4_LOGI("hotel stay: player %d walk into corp %d (RE 0x40D5A5)", p, idx);
+                    }
                 }
             }
         }
@@ -879,37 +894,60 @@ bool moveOneStep(Application& app) {
         if (st.moveSoundIndex > 0) {
             app.audio().playEffectSlot(st.moveSoundIndex);
         }
-        const int startX = st.cellEnts[pl.cellEntId].x;
-        const int startY = st.cellEnts[pl.cellEntId].y;
-        // 收集可走出口（排除来向）。cellEnt id 为 u16，候选必须用 uint16_t（原版存 word 数组）
-        uint16_t cand[4];
-        int n = 0;
-        uint32_t exitBit = 0x40000000u; // [RE 0x40C05C] v6 起始位（bit30 起）
-        for (int k = 0; k < 4; ++k) {
-            const uint16_t exitId = st.cellEnts[pl.cellEntId].exits[k];
-            if (exitId && exitId != pl.prevCellEnt && exitId < st.cellEnts.size() &&
-                (exitBit & st.cellEnts[pl.cellEntId].occMask) == 0) {
-                cand[n++] = exitId;
+        int startX = st.cellEnts[pl.cellEntId].x;
+        int startY = st.cellEnts[pl.cellEntId].y;
+        st.stepExitState = 0;
+        if ((pl.alive & 0x30) != 0) {
+            // [RE 0x40C05C] 状态移动分支（不选出口、不改 cellEntId）：
+            //   0x20 走进旅館：起点=当前格坐标、终点=住宿旅館坐标（word_496BB2 → corps）
+            //   0x10 走出旅館：起点=当前 sprite（旅館坐标）、终点=当前格坐标
+            st.stepExitState = static_cast<uint8_t>(pl.alive & 0x30);
+            if ((pl.alive & 0x20) != 0) {
+                const int ci = pl.stayCorpIdx;
+                if (ci > 0 && ci < static_cast<int>(st.corps.size())) {
+                    st.stepTargetX = st.corps[ci].x;
+                    st.stepTargetY = st.corps[ci].y;
+                } else {
+                    st.stepTargetX = startX;
+                    st.stepTargetY = startY;
+                }
+            } else {
+                startX = pl.spriteX;
+                startY = pl.spriteY;
+                st.stepTargetX = st.cellEnts[pl.cellEntId].x;
+                st.stepTargetY = st.cellEnts[pl.cellEntId].y;
             }
-            exitBit >>= 1;
-        }
-        uint16_t nextId = n ? cand[std::rand() % n] : pl.prevCellEnt;
-        if (nextId == 0 || nextId >= st.cellEnts.size()) {
-            nextId = pl.cellEntId;
-        }
-        // 更新来向/当前格/占用掩码
-        pl.prevCellEnt = pl.cellEntId;
-        const uint32_t mask = 256u << p;
-        st.cellEnts[pl.cellEntId].occMask &= ~mask;
-        st.cellEnts[nextId].occMask |= mask;
-        pl.cellEntId = nextId;
-        // [RE 0x40C05C] 移动中即朝本步方向（原版每帧设 byte_496B78=sub_407A8C(来向,当前)），
-        //   否则角色朝上一步方向走、到新格才转向 → 转角混乱
-        pl.dir = static_cast<uint8_t>(facingBetween(st, pl.prevCellEnt, pl.cellEntId));
-        updatePlayerCarriedObjects(st, p);
+        } else {
+            // 收集可走出口（排除来向）。cellEnt id 为 u16，候选必须用 uint16_t（原版存 word 数组）
+            uint16_t cand[4];
+            int n = 0;
+            uint32_t exitBit = 0x40000000u; // [RE 0x40C05C] v6 起始位（bit30 起）
+            for (int k = 0; k < 4; ++k) {
+                const uint16_t exitId = st.cellEnts[pl.cellEntId].exits[k];
+                if (exitId && exitId != pl.prevCellEnt && exitId < st.cellEnts.size() &&
+                    (exitBit & st.cellEnts[pl.cellEntId].occMask) == 0) {
+                    cand[n++] = exitId;
+                }
+                exitBit >>= 1;
+            }
+            uint16_t nextId = n ? cand[std::rand() % n] : pl.prevCellEnt;
+            if (nextId == 0 || nextId >= st.cellEnts.size()) {
+                nextId = pl.cellEntId;
+            }
+            // 更新来向/当前格/占用掩码
+            pl.prevCellEnt = pl.cellEntId;
+            const uint32_t mask = 256u << p;
+            st.cellEnts[pl.cellEntId].occMask &= ~mask;
+            st.cellEnts[nextId].occMask |= mask;
+            pl.cellEntId = nextId;
+            // [RE 0x40C05C] 移动中即朝本步方向（原版每帧设 byte_496B78=sub_407A8C(来向,当前)），
+            //   否则角色朝上一步方向走、到新格才转向 → 转角混乱
+            pl.dir = static_cast<uint8_t>(facingBetween(st, pl.prevCellEnt, pl.cellEntId));
+            updatePlayerCarriedObjects(st, p);
 
-        st.stepTargetX = st.cellEnts[nextId].x;
-        st.stepTargetY = st.cellEnts[nextId].y;
+            st.stepTargetX = st.cellEnts[nextId].x;
+            st.stepTargetY = st.cellEnts[nextId].y;
+        }
         const int dx = st.stepTargetX - startX;
         const int dy = st.stepTargetY - startY;
         const double dist = std::sqrt(static_cast<double>(dx * dx + dy * dy));
@@ -948,11 +986,29 @@ bool moveOneStep(Application& app) {
             st.playerMoveFrame[p] = (st.playerMoveFrame[p] + 1) % perDir;
         }
     }
+    // [RE 0x40C05C] 半程清除状态标志（dword_4749DC < dword_48BAF4）：
+    //   走进(0x20) → alive &= 0xF（到达旅館）；走出(0x10) → stateFlags=0（恢复行动）
+    if (st.stepExitState != 0 && (st.stepExitState & 0x80) == 0 && st.stepFrames < st.stepHalf) {
+        if ((st.stepExitState & 0x10) != 0) {
+            pl.stateFlags = 0;
+            RICH4_LOGI("stay exit: player %d states cleared at half (RE 0x40C05C)", p);
+        } else {
+            pl.alive &= 0x0F;
+            RICH4_LOGI("stay enter: player %d reached hotel at half (RE 0x40C05C)", p);
+        }
+        st.stepExitState |= 0x80;
+    }
     --st.stepFrames;
     if (st.stepFrames <= 0) {
         pl.spriteX = static_cast<uint16_t>(st.stepTargetX);
         pl.spriteY = static_cast<uint16_t>(st.stepTargetY);
-        pl.dir = static_cast<uint8_t>(facingBetween(st, pl.prevCellEnt, pl.cellEntId));
+        if ((st.stepExitState & 0x10) != 0) {
+            st.stepSkipLanding = true; // 走出旅館完成 → 跳过落地结算（不重复收旅館费）
+            RICH4_LOGI("stay exit: player %d back on road (RE 0x40C05C)", p);
+        } else if (st.stepExitState == 0) {
+            pl.dir = static_cast<uint8_t>(facingBetween(st, pl.prevCellEnt, pl.cellEntId));
+        }
+        st.stepExitState = 0;
         return true;
     }
     st.playerStepX[p] += st.stepDeltaX;
@@ -1028,6 +1084,13 @@ int checkPlayerAction(Application& app, int a1) {
 void calcPlayerWait(Application& app) {
     GameState& st = app.gameState();
     const int p = st.currentPlayer;
+    // [NEW] 走出旅館完成 → 跳过落地结算（原版走出移动由 sub_40DD1F 启动，不再收旅館费）
+    if (st.stepSkipLanding) {
+        st.stepSkipLanding = false;
+        st.playerActionWait[p] = -125;
+        RICH4_LOGI("calcPlayerWait: skip landing after stay exit (player %d)", p);
+        return;
+    }
     if (checkPlayerAction(app, 1)) {
         st.playerActionWait[p] = static_cast<int8_t>(landingEvent(app, st.players[p].cellEntId));
     } else {
@@ -1178,7 +1241,8 @@ void updatePlayerStates(Application& app, int p) {
     // BYTE0 住宿
     const uint8_t b0 = static_cast<uint8_t>(pl.stateFlags & 0xFF);
     if ((b0 & 0x80) != 0) {
-        pl.stateFlags &= 0xFFFFFF00u;
+        // [RE 0x40D6BE] 结束：alive|=0x10 → 该玩家回合自动"走出旅館"移动（0x40C05C 0x10 分支），
+        //   半程清 stateFlags；本函数不清 BYTE0（原版清零在走出移动半程）
         endPlayerState(app, p);
     } else if (b0 != 0) {
         pl.stateFlags = (pl.stateFlags & 0xFFFFFF00u) | decay(b0, 0xFF);
@@ -1197,7 +1261,8 @@ void updatePlayerStates(Application& app, int p) {
     // BYTE2 監獄
     const uint8_t b2 = static_cast<uint8_t>((pl.stateFlags >> 16) & 0xFF);
     if ((b2 & 0x80) != 0) {
-        pl.stateFlags &= 0xFF00FFFFu;
+        // [RE 0x43D7BF] releaseJailNpc：sub_40D6BE（不清 BYTE2，走出監獄格移动半程清）
+        endPlayerState(app, p);
     } else if (b2 != 0) {
         pl.stateFlags =
             (pl.stateFlags & 0xFF00FFFFu) | (static_cast<uint32_t>(decay(b2, 0xFF)) << 16);
@@ -1205,7 +1270,8 @@ void updatePlayerStates(Application& app, int p) {
     // BYTE3 醫院
     const uint8_t b3 = static_cast<uint8_t>((pl.stateFlags >> 24) & 0xFF);
     if ((b3 & 0x80) != 0) {
-        pl.stateFlags &= 0x00FFFFFFu;
+        // [RE 0x43EE6E] releaseHospitalNpc 同构（走出醫院格）
+        endPlayerState(app, p);
     } else if (b3 != 0) {
         pl.stateFlags =
             (pl.stateFlags & 0x00FFFFFFu) | (static_cast<uint32_t>(decay(b3, 0xFF)) << 24);

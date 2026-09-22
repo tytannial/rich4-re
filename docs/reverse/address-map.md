@@ -35,20 +35,20 @@
 | `0x407A8C` | 朝向 | `src/app/turn_system.cpp:302` | 0x407A8C→0x454FB4（atan2(-dy,dx) 量化）→byte_482414[2,3,4,5,6,7,0,1] |
 | `0x407AD2` | loadMap | `src/app/new_game.cpp:307` | 0x407AD2 反编译; sub_4502FE("MAP.MKF") + sub_450441(handle, 2*(4*mode+map)) 取 GND 地图数据; +1 取 MAPDAT（本作无独立 MAPDAT.MKF，走 fallback 分支）; 加载图块/棋子精灵并初始化格子表 差异: 玩家地图数据（10008B/玩家）与 sub_42915A/sub_428CAF 待后续 |
 | `0x40829D` | 等距地图渲染 | `include/game/app/map_render.h:10` | 0x40829D 反编译; 视口中心 = 当前玩家像素坐标（centerX/centerY = -1 时用上次值）, 遍历 kIsoDrawOrder 绘制地面等距地块（sub_4557A1）, 再按等距表定位 cellEnts 物件与玩家棋子; 首次进入时随机选择出生点 cellEnt |
-| `0x40A4E1` | 单份工作副本重建（a1=0 | `src/app/map_render.cpp:532` | 0x40A4E1 反编译; 底图 = g_miniMapRaw 帧 a1（尺寸即缓冲尺寸）→ g_miniMapWork 帧 a1; 标记 = sub_456384(目标, g_tipFrame 帧, (scale*x)>>16, (scale*y)>>16, g_playerColor[owner-1]) |
-| `0x40A4E1` | sub_40A4E1(0)/sub_40A4E1(1) | `src/app/map_render.cpp:580` | 0x40A4E1 反编译; a1=0 小地图（5696 缩放，标记帧 22/24/24）, a1=1 大地图（11392 缩放，标记帧 26/28/28） |
+| `0x40A4E1` | 单份工作副本重建（a1=0 | `src/app/map_render.cpp:537` | 0x40A4E1 反编译; 底图 = g_miniMapRaw 帧 a1（尺寸即缓冲尺寸）→ g_miniMapWork 帧 a1; 标记 = sub_456384(目标, g_tipFrame 帧, (scale*x)>>16, (scale*y)>>16, g_playerColor[owner-1]) |
+| `0x40A4E1` | sub_40A4E1(0)/sub_40A4E1(1) | `src/app/map_render.cpp:585` | 0x40A4E1 反编译; a1=0 小地图（5696 缩放，标记帧 22/24/24）, a1=1 大地图（11392 缩放，标记帧 26/28/28） |
 | `0x40A9BD` | mapDialog（大地圖界面） | `include/game/app/map_dialog.h:7` | 0x40A9BD → runModal(sub_40A801) + sub_415E70(1); sub_40A801 WM_PAINT 绘制大地图（dword_48BADC 帧 1，400x400）到 (20,60) + 玩家标记（g_pieceSprites 帧 6，11392/65536 缩放）; WM_RBUTTONUP → postModalExit(0) |
 | `0x40A9D7` | 地图物件拾取 | `src/app/object_tip.cpp:142` | 0x40A9D7 拾取缓冲（重写用渲染记录的 mapHitRegions）; 命中用拾取形状的 SPR 像素掩码（原版拾取缓冲语义），无形状时用矩形 |
 | `0x40B8D8` | releaseWalkResources | `src/app/turn_system.cpp:117` | 0x40B8D8 反编译; 释放玩家 a1 的动画组 a2（slot = a2 + 2*i, i<4）， 并清 byte_498EA0 的动画组位（a2=1 → 低 4 位；a2=0 → 高 4 位） |
 | `0x40B93B` | loadWalkResources | `src/app/turn_system.cpp:131` | 0x40B93B 反编译; 普通玩家(0..3): v1 = 21*charIndex + 128 state37 → 组5: slot0=v1+16, slot2=v1+17, slot4=v1+2 cellEnt+39 最高位（有路）→ 组1: slot1=v1+13, slot3=v1+14, slot5=v1+15 travel → slot0=3*travel+v1, slot2=+1, slot4=+2, slot6=+3（travel==3） 差异: 槽 4..8（事件槽）分支待补 |
-| `0x40C05C` | moveOneStep | `src/app/turn_system.cpp:861` | 0x40C05C 反编译; 普通玩家: 从当前 cellEnt 的 exits[4] 中排除来向 （word_496B76）与占用出口，随机选下一格；占用掩码 256<<player； 速度 = byte_4749D8[travel&3]（或 flt_4631DC），浮点插值 g_playerSpriteX/Y； 到达后 byte_496B78 = sub_407A8C(上一步, 当前)，sub_40FC00 更新携带物件 差异: 载具状态 alive&0x30 的上下车分支、AI 槽 4..8 分支、占用位 0x40000000 判定待补 |
-| `0x40C912` | checkPlayerAction | `src/app/turn_system.cpp:965` | 0x40C912 反编译; a1=1 时返回可行动标志（alive）； a1=0 时有状态效果则 sub_40DD1F（自动移动）或显示状态文本；g_playerState37 → -1 差异: 状态文本/语音（sub_44808A/sub_452946/sprintf/sub_440CAC/sub_44EF41）M2 接入 |
+| `0x40C05C` | moveOneStep | `src/app/turn_system.cpp:876` | 0x40C05C 反编译; 普通玩家: 从当前 cellEnt 的 exits[4] 中排除来向 （word_496B76）与占用出口，随机选下一格；占用掩码 256<<player； 速度 = byte_4749D8[travel&3]（或 flt_4631DC），浮点插值 g_playerSpriteX/Y； 到达后 byte_496B78 = sub_407A8C(上一步, 当前)，sub_40FC00 更新携带物件 差异: 载具状态 alive&0x30 的上下车分支、AI 槽 4..8 分支、占用位 0x40000000 判定待补 |
+| `0x40C912` | checkPlayerAction | `src/app/turn_system.cpp:1021` | 0x40C912 反编译; a1=1 时返回可行动标志（alive）； a1=0 时有状态效果则 sub_40DD1F（自动移动）或显示状态文本；g_playerState37 → -1 差异: 状态文本/语音（sub_44808A/sub_452946/sprintf/sub_440CAC/sub_44EF41）M2 接入 |
 | `0x40CD87` | eliminatePlayer | `src/app/economy.cpp:150` | 0x40CD87 反编译; 详见 economy.h 注释 |
 | `0x40D293` | bitScanPlayer | `src/app/economy.cpp:23` | 0x40D293 反编译; 掩码低 8 位中第一个置位的玩家号 |
-| `0x40D6BE` | endPlayerState | `src/app/turn_system.cpp:1134` | 0x40D6BE 反汇编; alive \|= 0x10（状态结束标志，nextPlayer 0x30 分支据此恢复朝向并让该 玩家重新开始回合）+ 朝向重算（面向所在格中心 sub_454FB4）+ 恢复格占用（cellEnt+36 bit8+p） 差异: 原版不含状态字节清零（清零见 updatePlayerStates 差异说明） |
-| `0x40D7C4` | updateGameState | `src/app/turn_system.cpp:1375` | 0x40D7C4 反编译; byte_498EA2 状态机: 0 = 收尾倒计时（byte_498EA5）→ sub_418E7F 重算（landingEvent 停留结算）/ 负数则 sub_418EBD 1 = 移动中: sub_40C05C 走一格，byte_48BB00 → onPlayerActionPhase，dword_48BAF8 递减 2 = 掷骰动画: 结束设 dword_48BAF8 = sub_419572() 并转状态 1 3 = 移动结束特殊移动（sub_448A7E 触发）: addPlayerDebt(owner-1, cur, 30*moneyMul) 仅记账 + 面向目标 + FLC 526；实际收租在 landingEvent 0x419A67 差异: sub_416E6D 小地图刷新（迁移为每 tick 全量重绘）、移动音效、case 3 的 FLC 视觉 |
-| `0x40DD1F` | startPlayerMove | `src/app/turn_system.cpp:1089` | 0x40DD1F 反编译; 人类(<4): alive&0x30 → dword_48BAF8=1,state=1； byte_496BA0 → state=0,wait=2；byte_496BA1 → dword_48BAF8=1,state=1； 否则 state=2（掷骰）。AI(4..7): dword_48BAF8=rand()%9+2,state=1。 玩家 8: dword_48BAF8=9,state=1。末尾 byte_498EA3=0, byte_46CAFB=1 |
-| `0x40E033` | createMapObject（神明/商店等物件写入 | `src/app/map_render.cpp:615` | 0x40E033 反编译; 槽结构 +0 类型、+1 朝向、+2 cellEnt u16、+4 a3、+5 a4； cellEnt 占用位 \|= (槽+1)<<16 |
+| `0x40D6BE` | endPlayerState | `src/app/turn_system.cpp:1197` | 0x40D6BE 反汇编; alive \|= 0x10（状态结束标志，nextPlayer 0x30 分支据此恢复朝向并让该 玩家重新开始回合）+ 朝向重算（面向所在格中心 sub_454FB4）+ 恢复格占用（cellEnt+36 bit8+p） 差异: 原版不含状态字节清零（清零见 updatePlayerStates 差异说明） |
+| `0x40D7C4` | updateGameState | `src/app/turn_system.cpp:1441` | 0x40D7C4 反编译; byte_498EA2 状态机: 0 = 收尾倒计时（byte_498EA5）→ sub_418E7F 重算（landingEvent 停留结算）/ 负数则 sub_418EBD 1 = 移动中: sub_40C05C 走一格，byte_48BB00 → onPlayerActionPhase，dword_48BAF8 递减 2 = 掷骰动画: 结束设 dword_48BAF8 = sub_419572() 并转状态 1 3 = 移动结束特殊移动（sub_448A7E 触发）: addPlayerDebt(owner-1, cur, 30*moneyMul) 仅记账 + 面向目标 + FLC 526；实际收租在 landingEvent 0x419A67 差异: sub_416E6D 小地图刷新（迁移为每 tick 全量重绘）、移动音效、case 3 的 FLC 视觉 |
+| `0x40DD1F` | startPlayerMove | `src/app/turn_system.cpp:1152` | 0x40DD1F 反编译; 人类(<4): alive&0x30 → dword_48BAF8=1,state=1； byte_496BA0 → state=0,wait=2；byte_496BA1 → dword_48BAF8=1,state=1； 否则 state=2（掷骰）。AI(4..7): dword_48BAF8=rand()%9+2,state=1。 玩家 8: dword_48BAF8=9,state=1。末尾 byte_498EA3=0, byte_46CAFB=1 |
+| `0x40E033` | createMapObject（神明/商店等物件写入 | `src/app/map_render.cpp:620` | 0x40E033 反编译; 槽结构 +0 类型、+1 朝向、+2 cellEnt u16、+4 a3、+5 a4； cellEnt 占用位 \|= (槽+1)<<16 |
 | `0x40E14D` | releaseCellTableSlot | `src/app/economy.cpp:108` | 0x40E14D 反编译; 详见 economy.h 注释 |
 | `0x40FD49` | 滑块单位帧与复选标记帧。 | `src/app/settings_dialog.cpp:96` | 元素偏移 = 12 + 12*i；dword_48BB60+72 → 帧 5（15x16 滑块单位）; dword_48BB60+120 → 帧 9（16x16 复选标记） |
 | `0x4103A3` | settingsWndProc | `src/app/settings_dialog.cpp:367` | 0x4103A3 反编译; WM_MOUSEMOVE(515) 查找控件矩形 dword_474B92 并处理; WM_LBUTTONDOWN(513) 分发控件操作; WM_USER+1 重置悬停并复制设置 |
@@ -64,20 +64,20 @@
 | `0x417191` | 前进面板（panel.mkf[7] | `src/app/game_panel.cpp:430` | 0x417191 反编译; 背景帧 = dword_48BDD4 + v1（v1 = byte_496BA0?2 : byte_496BA1?4 : 0） GO/骰子图标（帧 6..11）: travel 0/3: 帧 6（byte_496BA0）或 7，(x+8/y+26) 或 (x+7/y+26) travel 1: 2 个骰子（帧 2i+6 未选 / 2i+7 选中），(x+8/y+19i+16) / (x+7/y+19i+16) travel 2: 3 个骰子，(x+8/y+16j+9) / (x+7/y+16j+9) 差异: 位置 qword_475284 原版动态确定，当前用 advancePanelX/Y |
 | `0x417559` | showObjectTip | `src/app/object_tip.cpp:168` | 0x417559 反编译; sub_40A9D7 拾取（重写用渲染记录的 mapHitRegions 代替）; 命中用拾取形状的 SPR 像素掩码（原版拾取缓冲语义），无形状时用矩形; 文本分支 cellEnt 名/estate 地主+建筑名+等级+费用/corp/specPt/evtCell/ cellTable 类型名/玩家名; 框 = data.mkf[517] 帧 0..3（四方向） |
 | `0x417E26` | gameEventHandler | `src/app/game_loop.cpp:336` | 0x417E26 反编译; WM_PAINT 绘制面板, WM_MOUSEMOVE 地图坐标换算 （×761856>>16 ≈ 11.625，限幅 220..2084）与小地图拖拽, WM_LBUTTONDOWN 地图点击/玩家移动, WM_USER+1 绘制玩家信息面板 差异: sub_417559 物件信息框、日历/页签切换阶段 3 接入 |
-| `0x418C55` | beginPlayerTurn | `src/app/turn_system.cpp:1038` | 0x418C55 反编译; dword_475114 待处理玩家 → sub_40B93B/sub_40B93B 重置； sub_40C912(0) 返回: 0/1 → 等待玩家操作（sub_4196F1 + setPauseDraw(1)）, 2/5 → sub_40DD1F（AI/自动） 差异: dword_475114（传送/移动待处理玩家）与 sub_41D546 面板刷新待补 |
-| `0x418E7F` | calcPlayerWait | `src/app/turn_system.cpp:1025` | 0x418E7F 反编译; sub_40C912(1) 非 0 → byte_498EA5 = sub_41982D(当前格)， 否则 -125（0x83，bit7 置位 = 下一位玩家） |
-| `0x418EBD` | nextPlayer | `src/app/turn_system.cpp:1283` | 0x418EBD 反编译; 当前玩家 +1；越过 g_playerCount 进入事件槽 4； 4..7 检查 byte_498DF2 占用；8 → 回 0 并过天；跳过死亡玩家； byte_46CAFF（跳过请求）→ sub_41906A(1) + alive[0]&=~4； v1 时 advanceDay；sub_41C84F 状态效果倒计时；自动存档；末尾 byte_498EA0\|=0x80 差异: sub_41C84F（状态效果倒计时）、sub_40F381/sub_448A7E（槽渲染）、 自动存档（saveGameToSlot）待接入 |
+| `0x418C55` | beginPlayerTurn | `src/app/turn_system.cpp:1101` | 0x418C55 反编译; dword_475114 待处理玩家 → sub_40B93B/sub_40B93B 重置； sub_40C912(0) 返回: 0/1 → 等待玩家操作（sub_4196F1 + setPauseDraw(1)）, 2/5 → sub_40DD1F（AI/自动） 差异: dword_475114（传送/移动待处理玩家）与 sub_41D546 面板刷新待补 |
+| `0x418E7F` | calcPlayerWait | `src/app/turn_system.cpp:1081` | 0x418E7F 反编译; sub_40C912(1) 非 0 → byte_498EA5 = sub_41982D(当前格)， 否则 -125（0x83，bit7 置位 = 下一位玩家） |
+| `0x418EBD` | nextPlayer | `src/app/turn_system.cpp:1349` | 0x418EBD 反编译; 当前玩家 +1；越过 g_playerCount 进入事件槽 4； 4..7 检查 byte_498DF2 占用；8 → 回 0 并过天；跳过死亡玩家； byte_46CAFF（跳过请求）→ sub_41906A(1) + alive[0]&=~4； v1 时 advanceDay；sub_41C84F 状态效果倒计时；自动存档；末尾 byte_498EA0\|=0x80 差异: sub_41C84F（状态效果倒计时）、sub_40F381/sub_448A7E（槽渲染）、 自动存档（saveGameToSlot）待接入 |
 | `0x4190CF` | loadPanelUi | `src/app/new_game.cpp:412` | 0x4190CF 反编译; panel.mkf 索引 0-8（dword_48BE0C/0x475118/0x48BE10/0x48BE14/ 0x48BE04/0x48BE08/0x48BDF8）; dword_475118 非 0 时跳过（幂等） |
-| `0x419572` | rollDice | `src/app/turn_system.cpp:841` | 0x419572 反编译; v2 = byte_496B7A[当前玩家]（骰子个数）, v14[i] = rand()%6+1，返回 sum(v14) 差异: 骰子精灵绘制与 sub_45285E(500) 延时见 B4 |
-| `0x4196F1` | enablePlayerControl | `src/app/turn_system.cpp:1076` | 0x4196F1 → byte_46CAFD = 1; sub_417191(1)（绘制前进面板） |
-| `0x419703` | disablePlayerControl | `src/app/turn_system.cpp:1083` | 0x419703 → byte_46CAFD = 0（并跳转 sub_417191 尾部） |
+| `0x419572` | rollDice | `src/app/turn_system.cpp:856` | 0x419572 反编译; v2 = byte_496B7A[当前玩家]（骰子个数）, v14[i] = rand()%6+1，返回 sum(v14) 差异: 骰子精灵绘制与 sub_45285E(500) 延时见 B4 |
+| `0x4196F1` | enablePlayerControl | `src/app/turn_system.cpp:1139` | 0x4196F1 → byte_46CAFD = 1; sub_417191(1)（绘制前进面板） |
+| `0x419703` | disablePlayerControl | `src/app/turn_system.cpp:1146` | 0x419703 → byte_46CAFD = 0（并跳转 sub_417191 尾部） |
 | `0x419744` | estateRouteRent | `include/game/app/turn_system.h:11` | 0x419744；普通住宅用地 = 同 owner 同名地块 fees[level] 之和；连锁店 = 数量 × 2000；× M |
 | `0x419744` | estateRouteRent | `src/app/turn_system.cpp:272` | 0x419744 反编译; 普通住宅用地（type==0）→ 遍历全部地产，owner 相同且地名相同 （strcmp）的 fees[level]（+32+2*level）累加；连锁店（type!=0）→ owner 相同的 连锁店每处 +2000；返回 g_moneyMul × 总和 |
 | `0x41982D` | landingEvent | `src/app/turn_system.cpp:447` | 0x41982D 反编译; 停留格结算。switch(cellEnt+36 低字节 格子类型 0..16)： 入口先按 g_cellTypeSound[type]（0x475299）播放格子音效（type 2..16） case 0 = 按 objId 分（2000..4000 住宅用地 / 4000..6000 商業用地 / 其他 → loc_41A168） 无主住宅用地购地（loc_41A013）： 守卫 state37 / cellTableIdx==12 → 价格=(level*priceBase+priceAdd)*moneyMul → 现金检查（不足 → 0x41A159 showMessage"您的現金不足！"）→ sprintf("%s\n\n", estate.name) → 人类 askDialog → sub_40FA61 携带神明检查（showMessage 神明名）→ owner=cur+1 → 音效槽 17（dword_4823D2）→ rebuildMiniMap(0) → 期限 expireDate（g_landPermDays）→ 扣现金 自己住宅用地升級（0x419911）：见下 他人住宅用地收租（loc_419A67）：音效槽 20 → ownerCanCollectRent（0x41D559 地主状态免收） → estateRouteRent（0x419744 同路段 fees[level] 之和 / 连锁店数×2000）× moneyMul → flag(+23) 翻倍 → applyGodRentModifier（0x41D709 付款方神明调整） → showMessage("此地屬%s請付%d元過路費") → transferMoney(flags=0 收款入银行) 差异: 事件格 case 2..16、商業用地/行業設施點收費/特殊点（loc_41A168）、AI 决策（sub_41D7D4）、 收租的同盟分账/死神代付/免租卡片/同路段高亮/浮动数字（P4） |
 | `0x419A67` | startRouteHighlight | `src/app/turn_system.cpp:318` | 0x419A67 高亮循环（rebuildPickBuffer(1) + sub_456C0A 标记同组地块 → v141 > 1 时 sub_451985 播放 16 帧闪烁）；组定义： 住宅用地 = 同 owner + 同名 + type==0；连锁店 = 同 owner + type!=0（跨街道） 差异: 原版高亮含同盟地块（v140）→ P4 |
 | `0x41B42D` | onPlayerActionPhase | `src/app/turn_system.cpp:95` | 0x41B42D 反编译; 161 基本块，购地/收租/税/卡片/机会等 |
-| `0x41C84F` | updatePlayerStates | `src/app/turn_system.cpp:1154` | 0x41C84F 反编译; BYTE0..BYTE3 编码 = 剩余天数（1..0x7F），bit7 = 结束标志： n>0 → n-1；n==1 → (n-1)\|0x80（BYTE1 出國为 (n-1)&0x3F==0 时置位）；bit7 → 结束处理： BYTE0 住宿 → sub_40D6BE / BYTE1 出國 → sub_40D4E5（清位+恢复占用+loadWalkResources）/ BYTE2 監獄 → releaseJailNpc / BYTE3 醫院 → releaseHospitalNpc； byte54 冬眠 / state37 夢遊 在 stateFlags==0 时倒计时（0→0x80） 差异: 原版结束分支未见状态字节清零（实测会永久卡在"住宿中"），重写在结束时清零对应 BYTE （与監獄 g_jailFlags 同模式）；出國/監獄/醫院结束的 FLC 动画与 NPC 释放 M3 |
-| `0x41CF67` | advanceDay | `src/app/turn_system.cpp:1226` | 0x41CF67 反编译; byte_46CB06 音乐淡出；sub_452117 日期推进；++g_dayCount； checkVictory(0) 未结束则每日处理（股票/月度事件/住宅用地/商業用地到期） 差异: 音乐淡出（sub_454ACB/sub_454D91）、checkVictory（M3）、 stockTick/sub_423ACF/sub_428475/sub_452444/sub_42BA97/sub_431712/sub_439BFA 待接入； 当前实现日期推进 + 住宅用地/商業用地到期回收 + 小地图标记刷新 |
+| `0x41C84F` | updatePlayerStates | `src/app/turn_system.cpp:1217` | 0x41C84F 反编译; BYTE0..BYTE3 编码 = 剩余天数（1..0x7F），bit7 = 结束标志： n>0 → n-1；n==1 → (n-1)\|0x80（BYTE1 出國为 (n-1)&0x3F==0 时置位）；bit7 → 结束处理： BYTE0 住宿 → sub_40D6BE / BYTE1 出國 → sub_40D4E5（清位+恢复占用+loadWalkResources）/ BYTE2 監獄 → releaseJailNpc / BYTE3 醫院 → releaseHospitalNpc； byte54 冬眠 / state37 夢遊 在 stateFlags==0 时倒计时（0→0x80） 差异: 原版结束分支未见状态字节清零（实测会永久卡在"住宿中"），重写在结束时清零对应 BYTE （与監獄 g_jailFlags 同模式）；出國/監獄/醫院结束的 FLC 动画与 NPC 释放 M3 |
+| `0x41CF67` | advanceDay | `src/app/turn_system.cpp:1292` | 0x41CF67 反编译; byte_46CB06 音乐淡出；sub_452117 日期推进；++g_dayCount； checkVictory(0) 未结束则每日处理（股票/月度事件/住宅用地/商業用地到期） 差异: 音乐淡出（sub_454ACB/sub_454D91）、checkVictory（M3）、 stockTick/sub_423ACF/sub_428475/sub_452444/sub_42BA97/sub_431712/sub_439BFA 待接入； 当前实现日期推进 + 住宅用地/商業用地到期回收 + 小地图标记刷新 |
 | `0x41D2C6` | transferMoney | `src/app/economy.cpp:37` | 0x41D2C6 反编译; 详见 economy.h 注释 |
 | `0x41D559` | ownerCanCollectRent | `src/app/turn_system.cpp:379` | 0x41D559 反编译; 依次判断（命中即 showMessage(文本, 1500) 并返回 false）： flag(+23) 高/低半字节均非 0 = 房屋查封中; 地主 +65 同盟对象 == 付款人+1 = 與%s同盟中; 地主携带死神（cellTableIdx==15）= 死神顯靈; stateFlags BYTE0/1/2/3 = 住宿/消失/坐牢/住院中; byte54 = 冬眠中; state37 = 夢遊中 |
 | `0x41D709` | applyGodRentModifier | `src/app/turn_system.cpp:414` | 0x41D709 反编译; switch(cellTableIdx)：1 小財神=减半 / 2 大財神=免付 / 5 小窮神=加付 50% / 6 大窮神=加倍；金额有变化时 showMessage(提示, 1500) |
@@ -98,8 +98,8 @@
 | `0x4502FE` | mkfOpen | `src/resource/mkf.cpp:20` | 0x4015D6 中 sub_4502FE("data.mkf"/"speaking.mkf"/"panel.mkf"/"effect.mkf")， 返回句柄存入 dword_48A0E4/0x48A054/0x48A05C/0x48A058；0x450441 以句柄取资源 差异: 原版打开文件后按需 seek+解压（带缓存），当前实现全量读入 + 索引预解析 |
 | `0x450441` | mkfRead | `src/resource/mkf.cpp:82` | 0x4029FD 中 sub_450441(dword_48A0E4, 1, 0, 0) 取 data.mkf 索引 1（菜单资源）； 0x406DE7 等多处按 (句柄, 索引, 输出, ...) 调用 差异: 原版返回内部缓存指针，当前返回独立 vector；关闭对应 sub_450404 |
 | `0x45144F` | 跳伞动画帧（FLC）叠加到地图区 | `src/app/game_loop.cpp:33` | 0x45144F 播放 data.mkf[charIndex+559] 到 (0,40) 区域 |
-| `0x451985` | 收租联动高亮（整条街/连锁店闪烁） | `include/game/game_state.h:335` | 0x419A67 收租时标记同 owner 同名住宅（或全部连锁店）→ v141>1 时 sub_451985 播放 16 帧亮度闪烁（byte_476380，30ms/帧）+ 400ms 停留； sub_4554FC 按 g_pickBuffer 0xFFFF 标记重绘高亮像素（迁移: 重写无 pickBuffer，改用 mapHitRegions 的 estate 绘制区域做 RGB555 亮度偏移； 帧推进/停留由阻塞播放 playHighlightBlink 控制，drawEstateHighlight 仅渲染） |
-| `0x451985` | drawEstateHighlight | `src/app/map_render.cpp:688` | 0x451985 每帧取 byte_476380[i] 亮度偏移（16 帧，30ms/帧）→ sub_4554FC 按 g_pickBuffer 的 0xFFFF 标记重绘高亮像素；循环后 sub_4528B9(400) 停留； byte_476380 = {4,8,12,16,12,8,4,0,252,248,244,240,244,248,252,0}（252..240 = -4..-16）（迁移: 重写无 pickBuffer，用 mapHitRegions 中 estate（2000+idx）的绘制区域/像素掩码， 对 RGB555 逐通道偏移（8bit 亮度量 → 5bit: >>2）； 帧推进/停留由阻塞播放 playHighlightBlink（turn_system.cpp）负责，本函数仅按 highlightFrame 渲染（0..15 有效；16=停留期无偏移）） |
+| `0x451985` | 收租联动高亮（整条街/连锁店闪烁） | `include/game/game_state.h:336` | 0x419A67 收租时标记同 owner 同名住宅（或全部连锁店）→ v141>1 时 sub_451985 播放 16 帧亮度闪烁（byte_476380，30ms/帧）+ 400ms 停留； sub_4554FC 按 g_pickBuffer 0xFFFF 标记重绘高亮像素（迁移: 重写无 pickBuffer，改用 mapHitRegions 的 estate 绘制区域做 RGB555 亮度偏移； 帧推进/停留由阻塞播放 playHighlightBlink 控制，drawEstateHighlight 仅渲染） |
+| `0x451985` | drawEstateHighlight | `src/app/map_render.cpp:693` | 0x451985 每帧取 byte_476380[i] 亮度偏移（16 帧，30ms/帧）→ sub_4554FC 按 g_pickBuffer 的 0xFFFF 标记重绘高亮像素；循环后 sub_4528B9(400) 停留； byte_476380 = {4,8,12,16,12,8,4,0,252,248,244,240,244,248,252,0}（252..240 = -4..-16）（迁移: 重写无 pickBuffer，用 mapHitRegions 中 estate（2000+idx）的绘制区域/像素掩码， 对 RGB555 逐通道偏移（8bit 亮度量 → 5bit: >>2）； 帧推进/停留由阻塞播放 playHighlightBlink（turn_system.cpp）负责，本函数仅按 highlightFrame 渲染（0..15 有效；16=停留期无偏移）） |
 | `0x451985` | playHighlightBlink | `src/app/turn_system.cpp:343` | 0x451985 逐帧 byte_476380[i] 重绘（sub_4554FC），每帧 sub_4528B9(30)， 循环后 sub_4528B9(400) 停留；原版在 showMessage(收费) 之前完成（迁移: 逐帧 renderGameFrame（画 surface）+ renderFrame（present/音频）+ 分段延时， 期间 pumpEvents 保持窗口响应（收租时 gamePlayerControl=0，事件被吞/仅物件提示） [PORT] 音频续喂：kTargetQueued=1024 字节（8bit mono @44.1kHz ≈ 23ms）——阻塞循环的 30ms 间隔会超过缓冲导致音乐 underrun（卡顿）→ 延时拆为 5ms 小段逐段 audio.update()） |
 | `0x4520A6` | 日历计算 | `src/app/date_dialog.cpp:80` | 0x4520A6 中 v6 = (天数+4)%7（1998-01-01 为周四）; 2 月闰年 29 天（年%4） |
 | `0x4521F0` | 节日查询 | `src/app/game_panel.cpp:255` | 0x4521F0; type 0=固定(月,日)、2=第N个星期X；1=浮动(需 dword_47639C 表) 差异: type1 浮动节日暂未实现（跳过） |
@@ -121,8 +121,8 @@
 | `0x456770` | sub_456770 | `include/game/render/blit.h:48` | 0x456770 反编译; 帧头 12 字节 {w,h,offX,offY,size}, 8bit 索引 + 调色板, 目标 = (x - offX, y - offY), 裁剪到 dword_4861B8/C0/BC/C4 用于游戏内地图精灵（棋子/住宅用地/商業用地/行業設施點/事件格） |
 | `0x45709C` | start | `src/main.cpp:9` | 0x45709C 为 CRT 入口 thunk（jmp sub_458CED）; sub_458CED 初始化 CRT 后调用 WinMain(GetModuleHandleA(0), 0, lpCmdLine, 10)（迁移: CRT 启动 + WinMain → 标准 main(argc, argv); lpCmdLine → --game <dir> 参数） |
 | `0x46CAD8` | nIDEvent | `include/game/app/event_stack.h:58` | 栈顶索引; 0x4018E7 中 ++nIDEvent 压栈、--nIDEvent 出栈 |
-| `0x46CAFC` | byte_46CAFC | `include/game/game_state.h:197` | WinMain case 0/4 调 sub_406DE7(byte_46CAFC)；进入游戏后置 1， 再次进入时 lParam!=0 → 0x406DE7 保留上次选人配置并自动確定 |
-| `0x46CB05` | byte_46CB05 | `include/game/game_state.h:181` | 0x401815 清理函数的幂等标志（非 0 时跳过清理） |
+| `0x46CAFC` | byte_46CAFC | `include/game/game_state.h:198` | WinMain case 0/4 调 sub_406DE7(byte_46CAFC)；进入游戏后置 1， 再次进入时 lParam!=0 → 0x406DE7 保留上次选人配置并自动確定 |
+| `0x46CB05` | byte_46CB05 | `include/game/game_state.h:182` | 0x401815 清理函数的幂等标志（非 0 时跳过清理） |
 | `0x46CB28` | word_46CB28 | `src/app/main_menu.cpp:17` | DGROUP 原始数据 0x46CB28: BE00 7C01 4801 7C01 D401 7A01 4801 C201 3E00 7C01 为 5 组 u16 (x, y)；0x4029FD 循环 i<5 用 word_46CB28[2i]/word_46CB2A[2i] 布局 索引语义（由 0x40257A 点击分支与 WinMain switch 推断）: 0 新游戏 / 1 读档 / 2 设置(不退出) / 3 退出 / 4 新游戏(模式 1) |
 | `0x46CB3C` | g_newGameOptions | `include/game/game_state.h:13` | 0x406DE7 中 dword_46CB3C[0..5] 为 6 项选项索引、dword_46CB54 为地图索引; dword_48A35C[3*k] 为玩家 k 的角色 ID（bit31 = AI，状态 1 随机补齐时置位） |
 | `0x474A54` | 设置项标签（BIG5 | `src/app/settings_dialog.cpp:64` | 索引 5 = "樂 曲"(0x46355B)、6 = "視 窗"(0x463562)、7 = "日、月曆"(0x463569) |
@@ -130,22 +130,22 @@
 | `0x47FF4A` | byte_47FF4A.. | `src/app/map_tables.cpp:640` | 0x4521F0; type 0=固定月日 1=每年同月日 2=第N个星期X(用 weekday) |
 | `0x4861B8` | dword_4861B8/C0/BC/C4 | `include/game/render/blit.h:13` | 0x455C52/0x455FD9/0x455E24 裁剪模式 1 使用该矩形 (left, right, top, bottom) |
 | `0x48A010` | dword_48A010 | `include/game/app/event_stack.h:18` | 0x48A010 为 20 项函数指针数组; 0x4019DD 窗口过程把消息转发给 dword_48A010[nIDEvent]; 0x4018E7 压栈/出栈并返回 handler 的结果码 |
-| `0x48A054` | dword_48A054 | `include/game/game_state.h:164` | 0x4015D6 中 sub_4502FE("speaking.mkf") 的返回值 |
-| `0x48A058` | dword_48A058 | `include/game/game_state.h:172` | 0x4015D6 中 sub_4502FE("effect.mkf") 的返回值 |
-| `0x48A05C` | dword_48A05C | `include/game/game_state.h:168` | 0x4015D6 中 sub_4502FE("panel.mkf") 的返回值 |
+| `0x48A054` | dword_48A054 | `include/game/game_state.h:165` | 0x4015D6 中 sub_4502FE("speaking.mkf") 的返回值 |
+| `0x48A058` | dword_48A058 | `include/game/game_state.h:173` | 0x4015D6 中 sub_4502FE("effect.mkf") 的返回值 |
+| `0x48A05C` | dword_48A05C | `include/game/game_state.h:169` | 0x4015D6 中 sub_4502FE("panel.mkf") 的返回值 |
 | `0x48A08C` | dword_48A08C | `include/game/render/surface.h:11` | 0x401543 memcpy(dword_48A08C, data.mkf[601], 614400)（614400 = 640*480*2）; 0x451B36 sub_456F60(dword_48A08C, 0, 614400); 0x456418/0x4563F5 等以其为绘制目标; 0x40257A WM_PAINT 把绘制结果经 DDraw 后台表面 BltFast 到主表面（迁移: DDraw 后台表面 Lock/Unlock + BltFast → SDL 纹理每帧上传（RGB555 与原版一致）） |
-| `0x48A0E4` | dword_48A0E4 | `include/game/game_state.h:160` | 0x4015D6 中 sub_4502FE("data.mkf") 的返回值; 0x450441 以其为资源库句柄 |
+| `0x48A0E4` | dword_48A0E4 | `include/game/game_state.h:161` | 0x4015D6 中 sub_4502FE("data.mkf") 的返回值; 0x450441 以其为资源库句柄 |
 | `0x48A184` | dword_48A184 | `src/app/main_menu.cpp:36` | 0x40257A 中鼠标移动时记录的悬停按钮索引，-1 表示无 |
-| `0x48A354` | dword_48A354 | `include/game/game_state.h:231` | 0x406DE7 分配 0x96000 字节并由 JUMP.MKF 地图图填充 |
+| `0x48A354` | dword_48A354 | `include/game/game_state.h:232` | 0x406DE7 分配 0x96000 字节并由 JUMP.MKF 地图图填充 |
 | `0x496B68` | g_players | `include/game/game_state.h:35` | 0x406DE7 memcpy(&g_players[26*k], &g_charData + 104*charId, 104); 0x417E26/0x40829D/0x415F69 等以 g_playerCash/g_playerSpriteX/... 偏移访问 |
 | `0x496BA9` | g_playerVehicle | `include/game/game_state.h:71` | 0x41D559 用 g_playerVehicle[地主] == 当前玩家+1 → "與%s同盟中\n\n免收%s！"; 0x40DF69 记账后命中同盟 → sub_40CC1A 解除同盟（清双方 +65 与 byte_496BA5）; 0x416256 面板用 pieceSprites[+65-1] 帧 2 画同盟对象棋子头像 |
-| `0x497158` | byte_497158 | `include/game/game_state.h:176` | 0x411E8F CFG 不存在时初始化 byte_497158=1/497159=1/49715A=4/49715B=4/ 49715C=1/49715D=1；存在时由 CFG 前 16 字节覆盖 |
-| `0x497160` | dword_497160 | `include/game/game_state.h:215` | 0x4119E3 中日期更改确认后写入 dword_48BB50/dword_497160 |
-| `0x497164` | byte_497164 | `include/game/game_state.h:219` | 0x411E8F loadConfig 读 cfg 第12字节(默认0); 0x417E26 gameWndProc 点击 x∈[448,474]→0、x∈[478,504]→1（日历区左右箭头切换），切换后 sub_4169BC(1) 重绘 |
-| `0x49910C` | dword_49910C | `include/game/game_state.h:205` | 0x417E26 中 *dword_49910C 为当前玩家索引 |
-| `0x499114` | dword_499114 | `include/game/game_state.h:193` | 0x406DE7 中 dword_499114 = dword_46CB3C + 2（玩家数） |
-| `0x4991B6` | word_4991B6 | `include/game/game_state.h:185` | WinMain case 4 设置（新模式）; 0x406DE7 中参与资源索引 4*mode+map |
-| `0x4991B8` | word_4991B8 | `include/game/game_state.h:189` | 0x406DE7 中地图索引; 0x407AD2 中参与 MAP.MKF 索引 |
+| `0x497158` | byte_497158 | `include/game/game_state.h:177` | 0x411E8F CFG 不存在时初始化 byte_497158=1/497159=1/49715A=4/49715B=4/ 49715C=1/49715D=1；存在时由 CFG 前 16 字节覆盖 |
+| `0x497160` | dword_497160 | `include/game/game_state.h:216` | 0x4119E3 中日期更改确认后写入 dword_48BB50/dword_497160 |
+| `0x497164` | byte_497164 | `include/game/game_state.h:220` | 0x411E8F loadConfig 读 cfg 第12字节(默认0); 0x417E26 gameWndProc 点击 x∈[448,474]→0、x∈[478,504]→1（日历区左右箭头切换），切换后 sub_4169BC(1) 重绘 |
+| `0x49910C` | dword_49910C | `include/game/game_state.h:206` | 0x417E26 中 *dword_49910C 为当前玩家索引 |
+| `0x499114` | dword_499114 | `include/game/game_state.h:194` | 0x406DE7 中 dword_499114 = dword_46CB3C + 2（玩家数） |
+| `0x4991B6` | word_4991B6 | `include/game/game_state.h:186` | WinMain case 4 设置（新模式）; 0x406DE7 中参与资源索引 4*mode+map |
+| `0x4991B8` | word_4991B8 | `include/game/game_state.h:190` | 0x406DE7 中地图索引; 0x407AD2 中参与 MAP.MKF 索引 |
 
 ## PORT 映射（8 条）
 

@@ -77,6 +77,7 @@ struct Player {
     int16_t bonusAtk = 0;       // +68 word_496BAC（神明属性加成，sub_40EAD7 加 / sub_40E14D 减）
     int16_t bonusDef = 0;       // +70 word_496BAE
     int16_t bonusMove = 0;      // +72 word_496BB0
+    uint16_t stayCorpIdx = 0;   // +74 word_496BB2（住宿的旅館 corp 索引，走进/走出移动目标）
     uint8_t kind = 0;           // +100 g_playerKind 0x496BCC（1=人类 2=AI）
 };
 
@@ -457,6 +458,10 @@ struct GameState {
     int stepHalf = 0;
     // [RE 0x4749E0] byte_4749E0 到达后停留帧
     int stepDwell = 0;
+    // [NEW] 走进旅館(0x20)/走出旅館(0x10)移动标志（半程清状态用；0=普通移动）
+    uint8_t stepExitState = 0;
+    // [NEW] 走出旅館完成 → 跳过落地结算（不重复收旅館费）
+    bool stepSkipLanding = false;
 
     // [RE 0x4749D4] dword_4749D4 当前移动音效索引
     int moveSoundIndex = 0;

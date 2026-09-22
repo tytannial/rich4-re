@@ -96,9 +96,11 @@ int roulettePrompt(Application& app, int theme, const char* arg) {
         }
         waitAudio(kFrameMs);
     }
-    // 阶段 2：停止过渡（画中心帧 1）
+    // 阶段 2：停止过渡（画中心帧 1 = 天使出现）
     draw(true);
     app.pumpEvents();
+    // [RE 0x43F7C6] 状态2 播放 UI 点击音效（g_uiSoundClick = Effect.mkf[1]）
+    app.audio().playEffect(1);
     waitAudio(kFrameMs);
     // 阶段 3：减速步进（v16 间隔 1..5，每 3 步 +1；落在有效格且间隔达 5 → 停）
     int interval = 1;
