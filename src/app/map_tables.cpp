@@ -622,6 +622,18 @@ const char* const kObjectNames[19] = {"間諜", "小財神", "大財神", "小�
 // off_475150 = +6 起设施名表 g_facilityNames；费用名单列 off_47517C g_costNames）
 const char* const kBuildingNames[17] = {"空  地", "平  房", "店  舖", "商  場", "商業大樓", "摩天大樓", "公  園", "旅  館", "購物中心", "加油站", "研究所", "０級", "一級", "二級", "三級", "四級", "五級"};
 
+// [RE 0x47517C] g_costNames 费用名（13 项指针，0x46388A..0x4638DA）
+const char* const kCostNames[13] = {"過路費", "房租費", "加油費", "修車費", "店租費", "住宿費",
+                                    "旅遊費", "保險費", "電腦費", "工程費", "水  費", "電  費",
+                                    "購物費"};
+
+// [RE 0x474940] g_facilityMaxLevel 设施等级上限（0=公園 1=旅館 2=購物中心 3=加油站 4=研究所）
+const uint8_t kFacilityMaxLevel[5] = {1, 5, 5, 1, 5};
+
+// [RE 0x47528B] 商業用地费用名映射 byte_47528B[type]（0x475284 起第 8 字节；type 1→5 住宿費、
+//   2→12 購物費、3→2 加油費、4→6 旅遊費；0/4 不收费仅占位）
+const uint8_t kCorpCostMap[5] = {0, 5, 12, 2, 6};
+
 // [RE 0x47511C] off_47511C 星期名（7 项；原表其后紧邻 off_475138 建筑名表，勿越界）
 const char* const kWeekdayNames[7] = {"星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"};
 

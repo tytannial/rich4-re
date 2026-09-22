@@ -3,6 +3,7 @@
 #include <cstring>
 #include <string>
 
+#include "game/app/facility_dialog.h"
 #include "game/app/map_render.h"
 #include "game/app/object_tip.h"
 #include "game/application.h"
@@ -93,11 +94,10 @@ bool handleDebugKey(Application& app, int digit) {
             }
             return true;
         }
-        case 4: { // 住宅 ↔ 连锁店 切换（改建卡效果 0x44309B）
-            // 原版: level(+26) != 0 才可改建；type ^= 1（0=住宅/1=连锁店）；
-            //       变连锁店且 level > 1 → level = 1（连锁店不可加盖）
+        case 4: { // 改建卡效果（0x44309B）：住宅↔连锁店 / 商業用地变更设施类型
             const uint16_t id = pointedObject(app);
             if (id >= 2000 && id < 4000) {
+                // estate：level(+26) != 0 才可改建；type ^= 1；变连锁店且 level>1 → level=1
                 const int i = id - 2000;
                 if (i > 0 && i < static_cast<int>(st.estates.size())) {
                     Estate& es = st.estates[i];
@@ -115,8 +115,29 @@ bool handleDebugKey(Application& app, int digit) {
                     RICH4_LOGI("debug: estate[%d] %s type=%u level=%u (RE 0x44309B)", i,
                                wasChain ? "chain->house" : "house->chain", es.type, es.level);
                 }
+            } else if (id >= 4000 && id < 6000) {
+                // corp：sub != 0 时 selectFacilityDialog(1) 变更设施类型；
+                //   公園/加油站（type 0/3）时 sub 降为 1（原版 0x4431FC）
+                const int i = id - 4000;
+                if (i > 0 && i < static_cast<int>(st.corps.size())) {
+                    Corp& cp = st.corps[i];
+                    if (cp.sub == 0) {
+                        RICH4_LOGW("debug: Ctrl+4 corp[%d] sub==0 (need facility, RE 0x443174)", i);
+                        return true;
+                    }
+                    const int r = selectFacilityDialog(app, 1); // [RE 0x4431C4]
+                    if (r >= 0) {
+                        cp.type = static_cast<uint8_t>(r);
+                        if ((cp.type == 0 || cp.type == 3) && cp.sub > 1) {
+                            cp.sub = 1;
+                        }
+                        buildMiniMapMarks(app);
+                        RICH4_LOGI("debug: corp[%d] type -> %u sub %u (RE 0x44309B)", i, cp.type,
+                                   cp.sub);
+                    }
+                }
             } else {
-                RICH4_LOGW("debug: Ctrl+4 no estate under cursor (id=%u)", id);
+                RICH4_LOGW("debug: Ctrl+4 no estate/corp under cursor (id=%u)", id);
             }
             return true;
         }
@@ -169,9 +190,13 @@ bool handleDebugKey(Application& app, int digit) {
                 const int i = id - 4000;
                 if (i > 0 && i < static_cast<int>(st.corps.size())) {
                     const Corp& cp = st.corps[i];
-                    RICH4_LOGI("debug: corp[%d] id=%u type=%u owner=%u sub=%u flag=%u price=%d "
+                    RICH4_LOGI("debug: corp[%d] id=%u type=%u owner=%u sub=%u flag=%u "
+                               "buildPrice=%u fees=[%u,%u,%u,%u,%u,%u] lastFee=%d research=%u/%u "
                                "expire=%u",
-                               i, id, cp.type, cp.owner, cp.sub, cp.flag, cp.price, cp.expireDate);
+                               i, id, cp.type, cp.owner, cp.sub, cp.flag, cp.buildPrice,
+                               cp.feeTable[0], cp.feeTable[1], cp.feeTable[2], cp.feeTable[3],
+                               cp.feeTable[4], cp.feeTable[5], cp.lastFee, cp.researchItem,
+                               cp.researchLeft, cp.expireDate);
                 }
             } else if (id >= 6000 && id < 8000) {
                 const int i = id - 6000;

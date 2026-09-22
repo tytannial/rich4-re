@@ -12,6 +12,7 @@
 #include "game/application.h"
 #include "game/app/confirm_dialog.h"
 #include "game/app/economy.h"
+#include "game/app/facility_dialog.h"
 #include "game/app/game_loop.h"
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
@@ -309,6 +310,32 @@ int32_t estateRouteRent(const GameState& st, uint8_t owner, const Estate& es) {
     return sum * st.moneyMul;
 }
 
+// [RE 0x43F7C6] rouletteValue：轮盘读数（主题表 byte_475D0C[12*theme + 格]，0xFF = 无效格）
+// 依据: 0x43F7C6 动画结束返回 byte_475D0C[12*theme + 终格]（有效格）；
+//   主题 0=出國天數 {1,0,1,2,3,2} / 1=旅館天數 {1,4,3,2} / 2=購物倍數 {1,6,5,4,3,2}
+//   / 3=投保天數 {5,3,30,20,15,10}（0x476380 附近表；0xFF 为无效格占位）
+// 差异: 重写暂以"随机取有效值"等价（滚轮/转盘 UI 动画后续接入）
+int rouletteValue(int theme) {
+    static const uint8_t kTable[4][12] = {
+        {1, 0xFF, 0, 0xFF, 1, 0xFF, 2, 0xFF, 3, 0xFF, 2, 0xFF},
+        {0xFF, 0xFF, 1, 0xFF, 0xFF, 4, 0xFF, 3, 0xFF, 0xFF, 2, 0xFF},
+        {1, 0xFF, 6, 0xFF, 5, 0xFF, 4, 0xFF, 3, 0xFF, 2, 0xFF},
+        {5, 0xFF, 3, 0xFF, 30, 0xFF, 20, 0xFF, 15, 0xFF, 10, 0xFF},
+    };
+    const int t = theme & 3;
+    uint8_t values[12];
+    int n = 0;
+    for (int i = 0; i < 12; ++i) {
+        if (kTable[t][i] != 0xFF) {
+            values[n++] = kTable[t][i];
+        }
+    }
+    if (n == 0) {
+        return 0;
+    }
+    return values[std::rand() % n];
+}
+
 // [RE 0x419A67] startRouteHighlight：收租联动高亮收集与启动
 // 依据: 0x419A67 高亮循环（rebuildPickBuffer(1) + sub_456C0A 标记同组地块 →
 //       v141 > 1 时 sub_451985 播放 16 帧闪烁）；组定义：
@@ -554,7 +581,9 @@ int landingEvent(Application& app, uint16_t cellEntId) {
             }
             const std::string label = big5ToUtf8(es.name, sizeof(es.name));
             char text[160];
-            std::snprintf(text, sizeof(text), "%s\n\n費用:%d元\n\n是否加蓋?", label.c_str(), cost);
+            // [RE 0x46396D] 原版升级询问文本（estate/corp 共用 aS_3）
+            std::snprintf(text, sizeof(text), "%s\n\n升級費用:%d元\n\n是否升級？", label.c_str(),
+                          cost);
             bool upgrade = false;
             if ((pl.alive & 6) != 0) {
                 upgrade = true; // [RE 0x41997D] AI 直接升级
@@ -616,6 +645,206 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                 }
             }
         }
+    } else if (objId > 4000 && objId < 6000) {
+        // ================= 商業用地 corp（0x41A168..0x41B074）=================
+        const int idx = static_cast<int>(objId) - 4000;
+        if (idx <= 0 || idx >= static_cast<int>(st.corps.size())) {
+            return kLandingWait;
+        }
+        Corp& cp = st.corps[idx];
+        Player& pl = st.players[p];
+        const std::string label =
+            big5ToUtf8(reinterpret_cast<const char*>(cp.pad4), sizeof(cp.pad4));
+        if (cp.owner == 0) {
+            // ---- 无主商業用地购地（0x41A86B）：价格 = +34 buildPrice × M ----
+            if (pl.state37 != 0 || pl.cellTableIdx == 12) {
+                return kLandingWait;
+            }
+            const int32_t price = static_cast<int32_t>(cp.buildPrice) * st.moneyMul;
+            if (price > pl.cash) {
+                showMessage(app, "您的現金不足！", 1500);
+                RICH4_LOGI("buy corp: cash %d < price %d (RE 0x41A89D)", pl.cash, price);
+                return kLandingWait;
+            }
+            char text[160];
+            // [RE 0x4639E1] "%s\n\n費用:%d元\n\n是否買下此地?"
+            std::snprintf(text, sizeof(text), "%s\n\n費用:%d元\n\n是否買下此地?", label.c_str(),
+                          price);
+            bool buy = false;
+            if ((pl.alive & 6) != 0) {
+                buy = false; // TODO [RE 0x41D7D4] AI 决策（与 estate 共用）
+            } else if (pl.alive == 1) {
+                buy = confirmDialog(app, text, 220, 320);
+            }
+            if (!buy) {
+                return kLandingWait;
+            }
+            const uint8_t carried = pl.cellTableIdx;
+            if (carried == 7 || carried == 8 || carried == 15) {
+                showMessage(app, kObjectNames[carried], 1500);
+                return kLandingWait;
+            }
+            cp.owner = static_cast<uint8_t>(p + 1);
+            app.audio().playEffectSlot(17); // [RE 0x4823D2] 买地音效
+            buildMiniMapMarks(app);
+            if (st.cfgLandPerm > 0 && st.cfgLandPerm <= 3) {
+                static const int32_t kLandPermDays[4] = {0, 0x00020000, 0x00010000, 0x00000600};
+                int32_t d = static_cast<int32_t>(st.gameDate) + kLandPermDays[st.cfgLandPerm];
+                if ((kLandPermDays[st.cfgLandPerm] & 0xFF00) != 0 && (d & 0xFF00) > 0xC00) {
+                    d += 0xF400;
+                }
+                cp.expireDate = static_cast<uint32_t>(d);
+            }
+            pl.cash -= price;
+            RICH4_LOGI("buy corp: corp %d price %d owner %d (RE 0x41A86B)", idx, price, p + 1);
+        } else if (cp.owner == static_cast<uint8_t>(p + 1)) {
+            // ---- 自己的商業用地 ----
+            if (cp.type == 0) {
+                // 建设施（0x41A1E0）：付 +34×M → selectFacilityDialog（AI rand%4+1）→ type、++sub
+                const int32_t cost = static_cast<int32_t>(cp.buildPrice) * st.moneyMul;
+                if (cost > pl.cash) {
+                    showMessage(app, "您的現金不足！", 1500);
+                    RICH4_LOGI("build facility: cash %d < cost %d (RE 0x41A216)", pl.cash, cost);
+                    return kLandingWait;
+                }
+                uint8_t facility = 0;
+                bool chosen = false;
+                if ((pl.alive & 6) != 0) {
+                    facility = static_cast<uint8_t>(std::rand() % 4 + 1); // [RE 0x41A24D]
+                    chosen = true;
+                } else if (pl.alive == 1) {
+                    const int r = selectFacilityDialog(app, 0); // [RE 0x41A22A]
+                    if (r >= 0) {
+                        facility = static_cast<uint8_t>(r);
+                        chosen = true;
+                    }
+                }
+                if (!chosen) {
+                    return kLandingWait;
+                }
+                const uint8_t carried = pl.cellTableIdx;
+                if (carried == 7 || carried == 8 || carried == 15) {
+                    showMessage(app, kObjectNames[carried], 1500);
+                    return kLandingWait;
+                }
+                cp.type = facility;
+                ++cp.sub;                       // [RE 0x41A27C] ++sub（建设施即 1 级）
+                app.audio().playEffectSlot(18); // [RE 0x4823DA]
+                pl.cash -= cost;
+                RICH4_LOGI("build facility: corp %d type %u sub %u cost %d (RE 0x41A1E0)", idx,
+                           cp.type, cp.sub, cost);
+            } else if (cp.type == 4) {
+                // 研究所（type4）owner 停留：研发道具（labDevelopDialog 0x44101D）
+                // 条件：sub!=0 且 flag(+28) 低半字节为 0（0x41B0FC）
+                if (cp.sub != 0 && (cp.flag & 0x0F) == 0) {
+                    RICH4_LOGI("lab develop dialog TODO (corp %d sub %u, RE 0x41B106)", idx,
+                               cp.sub);
+                }
+                return kLandingWait;
+            } else {
+                // 设施升级（0x41A2B3）：+36 feeTable[0]×M，上限 kFacilityMaxLevel[type]
+                const uint8_t maxLv = (cp.type < 5) ? kFacilityMaxLevel[cp.type] : 1;
+                if (cp.sub >= maxLv) {
+                    return kLandingWait;
+                }
+                const int32_t cost = static_cast<int32_t>(cp.feeTable[0]) * st.moneyMul;
+                if (cost > pl.cash) {
+                    showMessage(app, "您的現金不足！", 1500);
+                    RICH4_LOGI("upgrade facility: cash %d < cost %d (RE 0x41A2E6)", pl.cash, cost);
+                    return kLandingWait;
+                }
+                char text[160];
+                // [RE 0x46396D] "%s\n\n升級費用:%d元\n\n是否升級？"
+                std::snprintf(text, sizeof(text), "%s\n\n升級費用:%d元\n\n是否升級？",
+                              label.c_str(), cost);
+                bool up = false;
+                if ((pl.alive & 6) != 0) {
+                    up = true; // [RE 0x41A310] AI 直接升级
+                } else if (pl.alive == 1) {
+                    up = confirmDialog(app, text, 220, 320); // [RE 0x41A31E]
+                }
+                if (!up) {
+                    return kLandingWait;
+                }
+                const uint8_t carried = pl.cellTableIdx;
+                if (carried == 7 || carried == 8 || carried == 15) {
+                    showMessage(app, kObjectNames[carried], 1500);
+                    return kLandingWait;
+                }
+                pl.cash -= cost;
+                ++cp.sub;                       // [RE 0x41A35D]
+                app.audio().playEffectSlot(18); // [RE 0x4823DA]
+                RICH4_LOGI("upgrade facility: corp %d type %u sub %u cost %d (RE 0x41A2B3)", idx,
+                           cp.type, cp.sub, cost);
+            }
+        } else {
+            // ---- 他人商業用地收费（0x41A370）----
+            // 守卫：无设施(sub==0)/公園(type0)/研究所(type4) 不收费
+            if (cp.sub == 0 || cp.type == 0 || cp.type >= 4) {
+                return kLandingWait;
+            }
+            app.audio().playEffectSlot(20); // [RE 0x4823EA]
+            const uint8_t costIdx = (cp.type < 5) ? kCorpCostMap[cp.type] : 0;
+            const char* feeName = kCostNames[costIdx < 13 ? costIdx : 0];
+            if (ownerCanCollectRent(app, cp.owner - 1, cp.flag, feeName)) {
+                int32_t base =
+                    static_cast<int32_t>(cp.feeTable[cp.sub < 6 ? cp.sub : 0]) * st.moneyMul;
+                if (cp.flag != 0) {
+                    base *= 2; // [RE 0x41A44C] flag 非 0 翻倍
+                }
+                const Player& owner = st.players[cp.owner - 1];
+                const char* ownerName = owner.name ? owner.name : "";
+                char text[192];
+                int32_t rent = 0;
+                int hotelDays = 0;
+                if (cp.type == 1) {
+                    // 旅館：休息天數 = 轮盘(1)；rent = base × days
+                    hotelDays = rouletteValue(1); // [RE 0x41A458]
+                    rent = base * hotelDays;
+                    // [RE 0x4639FF] "休息%d天\n\n費用%d元！"
+                    std::snprintf(text, sizeof(text), "休息%d天\n\n費用%d元！", hotelDays, rent);
+                    showMessage(app, text, 1500);
+                } else if (cp.type == 2) {
+                    // 購物中心：消費倍數 = 轮盘(2)；rent = base × mult
+                    const int mult = rouletteValue(2); // [RE 0x41A4B4]
+                    rent = base * mult;
+                    // [RE 0x463A14] "您的消費金額為\n\n%dx%d倍=%d元"
+                    std::snprintf(text, sizeof(text), "您的消費金額為\n\n%dx%d倍=%d元", base, mult,
+                                  rent);
+                    showMessage(app, text, 1500);
+                } else {
+                    // 加油站（type3）：500 × 載具倍率 × 本次步數 × M（步行免付）
+                    const int travel = pl.travel & 3;
+                    if (travel == 0) {
+                        return kLandingWait; // [RE 0x41A4ED] 步行免付
+                    }
+                    const int mult = 1 << (travel - 1); // [RE 0x41A4FC]
+                    rent = 500 * mult * st.diceValue * st.moneyMul;
+                    // [RE 0x463A31] "加油站\n\n董事長%s\n\n請付%d元%s"
+                    std::snprintf(text, sizeof(text), "加油站\n\n董事長%s\n\n請付%d元%s", ownerName,
+                                  rent, feeName);
+                    showMessage(app, text, 1500);
+                }
+                // [RE 0x41A581] 通用后处理：神明调整 → 转账（flags=0 收款入银行）→ corp+48
+                rent = applyGodRentModifier(app, p, rent, feeName);
+                if (rent > 0) {
+                    transferMoney(app, p, cp.owner - 1, rent, 0);
+                    cp.lastFee = rent; // [RE 0x41A75E] corp+48 = 最近收费
+                    RICH4_LOGI("corp fee: player %d -> %d amount %d (corp %d type %u, RE 0x41A370)",
+                               p, cp.owner - 1, rent, idx, cp.type);
+                }
+                // [RE 0x41A761] 旅館住宿状态：BYTE0 = days-1（0→0x80）、累计天数、住宿欠款
+                if (cp.type == 1 && hotelDays > 0 && pl.alive != 0 && st.sceneRequest == 0) {
+                    const uint8_t stay = static_cast<uint8_t>(hotelDays - 1);
+                    pl.stateFlags = (pl.stateFlags & 0xFFFFFF00u) |
+                                    static_cast<uint32_t>(stay != 0 ? stay : 0x80);
+                    pl.byte66 = static_cast<uint8_t>(pl.byte66 + hotelDays); // byte_496BAA
+                    // [RE 0x41A7BC] 住宿欠款 20×M×days（addPlayerDebt 矩阵未建模，仅日志）
+                    RICH4_LOGI("hotel stay: player %d days %d owe %d (RE 0x41A7F4)", p, hotelDays,
+                               20 * st.moneyMul * hotelDays);
+                }
+            }
+        }
     }
     // loc_41B077 → sub_40F381/sub_448A7E/refreshGameUi → loc_41B111：等待 kLandingWait 帧
     return kLandingWait;
@@ -636,6 +865,7 @@ int rollDice(Application& app) {
         sum += v;
     }
     st.showDice = true;
+    st.diceValue = sum; // [RE 0x48BAFC] g_diceValue = 本次行走总步数（供步数计费公式）
     RICH4_LOGI("roll dice: %d (RE 0x419572)", sum);
     return sum;
 }

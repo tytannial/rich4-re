@@ -46,6 +46,12 @@ extern const char* const kWeekdayNames[7];
 extern const char* const kObjectNames[19];
 // [RE 0x475138] off_475138 建筑/费用名（0-10 建筑等级、11-15 费用）
 extern const char* const kBuildingNames[17];
+// [RE 0x47517C] g_costNames 费用名（13 项；corp 按 kCorpCostMap、specPt 按 g_specPtCostMap 取值）
+extern const char* const kCostNames[13];
+// [RE 0x474940] g_facilityMaxLevel 设施等级上限（按 corp.type 0..4）
+extern const uint8_t kFacilityMaxLevel[5];
+// [RE 0x47528B] 商業用地费用名映射（按 corp.type 0..4 → kCostNames 索引）
+extern const uint8_t kCorpCostMap[5];
 // [RE 0x415D1D] byte_415D1D 金额前缀模板
 extern const uint8_t kMoneyPrefix[20];
 

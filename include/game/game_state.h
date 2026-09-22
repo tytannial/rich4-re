@@ -109,18 +109,22 @@ struct Estate {
     uint32_t expireDate = 0;    // +48 到期日期（dword_497160 比较，sub_41CF67）
 };
 
-// [RE 0x498E88] g_corps 每项 56 字节
+// [RE 0x498E88] g_corps 每项 56 字节（商業用地及其上设施）
 struct Corp {
     int16_t x = 0;              // +0
     int16_t y = 0;              // +2
-    uint8_t pad4[20] = {};      // +4..+23
-    uint8_t type = 0;           // +24
-    uint8_t owner = 0;          // +25
-    uint8_t sub = 0;            // +26
-    uint8_t dir = 0;            // +27
-    uint8_t flag = 0;           // +28 旗帜（&1）
-    uint8_t pad29[19] = {};     // +29..+47
-    int32_t price = 0;          // +48
+    uint8_t pad4[20] = {};      // +4..+23 地名（BIG5）
+    uint8_t type = 0;           // +24 设施类型 0=公園 1=旅館 2=購物中心 3=加油站 4=研究所
+    uint8_t owner = 0;          // +25 拥有者+1
+    uint8_t sub = 0;            // +26 设施等级（0=无设施）
+    uint8_t dir = 0;            // +27 朝向
+    uint8_t flag = 0;           // +28 旗帜/查封（非 0 收费翻倍；&0x0F 非 0 时研究所不研发）
+    uint8_t researchItem = 0;   // +29 研究所研发项目+1（0=未研发）
+    uint8_t researchLeft = 0;   // +30 研发剩余（原版 =5）
+    uint8_t pad31[3] = {};      // +31..+33
+    uint16_t buildPrice = 0;    // +34 建设价（购地/建设施费用）
+    uint16_t feeTable[6] = {};  // +36..+47 各等级费用表（等级 0..5）
+    int32_t lastFee = 0;        // +48 最近收费（收租时写入；原名 price 误）
     uint32_t expireDate = 0;    // +52 到期日期（sub_41CF67）
 };
 
@@ -435,6 +439,9 @@ struct GameState {
 
     // [RE 0x48BAF8] dword_48BAF8 剩余移动步数（= 骰子点数）
     int remainingSteps = 0;
+    // [RE 0x48BAFC] g_diceValue 本次行走总步数（掷骰定格时记录，供加油費/修車費等
+    //   "依行走步數收費"公式使用；移动中不递减）
+    int diceValue = 0;
     // [RE 0x48BB00] byte_48BB00 待处理落地事件
     bool stepActionPending = false;
     // [RE 0x4749DC] dword_4749DC 单格移动剩余帧
