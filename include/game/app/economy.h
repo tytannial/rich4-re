@@ -27,4 +27,8 @@ void releaseCellTableSlot(Application& app, int slot);
 // 玩家破产/淘汰：标记占用位、释放携带物件、清空住宅用地/商業用地/行業設施點、全灭时 sceneRequest
 void eliminatePlayer(Application& app, int p);
 
+// [RE 0x4239B9] playerTotalAssets：总资产 = 现金+银行-贷款 + Σ(12股×现价) +
+//   地产(priceAdd + type?priceBase:priceBase×level) + 公司(buildPrice + feeTable[0]×sub)
+int32_t playerTotalAssets(Application& app, int player);
+
 } // namespace rich4

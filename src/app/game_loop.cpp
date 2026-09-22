@@ -14,6 +14,7 @@
 #include "game/app/object_tip.h"
 #include "game/app/save_dialog.h"
 #include "game/app/settings_dialog.h"
+#include "game/app/stock_market_dialog.h"
 #include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/log.h"
@@ -139,8 +140,12 @@ void handleTopBarButton(Application& app, int index) {
             saveDialog(app);
             break;
         case 5:
-            // [RE 0x417D65] case 5: sub_40A9BD（大地圖）
+            // [RE 0x417D65] case 5: sub_40A9BD（大地图）
             mapDialog(app);
+            break;
+        case 10:
+            // [RE 0x417D65] case 10: sub_42B58F(0)（股票行情界面）
+            stockMarketDialog(app);
             break;
         default:
             // 2/4-10 依赖游戏内逻辑（存檔/地圖/卡片/道具/股票等）

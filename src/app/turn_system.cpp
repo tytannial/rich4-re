@@ -1314,6 +1314,8 @@ void updatePlayerStates(Application& app, int p) {
     if (pl.alive == 0 || st.sceneRequest != 0) {
         return;
     }
+    // [RE 0x41C84F] 开头 sub_42915A：银行可售股数每回合随机刷新（10%~30%）
+    refreshBankStockShares(app);
     auto decay = [](uint8_t v, uint8_t lowMask) -> uint8_t {
         if (v == 0) {
             return 0;

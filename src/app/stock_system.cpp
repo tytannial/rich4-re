@@ -70,6 +70,23 @@ void refreshStockSpecPtMap(Application& app) {
     }
 }
 
+// [RE 0x42915A] refreshBankStockShares
+// 依据: 0x42915A 反编译; 发行 <= 1000 → 全部可售；否则 可售 = 发行 × (rand()%2000 + 1000)/10000
+//   （即 10%~30%）；调用点 loadMapData（初始化）与 sub_41C84F（每回合）
+void refreshBankStockShares(Application& app) {
+    GameState& st = app.gameState();
+    for (int i = 0; i < 12; ++i) {
+        const uint16_t issued = st.stockBankIssued[i];
+        if (issued <= 1000) {
+            st.stockBankShares[i] = issued;
+        } else {
+            const int r = std::rand() % 2000 + 1000; // 1000..2999
+            st.stockBankShares[i] =
+                static_cast<uint16_t>(static_cast<int>(issued) * r / 10000);
+        }
+    }
+}
+
 // [RE 0x4291D6] stockTick
 // 依据: 0x4291D6 反编译; ① 停市判定 sub_428D01（dword_4990DC || isSpecialDate）→ 跳过；
 //   ② 全局扰动 dword_4990EC = (rand()-0x4000)/4097；
@@ -186,6 +203,33 @@ int updateSpecPtControl(Application& app, int player, int stock) {
     return 0;
 }
 
+// [RE 0x428E23] sellStock
+// 依据: 0x428E23 反编译; 持股 -= count（归零清均价）；金额 = count × 当前价；
+//   银行股可售/发行 += count（回归市场）；toBank=1 入银行、0 入系统（dword_499080 未建模）；
+//   末尾 sub_4294D5 控股重排；返回 1 表示经营権变化
+int sellStock(Application& app, int player, int stock, int count, bool toBank) {
+    GameState& st = app.gameState();
+    if (player < 0 || player >= 4 || stock < 0 || stock >= 12 || count <= 0) {
+        return 0;
+    }
+    if (st.playerShares[player][stock] < count) {
+        return 0;
+    }
+    st.playerShares[player][stock] -= count;
+    if (st.playerShares[player][stock] == 0) {
+        st.playerAvgCost[player][stock] = 0.0f;
+    }
+    const int32_t amount = static_cast<int32_t>(static_cast<double>(count) * st.stocks[stock][5]);
+    st.stockBankShares[stock] += static_cast<uint16_t>(count);
+    st.stockBankIssued[stock] += static_cast<uint16_t>(count);
+    if (toBank) {
+        st.players[player].bank += amount;
+    }
+    RICH4_LOGI("sellStock: player %d stock %d count %d amount %d toBank=%d (RE 0x428E23)", player,
+               stock, count, amount, toBank ? 1 : 0);
+    return updateSpecPtControl(app, player, stock);
+}
+
 // [RE 0x428D2A] buyStock
 // 依据: 0x428D2A 反编译; viaBank=false（现金）：价格 = specPt.feeBase/10000 × count，
 //   sharesLeft -= count，现金扣款；viaBank=true：金额 = 当前价 × count，银行扣款（市场股数未建模）；
@@ -198,8 +242,12 @@ int buyStock(Application& app, int player, int stock, int count, bool viaBank) {
     }
     int32_t amount = 0;
     if (viaBank) {
-        amount = static_cast<int32_t>(static_cast<double>(count) * st.stocks[stock][2]);
+        // [RE 0x428D2A] 银行买：金额 = 股数 × 当前价（flt_496994 = stocks[][5]），银行扣款
+        amount = static_cast<int32_t>(static_cast<double>(count) * st.stocks[stock][5]);
         st.players[player].bank -= amount;
+        if (st.stockBankShares[stock] >= count) {
+            st.stockBankShares[stock] -= static_cast<uint16_t>(count);
+        }
     } else {
         const int si = static_cast<int>(st.stocks[stock][1]);
         if (si > 0 && si < static_cast<int>(st.specPts.size())) {

@@ -34,6 +34,42 @@ int bitScanPlayer(uint32_t mask) {
     return -1;
 }
 
+// [RE 0x4239B9] playerTotalAssets
+// 依据: 0x4239B9 反编译; bank + cash - loan + Σ(12股×现价 flt_496994) +
+//   地产(priceAdd(+28) + [type(+24)? priceBase(+30) : level(+26)? priceBase×level]) +
+//   公司(buildPrice(+34) + feeTable[0](+36) × sub(+26))；胜利判定输入
+int32_t playerTotalAssets(Application& app, int player) {
+    GameState& st = app.gameState();
+    if (player < 0 || player >= 4) {
+        return 0;
+    }
+    int32_t total =
+        st.players[player].bank + st.players[player].cash - st.players[player].loan;
+    for (int i = 0; i < 12; ++i) {
+        total += static_cast<int32_t>(static_cast<double>(st.playerShares[player][i]) *
+                                      st.stocks[i][5]);
+    }
+    for (size_t i = 1; i < st.estates.size(); ++i) {
+        const Estate& es = st.estates[i];
+        if (es.owner != player + 1) {
+            continue;
+        }
+        total += es.priceAdd;
+        if (es.type != 0) {
+            total += es.priceBase;
+        } else if (es.level != 0) {
+            total += static_cast<int32_t>(es.priceBase) * es.level;
+        }
+    }
+    for (size_t i = 1; i < st.corps.size(); ++i) {
+        const Corp& cp = st.corps[i];
+        if (cp.owner == player + 1) {
+            total += cp.buildPrice + static_cast<int32_t>(cp.feeTable[0]) * cp.sub;
+        }
+    }
+    return total;
+}
+
 // [RE 0x41D2C6] transferMoney
 // 依据: 0x41D2C6 反编译; 详见 economy.h 注释
 void transferMoney(Application& app, int from, int to, int32_t amount, int flags) {

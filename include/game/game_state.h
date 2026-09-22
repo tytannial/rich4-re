@@ -363,6 +363,8 @@ struct GameState {
     // [RE 0x4971A4] flt_4971A4 持股均价（买入加权平均）
     float playerAvgCost[4][12] = {};
     int32_t stockHistory[12][144] = {}; // [RE 0x497328] g_stockHistory（int32 存 float 位模式）
+    uint16_t stockBankIssued[12] = {}; // [RE 0x496988] word_496988 银行股发行股数（= stocks[i][2]）
+    uint16_t stockBankShares[12] = {}; // [RE 0x49698A] word_49698A 银行股可售股数（sub_42915A）
     uint8_t stockHalted[12] = {};    // [RE 0x496986] byte_496986 停牌标志
     uint8_t stockNews[12] = {};      // [RE 0x496987] byte_496987 新闻影响（bit4=涨否则跌）
     int32_t marketIndex = 0;         // [RE 0x499078] dword_499078 大盘指数（Σ价格×10）
