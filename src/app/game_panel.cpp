@@ -100,8 +100,9 @@ void drawPlayerBar(Application& app) {
     if (state.pieceSprites[idx].frameCount() > 0) {
         blitElement(dst, state.pieceSprites[idx].frame(0), 482, 40, false);
     }
-    if (p.vehicle && p.vehicle <= 9 && state.pieceSprites[p.vehicle - 1].frameCount() > 2) {
-        blitElement(dst, state.pieceSprites[p.vehicle - 1].frame(2), 524, 64, false);
+    // [RE 0x416256] 同盟对象头像：g_playerVehicle(+65) 非 0 → pieceSprites[+65-1] 帧 2 @ (524,64)
+    if (p.ally && p.ally <= 9 && state.pieceSprites[p.ally - 1].frameCount() > 2) {
+        blitElement(dst, state.pieceSprites[p.ally - 1].frame(2), 524, 64, false);
     }
 
     if (p.name) {
@@ -118,7 +119,7 @@ void drawPlayerBar(Application& app) {
 }
 
 // [RE 0x415F69] 玩家信息面板（布局 0/1，440,0-640,280）— 阶段 1 简化
-// 差异: 4 页签（資金/地產/股票/其他）切换与地产/股票统计阶段 2 接入
+// 差异: 4 页签（資金/地產/股票/其他）切换与地產/股票统计阶段 2 接入
 void drawPlayerInfoPanel(Application& app) {
     GameState& state = app.gameState();
     Surface& dst = app.surface();
@@ -162,7 +163,7 @@ void drawMiniMap(Application& app) {
     if (v1 == 0) {
         return;
     }
-    // [RE 0x40A4E1] 重建工作副本（底图 + 地产/公司/特殊点玩家颜色标记），随物件变化更新
+    // [RE 0x40A4E1] 重建工作副本（底图 + 住宅用地/商業用地/行業設施點玩家颜色标记），随物件变化更新
     buildMiniMapMarks(app);
     // [DIAG] 小地图状态（每 120 帧一次）
     static int s_mmLog = 0;

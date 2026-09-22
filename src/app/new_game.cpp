@@ -72,7 +72,7 @@ void applyCharTemplate(Player& p, int charId) {
     p.byte27 = t[19];            // +27 状态恢复朝向
     p.cash = readI32(t + 20);    // +28
     p.bank = readI32(t + 24);    // +32
-    p.vehicle = t[57];           // +65
+    p.ally = t[57];              // +65 同盟对象（角色模板恒 0）
     p.kind = t[92];              // +100
 }
 
@@ -383,7 +383,7 @@ bool loadMap(Application& app) {
         }
     }
 
-    // [RE 0x48BAD8/0x48BAD4] data.mkf[517]/[519]（地产/公司标记图块）
+    // [RE 0x48BAD8/0x48BAD4] data.mkf[517]/[519]（住宅用地/商業用地标記图块）
     loadUiImage(state.estateTiles, state.data, 517);
     loadUiImage(state.mapTiles519, state.data, 519);
     // [RE 0x49692C] cellType -> data.mkf[cellType+395]（索引 1..20）
@@ -405,7 +405,7 @@ bool loadMap(Application& app) {
     createMapObject(state, 14, randomCellEnt(state, 0), 0, 0);
     // [RE 0x407AD2] 棋子动画资源初始化
     initMapEntities(app);
-    // TODO(RE 0x40A4E1): 小地图背景绘制（叠加地产/公司标记）
+    // TODO(RE 0x40A4E1): 小地图背景绘制（叠加住宅用地/商業用地标記）
     return true;
 }
 

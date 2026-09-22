@@ -68,7 +68,11 @@ struct Player {
     uint8_t cardCount = 0;      // +62 g_playerCardCnt 0x496BA6
     uint8_t cellTableIdx = 0;   // +63 byte_496BA7
     uint8_t cellNo = 0;         // +64 g_playerCellNo 0x496BA8
-    uint8_t vehicle = 0;        // +65 g_playerVehicle 0x496BA9
+    // [RE 0x496BA9] g_playerVehicle 实为同盟对象（1-based 玩家号，0=无）
+    // 依据: 0x41D559 用 g_playerVehicle[地主] == 当前玩家+1 → "與%s同盟中\n\n免收%s！";
+    //       0x40DF69 记账后命中同盟 → sub_40CC1A 解除同盟（清双方 +65 与 byte_496BA5）;
+    //       0x416256 面板用 pieceSprites[+65-1] 帧 2 画同盟对象棋子头像
+    uint8_t ally = 0;           // +65 同盟对象（重写原误名 vehicle）
     uint8_t byte66 = 0;         // +66 byte_496BAA
     int16_t bonusAtk = 0;       // +68 word_496BAC（神明属性加成，sub_40EAD7 加 / sub_40E14D 减）
     int16_t bonusDef = 0;       // +70 word_496BAE
@@ -92,7 +96,7 @@ struct CellEnt {
 struct Estate {
     int16_t x = 0;              // +0
     int16_t y = 0;              // +2
-    char name[19] = {};         // +4..+22 地产名（BIG5，原版 sprintf "%s\n\n" 显示）
+    char name[19] = {};         // +4..+22 住宅用地名（BIG5，原版 sprintf "%s\n\n" 显示）
     uint8_t flag = 0;           // +23 旗帜（&1）
     uint8_t type = 0;           // +24 类型
     uint8_t owner = 0;          // +25 拥有者（玩家号+1）
@@ -256,11 +260,11 @@ struct GameState {
     UiImage cellEntTiles;         // [RE 0x474949] map.mkf[24]
     UiImage flagTiles;            // [RE 0x47494D] map.mkf[26]
     UiImage pieceTiles;           // [RE 0x48AEA8] map.mkf[25]
-    UiImage estateTiles;          // [RE 0x48BAD8] data.mkf[517]（地产/公司标记）
+    UiImage estateTiles;          // [RE 0x48BAD8] data.mkf[517]（住宅用地/商業用地标記）
     UiImage mapTiles519;          // [RE 0x48BAD4] data.mkf[519]
     UiImage miniMap;              // [RE 0x48BADC] map.mkf[map+4*mode+16]
     UiImage miniMapRaw;           // [RE 0x48BAD0] map.mkf[map+4*mode+16]
-    // [RE 0x48BADC] dword_48BADC 小地图工作副本（200x200，叠加地产/公司标记）
+    // [RE 0x48BADC] dword_48BADC 小地图工作副本（200x200，叠加住宅用地/商業用地标記）
     std::vector<uint16_t> miniMapBuffer;
     // [RE 0x48BADC] dword_48BADC 大地图工作副本（= g_miniMapWork 帧 1，400x400；
     //   原版 rebuildMiniMap(1) 的产物，帧 26/28/28 标记 + 11392 缩放）
@@ -270,9 +274,9 @@ struct GameState {
     //   原版 dword_48AE4C[sprite] = map.mkf[sprite + 38]（loadMapData 按需加载）
     std::vector<UiImage> specTiles;
     UiImage estateFlag;           // [RE 0x48AE60] map.mkf[map+79+4*mode]
-    UiImage corpTiles[17];        // [RE 0x48AE64] 公司图块组 1
-    UiImage corpTiles2[17];       // [RE 0x48AE78] 公司图块组 2
-    UiImage corpTiles3[17];       // [RE 0x48AE90] 公司图块组 3
+    UiImage corpTiles[17];        // [RE 0x48AE64] 商業用地图块组 1
+    UiImage corpTiles2[17];       // [RE 0x48AE78] 商業用地图块组 2
+    UiImage corpTiles3[17];       // [RE 0x48AE90] 商業用地图块组 3
     UiImage pieceSprites[9];      // [RE 0x498EB0] map.mkf[charIndex+27]
     UiImage pieceAnim[9];         // [RE 0x498EB4] data.mkf[21*charIndex+128+3*travel]
     UiImage cellTypeSprites[46];  // [RE 0x49692C] data.mkf[cellType+395]（索引 1-20 有效）

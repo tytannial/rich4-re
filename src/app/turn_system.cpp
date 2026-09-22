@@ -4,12 +4,15 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <string>
 
 #include "game/application.h"
 #include "game/app/confirm_dialog.h"
 #include "game/app/economy.h"
 #include "game/app/map_render.h"
+#include "game/app/map_tables.h"
+#include "game/app/message_dialog.h"
 #include "game/core/encoding.h"
 #include "game/core/log.h"
 
@@ -273,17 +276,111 @@ int facingBetween(GameState& st, int fromId, int toId) {
     return facingFromDelta(dx, dy);
 }
 
+// [RE 0x419744] estateRouteRent：同路段/连锁店联合租金
+// 依据: 0x419744 反编译; 普通住宅用地（type==0）→ 遍历全部地产，owner 相同且地名相同
+//       （strcmp）的 fees[level]（+32+2*level）累加；连锁店（type!=0）→ owner 相同的
+//       连锁店每处 +2000；返回 g_moneyMul × 总和
+int32_t estateRouteRent(const GameState& st, uint8_t owner, const Estate& es) {
+    int32_t sum = 0;
+    for (size_t i = 1; i < st.estates.size(); ++i) {
+        const Estate& e = st.estates[i];
+        if (es.type == 0) {
+            if (e.type == 0 && e.owner == owner &&
+                std::strncmp(e.name, es.name, sizeof(e.name)) == 0) {
+                const int lv = e.level < 6 ? e.level : 0;
+                sum += e.fees[lv];
+            }
+        } else if (e.type != 0 && e.owner == owner) {
+            sum += 2000;
+        }
+    }
+    return sum * st.moneyMul;
+}
+
+// [RE 0x41D559] ownerCanCollectRent：地主状态免收租检查（false = 免收，已显示提示）
+// 依据: 0x41D559 反编译; 依次判断（命中即 showMessage(文本, 1500) 并返回 false）：
+//   flag(+23) 高/低半字节均非 0 = 房屋查封中; 地主 +65 同盟对象 == 付款人+1 = 與%s同盟中;
+//   地主携带死神（cellTableIdx==15）= 死神顯靈; stateFlags BYTE0/1/2/3 = 住宿/消失/坐牢/住院中;
+//   byte54 = 冬眠中; state37 = 夢遊中
+bool ownerCanCollectRent(Application& app, int ownerIdx, uint8_t flag, const char* feeName) {
+    GameState& st = app.gameState();
+    const Player& owner = st.players[ownerIdx];
+    const char* ownerName = owner.name ? owner.name : "";
+    char text[192];
+    if ((flag & 0xF0) != 0 && (flag & 0x0F) != 0) {
+        std::snprintf(text, sizeof(text), "房屋查封中\n\n免收%s！", feeName);
+    } else if (owner.ally == static_cast<uint8_t>(st.currentPlayer + 1)) {
+        std::snprintf(text, sizeof(text), "與%s同盟中\n\n免收%s！", ownerName, feeName);
+    } else if (owner.cellTableIdx == 15) {
+        std::snprintf(text, sizeof(text), "死神顯靈\n\n免收%s！", feeName);
+    } else if ((owner.stateFlags & 0xFFu) != 0) {
+        std::snprintf(text, sizeof(text), "%s住宿中\n\n免收%s！", ownerName, feeName);
+    } else if ((owner.stateFlags & 0xFF00u) != 0) {
+        std::snprintf(text, sizeof(text), "%s消失中\n\n免收%s！", ownerName, feeName);
+    } else if ((owner.stateFlags & 0xFF0000u) != 0) {
+        std::snprintf(text, sizeof(text), "%s坐牢中\n\n免收%s！", ownerName, feeName);
+    } else if ((owner.stateFlags & 0xFF000000u) != 0) {
+        std::snprintf(text, sizeof(text), "%s住院中\n\n免收%s！", ownerName, feeName);
+    } else if (owner.byte54 != 0) {
+        std::snprintf(text, sizeof(text), "%s冬眠中\n\n免收%s！", ownerName, feeName);
+    } else if (owner.state37 != 0) {
+        std::snprintf(text, sizeof(text), "%s夢遊中\n\n免收%s！", ownerName, feeName);
+    } else {
+        return true;
+    }
+    showMessage(app, text, 1500);
+    return false;
+}
+
+// [RE 0x41D709] applyGodRentModifier：付款方携带神明对租金的调整
+// 依据: 0x41D709 反编译; switch(cellTableIdx)：1 小財神=减半 / 2 大財神=免付 /
+//   5 小窮神=加付 50% / 6 大窮神=加倍；金额有变化时 showMessage(提示, 1500)
+int32_t applyGodRentModifier(Application& app, int payer, int32_t rent, const char* feeName) {
+    const uint8_t slot = app.gameState().players[payer].cellTableIdx;
+    int32_t v = rent;
+    char text[192];
+    switch (slot) {
+        case 1:
+            std::snprintf(text, sizeof(text), "小財神顯靈\n\n%s減免一半！", feeName);
+            v = rent / 2;
+            break;
+        case 2:
+            std::snprintf(text, sizeof(text), "大財神顯靈\n\n免付%s！", feeName);
+            v = 0;
+            break;
+        case 5:
+            std::snprintf(text, sizeof(text), "小窮神顯靈\n\n%s加付50％！", feeName);
+            v = rent + rent / 2;
+            break;
+        case 6:
+            std::snprintf(text, sizeof(text), "大窮神顯靈\n\n加倍付%s！", feeName);
+            v = 2 * rent;
+            break;
+        default:
+            return rent;
+    }
+    if (v != rent) {
+        showMessage(app, text, 1500);
+    }
+    return v;
+}
+
 // [RE 0x41982D] landingEvent
 // 依据: 0x41982D 反编译; 停留格结算。switch(cellEnt+36 低字节 格子类型 0..16)：
 //   入口先按 g_cellTypeSound[type]（0x475299）播放格子音效（type 2..16）
-//   case 0 = 按 objId 分（2000..4000 地产 / 4000..6000 公司 / 其他 → loc_41A168）
-//   无主地产购地（loc_41A013）：
+//   case 0 = 按 objId 分（2000..4000 住宅用地 / 4000..6000 商業用地 / 其他 → loc_41A168）
+//   无主住宅用地购地（loc_41A013）：
 //     守卫 state37 / cellTableIdx==12 → 价格=(level*priceBase+priceAdd)*moneyMul
-//     → 现金检查（不足 → 0x41A159）→ sprintf("%s\n\n", estate.name) → 人类 askDialog
-//     → sub_40FA61 携带神明检查 → owner=cur+1 → 音效槽 17（dword_4823D2）
-//     → rebuildMiniMap(0) → 期限 expireDate（g_landPermDays）→ 扣现金
-// 差异: 事件格 case 2..16、公司/特殊点（loc_41A168）、AI 决策（sub_41D7D4）、
-//       现金不足提示（0x41A159）、神明阻止文本（showMessage）、提示框背景待补
+//     → 现金检查（不足 → 0x41A159 showMessage"您的現金不足！"）→ sprintf("%s\n\n", estate.name)
+//     → 人类 askDialog → sub_40FA61 携带神明检查（showMessage 神明名）→ owner=cur+1
+//     → 音效槽 17（dword_4823D2）→ rebuildMiniMap(0) → 期限 expireDate（g_landPermDays）→ 扣现金
+//   自己住宅用地升級（0x419911）：见下
+//   他人住宅用地收租（loc_419A67）：音效槽 20 → ownerCanCollectRent（0x41D559 地主状态免收）
+//     → estateRouteRent（0x419744 同路段 fees[level] 之和 / 连锁店数×2000）× moneyMul
+//     → flag(+23) 翻倍 → applyGodRentModifier（0x41D709 付款方神明调整）
+//     → showMessage("此地屬%s請付%d元過路費") → transferMoney(flags=0 收款入银行)
+// 差异: 事件格 case 2..16、商業用地/行業設施點收費/特殊点（loc_41A168）、AI 决策（sub_41D7D4）、
+//       收租的同盟分账/死神代付/免租卡片/同路段高亮/浮动数字（P4）
 int landingEvent(Application& app, uint16_t cellEntId) {
     GameState& st = app.gameState();
     const int p = st.currentPlayer;
@@ -304,7 +401,7 @@ int landingEvent(Application& app, uint16_t cellEntId) {
         return 0x80;
     }
     // case 0：普通格，按 objId 分（objId == 0 → 无事件返回 0x80；
-    //   有 objId 的地产/公司/特殊点路径统一在 loc_41B111 返回等待值后下一位）
+    //   有 objId 的住宅用地/商業用地/行業設施點路径统一在 loc_41B111 返回等待值后下一位）
     // 差异: 原版 0x88 = 8 帧；重写帧率更高（约 2 倍），暂用 0x90 = 16 帧对齐观感
     constexpr int kLandingWait = 0x90;
     if (objId == 0) {
@@ -318,14 +415,15 @@ int landingEvent(Application& app, uint16_t cellEntId) {
         Estate& es = st.estates[idx];
         Player& pl = st.players[p];
         if (es.owner == 0) {
-            // ---- 无主地产购地（loc_41A013）----
+            // ---- 无主住宅用地购地（loc_41A013）----
             if (pl.state37 != 0 || pl.cellTableIdx == 12) {
                 return kLandingWait;
             }
             const int32_t price =
                 (static_cast<int32_t>(es.level) * es.priceBase + es.priceAdd) * st.moneyMul;
             if (price > pl.cash) {
-                // [RE 0x41A159] 现金不足：showMessage(byte_46398B, 1500) → loc_41B111(0x88)
+                // [RE 0x41A159] 现金不足：showMessage(byte_46398B="您的現金不足！", 1500)
+                showMessage(app, "您的現金不足！", 1500);
                 RICH4_LOGI("buy land: cash %d < price %d (RE 0x41A159)", pl.cash, price);
                 return kLandingWait;
             }
@@ -344,10 +442,11 @@ int landingEvent(Application& app, uint16_t cellEntId) {
             if (!buy) {
                 return kLandingWait;
             }
-            // [RE 0x40FA61] 携带神明（槽 7/8/15）阻止（原版显示神明名 1500ms）
+            // [RE 0x40FA61] 携带神明（槽 7/8/15）阻止 → showMessage(神明名, 1500)
             const uint8_t carried = pl.cellTableIdx;
             if (carried == 7 || carried == 8 || carried == 15) {
-                RICH4_LOGI("buy land blocked by carried god %u (RE 0x40FA61, text TODO)", carried);
+                showMessage(app, kObjectNames[carried], 1500);
+                RICH4_LOGI("buy land blocked by carried god %u (RE 0x40FA61)", carried);
                 return kLandingWait;
             }
             es.owner = static_cast<uint8_t>(p + 1);
@@ -365,12 +464,12 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                 es.expireDate = static_cast<uint32_t>(d);
             }
             pl.cash -= price;
-            // [RE 0x41A13E] sub_44F627(estate.name, 0)：同名地产 ≥3 时角色感想
+            // [RE 0x41A13E] sub_44F627(estate.name, 0)：同路段住宅用地 ≥3 时角色感想
             //   （sub_44EF41 角色语音/表情，P4 待实现）
             RICH4_LOGI("buy land: estate %d price %d owner %d (RE 0x41982D/0x41A013)", idx, price,
                        p + 1);
         } else if (es.owner == static_cast<uint8_t>(p + 1)) {
-            // ---- 自己的地产：升级/加盖（0x419911..0x419A52）----
+            // ---- 自己的住宅用地：升级/加盖（0x419911..0x419A52）----
             // 守卫: level >= 5 / type != 0（大地块走建造菜单）/ state37 != 0 → 无操作
             // 费用 = word[estate+30](priceBase) * g_moneyMul；现金不足 → showMessage("現金不夠支付！")
             // 人类 askDialog 询问（AI alive&6 自动升级）→ checkCarriedGod 阻止 → level++
@@ -383,6 +482,8 @@ int landingEvent(Application& app, uint16_t cellEntId) {
             }
             const int32_t cost = static_cast<int32_t>(es.priceBase) * st.moneyMul;
             if (cost > pl.cash) {
+                // [RE 0x419A52] 现金不足 → showMessage(byte_46398B="您的現金不足！", 1500)
+                showMessage(app, "您的現金不足！", 1500);
                 RICH4_LOGI("upgrade: cash %d < cost %d (RE 0x419A52)", pl.cash, cost);
                 return kLandingWait;
             }
@@ -400,16 +501,49 @@ int landingEvent(Application& app, uint16_t cellEntId) {
             }
             const uint8_t carried = pl.cellTableIdx;
             if (carried == 7 || carried == 8 || carried == 15) {
-                // [RE 0x4199AE] checkCarriedGod 阻止（显示神明名 1500ms，重写仅日志）
-                RICH4_LOGI("upgrade blocked by carried god %u (RE 0x40FA61, text TODO)", carried);
+                // [RE 0x4199AE] checkCarriedGod 阻止 → showMessage(神明名, 1500)
+                showMessage(app, kObjectNames[carried], 1500);
+                RICH4_LOGI("upgrade blocked by carried god %u (RE 0x40FA61)", carried);
                 return kLandingWait;
             }
             pl.cash -= cost;
             ++es.level;                          // [RE 0x4199D1] inc byte ptr [esi+1Ah]
             app.audio().playEffectSlot(18);      // [RE 0x4823DA] 升级音效
             RICH4_LOGI("upgrade: estate %d level %d cost %d (RE 0x419911)", idx, es.level, cost);
+        } else {
+            // ---- 他人住宅用地收租（loc_419A67）----
+            // [RE 0x419A67] 收租音效 dword_4823EA = 槽 20 → sub_41D559 地主状态免收检查 →
+            //   sub_419744 联合租金（同路段 fees[level] 之和 / 连锁店数×2000）→
+            //   flag(+23) 非 0 翻倍 → sub_41D709 付款方神明调整 →
+            //   showMessage("%s\n\n此地屬%s\n\n請付%d元過路費") → sub_41D2C6 转账（flags=0
+            //   收款入银行）→ estate+44 = 本次租金
+            // 差异: 原版同盟分账（g_playerVehicle 双方按比例拆分）、死神代付（sub_40FBB8）、
+            //       免租/分期卡片（sub_4413AD/sub_444A60/sub_44476A）、同路段高亮
+            //       （rebuildPickBuffer + sub_456C0A）与浮动数字（sub_44F354）待 P4
+            app.audio().playEffectSlot(20);
+            static const char kFeeName[] = "過路費"; // [RE 0x47517C] off_47517C 初值
+            if (ownerCanCollectRent(app, es.owner - 1, es.flag, kFeeName)) {
+                int32_t rent = estateRouteRent(st, es.owner, es);
+                if (es.flag != 0) {
+                    rent *= 2;
+                }
+                rent = applyGodRentModifier(app, p, rent, kFeeName);
+                if (rent > 0) {
+                    const std::string label = big5ToUtf8(es.name, sizeof(es.name));
+                    const Player& owner = st.players[es.owner - 1];
+                    const char* ownerName = owner.name ? owner.name : "";
+                    char text[192];
+                    std::snprintf(text, sizeof(text), "%s\n\n此地屬%s\n\n請付%d元%s", label.c_str(),
+                                  ownerName, rent, kFeeName);
+                    showMessage(app, text, 1500);
+                    // [RE 0x41A003] 转账：付款人 → 地主（flags=0，收款入银行存款）
+                    transferMoney(app, p, es.owner - 1, rent, 0);
+                    es.price = rent; // [RE 0x41A00B] estate+44 = 本次租金
+                    RICH4_LOGI("rent: player %d -> %d amount %d (estate %d, RE 0x419A67)", p,
+                               es.owner - 1, rent, idx);
+                }
+            }
         }
-        // 他人地产：无操作（收租在状态机 case 3，RE 0x40DA4B）
     }
     // loc_41B077 → sub_40F381/sub_448A7E/refreshGameUi → loc_41B111：等待 kLandingWait 帧
     return kLandingWait;
@@ -686,16 +820,16 @@ void startPlayerMove(Application& app) {
 
 // [RE 0x41CF67] advanceDay
 // 依据: 0x41CF67 反编译; byte_46CB06 音乐淡出；sub_452117 日期推进；++g_dayCount；
-//       checkVictory(0) 未结束则每日处理（股票/月度事件/地产公司到期）
+//       checkVictory(0) 未结束则每日处理（股票/月度事件/住宅用地/商業用地到期）
 // 差异: 音乐淡出（sub_454ACB/sub_454D91）、checkVictory（M3）、
 //       stockTick/sub_423ACF/sub_428475/sub_452444/sub_42BA97/sub_431712/sub_439BFA 待接入；
-//       当前实现日期推进 + 地产/公司到期回收 + 小地图标记刷新
+//       当前实现日期推进 + 住宅用地/商業用地到期回收 + 小地图标记刷新
 void advanceDay(Application& app) {
     GameState& st = app.gameState();
     const int newMonth = advanceDate(st);
     ++st.dayCount;
 
-    // 地产/公司到期回收（原版 estates+23/+48、corps+28/+52 与 dword_497160 比较）
+    // 住宅用地/商業用地到期回收（原版 estates+23/+48、corps+28/+52 与 dword_497160 比较）
     bool refreshed = false;
     for (size_t i = 1; i < st.estates.size(); ++i) {
         Estate& es = st.estates[i];
@@ -834,10 +968,11 @@ void nextPlayer(Application& app) {
 
 // [RE 0x40D7C4] updateGameState
 // 依据: 0x40D7C4 反编译; byte_498EA2 状态机:
-//   0 = 收尾倒计时（byte_498EA5）→ sub_418E7F 重算 / 负数则 sub_418EBD
+//   0 = 收尾倒计时（byte_498EA5）→ sub_418E7F 重算（landingEvent 停留结算）/ 负数则 sub_418EBD
 //   1 = 移动中: sub_40C05C 走一格，byte_48BB00 → onPlayerActionPhase，dword_48BAF8 递减
 //   2 = 掷骰动画: 结束设 dword_48BAF8 = sub_419572() 并转状态 1
-//   3 = 移动结束收租: 30*g_moneyMul + 面向目标 + FLC 526（重写简化，见 case 3）
+//   3 = 移动结束特殊移动（sub_448A7E 触发）: addPlayerDebt(owner-1, cur, 30*moneyMul) 仅记账
+//       + 面向目标 + FLC 526；实际收租在 landingEvent 0x419A67
 // 差异: sub_416E6D 小地图刷新（迁移为每 tick 全量重绘）、移动音效、case 3 的 FLC 视觉
 void updateGameState(Application& app) {
     GameState& st = app.gameState();
@@ -974,12 +1109,13 @@ void updateGameState(Application& app) {
             break;
         }
         case 3: {
-            // [RE 0x40DA4B] 移动结束收租：objId 2000..4000 地产 / 4000..6000 公司，
-            //   金额 = 30 * g_moneyMul（原版 eax=2*m; eax<<=4; eax-=ecx → 30*m），
-            //   owner != 0 且非自己 → sub_40DF69(owner-1, cur, 30*m) 记账；
-            //   随后面向目标格（sub_454FB4）并播 data.mkf[526] FLC（x-55, y-55）逐帧动画
-            // 差异: 重写简化为立即转账（原版仅累加 dword_496BB4 欠款矩阵，结算时机待实机对照）
-            //       + stepDwell 停留；FLC 视觉待接入
+            // [RE 0x40DA4B] 移动结束特殊移动（由 sub_448A7E 触发：落在他人有建筑的住宅用地/商業用地）：
+            //   记账 30*g_moneyMul（sub_40DF69 欠款矩阵，重写未建模，仅日志）→
+            //   面向目标格（sub_454FB4）→ data.mkf[526] FLC 动画（x-55, y-55）→ stepDwell
+            // 注意: 原版此分支**不直接转账**（实际收租在 landingEvent 0x419A67，租金按
+            //   fees[level] 联合计算）；重写早期版本曾在此立即转账 30*moneyMul，已移除
+            //   （避免与停留结算重复扣款）
+            // 差异: FLC 526 视觉、sub_40B066 动画帧、同格音效待接入
             if (st.stepDwell) {
                 --st.stepDwell;
                 break;
@@ -988,30 +1124,28 @@ void updateGameState(Application& app) {
                 st.players[p].cellEntId < st.cellEnts.size()) {
                 const CellEnt& ce = st.cellEnts[st.players[p].cellEntId];
                 const uint16_t objId = ce.special;
-                const int32_t rent = 30 * st.moneyMul;
+                const int32_t due = 30 * st.moneyMul;
                 if (objId > 2000 && objId < 4000) {
                     const int i = objId - 2000;
                     if (i > 0 && i < static_cast<int>(st.estates.size())) {
-                        Estate& es = st.estates[i];
+                        const Estate& es = st.estates[i];
                         if (es.owner != 0 && es.owner - 1 != p) {
-                            transferMoney(app, p, es.owner - 1, rent, 1);
-                            RICH4_LOGI("rent: player %d -> %d amount %d (estate %d, RE 0x40DA4B)",
-                                       p, es.owner - 1, rent, i);
+                            RICH4_LOGI("landing due: player %d owes %d (estate %d, RE 0x40DA4B)",
+                                       p, due, i);
                         }
                         st.players[p].dir = static_cast<uint8_t>(
-                            facingFromDelta(es.x - ce.x, es.y - ce.y)); // [RE 0x40DA4B] 面向地产
+                            facingFromDelta(es.x - ce.x, es.y - ce.y)); // [RE 0x40DA4B] 面向住宅用地
                     }
                 } else if (objId > 4000 && objId < 6000) {
                     const int i = objId - 4000;
                     if (i > 0 && i < static_cast<int>(st.corps.size())) {
-                        Corp& cp = st.corps[i];
+                        const Corp& cp = st.corps[i];
                         if (cp.owner != 0 && cp.owner - 1 != p) {
-                            transferMoney(app, p, cp.owner - 1, rent, 1);
-                            RICH4_LOGI("rent: player %d -> %d amount %d (corp %d, RE 0x40DA4B)", p,
-                                       cp.owner - 1, rent, i);
+                            RICH4_LOGI("landing due: player %d owes %d (corp %d, RE 0x40DA4B)", p,
+                                       due, i);
                         }
                         st.players[p].dir = static_cast<uint8_t>(
-                            facingFromDelta(cp.x - ce.x, cp.y - ce.y)); // [RE 0x40DA4B] 面向公司
+                            facingFromDelta(cp.x - ce.x, cp.y - ce.y)); // [RE 0x40DA4B] 面向商業用地
                     }
                 }
             }

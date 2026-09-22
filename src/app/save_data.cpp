@@ -55,7 +55,7 @@ void serializePlayer(uint8_t out[kPlayerSize], const Player& p) {
     out[55] = p.state37;
     out[62] = p.cardCount;
     out[63] = p.cellTableIdx;
-    out[65] = p.vehicle;
+    out[65] = p.ally;
     out[100] = p.kind;
 }
 
