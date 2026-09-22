@@ -503,6 +503,13 @@ bool loadGameFromSlot(Application& app, int slot) {
     if (!loadMap(app)) {
         return false;
     }
+    // [PORT] 存档未保存股票表/持股/均价 → 用 kStockInit 重建 + 股票→specPt 映射
+    //   （loadMap 内的映射此时 stocks 全 0 无法反查；完整存档恢复待做）
+    std::memcpy(state.stocks, kStockInit[state.gameMode * 4 + state.mapIndex],
+                sizeof(state.stocks));
+    std::memset(state.playerShares, 0, sizeof(state.playerShares));
+    std::memset(state.playerAvgCost, 0, sizeof(state.playerAvgCost));
+    refreshStockSpecPtMap(app);
     enterGameLoop(app); // [RE 0x401981]
     return true;
 }

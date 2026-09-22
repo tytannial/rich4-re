@@ -68,6 +68,10 @@ void refreshStockSpecPtMap(Application& app) {
             }
         }
     }
+    RICH4_LOGI("stock map: s0->%d s1->%d s2->%d s3->%d (specPts=%zu, RE 0x428CAF)",
+               static_cast<int>(st.stocks[0][1]), static_cast<int>(st.stocks[1][1]),
+               static_cast<int>(st.stocks[2][1]), static_cast<int>(st.stocks[3][1]),
+               st.specPts.size());
 }
 
 // [RE 0x4291D6] stockTick
@@ -206,6 +210,11 @@ int buyStock(Application& app, int player, int stock, int count, bool viaBank) {
             const int32_t per = st.specPts[si].capital / 10000; // 股本 / 10000 = 每股价格
             amount = per * count;
             st.specPts[si].sharesLeft -= count;
+            RICH4_LOGI("buyStock: si=%d capital=%d per=%d sharesLeft=%d", si,
+                       st.specPts[si].capital, per, st.specPts[si].sharesLeft);
+        } else {
+            RICH4_LOGI("buyStock: si=%d invalid (stocks[%d][1]=%.1f, specPts=%zu)", si, stock,
+                       st.stocks[stock][1], st.specPts.size());
         }
         st.players[player].cash -= amount;
     }
