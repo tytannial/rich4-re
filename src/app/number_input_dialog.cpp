@@ -11,6 +11,7 @@
 #include "game/application.h"
 #include "game/core/log.h"
 #include "game/render/blit.h"
+#include "game/render/cursor.h"
 #include "game/render/surface.h"
 #include "game/render/ui_image.h"
 
@@ -39,8 +40,13 @@ constexpr uint8_t kSliderSteps[34] = {3,  6,  9,  12, 15, 19, 22, 25, 28,  31, 3
 constexpr float kSliderDivisor = 33.0f; // [RE 0x466218/0x46621C] 档位除数
 constexpr int kPanelW = 128;
 constexpr int kPanelH = 192;
-constexpr int kPanelX = 256; // 原版默认位置 word_48CAB8/CAB6（拖动简化：固定）
-constexpr int kPanelY = 144;
+constexpr int kPanelInitX = 256; // [RE 0x452C02] word_48CAB8/CAB6 初始位置
+constexpr int kPanelInitY = 144;
+constexpr int kSfxKeyPress = 7;  // [RE 0x48234A] g_effectSlots[0]（按键音效）
+constexpr int kSfxSlider = 9;    // [RE 0x482352] 滑块音效
+constexpr int kSfxCancel = 4;    // [RE 0x482332] g_uiSoundCancel
+constexpr int kCursorPanel = 27; // [RE 0x452C02] cursorSelect(27) 面板交互光标
+constexpr int kCursorArrow = 41; // 默认箭头
 
 struct NumberInputCtx {
     Application* app = nullptr;
@@ -49,6 +55,11 @@ struct NumberInputCtx {
     size_t indexMapSize = 0;
     int maxValue = 0;
     char text[16] = "0";
+    int panelX = kPanelInitX;
+    int panelY = kPanelInitY;
+    uint8_t pressedKey = 0; // 按下态按键 ID（0=无；绘制帧 keyId 作按下动画）
+    int dragOffX = 0;       // 面板拖动抓取偏移
+    int dragOffY = 0;
 };
 
 // [RE 0x456512] SPR 索引+调色板绘制（不透明，含索引 0；对齐原版 sub_456512）
@@ -78,12 +89,12 @@ void blitSprRegion(Surface& dst, const UiImage& spr, int frame, int dstX, int ds
     }
 }
 
-// [RE 0x45297E] 数字显示 + 滑块
+// [RE 0x45297E] 数字显示 + 滑块 + 按下态
 void drawNumber(NumberInputCtx& ctx) {
     Application& app = *ctx.app;
     Surface& dst = app.surface();
-    const int x = kPanelX;
-    const int y = kPanelY;
+    const int x = ctx.panelX;
+    const int y = ctx.panelY;
     // 数字（帧 16..25 = '0'..'9'，从右到左每字符 12px，最多 9 位）
     int px = x + 107;
     const int py = y + 11;
@@ -103,7 +114,7 @@ void drawNumber(NumberInputCtx& ctx) {
             break;
         }
     }
-    // 滑块轨道（帧 1，108x12）+ 已选比例：用帧 0 背景擦除轨道左段（原版 blitOpaqueToBackbuffer 等价）
+    // 滑块轨道（帧 1，108x12）+ 已选比例：用帧 0 背景擦除轨道左段
     if (ctx.panel.frameCount() > 1) {
         const UiFrameView& track = ctx.panel.frame(1);
         blitSprRegion(dst, ctx.panel, 1, x + 10, y + 42, 0, 0, track.width, track.height);
@@ -118,6 +129,14 @@ void drawNumber(NumberInputCtx& ctx) {
             blitSprRegion(dst, ctx.panel, 0, x + 10, y + 42, 10, 42, w, 12);
         }
     }
+    // [RE 0x452C02] 按下态：画帧 keyId @ 按键位置（kKeyRect + 面板偏移）
+    if (ctx.pressedKey >= 2 && ctx.pressedKey <= 16 &&
+        ctx.pressedKey < static_cast<uint8_t>(ctx.panel.frameCount())) {
+        const uint8_t* r = kKeyRect[ctx.pressedKey];
+        const UiFrameView& v = ctx.panel.frame(ctx.pressedKey);
+        blitSprRegion(dst, ctx.panel, ctx.pressedKey, x + r[0], y + r[1], 0, 0, v.width,
+                      v.height);
+    }
 }
 
 void drawAll(NumberInputCtx& ctx) {
@@ -126,9 +145,25 @@ void drawAll(NumberInputCtx& ctx) {
     renderGameFrame(app);
     if (ctx.panel.frameCount() > 0) {
         const UiFrameView& bg = ctx.panel.frame(0);
-        blitSprRegion(dst, ctx.panel, 0, kPanelX, kPanelY, 0, 0, bg.width, bg.height);
+        blitSprRegion(dst, ctx.panel, 0, ctx.panelX, ctx.panelY, 0, 0, bg.width, bg.height);
     }
     drawNumber(ctx);
+}
+
+// 面板坐标 → 输入值（滑块档位比例；rel 为轨道内相对 x）
+void sliderValueFromRel(NumberInputCtx& ctx, int rel) {
+    int step = 0;
+    if (rel > 0) {
+        while (step < 33 && rel > kSliderSteps[step]) {
+            ++step;
+        }
+    }
+    const int v = static_cast<int>(static_cast<float>(ctx.maxValue) *
+                                   (static_cast<float>(step) / kSliderDivisor));
+    std::snprintf(ctx.text, sizeof(ctx.text), "%d", v);
+    if (v > ctx.maxValue) {
+        std::snprintf(ctx.text, sizeof(ctx.text), "%d", ctx.maxValue);
+    }
 }
 
 bool numberInputHandler(const SDL_Event* event, void* user) {
@@ -162,6 +197,7 @@ bool numberInputHandler(const SDL_Event* event, void* user) {
                 }
             }
             clampText();
+            app.audio().playEffect(kSfxKeyPress);
         } else if (key == SDLK_BACKSPACE) {
             const size_t len = std::strlen(ctx.text);
             if (len > 1) {
@@ -169,12 +205,43 @@ bool numberInputHandler(const SDL_Event* event, void* user) {
             } else {
                 std::snprintf(ctx.text, sizeof(ctx.text), "0");
             }
+            app.audio().playEffect(kSfxKeyPress);
         } else if (key == SDLK_RETURN || key == SDLK_KP_ENTER) {
             clampText();
+            app.audio().playEffect(kSfxKeyPress);
             app.events().requestExit(std::atoi(ctx.text));
+            return true;
         } else if (key == SDLK_ESCAPE) {
+            app.audio().playEffect(kSfxCancel);
             app.events().requestExit(-1);
+            return true;
         }
+        drawAll(ctx);
+        return true;
+    }
+    if (event->type == SDL_EVENT_MOUSE_MOTION) {
+        if (ctx.pressedKey == 0) {
+            return true;
+        }
+        int mx = 0;
+        int my = 0;
+        app.mouseLogicalPos(mx, my);
+        if (ctx.pressedKey == 1) {
+            // [RE 0x452C02] 拖动面板（byte_48CAC2==1 时 WM_MOUSEMOVE 更新 word_48CAB8/CAB6）
+            ctx.panelX = mx - ctx.dragOffX;
+            ctx.panelY = my - ctx.dragOffY;
+            drawAll(ctx);
+        } else if (ctx.pressedKey == 16) {
+            // [RE 0x452C02] 拖动滑块（byte_48CAC2==16 时 WM_MOUSEMOVE 实时更新值）
+            const int rel = (mx - ctx.panelX) - 10;
+            sliderValueFromRel(ctx, rel);
+            app.audio().playEffect(kSfxSlider);
+            drawAll(ctx);
+        }
+        return true;
+    }
+    if (event->type == SDL_EVENT_MOUSE_BUTTON_UP && event->button.button == SDL_BUTTON_LEFT) {
+        ctx.pressedKey = 0; // 松开：清除按下态
         drawAll(ctx);
         return true;
     }
@@ -182,23 +249,31 @@ bool numberInputHandler(const SDL_Event* event, void* user) {
         int mx = 0;
         int my = 0;
         app.mouseLogicalPos(mx, my);
-        const int rx = mx - kPanelX;
-        const int ry = my - kPanelY;
+        const int rx = mx - ctx.panelX;
+        const int ry = my - ctx.panelY;
         if (rx < 0 || rx >= kPanelW || ry < 0 || ry >= kPanelH || ctx.indexMap == nullptr ||
             ctx.indexMapSize < static_cast<size_t>(kPanelW * kPanelH)) {
-            RICH4_LOGI("number input click outside: mx=%d my=%d (rx=%d ry=%d)", mx, my, rx, ry);
             return true;
         }
         const uint8_t key = ctx.indexMap[ry * kPanelW + rx];
-        RICH4_LOGI("number input click: rx=%d ry=%d key=%u", rx, ry, key);
+        ctx.pressedKey = key; // 按下态动画
+        // 音效：按键（2..15）/ 滑块（16）
+        if (key == 16) {
+            app.audio().playEffect(kSfxSlider);
+        } else if (key >= 2 && key <= 15) {
+            app.audio().playEffect(kSfxKeyPress);
+        }
         switch (key) {
-            case 1:
-                break; // 拖动区（简化：固定位置）
+            case 1: // 拖动区：记录抓取偏移
+                ctx.dragOffX = mx - ctx.panelX;
+                ctx.dragOffY = my - ctx.panelY;
+                break;
             case 2: // 最大
                 std::snprintf(ctx.text, sizeof(ctx.text), "%d", ctx.maxValue);
                 break;
             case 3: // 确定
                 clampText();
+                drawAll(ctx);
                 app.events().requestExit(std::atoi(ctx.text));
                 return true;
             case 4: // 清除
@@ -237,16 +312,8 @@ bool numberInputHandler(const SDL_Event* event, void* user) {
                 }
                 break;
             }
-            case 16: { // 滑块：位置 → 档位 → 值 = 上限 × 档位/33
-                const int rel = rx - 10;
-                int step = 0;
-                while (step < 33 && rel > kSliderSteps[step]) {
-                    ++step;
-                }
-                const int v = static_cast<int>(static_cast<float>(ctx.maxValue) *
-                                               (static_cast<float>(step) / kSliderDivisor));
-                std::snprintf(ctx.text, sizeof(ctx.text), "%d", v);
-                clampText();
+            case 16: { // 滑块：点击位置 → 值（拖动在 MOUSE_MOTION 处理）
+                sliderValueFromRel(ctx, rx - 10);
                 break;
             }
             default:
@@ -262,10 +329,12 @@ bool numberInputHandler(const SDL_Event* event, void* user) {
 
 // [RE 0x453544] numberInputDialog
 // 依据: 0x453544 反编译（panel[21] 背景/滑块/按键 + panel[22] 索引图 + runModal(sub_452C02)）;
-//   上限 clamp（超限 → 上限，LABEL_71）、"最大"= 上限、"清除"归 0、退格、滑块按档位比例
-// 迁移: panel[21] 为 SPR（8bit 索引 + RGB555 调色板），按原版 sub_456512（索引查表、不透明、
-//   含索引 0）实现 blitSprRegion；数字帧 = 字符-32（'0'..'9' → 16..25）
-// 差异: 拖动面板（word_48CAB8/CAB6 + 背景保存恢复）简化为固定位置 (256,144)
+//   上限 clamp（超限 → 上限）、"最大"= 上限、"清除"归 0、退格、滑块按档位比例；
+//   0x452C02: 按键/滑块音效（g_effectSlots[0]/dword_482352）、按下态画帧 keyId、
+//   byte_48CAC2==1 拖动面板（word_48CAB8/CAB6）、byte_48CAC2==16 拖动滑块实时更新、
+//   进入 cursorSelect(27)/退出 cursorSelect(41)
+// 迁移: panel[21] 为 SPR（8bit 索引 + RGB555 调色板），按原版 sub_456512 实现 blitSprRegion
+// 差异: 背景保存恢复（saveBackground/allocUiElement）改为逐帧全量重绘（等价）
 int numberInputDialog(Application& app, int maxValue) {
     GameState& st = app.gameState();
     NumberInputCtx ctx;
@@ -286,7 +355,9 @@ int numberInputDialog(Application& app, int maxValue) {
     }
     std::snprintf(ctx.text, sizeof(ctx.text), "0");
     RICH4_LOGI("number input dialog: max=%d (RE 0x453544)", ctx.maxValue);
+    app.cursor().select(kCursorPanel, 1, 0); // [RE 0x452C02] 面板交互光标
     const int result = runModal(app, numberInputHandler, &ctx);
+    app.cursor().select(kCursorArrow, 1, 0); // 恢复默认箭头
     RICH4_LOGI("number input result: %d", result);
     return result;
 }
