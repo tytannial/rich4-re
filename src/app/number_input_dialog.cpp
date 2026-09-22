@@ -51,12 +51,40 @@ struct NumberInputCtx {
     char text[16] = "0";
 };
 
+// [RE 0x456512] SPR 索引+调色板绘制（不透明，含索引 0；对齐原版 sub_456512）
+void blitSprRegion(Surface& dst, const UiImage& spr, int frame, int dstX, int dstY, int srcX,
+                   int srcY, int w, int h) {
+    const uint8_t* bytes = spr.frameBytes(frame);
+    const uint16_t* pal = spr.palette();
+    if (bytes == nullptr || pal == nullptr || frame < 0 || frame >= spr.frameCount()) {
+        return;
+    }
+    const UiFrameView& view = spr.frame(frame);
+    for (int row = 0; row < h; ++row) {
+        const int sy = srcY + row;
+        const int dy = dstY + row;
+        if (sy < 0 || sy >= view.height || dy < 0 || dy >= dst.height()) {
+            continue;
+        }
+        for (int col = 0; col < w; ++col) {
+            const int sx = srcX + col;
+            const int dx = dstX + col;
+            if (sx < 0 || sx >= view.width || dx < 0 || dx >= dst.width()) {
+                continue;
+            }
+            dst.pixels()[static_cast<size_t>(dy) * dst.width() + dx] =
+                pal[bytes[static_cast<size_t>(sy) * view.width + sx]];
+        }
+    }
+}
+
 // [RE 0x45297E] 数字显示 + 滑块
 void drawNumber(NumberInputCtx& ctx) {
     Application& app = *ctx.app;
     Surface& dst = app.surface();
     const int x = kPanelX;
     const int y = kPanelY;
+    // 数字（帧 16..25 = '0'..'9'，从右到左每字符 12px，最多 9 位）
     int px = x + 107;
     const int py = y + 11;
     const int len = static_cast<int>(std::strlen(ctx.text));
@@ -66,7 +94,8 @@ void drawNumber(NumberInputCtx& ctx) {
         if (ch >= 32) {
             const int frame = ch - 32;
             if (frame >= 0 && frame < ctx.panel.frameCount()) {
-                blitElementOpaque(dst, ctx.panel.frame(static_cast<size_t>(frame)), px, py);
+                const UiFrameView& v = ctx.panel.frame(static_cast<size_t>(frame));
+                blitSprRegion(dst, ctx.panel, frame, px, py, 0, 0, v.width, v.height);
             }
         }
         px -= 12;
@@ -74,25 +103,19 @@ void drawNumber(NumberInputCtx& ctx) {
             break;
         }
     }
-    // 滑块按钮（帧 1）+ 位置条
+    // 滑块轨道（帧 1，108x12）+ 已选比例：用帧 0 背景擦除轨道左段（原版 blitOpaqueToBackbuffer 等价）
     if (ctx.panel.frameCount() > 1) {
-        blitElementOpaque(dst, ctx.panel.frame(1), x + 10, y + 42);
+        const UiFrameView& track = ctx.panel.frame(1);
+        blitSprRegion(dst, ctx.panel, 1, x + 10, y + 42, 0, 0, track.width, track.height);
     }
     const int value = std::atoi(ctx.text);
     if (value > 0 && ctx.maxValue > 0) {
         int step = static_cast<int>(static_cast<float>(value) /
                                     static_cast<float>(ctx.maxValue) * kSliderDivisor);
-        if (step < 0) {
-            step = 0;
-        }
-        if (step > 33) {
-            step = 33;
-        }
-        // [RE 0x45297E] 原版：blitOpaqueToBackbuffer 从离屏背景恢复 (x+10,y+42) 处 w×12
-        //   （效果 = 擦除轨道左段表示已选比例）；重写用帧 0 背景对应区域等价覆盖
+        step = step < 0 ? 0 : (step > 33 ? 33 : step);
         const int w = kSliderSteps[step];
         if (w > 0) {
-            blitElementRegionOpaque(dst, ctx.panel.frame(0), x + 10, y + 42, 10, 42, w, 12, false);
+            blitSprRegion(dst, ctx.panel, 0, x + 10, y + 42, 10, 42, w, 12);
         }
     }
 }
@@ -102,7 +125,8 @@ void drawAll(NumberInputCtx& ctx) {
     Surface& dst = app.surface();
     renderGameFrame(app);
     if (ctx.panel.frameCount() > 0) {
-        blitElementOpaque(dst, ctx.panel.frame(0), kPanelX, kPanelY);
+        const UiFrameView& bg = ctx.panel.frame(0);
+        blitSprRegion(dst, ctx.panel, 0, kPanelX, kPanelY, 0, 0, bg.width, bg.height);
     }
     drawNumber(ctx);
 }
@@ -112,7 +136,7 @@ bool numberInputHandler(const SDL_Event* event, void* user) {
     Application& app = *ctx.app;
     auto clampText = [&]() {
         if (ctx.text[0] == '\0') {
-            std::strcpy(ctx.text, "0");
+            std::snprintf(ctx.text, sizeof(ctx.text), "0");
         }
         const long v = std::strtol(ctx.text, nullptr, 10);
         if (v > ctx.maxValue) {
@@ -143,7 +167,7 @@ bool numberInputHandler(const SDL_Event* event, void* user) {
             if (len > 1) {
                 ctx.text[len - 1] = '\0';
             } else {
-                std::strcpy(ctx.text, "0");
+                std::snprintf(ctx.text, sizeof(ctx.text), "0");
             }
         } else if (key == SDLK_RETURN || key == SDLK_KP_ENTER) {
             clampText();
@@ -162,6 +186,7 @@ bool numberInputHandler(const SDL_Event* event, void* user) {
         const int ry = my - kPanelY;
         if (rx < 0 || rx >= kPanelW || ry < 0 || ry >= kPanelH || ctx.indexMap == nullptr ||
             ctx.indexMapSize < static_cast<size_t>(kPanelW * kPanelH)) {
+            RICH4_LOGI("number input click outside: mx=%d my=%d (rx=%d ry=%d)", mx, my, rx, ry);
             return true;
         }
         const uint8_t key = ctx.indexMap[ry * kPanelW + rx];
@@ -177,7 +202,7 @@ bool numberInputHandler(const SDL_Event* event, void* user) {
                 app.events().requestExit(std::atoi(ctx.text));
                 return true;
             case 4: // 清除
-                std::strcpy(ctx.text, "0");
+                std::snprintf(ctx.text, sizeof(ctx.text), "0");
                 break;
             case 5: // 数字 0
             case 7:
@@ -208,7 +233,7 @@ bool numberInputHandler(const SDL_Event* event, void* user) {
                 if (len > 1) {
                     ctx.text[len - 1] = '\0';
                 } else {
-                    std::strcpy(ctx.text, "0");
+                    std::snprintf(ctx.text, sizeof(ctx.text), "0");
                 }
                 break;
             }
@@ -238,8 +263,9 @@ bool numberInputHandler(const SDL_Event* event, void* user) {
 // [RE 0x453544] numberInputDialog
 // 依据: 0x453544 反编译（panel[21] 背景/滑块/按键 + panel[22] 索引图 + runModal(sub_452C02)）;
 //   上限 clamp（超限 → 上限，LABEL_71）、"最大"= 上限、"清除"归 0、退格、滑块按档位比例
-// 差异: 拖动面板（word_48CAB8/CAB6 更新 + 背景保存恢复）简化为固定位置 (256,144)；
-//       滑块高亮条用纯色占位（原版 blitOpaqueToBackbuffer 恢复背景 + 档位条）
+// 迁移: panel[21] 为 SPR（8bit 索引 + RGB555 调色板），按原版 sub_456512（索引查表、不透明、
+//   含索引 0）实现 blitSprRegion；数字帧 = 字符-32（'0'..'9' → 16..25）
+// 差异: 拖动面板（word_48CAB8/CAB6 + 背景保存恢复）简化为固定位置 (256,144)
 int numberInputDialog(Application& app, int maxValue) {
     GameState& st = app.gameState();
     NumberInputCtx ctx;
