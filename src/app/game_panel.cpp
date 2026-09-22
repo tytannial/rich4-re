@@ -409,7 +409,7 @@ void drawCalendar(Application& app) {
         } else {
             app.text().setFont(16, kTextDark, 0xFFFFFF, 6, 1);
         }
-        app.text().drawText(dst, kMonthName[curWd], 454, 352, 3);
+        app.text().drawText(dst, kWeekdayNames[curWd], 454, 352, 3);
         if (v6) {
             app.text().setFont(60, kTextRed, kTextDark, 6, 1);
         } else {

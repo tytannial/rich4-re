@@ -74,6 +74,8 @@ void renderGameFrame(Application& app) {
     if (state.parachuteActive && state.parachute.valid()) {
         drawParachuteFrame(app);
     }
+    // [RE 0x451985] 收租联动高亮（整条街/连锁店闪烁；地图图元之上、提示框之下）
+    drawEstateHighlight(app);
     // [RE 0x417559] 右键物件提示框（地图区之上、面板之下）
     drawObjectTip(app);
     renderGamePanel(app);
@@ -427,10 +429,10 @@ bool gameEventHandler(const SDL_Event* event, void* user) {
     // [RE 0x401010] 全局键盘钩子 fn 的游戏内功能键（word_49717C 前進指令 / 49717E 選擇骰子數）
     if (event->type == SDL_EVENT_KEY_DOWN) {
         GameState& st = app.gameState();
-        // [NEW] 调试热键（--debug 启用）：Ctrl+1..8（测试辅助，无原版对应；
+        // [NEW] 调试热键（--debug 启用）：Ctrl+1..9（测试辅助，无原版对应；
         //   不受 gamePlayerControl 限制，AI 回合/移动中亦可改地块）
         if (st.debugMode && (SDL_GetModState() & SDL_KMOD_CTRL) && event->key.key >= SDLK_1 &&
-            event->key.key <= SDLK_8) {
+            event->key.key <= SDLK_9) {
             if (handleDebugKey(app, static_cast<int>(event->key.key - SDLK_1) + 1)) {
                 renderGameFrame(app);
                 return true;

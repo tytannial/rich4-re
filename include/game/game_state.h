@@ -327,6 +327,15 @@ struct GameState {
     int objectTipX = 0;
     int objectTipY = 0;
 
+    // [RE 0x451985] 收租联动高亮（整条街/连锁店闪烁）
+    // 依据: 0x419A67 收租时标记同 owner 同名住宅（或全部连锁店）→ v141>1 时
+    //       sub_451985 播放 16 帧亮度闪烁（byte_476380，30ms/帧）+ 400ms 停留；
+    //       sub_4554FC 按 g_pickBuffer 0xFFFF 标记重绘高亮像素
+    // 迁移: 重写无 pickBuffer，改用 mapHitRegions 的 estate 绘制区域做 RGB555 亮度偏移
+    std::vector<int> highlightEstates; // 联动组 estate idx（含自身）
+    int highlightFrame = -1;           // -1=未激活；0..15=闪烁帧；16=400ms 停留期
+    uint64_t highlightLastMs = 0;      // 当前帧起始时间
+
     // ===== 经济/回合全局 =====
     int32_t startMoneyVal = 0; // [RE 0x49908C] g_startMoneyVal
     int32_t gameDaysLimit = 0; // [RE 0x49911C] g_gameDaysLimit

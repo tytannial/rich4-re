@@ -1,5 +1,6 @@
 #include "game/app/debug_keys.h"
 
+#include <cstring>
 #include <string>
 
 #include "game/app/map_render.h"
@@ -92,9 +93,33 @@ bool handleDebugKey(Application& app, int digit) {
             }
             return true;
         }
-        case 4: // 连锁店（待 F3 探明后接入）
-            RICH4_LOGW("debug: Ctrl+4 chain store not implemented (pending RE)");
+        case 4: { // 住宅 ↔ 连锁店 切换（改建卡效果 0x44309B）
+            // 原版: level(+26) != 0 才可改建；type ^= 1（0=住宅/1=连锁店）；
+            //       变连锁店且 level > 1 → level = 1（连锁店不可加盖）
+            const uint16_t id = pointedObject(app);
+            if (id >= 2000 && id < 4000) {
+                const int i = id - 2000;
+                if (i > 0 && i < static_cast<int>(st.estates.size())) {
+                    Estate& es = st.estates[i];
+                    if (es.level == 0) {
+                        RICH4_LOGW("debug: Ctrl+4 estate[%d] level==0 (need building, RE 0x44309B)",
+                                   i);
+                        return true;
+                    }
+                    const bool wasChain = (es.type == 1);
+                    es.type ^= 1;
+                    if (!wasChain && es.level > 1) {
+                        es.level = 1;
+                    }
+                    buildMiniMapMarks(app);
+                    RICH4_LOGI("debug: estate[%d] %s type=%u level=%u (RE 0x44309B)", i,
+                               wasChain ? "chain->house" : "house->chain", es.type, es.level);
+                }
+            } else {
+                RICH4_LOGW("debug: Ctrl+4 no estate under cursor (id=%u)", id);
+            }
             return true;
+        }
         case 5: { // 全图住宅用地归当前玩家
             for (size_t i = 1; i < st.estates.size(); ++i) {
                 st.estates[i].owner = static_cast<uint8_t>(cur + 1);
@@ -169,6 +194,43 @@ bool handleDebugKey(Application& app, int digit) {
                 RICH4_LOGI("debug: cellEnt[%u]", id);
             } else {
                 RICH4_LOGW("debug: Ctrl+8 no object under cursor (id=%u)", id);
+            }
+            return true;
+        }
+        case 9: { // 指向地块的联动组归当前玩家（住宅=同街同名；连锁店=全部连锁店）
+            // 联动组定义对齐原版收租（0x419A67 高亮循环）：
+            //   住宅用地 = 同 owner + 同名 + type==0；连锁店 = 同 owner + type!=0（跨街道）
+            const uint16_t id = pointedObject(app);
+            if (id >= 2000 && id < 4000) {
+                const int i = id - 2000;
+                if (i > 0 && i < static_cast<int>(st.estates.size())) {
+                    char street[19] = {};
+                    std::memcpy(street, st.estates[i].name, sizeof(street));
+                    int n = 0;
+                    if (st.estates[i].type == 0) {
+                        for (size_t j = 1; j < st.estates.size(); ++j) {
+                            Estate& e = st.estates[j];
+                            if (e.type == 0 &&
+                                std::strncmp(e.name, street, sizeof(street)) == 0) {
+                                e.owner = static_cast<uint8_t>(cur + 1);
+                                ++n;
+                            }
+                        }
+                        RICH4_LOGI("debug: Ctrl+9 street %s -> %d estates owner=%d", street, n,
+                                   cur + 1);
+                    } else {
+                        for (size_t j = 1; j < st.estates.size(); ++j) {
+                            if (st.estates[j].type != 0) {
+                                st.estates[j].owner = static_cast<uint8_t>(cur + 1);
+                                ++n;
+                            }
+                        }
+                        RICH4_LOGI("debug: Ctrl+9 all %d chain stores owner=%d", n, cur + 1);
+                    }
+                    buildMiniMapMarks(app);
+                }
+            } else {
+                RICH4_LOGW("debug: Ctrl+9 no estate under cursor (id=%u)", id);
             }
             return true;
         }

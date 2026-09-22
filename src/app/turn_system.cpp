@@ -282,6 +282,7 @@ int facingBetween(GameState& st, int fromId, int toId) {
 //       连锁店每处 +2000；返回 g_moneyMul × 总和
 int32_t estateRouteRent(const GameState& st, uint8_t owner, const Estate& es) {
     int32_t sum = 0;
+    int count = 0;
     for (size_t i = 1; i < st.estates.size(); ++i) {
         const Estate& e = st.estates[i];
         if (es.type == 0) {
@@ -289,12 +290,52 @@ int32_t estateRouteRent(const GameState& st, uint8_t owner, const Estate& es) {
                 std::strncmp(e.name, es.name, sizeof(e.name)) == 0) {
                 const int lv = e.level < 6 ? e.level : 0;
                 sum += e.fees[lv];
+                ++count;
+                RICH4_LOGD("  routeRent match estate[%zu] owner=%u level=%u fee=%u", i, e.owner,
+                           e.level, e.fees[lv]);
             }
         } else if (e.type != 0 && e.owner == owner) {
             sum += 2000;
+            ++count;
+            RICH4_LOGD("  routeRent match chain estate[%zu] owner=%u", i, e.owner);
         }
     }
+    const std::string curName = big5ToUtf8(es.name, sizeof(es.name));
+    RICH4_LOGI("routeRent: owner=%u cur=(%s type=%u) matched=%d sum=%d total=%d (M=%d)",
+               owner, curName.c_str(), es.type, count, sum, sum * st.moneyMul, st.moneyMul);
     return sum * st.moneyMul;
+}
+
+// [RE 0x419A67] startRouteHighlight：收租联动高亮收集与启动
+// 依据: 0x419A67 高亮循环（rebuildPickBuffer(1) + sub_456C0A 标记同组地块 →
+//       v141 > 1 时 sub_451985 播放 16 帧闪烁）；组定义：
+//       住宅用地 = 同 owner + 同名 + type==0；连锁店 = 同 owner + type!=0（跨街道）
+// 差异: 原版高亮含同盟地块（v140）→ P4；重写非阻塞（渲染期推进，与 showMessage 并行）
+void startRouteHighlight(GameState& st, const Estate& es) {
+    st.highlightEstates.clear();
+    if (es.type == 0) {
+        for (size_t j = 1; j < st.estates.size(); ++j) {
+            const Estate& e = st.estates[j];
+            if (e.type == 0 && e.owner == es.owner &&
+                std::strncmp(e.name, es.name, sizeof(e.name)) == 0) {
+                st.highlightEstates.push_back(static_cast<int>(j));
+            }
+        }
+    } else {
+        for (size_t j = 1; j < st.estates.size(); ++j) {
+            if (st.estates[j].type != 0 && st.estates[j].owner == es.owner) {
+                st.highlightEstates.push_back(static_cast<int>(j));
+            }
+        }
+    }
+    if (st.highlightEstates.size() > 1) {
+        st.highlightFrame = 0;
+        st.highlightLastMs = SDL_GetTicks();
+        RICH4_LOGI("route highlight: %zu estates blink (RE 0x451985)",
+                   st.highlightEstates.size());
+    } else {
+        st.highlightFrame = -1;
+    }
 }
 
 // [RE 0x41D559] ownerCanCollectRent：地主状态免收租检查（false = 免收，已显示提示）
@@ -527,6 +568,8 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                 if (es.flag != 0) {
                     rent *= 2;
                 }
+                // [RE 0x419A67] 联动高亮（整条街/连锁店闪烁；原版在消息前阻塞播放）
+                startRouteHighlight(st, es);
                 rent = applyGodRentModifier(app, p, rent, kFeeName);
                 if (rent > 0) {
                     const std::string label = big5ToUtf8(es.name, sizeof(es.name));
