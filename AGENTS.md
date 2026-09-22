@@ -127,6 +127,7 @@ python tools/re_map.py
 - `docs/reverse/functions/gameplay-map-mechanics.md` — 地块机制总览与验收检查表
 - `docs/reverse/functions/pricing-formulas.md` — **收费/价格公式总汇**（物价指数、轮盘、住宅用地/商業用地/行業設施點、到期清算、MAPDAT 数值）
 - `docs/reverse/functions/41982d-p2-events.md` — P2 事件格（case 2..16）专项研究
+- `docs/reverse/functions/stock-system.md` — **股市系统**（行情 stockTick/控股/认购/行情界面/交易市场/数字输入框）
 
 ## 工作经验（踩坑与约定）
 
