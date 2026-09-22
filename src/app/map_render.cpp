@@ -657,79 +657,68 @@ int randomCellEnt(const GameState& state, int nearCellEnt) {
     return cand[std::rand() % n];
 }
 
-// [RE 0x451985] drawEstateHighlight：收租联动高亮（整条街/连锁店闪烁）
+// [RE 0x451985] drawEstateHighlight：收租联动高亮（整条街/连锁店闪烁，纯渲染）
 // 依据: 0x451985 每帧取 byte_476380[i] 亮度偏移（16 帧，30ms/帧）→ sub_4554FC 按
 //       g_pickBuffer 的 0xFFFF 标记重绘高亮像素；循环后 sub_4528B9(400) 停留；
 //       byte_476380 = {4,8,12,16,12,8,4,0,252,248,244,240,244,248,252,0}（252..240 = -4..-16）
 // 迁移: 重写无 pickBuffer，用 mapHitRegions 中 estate（2000+idx）的绘制区域/像素掩码，
-//       对 RGB555 逐通道偏移（8bit 亮度量 → 5bit: >>2）
+//       对 RGB555 逐通道偏移（8bit 亮度量 → 5bit: >>2）；
+//       帧推进/停留由阻塞播放 playHighlightBlink（turn_system.cpp）负责，本函数仅按
+//       highlightFrame 渲染（0..15 有效；16=停留期无偏移）
 void drawEstateHighlight(Application& app) {
     GameState& state = app.gameState();
-    if (state.highlightFrame < 0 || state.highlightEstates.empty()) {
+    if (state.highlightFrame < 0 || state.highlightFrame > 15 || state.highlightEstates.empty()) {
         return;
     }
     // [RE 0x476380] 高亮亮度偏移序列（16 帧；i8）
     static const int8_t kHighlightLut[16] = {4,  8,  12, 16, 12, 8,  4,  0,
                                              -4, -8, -12, -16, -12, -8, -4, 0};
-    const uint64_t now = SDL_GetTicks();
-    const int frame = state.highlightFrame;
-    if (frame <= 15) {
-        const int off5 = kHighlightLut[frame] >> 2; // 4..16 → 1..4（5bit 通道量）
-        if (off5 != 0) {
-            uint16_t* px = app.surface().pixels();
-            auto adjust = [px, off5](int x, int y) {
-                if (x < 0 || y < 0 || x >= Surface::kWidth || y >= Surface::kHeight) {
-                    return;
-                }
-                const size_t o = static_cast<size_t>(y) * Surface::kWidth + x;
-                const uint16_t c = px[o];
-                const int r = std::clamp(((c >> 10) & 0x1F) + off5, 0, 31);
-                const int g = std::clamp(((c >> 5) & 0x1F) + off5, 0, 31);
-                const int b = std::clamp((c & 0x1F) + off5, 0, 31);
-                px[o] = static_cast<uint16_t>((r << 10) | (g << 5) | b);
-            };
-            for (const auto& it : state.mapHitRegions) {
-                if (it.id < 2000 || it.id >= 4000) {
-                    continue;
-                }
-                const int idx = static_cast<int>(it.id) - 2000;
-                if (std::find(state.highlightEstates.begin(), state.highlightEstates.end(),
-                              idx) == state.highlightEstates.end()) {
-                    continue;
-                }
-                if (it.shape) {
-                    const UiFrameView& sf = it.shape->frame(it.shapeFrame);
-                    const uint8_t* mask = it.shape->frameBytes(it.shapeFrame);
-                    if (!mask) {
-                        continue;
-                    }
-                    const int ox = it.anchorX - sf.offsetX;
-                    const int oy = it.anchorY - sf.offsetY;
-                    for (int ly = 0; ly < sf.height; ++ly) {
-                        for (int lx = 0; lx < sf.width; ++lx) {
-                            if (mask[static_cast<size_t>(ly) * sf.width + lx] != 0) {
-                                adjust(ox + lx, oy + ly);
-                            }
-                        }
-                    }
-                } else {
-                    for (int ly = 0; ly < it.h; ++ly) {
-                        for (int lx = 0; lx < it.w; ++lx) {
-                            adjust(it.x + lx, it.y + ly);
-                        }
+    const int off5 = kHighlightLut[state.highlightFrame] >> 2; // 4..16 → 1..4（5bit 通道量）
+    if (off5 == 0) {
+        return;
+    }
+    uint16_t* px = app.surface().pixels();
+    auto adjust = [px, off5](int x, int y) {
+        if (x < 0 || y < 0 || x >= Surface::kWidth || y >= Surface::kHeight) {
+            return;
+        }
+        const size_t o = static_cast<size_t>(y) * Surface::kWidth + x;
+        const uint16_t c = px[o];
+        const int r = std::clamp(((c >> 10) & 0x1F) + off5, 0, 31);
+        const int g = std::clamp(((c >> 5) & 0x1F) + off5, 0, 31);
+        const int b = std::clamp((c & 0x1F) + off5, 0, 31);
+        px[o] = static_cast<uint16_t>((r << 10) | (g << 5) | b);
+    };
+    for (const auto& it : state.mapHitRegions) {
+        if (it.id < 2000 || it.id >= 4000) {
+            continue;
+        }
+        const int idx = static_cast<int>(it.id) - 2000;
+        if (std::find(state.highlightEstates.begin(), state.highlightEstates.end(), idx) ==
+            state.highlightEstates.end()) {
+            continue;
+        }
+        if (it.shape) {
+            const UiFrameView& sf = it.shape->frame(it.shapeFrame);
+            const uint8_t* mask = it.shape->frameBytes(it.shapeFrame);
+            if (!mask) {
+                continue;
+            }
+            const int ox = it.anchorX - sf.offsetX;
+            const int oy = it.anchorY - sf.offsetY;
+            for (int ly = 0; ly < sf.height; ++ly) {
+                for (int lx = 0; lx < sf.width; ++lx) {
+                    if (mask[static_cast<size_t>(ly) * sf.width + lx] != 0) {
+                        adjust(ox + lx, oy + ly);
                     }
                 }
             }
-        }
-        if (now - state.highlightLastMs >= 30) {
-            state.highlightLastMs = now;
-            ++state.highlightFrame;
-        }
-    } else {
-        // 停留期（原版 sub_4528B9(400)：最后一帧 byte_476380[15]=0 无偏移）
-        if (now - state.highlightLastMs >= 400) {
-            state.highlightFrame = -1;
-            state.highlightEstates.clear();
+        } else {
+            for (int ly = 0; ly < it.h; ++ly) {
+                for (int lx = 0; lx < it.w; ++lx) {
+                    adjust(it.x + lx, it.y + ly);
+                }
+            }
         }
     }
 }

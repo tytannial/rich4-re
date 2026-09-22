@@ -7,9 +7,12 @@
 #include <cstring>
 #include <string>
 
+#include <SDL3/SDL.h>
+
 #include "game/application.h"
 #include "game/app/confirm_dialog.h"
 #include "game/app/economy.h"
+#include "game/app/game_loop.h"
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
 #include "game/app/message_dialog.h"
@@ -310,7 +313,7 @@ int32_t estateRouteRent(const GameState& st, uint8_t owner, const Estate& es) {
 // 依据: 0x419A67 高亮循环（rebuildPickBuffer(1) + sub_456C0A 标记同组地块 →
 //       v141 > 1 时 sub_451985 播放 16 帧闪烁）；组定义：
 //       住宅用地 = 同 owner + 同名 + type==0；连锁店 = 同 owner + type!=0（跨街道）
-// 差异: 原版高亮含同盟地块（v140）→ P4；重写非阻塞（渲染期推进，与 showMessage 并行）
+// 差异: 原版高亮含同盟地块（v140）→ P4
 void startRouteHighlight(GameState& st, const Estate& es) {
     st.highlightEstates.clear();
     if (es.type == 0) {
@@ -328,14 +331,35 @@ void startRouteHighlight(GameState& st, const Estate& es) {
             }
         }
     }
-    if (st.highlightEstates.size() > 1) {
-        st.highlightFrame = 0;
-        st.highlightLastMs = SDL_GetTicks();
-        RICH4_LOGI("route highlight: %zu estates blink (RE 0x451985)",
-                   st.highlightEstates.size());
-    } else {
-        st.highlightFrame = -1;
+    st.highlightFrame = (st.highlightEstates.size() > 1) ? 0 : -1;
+}
+
+// [RE 0x451985] playHighlightBlink：阻塞播放联动闪烁（先闪烁、后弹收费提示）
+// 依据: 0x451985 逐帧 byte_476380[i] 重绘（sub_4554FC），每帧 sub_4528B9(30)，
+//       循环后 sub_4528B9(400) 停留；原版在 showMessage(收费) 之前完成
+// 迁移: 逐帧 renderGameFrame（画 surface）+ renderFrame（present/音频）+ SDL_Delay(30)，
+//       期间 pumpEvents 保持窗口响应（收租时 gamePlayerControl=0，事件被吞/仅物件提示）
+void playHighlightBlink(Application& app) {
+    GameState& st = app.gameState();
+    if (st.highlightFrame < 0) {
+        return; // 联动组 ≤ 1（原版 v141 > 1 才播放）
     }
+    RICH4_LOGI("route highlight: %zu estates blink (RE 0x451985)", st.highlightEstates.size());
+    for (int f = 0; f < 16; ++f) {
+        st.highlightFrame = f;
+        renderGameFrame(app);
+        app.renderFrame();
+        app.pumpEvents();
+        SDL_Delay(30);
+    }
+    // 停留期（原版 sub_4528B9(400)：最后一帧 byte_476380[15]=0 无偏移）
+    st.highlightFrame = 16;
+    renderGameFrame(app);
+    app.renderFrame();
+    app.pumpEvents();
+    SDL_Delay(400);
+    st.highlightFrame = -1;
+    st.highlightEstates.clear();
 }
 
 // [RE 0x41D559] ownerCanCollectRent：地主状态免收租检查（false = 免收，已显示提示）
@@ -568,9 +592,10 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                 if (es.flag != 0) {
                     rent *= 2;
                 }
-                // [RE 0x419A67] 联动高亮（整条街/连锁店闪烁；原版在消息前阻塞播放）
+                // [RE 0x419A67] 先播放联动闪烁（阻塞，原版 sub_451985 在收费提示之前完成）
                 startRouteHighlight(st, es);
-                rent = applyGodRentModifier(app, p, rent, kFeeName);
+                playHighlightBlink(app);
+                // 收费提示（原版显示神明调整前的金额 v8）
                 if (rent > 0) {
                     const std::string label = big5ToUtf8(es.name, sizeof(es.name));
                     const Player& owner = st.players[es.owner - 1];
@@ -579,7 +604,11 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                     std::snprintf(text, sizeof(text), "%s\n\n此地屬%s\n\n請付%d元%s", label.c_str(),
                                   ownerName, rent, kFeeName);
                     showMessage(app, text, 1500);
-                    // [RE 0x41A003] 转账：付款人 → 地主（flags=0，收款入银行存款）
+                }
+                // [RE 0x41D709] 付款方神明调整（内部可能弹神明提示）
+                rent = applyGodRentModifier(app, p, rent, kFeeName);
+                // [RE 0x41A003] 转账：付款人 → 地主（flags=0，收款入银行存款）
+                if (rent > 0) {
                     transferMoney(app, p, es.owner - 1, rent, 0);
                     es.price = rent; // [RE 0x41A00B] estate+44 = 本次租金
                     RICH4_LOGI("rent: player %d -> %d amount %d (estate %d, RE 0x419A67)", p,
@@ -1153,16 +1182,24 @@ void updateGameState(Application& app) {
         }
         case 3: {
             // [RE 0x40DA4B] 移动结束特殊移动（由 sub_448A7E 触发：落在他人有建筑的住宅用地/商業用地）：
-            //   记账 30*g_moneyMul（sub_40DF69 欠款矩阵，重写未建模，仅日志）→
-            //   面向目标格（sub_454FB4）→ data.mkf[526] FLC 动画（x-55, y-55）→ stepDwell
+            //   保存原朝向（g_playerRestoreDir +27）→ 面向目标格（sub_454FB4）→
+            //   data.mkf[526] FLC 动画（x-55, y-55）期间保持面向 → FLC 结束后恢复朝向 → 转状态 0
+            //   同时记账 30*g_moneyMul（sub_40DF69 欠款矩阵，重写未建模，仅日志）
             // 注意: 原版此分支**不直接转账**（实际收租在 landingEvent 0x419A67，租金按
             //   fees[level] 联合计算）；重写早期版本曾在此立即转账 30*moneyMul，已移除
             //   （避免与停留结算重复扣款）
-            // 差异: FLC 526 视觉、sub_40B066 动画帧、同格音效待接入
-            if (st.stepDwell) {
+            // 差异: FLC 526 视觉未接入，用 stepDwell=30 停留近似其时长；sub_40B066 动画帧、同格音效待接入
+            if (st.stepDwell > 0) {
                 --st.stepDwell;
+                if (st.stepDwell == 0) {
+                    // 面向结束：恢复原朝向（原版 byte_496B78 = g_playerRestoreDir）
+                    st.players[p].dir = st.players[p].byte27;
+                    st.playerActionWait[p] = 5; // 转入状态 0 倒计时后 calcPlayerWait（landingEvent）
+                    st.playerActionState[p] = 0;
+                }
                 break;
             }
+            bool faced = false;
             if (p < 9 && st.players[p].cellEntId > 0 &&
                 st.players[p].cellEntId < st.cellEnts.size()) {
                 const CellEnt& ce = st.cellEnts[st.players[p].cellEntId];
@@ -1172,28 +1209,36 @@ void updateGameState(Application& app) {
                     const int i = objId - 2000;
                     if (i > 0 && i < static_cast<int>(st.estates.size())) {
                         const Estate& es = st.estates[i];
-                        if (es.owner != 0 && es.owner - 1 != p) {
+                        // [RE 0x448A7E] 仅他人有建筑（owner≠自己 且 level≠0）才面向
+                        if (es.owner != 0 && es.owner - 1 != p && es.level != 0) {
                             RICH4_LOGI("landing due: player %d owes %d (estate %d, RE 0x40DA4B)",
                                        p, due, i);
+                            st.players[p].byte27 = st.players[p].dir; // 保存原朝向
+                            st.players[p].dir = static_cast<uint8_t>(
+                                facingFromDelta(es.x - ce.x, es.y - ce.y)); // 面向住宅用地
+                            faced = true;
                         }
-                        st.players[p].dir = static_cast<uint8_t>(
-                            facingFromDelta(es.x - ce.x, es.y - ce.y)); // [RE 0x40DA4B] 面向住宅用地
                     }
                 } else if (objId > 4000 && objId < 6000) {
                     const int i = objId - 4000;
                     if (i > 0 && i < static_cast<int>(st.corps.size())) {
                         const Corp& cp = st.corps[i];
-                        if (cp.owner != 0 && cp.owner - 1 != p) {
+                        if (cp.owner != 0 && cp.owner - 1 != p && cp.sub != 0) {
                             RICH4_LOGI("landing due: player %d owes %d (corp %d, RE 0x40DA4B)", p,
                                        due, i);
+                            st.players[p].byte27 = st.players[p].dir; // 保存原朝向
+                            st.players[p].dir = static_cast<uint8_t>(
+                                facingFromDelta(cp.x - ce.x, cp.y - ce.y)); // 面向商業用地
+                            faced = true;
                         }
-                        st.players[p].dir = static_cast<uint8_t>(
-                            facingFromDelta(cp.x - ce.x, cp.y - ce.y)); // [RE 0x40DA4B] 面向商業用地
                     }
                 }
             }
-            st.stepDwell = 6;
-            st.playerActionWait[p] = 5; // 转入状态 0 倒计时后 calcPlayerWait（landingEvent）
+            if (faced) {
+                st.stepDwell = 30; // 面向停留（近似原版 FLC 526 时长，约 0.5s @16ms tick）
+                break;
+            }
+            st.playerActionWait[p] = 5;
             st.playerActionState[p] = 0;
             break;
         }

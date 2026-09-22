@@ -163,9 +163,16 @@ return g_moneyMul * 总和
   - 16 帧亮度偏移 `g_highlightLut`（0x476380）= `{4,8,12,16,12,8,4,0,-4,-8,-12,-16,-12,-8,-4,0}`
   - 每帧 30ms（`sub_4528B9(30)`），用 `blitHighlightedMap`（0x4554FC）按标记 + 亮度调色板重绘
   - 循环后 `sub_4528B9(400)` 停留（最后一帧偏移 0 = 正常画面）
-- **重写**：`startRouteHighlight`（turn_system.cpp）收集联动组 → `drawEstateHighlight`（map_render.cpp）
-  对 `mapHitRegions` 中 estate 区域/像素掩码做 RGB555 亮度偏移（8bit 量 >>2），非阻塞与
-  `showMessage` 并行；`Ctrl+9` 可一键把联动组归当前回合玩家（测试用）
+- **重写**：`startRouteHighlight`（turn_system.cpp）收集联动组 → `playHighlightBlink` **阻塞播放**
+  （16 帧 × 30ms + 400ms，逐帧 `renderGameFrame` + `renderFrame` present）→ **闪烁结束后**才弹收费
+  提示（对齐原版 `sub_451985` 在 `showMessage` 之前完成的时序）；`drawEstateHighlight`（map_render.cpp）
+  按 `highlightFrame` 对 `mapHitRegions` 的 estate 区域/像素掩码做 RGB555 亮度偏移（8bit 量 >>2）；
+  `Ctrl+9` 可一键把联动组归当前回合玩家（测试用）
+- **收费提示金额** = 神明调整**前**的联合租金（原版 `sprintf(...v8...)` 在 `sub_41D709` 之前）；
+  神明调整后金额用于转账与 `estate+44`（与原版一致）
+- **case 3 面向恢复**：`sub_448A7E` 条件（他人 + `level/sub != 0`）成立时保存原朝向到
+  `g_playerRestoreDir`（+27）→ 面向目标 → 停留（重写 30 tick 近似 FLC 526）→ **恢复原朝向** →
+  转状态 0（此前重写面向后未恢复）
 
 ## 5. 重写差异与 P4 待办
 

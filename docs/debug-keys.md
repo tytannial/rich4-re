@@ -45,8 +45,9 @@
 1. `Ctrl+5` 全图归自己 → `Ctrl+6` 全图 level=1（建筑可见）
 2. 轮到 AI 玩家时，鼠标指向目标街的任一块按 **`Ctrl+9`**（该**整条街**归 AI）；
    或逐块 `Ctrl+1`
-3. 自己回合走到该街任一块 → 弹出「請付N元過路費」；**整条街地块闪烁**（原版 `highlightBlink`）；
-   **付款方现金减少、地主存款（银行）增加**（`transferMoney` flags=0 = 收款入银行）
+3. 自己回合走到该街任一块 → **整条街地块先闪烁**（原版 `highlightBlink`，16 帧约 0.9 秒）
+   → **再弹出**「請付N元過路費」；**付款方现金减少、地主存款（银行）增加**
+   （`transferMoney` flags=0 = 收款入银行）；角色面向地块片刻后**恢复原朝向**
 4. 日志核对（`estateRouteRent` 诊断）：
    ```
    routeRent: owner=2 cur=(台北市 type=0) matched=4 sum=4800 total=4800 (M=1)
