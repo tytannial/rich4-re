@@ -16,6 +16,7 @@
 #include "game/app/event_stack.h"
 #include "game/app/facility_dialog.h"
 #include "game/app/game_loop.h"
+#include "game/app/jail_dialog.h"
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
 #include "game/app/message_dialog.h"
@@ -681,6 +682,11 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                                                10, 16, 16, 16, 16, 10, 10, 10};
     if (cellType >= 2 && cellType <= 16) {
         app.audio().playEffectSlot(kCellTypeSound[cellType]);
+    }
+    if (cellType == 4) {
+        // [RE 0x41B132→0x43D304] case 4 監獄格：保释面板（人类头像选择 / AI 按个性自动保释）
+        jailBailDialog(app);
+        return 0x80;
     }
     if (cellType >= 10 && cellType <= 12) {
         // [RE 0x41B184/0x41B21E/0x41B2A3] case 10/11/12 得點券（type 10/11/12 = 50/30/10 點）：

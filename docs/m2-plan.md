@@ -87,8 +87,14 @@
   - 实现：`jailPlayer`/`hospitalizePlayer`/`insurancePayout`（`turn_system.cpp`）；`updatePlayerStates`
     补保险期递减与 `jailFlags`/`hospitalFlags` 清理；`jailCellEntId`/`hospitalCellEntId`
     （loadMapData 扫描 special 8002/8001）；debug `Ctrl+Shift+J` 入狱 / `Ctrl+Shift+L` 住院
-  - 待做：门外保释/办出院 UI（`sub_43CAAB`/`sub_43DA27` + panel.mkf[63/64/65]）+ AI 保释
-    （费用表 `dword_475C44/475CA4` = 玩家 30/NPC 300 点券；NPC 释放 P5）
+  - 待做：~~门外保释~~ ✅（见下）；医院办出院 UI（`sub_43DA27` 多阶段状态机 + 护士动画）
+- ✅ **面板底座 + 監獄保释（2026-09-23，`ui-controls.md` §25）**：
+  - 底座：`Audio::playVoice/voicePlaying/stopVoice`（Speaking.mkf 单通道，drawText `#NNNN` 0x45441A）
+    + `FloatMessage`（0x44EC30/44ECB6/44EE18/44EF3B，最短 2s + 语音未完继续等）
+    + `pushSceneMusic/resumeSceneMusic`（0x4549CF/0x454BCC 音乐栈，OGG 不续位）
+  - `jail_dialog.cpp`：人类 UI（panel[63] 帧表/8 格头像/悬停板 100×95/点券板）+ AI 保释
+    （0x43D3DF 个性候选 + 点券检查 + 释放）；`landingEvent` case 4 接入；
+    NPC 格占位 =「點數不足」消息 + `TODO(P5)`；释放返还 `addPlayerDebt` 日志占位
 - ⬜ **任务 F：建造菜单（未开始，P2 第一步完成后实施）**——IDA 结论：
   - `sub_423B3B(player, tab)` 5 页签筛选：0=我的地产+公司 / 1=我的地产 / 2=我的公司 /
     **3=普通地块（owner=me && level≠0 && type==0）** / **4=大地块（owner=me && level≠0 && type≠0）**
