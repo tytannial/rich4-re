@@ -465,14 +465,28 @@ void renderChart(ChartState& c) {
     t.drawText(dst, buf, 589, 243, 6);
     fmtNum(buf, lo, fmt);
     t.drawText(dst, buf, 589, 283, 6);
-    // 饼图（持股比例）：底椭圆 + 顶扇形
+    // 饼图（持股比例）：立体圆柱 = 底椭圆(蓝+黑框) 先画，顶椭圆(扇形+黑框) 覆盖其上半
+    // [RE 0x429D65] GDI 顺序：Ellipse(414,343,591,401) 底 → Ellipse/Pie(414,336,591,394) 顶；
+    //   CreatePen(0,1,0) 黑描边。底露出的下半 = 圆柱侧壁。
     const int32_t mine = (st.currentPlayer >= 0) ? st.playerShares[st.currentPlayer][s] : 0;
     const double frac = (mine > 0) ? std::min(1.0, mine / 10000.0) : 0.0;
     const uint16_t cRed = rgb888To555(0xD00000);
     const uint16_t cBlue = rgb888To555(0x0000D0);
+    const uint16_t kBlack = 0x0000;
     const int cx = 502, cy = 365, rx = 88, ry = 29;
     uint16_t* px = dst.pixels();
-    for (int y = cy - ry + 7; y <= cy + ry + 7; ++y) {  // 底（阴影）椭圆
+    auto ellipseOutline = [&](int ecx, int ecy) {
+        for (int i = 0; i <= 720; ++i) {
+            const double a = i * (2 * kPi / 720.0);
+            const int ex = ecx + static_cast<int>(std::lround(rx * std::cos(a)));
+            const int ey = ecy + static_cast<int>(std::lround(ry * std::sin(a)));
+            if (ex >= 0 && ex < Surface::kWidth && ey >= 0 && ey < Surface::kHeight) {
+                px[ey * Surface::kWidth + ex] = kBlack;
+            }
+        }
+    };
+    // 底椭圆（圆柱壁）：填充蓝 + 黑轮廓
+    for (int y = cy - ry + 7; y <= cy + ry + 7; ++y) {
         const int ey = y - 7;
         for (int x = cx - rx; x <= cx + rx; ++x) {
             const double nx = (x - cx) / static_cast<double>(rx);
@@ -483,7 +497,9 @@ void renderChart(ChartState& c) {
             }
         }
     }
-    for (int y = cy - ry; y <= cy + ry; ++y) {  // 顶扇形
+    ellipseOutline(cx, cy + 7);
+    // 顶椭圆（扇形）：填充 + 黑轮廓（覆盖底上半 → 露出侧壁）
+    for (int y = cy - ry; y <= cy + ry; ++y) {
         for (int x = cx - rx; x <= cx + rx; ++x) {
             const double nx = (x - cx) / static_cast<double>(rx);
             const double ny = (y - cy) / static_cast<double>(ry);
@@ -500,20 +516,7 @@ void renderChart(ChartState& c) {
             px[y * Surface::kWidth + x] = col;
         }
     }
-    // [RE 0x429D65] 黑色描边（CreatePen(0,1,0)）：底/顶椭圆轮廓 + 持股分界半径 + 左右刻度
-    const uint16_t kBlack = 0x0000;
-    auto ellipseOutline = [&](int ecx, int ecy) {
-        for (int i = 0; i <= 720; ++i) {
-            const double a = i * (2 * kPi / 720.0);
-            const int ex = ecx + static_cast<int>(std::lround(rx * std::cos(a)));
-            const int ey = ecy + static_cast<int>(std::lround(ry * std::sin(a)));
-            if (ex >= 0 && ex < Surface::kWidth && ey >= 0 && ey < Surface::kHeight) {
-                px[ey * Surface::kWidth + ex] = kBlack;
-            }
-        }
-    };
-    ellipseOutline(cx, cy + 7);  // 底椭圆轮廓
-    ellipseOutline(cx, cy);      // 顶椭圆轮廓
+    ellipseOutline(cx, cy);
     if (frac > 0.0 && frac < 1.0) {  // 持股分界半径（顶→角度点）
         const double a = kPi / 2 - frac * 2 * kPi;
         const int ex = cx + static_cast<int>(std::lround(rx * std::cos(a)));
