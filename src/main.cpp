@@ -6,11 +6,20 @@
 #include <cstdlib>
 #include <string>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 // [RE 0x45709C] start
 // 依据: 0x45709C 为 CRT 入口 thunk（jmp sub_458CED）; sub_458CED 初始化 CRT 后调用
 //       WinMain(GetModuleHandleA(0), 0, lpCmdLine, 10)
 // 迁移: CRT 启动 + WinMain → 标准 main(argc, argv); lpCmdLine → --game <dir> 参数
 int main(int argc, char** argv) {
+#ifdef _WIN32
+    // [PORT] 控制台日志按 UTF-8 显示（源码/执行字符集 = UTF-8，见 CMake /utf-8；
+    //        默认 CP936 会把 UTF-8 中文 stderr 日志显示成乱码）
+    SetConsoleOutputCP(CP_UTF8);
+#endif
     std::string gameDir = "resources/game";
     std::string shotPath;
     int shotFrame = 47;
