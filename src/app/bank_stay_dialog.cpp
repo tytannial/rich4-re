@@ -413,12 +413,21 @@ void doLoanInput(StayCtx& ui) {
     Application& app = *ui.app;
     GameState& st = app.gameState();
     Player& pl = st.players[st.currentPlayer];
+    // [PORT] 数字框为嵌套模态（其打开期间外层 tick 停止），先把滑动推进到位再打开
+    if (ui.slideDir != 0) {
+        ui.slideX = kPanelX;
+        ui.slideDir = 0;
+    }
     if (pl.loan >= ui.totalAssets) {
         ui.state = 8; // [RE 0x435354] 尚可融资不足 → 收尾滑出
         return;
     }
     const int v = numberInputDialog(app, ui.totalAssets - pl.loan); // [RE 0x435245]
+    // [PORT] 数字框无背景恢复（逐帧重绘面板区域）→ 退出后重画主 UI，避免输入器残留
+    drawStayBase(ui);
+    drawStayPanels(ui);
     if (v <= 0) {
+        RICH4_LOGI("bank stay: loan input cancelled (RE 0x435228)");
         ui.state = 8; // 取消/0 → 收尾
         return;
     }
@@ -437,8 +446,16 @@ void doRepayInput(StayCtx& ui) {
     Application& app = *ui.app;
     GameState& st = app.gameState();
     Player& pl = st.players[st.currentPlayer];
+    if (ui.slideDir != 0) { // [PORT] 同 doLoanInput：先完成滑动
+        ui.slideX = kPanelX;
+        ui.slideDir = 0;
+    }
     const int v = numberInputDialog(app, pl.loan); // [RE 0x435367]
+    // [PORT] 数字框退出后重画主 UI（防输入器残留）
+    drawStayBase(ui);
+    drawStayPanels(ui);
     if (v <= 0) {
+        RICH4_LOGI("bank stay: repay input cancelled (RE 0x435360)");
         ui.state = 8;
         return;
     }
@@ -574,6 +591,8 @@ void doAdvTurnInput(AdvCtx& ui) {
     GameState& st = app.gameState();
     Player& pl = st.players[st.currentPlayer];
     const int v = numberInputDialog(app, ui.quota - pl.bankAdvance); // [RE 0x4348xx 0x409]
+    // [PORT] 数字框退出后重画週轉画面（防输入器残留；含数字刷新）
+    drawAdvScene(ui);
     if (v <= 0) {
         ui.state = 2;
     } else {
@@ -592,6 +611,8 @@ void doAdvBackInput(AdvCtx& ui) {
     GameState& st = app.gameState();
     Player& pl = st.players[st.currentPlayer];
     const int v = numberInputDialog(app, pl.bankAdvance); // [RE 0x4349xx 0x40A]
+    // [PORT] 数字框退出后重画週轉画面（防输入器残留）
+    drawAdvScene(ui);
     if (v <= 0) {
         ui.state = 2;
         return;
@@ -634,6 +655,7 @@ bool advHandler(const SDL_Event* event, void* user) {
         drawAdvScene(ui);
         ui.state = 1;
         ui.msg.show(app, "#0086董事長親自蒞臨\n不知有何指教？"); // [RE 0x47585C]
+        RICH4_LOGI("bank advance: enter quota=%d cur=%d (RE 0x434492)", ui.quota, st.currentPlayer);
         return true;
     }
     switch (event->type) {
@@ -655,6 +677,7 @@ bool advHandler(const SDL_Event* event, void* user) {
                 doAdvBackInput(ui);
                 break;
             case 7:
+                RICH4_LOGI("bank advance: exit code=%d (RE 0x434492)", ui.exitCode);
                 app.events().requestExit(ui.exitCode); // [RE 0x4347xx 状态7]
                 return true;
             default:
@@ -1005,6 +1028,8 @@ bool stayHandler(const SDL_Event* event, void* user) {
         }
         app.audio().playEffect(kSfxClick); // [RE 0x435C6E g_uiSoundClick]
         ui.pressed = hit + 1;
+        RICH4_LOGI("bank stay: click hit=%d state=%d own=%d slideX=%d (RE 0x435C3A)", hit, ui.state,
+                   ui.own ? 1 : 0, ui.slideX);
         Player& pl = st.players[st.currentPlayer];
         switch (hit) {
         case 0: // 離開：按下高亮（原版 0x435D3E 传 Rect.right/bottom 笔误，按左上角修正）
@@ -1118,16 +1143,23 @@ void bankStayDialog(Application& app, int cellEntId) {
         ui.totalAssets = assets;
         // [RE 0x436726] 自家银行：cellEntId 6000..8000 且 specPt.owner == currentPlayer+1
         ui.own = false;
+        int specIdx = -1;
+        int specOwner = -1;
         if (cellEntId > 6000 && cellEntId < 8000) {
-            const int idx = cellEntId - 6000;
-            if (idx >= 0 && idx < static_cast<int>(st.specPts.size()) &&
-                st.specPts[idx].owner == p + 1) {
-                ui.own = true;
+            specIdx = cellEntId - 6000;
+            if (specIdx >= 0 && specIdx < static_cast<int>(st.specPts.size())) {
+                specOwner = st.specPts[specIdx].owner;
+                if (specOwner == p + 1) {
+                    ui.own = true;
+                }
             }
         }
+        RICH4_LOGI("bank stay: enter own=%d cellEnt=%d specIdx=%d owner=%d cur=%d assets=%d "
+                   "(RE 0x436668)",
+                   ui.own ? 1 : 0, cellEntId, specIdx, specOwner, p, assets);
         app.audio().pushSceneMusic(4); // [RE 0x43674F] musicPlayScene(4)
         runModal(app, &stayHandler, &ui, 50); // [RE 0x43675D] SetTimer 50ms
-        app.audio().resumeSceneMusic();   // [RE 0x436765]
+        app.audio().resumeSceneMusic(); // [RE 0x436765] musicStackPopRestore
         return;
     }
     // AI 分支（[RE 0x4367AB]）：已有贷款 → 提前还款；否则随机贷款

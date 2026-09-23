@@ -3,6 +3,7 @@
 #include <cstring>
 #include <string>
 
+#include "game/app/bank_stay_dialog.h"
 #include "game/app/facility_dialog.h"
 #include "game/app/game_loop.h"
 #include "game/app/map_render.h"
@@ -156,6 +157,23 @@ bool handleDebugKey(Application& app, int code, bool shift) {
                 st.players[cur].bank += 100000;
                 RICH4_LOGI("debug: Ctrl+Shift+B player %d bank=%d", cur, st.players[cur].bank);
                 return true;
+            case 'u': { // 银行停留 UI（调试：无需走到银行格；配合 Ctrl+1 改 owner 测自家模式）
+                int bankIdx = -1;
+                for (size_t i = 1; i < st.specPts.size(); ++i) {
+                    if (st.specPts[i].costType == 7) {
+                        bankIdx = static_cast<int>(i);
+                        break;
+                    }
+                }
+                if (bankIdx > 0) {
+                    RICH4_LOGI("debug: Ctrl+Shift+U open bank stay UI specPt=%d owner=%d cur=%d",
+                               bankIdx, st.specPts[bankIdx].owner, cur);
+                    bankStayDialog(app, 6000 + bankIdx);
+                } else {
+                    RICH4_LOGW("debug: Ctrl+Shift+U no bank specPt");
+                }
+                return true;
+            }
             case 'j': // 当前玩家入狱 3 天（jailPlayer 0x43D593：移格/标志/FLC 538/保险理赔）
                 if (st.eventFlcActive) {
                     return true; // FLC 播放中防重入（键盘重复会叠加播放）
