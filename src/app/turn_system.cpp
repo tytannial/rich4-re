@@ -23,6 +23,7 @@
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
 #include "game/app/message_dialog.h"
+#include "game/app/month_settle.h"
 #include "game/app/roulette_dialog.h"
 #include "game/app/spec_pt_dialog.h"
 #include "game/app/stock_system.h"
@@ -1949,6 +1950,7 @@ void advanceDay(Application& app) {
     // TODO(P2 樂透): sub_431712 乐透开奖（依赖 case 9 投注）
     // [RE 0x41CF67] 新月（跨月 1 号）：月初结息（sub_439BFA → sub_437E61）+ 事件格换位 + 月份计数
     if (newMonth) {
+        monthlySettle(app); // [RE 0x41D09E] 月初结息（panel.mkf[25] + 存款 ×1.1 + 排行演出）
         // 卡片格(13)/銀行格(14)：先记旧位置，清槽后就近（≥300px）随机换位
         // （原版 sub_40E14D(13/14) + randomCellEnt(旧 cellEnt) + createMapObject）
         for (int slot = 13; slot <= 14; ++slot) {

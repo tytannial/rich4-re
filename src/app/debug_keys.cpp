@@ -8,6 +8,7 @@
 #include "game/app/game_loop.h"
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
+#include "game/app/month_settle.h"
 #include "game/app/object_tip.h"
 #include "game/app/stock_market_dialog.h"
 #include "game/app/stock_system.h"
@@ -237,6 +238,11 @@ bool handleDebugKey(Application& app, int code, bool shift) {
             case 'd': // 过一天（advanceDay：日期/到期/每日事件）
                 advanceDay(app);
                 RICH4_LOGI("debug: Ctrl+Shift+D advanceDay dayCount=%d", st.dayCount);
+                return true;
+            case 'n': // 月初结息（monthlySettle 0x439BFA/0x437E61：发息 + 排行演出）
+                if (st.gameLoopActive) {
+                    monthlySettle(app);
+                }
                 return true;
             case 'p': // 当前玩家点券 +1000（测试監獄/醫院 NPC 保释 300 点券）
                 st.players[cur].points = static_cast<uint16_t>(st.players[cur].points + 1000);
