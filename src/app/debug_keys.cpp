@@ -4,6 +4,7 @@
 #include <string>
 
 #include "game/app/bank_stay_dialog.h"
+#include "game/app/dividend.h"
 #include "game/app/facility_dialog.h"
 #include "game/app/game_loop.h"
 #include "game/app/map_render.h"
@@ -242,6 +243,11 @@ bool handleDebugKey(Application& app, int code, bool shift) {
             case 'n': // 月初结息（monthlySettle 0x439BFA/0x437E61：发息 + 排行演出）
                 if (st.gameLoopActive) {
                     monthlySettle(app);
+                }
+                return true;
+            case 'e': // 15 号股东大会分红（dividendMeeting 0x42BA97/0x42B3EB）
+                if (st.gameLoopActive) {
+                    dividendMeeting(app);
                 }
                 return true;
             case 'p': // 当前玩家点券 +1000（测试監獄/醫院 NPC 保释 300 点券）

@@ -15,6 +15,7 @@
 #include "game/app/bank_stay_dialog.h"
 #include "game/app/confirm_dialog.h"
 #include "game/app/date_util.h"
+#include "game/app/dividend.h"
 #include "game/app/economy.h"
 #include "game/app/event_stack.h"
 #include "game/app/facility_dialog.h"
@@ -1947,7 +1948,10 @@ void advanceDay(Application& app) {
     // [RE 0x42915A] 每日交易量刷新（保留股份 → 交易量 10%~30%）
     refreshBankStockShares(app);
     // [RE 0x41CF67] 15 号：股东大会分红（sub_42BA97）+ 乐透开奖（sub_431712）
-    // TODO(P2 樂透): sub_431712 乐透开奖（依赖 case 9 投注）
+    if ((st.gameDate & 0xFF) == 15) {
+        dividendMeeting(app); // [RE 0x41D08F] 15 号分红（panel.mkf[76]）
+        // TODO(P2 樂透): sub_431712 乐透开奖（依赖 case 9 投注）
+    }
     // [RE 0x41CF67] 新月（跨月 1 号）：月初结息（sub_439BFA → sub_437E61）+ 事件格换位 + 月份计数
     if (newMonth) {
         monthlySettle(app); // [RE 0x41D09E] 月初结息（panel.mkf[25] + 存款 ×1.1 + 排行演出）
