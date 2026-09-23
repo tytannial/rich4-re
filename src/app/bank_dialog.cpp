@@ -2,6 +2,7 @@
 
 #include <SDL3/SDL.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -54,8 +55,8 @@ constexpr VisitRect kVisitRects[18] = {
 };
 // [RE 0x475914] 按钮 4..15 → 数字字符（键盘布局 789/456/123/C/0/←）
 constexpr char kVisitDigits[12] = {'7', '8', '9', '4', '5', '6', '1', '2', '3', 'C', '0', 8};
-// 数字显示帧 = ASCII - 29（'0'=48 → 帧 19，'9'=57 → 帧 28）
-constexpr int kDigitFrameBase = 29;
+// 数字显示帧 = ASCII − 29（'0'=48 → 帧 19，'9'=57 → 帧 28；面板仅 30 帧，越界会读垃圾导致卡死）
+constexpr int kDigitFrameBase = 19;
 // [RE 0x464BD0] flt_464BD0 = 32.0f（金额/上限 → 进度条宽度系数）
 constexpr double kVisitBarScale = 32.0;
 constexpr int kVisitBarMax = 204;
@@ -123,8 +124,9 @@ void drawVisitAmount(VisitCtx& ui) {
     int count = 0;
     for (int i = len - 1; i >= 0 && count < 10; --i, ++count) {
         const int digit = ui.amount[i] - '0';
-        if (digit >= 0 && digit <= 9) {
-            blitElement(dst, sheet.frame(kDigitFrameBase + digit), x, 172, false);
+        const int frame = kDigitFrameBase + digit;
+        if (digit >= 0 && digit <= 9 && frame < sheet.frameCount()) {
+            blitElement(dst, sheet.frame(frame), x, 172, false);
         }
         x -= 20;
     }
@@ -135,12 +137,13 @@ void drawVisitAmount(VisitCtx& ui) {
     const int width = ui.limit > 0
                           ? 6 * static_cast<int>(atoiVisit(ui.amount) * kVisitBarScale / ui.limit)
                           : 0;
-    if (width > 0) {
-        blitElementRegionOpaque(dst, sheet.frame(4), 118, 210, 0, 0, width, 26, false);
+    const int barW = std::min(std::max(width, 0), kVisitBarMax);
+    if (barW > 0) {
+        blitElementRegionOpaque(dst, sheet.frame(4), 118, 210, 0, 0, barW, 26, false);
     }
-    if (width < kVisitBarMax) {
-        blitElementRegionOpaque(dst, sheet.frame(0), width + 118, 210, width + 58, 139,
-                                kVisitBarMax - width, 26, false);
+    if (barW < kVisitBarMax) {
+        blitElementRegionOpaque(dst, sheet.frame(0), barW + 118, 210, barW + 58, 139,
+                                kVisitBarMax - barW, 26, false);
     }
 }
 
