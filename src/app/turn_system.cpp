@@ -12,6 +12,7 @@
 
 #include "game/application.h"
 #include "game/app/bank_dialog.h"
+#include "game/app/bank_stay_dialog.h"
 #include "game/app/confirm_dialog.h"
 #include "game/app/date_util.h"
 #include "game/app/economy.h"
@@ -746,11 +747,11 @@ int landingEvent(Application& app, uint16_t cellEntId) {
     }
     if (cellType == 14) {
         // [RE 0x41B396] case 14 銀行格：柜员机（sub_4379C9）→ sceneRequest==0 时停留处理
-        //   （sub_436668 贷款/週轉，1.4 实现，见 bank-system.md §3）
+        //   （sub_436668：贷款/还款/週轉，1.4 实现，见 bank-system.md §3）
         RICH4_LOGI("landingEvent: case 14 銀行格 cellEnt=%u cur=%d (RE 0x41982D)", cellEntId, p);
         bankVisitDialog(app);
         if (st.sceneRequest == 0) {
-            // TODO(1.4): bankStayDialog(app, cellEntId) 停留贷款/週轉面板（sub_436668）
+            bankStayDialog(app, static_cast<int>(cellEntId)); // [RE 0x41B3AF]
         }
         return 0x80;
     }
@@ -1736,7 +1737,7 @@ static void checkLoanDue(Application& app, int p) {
             break;
         case 3:
             // [RE 0x43695E] 催收演出（panel[23] + 柜员动画窗 sub_436034 runModal）
-            RICH4_LOGI("loan due: player %d 3 days left, collect UI TODO (RE 0x43695E)", p);
+            bankDueDialog(app);
             break;
         default:
             break;
