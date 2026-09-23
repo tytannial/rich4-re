@@ -500,6 +500,28 @@ void renderChart(ChartState& c) {
             px[y * Surface::kWidth + x] = col;
         }
     }
+    // [RE 0x429D65] 黑色描边（CreatePen(0,1,0)）：底/顶椭圆轮廓 + 持股分界半径 + 左右刻度
+    const uint16_t kBlack = 0x0000;
+    auto ellipseOutline = [&](int ecx, int ecy) {
+        for (int i = 0; i <= 720; ++i) {
+            const double a = i * (2 * kPi / 720.0);
+            const int ex = ecx + static_cast<int>(std::lround(rx * std::cos(a)));
+            const int ey = ecy + static_cast<int>(std::lround(ry * std::sin(a)));
+            if (ex >= 0 && ex < Surface::kWidth && ey >= 0 && ey < Surface::kHeight) {
+                px[ey * Surface::kWidth + ex] = kBlack;
+            }
+        }
+    };
+    ellipseOutline(cx, cy + 7);  // 底椭圆轮廓
+    ellipseOutline(cx, cy);      // 顶椭圆轮廓
+    if (frac > 0.0 && frac < 1.0) {  // 持股分界半径（顶→角度点）
+        const double a = kPi / 2 - frac * 2 * kPi;
+        const int ex = cx + static_cast<int>(std::lround(rx * std::cos(a)));
+        const int ey = cy - static_cast<int>(std::lround(ry * std::sin(a)));
+        drawLine(dst, cx, cy - ry, ex, ey, kBlack);
+    }
+    drawLine(dst, 414, 365, 414, 372, kBlack);  // 左刻度短线
+    drawLine(dst, 590, 365, 590, 372, kBlack);  // 右刻度短线
     // 折线（144 期，白）[RE 0x429D65] scale: (hi-lo)/mid<=0.3 ? 109/(mid*0.6) : 109/(hi-lo)
     const double mid = (hi + lo) * 0.5;
     const double span = hi - lo;
