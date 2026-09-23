@@ -166,6 +166,8 @@ void transferMoney(Application& app, int from, int to, int32_t amount, int flags
                 }
             }
         }
+        // [RE 0x41D2C6] 付款方"本月意外損失"累计（结息悲情人物排名 sub_437D1A）
+        payer.monthSettleA += paid;
     }
 
     if (to == -1) {
@@ -177,6 +179,8 @@ void transferMoney(Application& app, int from, int to, int32_t amount, int flags
             } else {
                 st.players[to].bank += paid;
             }
+            // [RE 0x41D2C6] 收款方"本月意外之財"累计（结息悲情人物排名 sub_437D1A）
+            st.players[to].monthSettleB += paid;
         }
     } else {
         const int idx = to - 100;
