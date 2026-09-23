@@ -1881,6 +1881,8 @@ void advanceDay(Application& app) {
     ++st.dayCount;
     // [RE 0x41CFBF] 物價指數每日更新（只升不降；原版位于 checkVictory 之后）
     updateMoneyIndex(app);
+    // TODO(任务 F): sub_428475 —— g_miscTable336（建造/待办队列 7 槽）每日计数 ++；
+    //   队列由建造菜单写入（0x4246C5），当前未建模（表恒 0，无操作）
 
     // 住宅用地/商業用地到期回收（原版 estates+23/+48、corps+28/+52 与 dword_497160 比较）
     bool refreshed = false;
@@ -1912,7 +1914,6 @@ void advanceDay(Application& app) {
             refreshed = true;
         }
     }
-    (void)newMonth;
     (void)refreshed;
     // [RE 0x41CF67] 休市倒计时（dword_4990DC）：bit7 未置且有值→--，==1 时置 bit7；bit7 已置→清 0
     if ((st.stockMarketClosed & 0x80) == 0) {
@@ -1944,6 +1945,23 @@ void advanceDay(Application& app) {
     stockTick(app);
     // [RE 0x42915A] 每日交易量刷新（保留股份 → 交易量 10%~30%）
     refreshBankStockShares(app);
+    // [RE 0x41CF67] 15 号：股东大会分红（sub_42BA97）+ 乐透开奖（sub_431712）
+    // TODO(P2 樂透): sub_431712 乐透开奖（依赖 case 9 投注）
+    // [RE 0x41CF67] 新月（跨月 1 号）：月初结息（sub_439BFA → sub_437E61）+ 事件格换位 + 月份计数
+    if (newMonth) {
+        // 卡片格(13)/銀行格(14)：先记旧位置，清槽后就近（≥300px）随机换位
+        // （原版 sub_40E14D(13/14) + randomCellEnt(旧 cellEnt) + createMapObject）
+        for (int slot = 13; slot <= 14; ++slot) {
+            const size_t off = static_cast<size_t>(24 * (slot - 1));
+            const int oldEnt = st.cellTable[off + 2] | (st.cellTable[off + 3] << 8);
+            releaseCellTableSlot(app, slot);
+            const int newEnt = randomCellEnt(st, oldEnt);
+            if (newEnt > 0) {
+                createMapObject(st, slot, newEnt, 0, 0);
+            }
+        }
+        ++st.stockDivPeriod; // [RE 0x499084] 分红期数递增
+    }
     // [RE 0x41CF67] 音乐切换计时器（byte_46CB06）：低4位递减到0 → 切下一首可选曲目
     if ((st.musicTimer & 0xF) != 0) {
         --st.musicTimer;
