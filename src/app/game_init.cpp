@@ -1,5 +1,6 @@
 #include "game/app/game_init.h"
 
+#include "game/app/date_dialog.h"
 #include "game/application.h"
 #include "game/core/log.h"
 
@@ -39,12 +40,17 @@ bool gameInit(Application& app) {
     // [RE 0x411E8F] 读取 RICH4.CFG（设置区 + 28 项键位表，见 docs/formats/cfg.md）
     // 依据: 0x411E8F CFG 存在时读 16B 设置 + 56B 键位；不存在时设置区保留默认值
     //       （byte_497158=1, 497159=1, 49715A=4, 49715B=4, 49715C=1, 49715D=1）
+    //       CFG 第 8..11 字节（byte_497158+8）与 dword_497160 重叠，但读取后即被
+    //       尾部 dos_getdate 钳位值覆盖（0x411F21..0x411A7C），不落回 settings[8..11]
     const std::string cfgPath = dir + "/RICH4.CFG";
     if (std::FILE* fp = std::fopen(cfgPath.c_str(), "rb")) {
         std::fread(state.settings, 1, sizeof(state.settings), fp);
         std::fclose(fp);
     }
     app.input().loadConfig(cfgPath);
+
+    // [RE 0x411E8F] loadConfig 尾部: dos_getdate → 钳位 [1998,2010] → dword_497160
+    state.gameDate = clampedSystemDate();
 
     // [RE 0x453B55] DirectSound 初始化（22050Hz/8bit/mono 主缓冲）→ SDL 音频流
     // [RE 0x4541E3] 音效库 Effect.mkf; [RE 0x47E773/0x47E793] 音乐表;

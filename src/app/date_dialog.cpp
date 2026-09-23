@@ -308,6 +308,18 @@ bool dateDialogEventHandler(const SDL_Event* event, void* user) {
 
 } // namespace
 
+uint32_t clampedSystemDate() {
+    const uint32_t d = systemDate();
+    const uint32_t year = (d >> 16) & 0xFFFF;
+    if (year < 1998) {
+        return (1998u << 16) | (1u << 8) | 1u;
+    }
+    if (year > 2010) {
+        return (2010u << 16) | (1u << 8) | 1u;
+    }
+    return d;
+}
+
 uint32_t dateDialog(Application& app, uint32_t currentDate) {
     // [RE 0x4119E3] 依据: _dos_getdate 取当前日期 → dword_48BB5C（重置目标）;
     // dword_48BB84 = dword_48BB50（上次确认日期，工作值）

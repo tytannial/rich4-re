@@ -31,7 +31,9 @@
   - `GetTickCount` + `srand`（随机种子）
   - `sub_44F935` 调色板初始化、`sub_45175D` 视频初始化
   - `sub_4502FE` 打开 4 个 MKF：`data.mkf`、`speaking.mkf`、`panel.mkf`、`effect.mkf`
-  - `sub_411E8F` 读取 `RICH4.CFG`（见 docs/formats/cfg.md）
+  - `sub_411E8F` 读取 `RICH4.CFG`（见 docs/formats/cfg.md）；尾部 `dos_getdate` → 钳位年
+    ∈[1998,2010]（越界→该端点 1-1）→ `dword_497160` 游戏日期（尾跳转 0x411A7C，**不**写
+    `dword_48BB50`；CFG 第 8..11 字节虽被读入 `byte_497158`，随即被该钳位值覆盖，即启动日期**不持久化**）
   - `SetWindowsHookExA(2, fn, hInstance, 0)`：`WH_KEYBOARD` 全局键盘钩子（`fn = 0x401010`）
   - `sub_4021F8(41, 1, 0)`、`sub_456F60(&dword_4990F0, 0, 4)`（清全局）
   - `dword_474938 = sub_456F80(0x5E880)`：分配 387200 字节缓冲区

@@ -12,4 +12,9 @@ class Application;
 // 返回新日期；取消返回 0（原版 -1 语义）
 uint32_t dateDialog(Application& app, uint32_t currentDate);
 
+// [RE 0x411E8F] loadConfig 尾部：_dos_getdate → 钳位年 ∈ [1998,2010]
+// 依据: 0x411F21 dos_getdate; 年<0x7CE(1998)→1998-1-1, 年>0x7DA(2010)→2010-1-1，
+//       否则系统日期；0x411A7C 尾跳转写 dword_497160（不写 dword_48BB50）
+uint32_t clampedSystemDate();
+
 } // namespace rich4

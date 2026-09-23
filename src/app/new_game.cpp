@@ -264,8 +264,8 @@ bool newGameInit(Application& app, bool mode1) {
     state.moneyMul = 1;
     state.dayCount = 0;
     state.turnCounter = 0;
-    // [RE 0x497160] dword_497160 游戏日期初值（BYTE0=日, BYTE1=月, HIWORD=年）
-    state.gameDate = (1998u << 16) | (1u << 8) | 1u;
+    // [RE 0x497160] 0x406DE7 全函数不写 dword_497160（游戏日期）：
+    //   开局日期沿用当前值 = 0x411E8F 启动钳位系统日期 / 0x4119E3 设置-更改日期 / 0x411AA3 重新遊戲
 
     // [RE 0x47F072] g_stocks = off_47F072[432*mode + 108*map]（12 股票 x 9 字段）
     std::memcpy(state.stocks, kStockInit[state.gameMode * 4 + state.mapIndex],

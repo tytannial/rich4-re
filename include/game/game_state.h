@@ -215,8 +215,16 @@ struct GameState {
     std::vector<uint8_t> saveData;
 
     // [RE 0x497160] dword_497160 游戏内日期（BYTE0=日, BYTE1=月, HIWORD=年）
-    // 依据: 0x4119E3 中日期更改确认后写入 dword_48BB50/dword_497160
+    // 依据: 0x411E8F loadConfig 尾部 dos_getdate 钳位 [1998,2010] 初始化（尾跳转 0x411A7C）;
+    //       0x4119E3 日期更改确认后写入; 0x411AA3 重新遊戲=系统日期; 0x402AC5 读档恢复;
+    //       0x41CF67 advanceDay 过天。0x406DE7 新开局**不**重置本值。
+    //       内存上与 byte_497158+8 重叠（RICH4.CFG 设置区第 8..11 字节随设置一并存盘）
     uint32_t gameDate = 0;
+
+    // [RE 0x48BB50] dword_48BB50 上次手动确认的日期（dateDialog 工作初值，0x410AC3 case 7 初值）
+    // 依据: 0x4119E3 确认分支 0x411A77 与 dword_497160 双写；loadConfig 尾跳转跳过此写，
+    //       故启动后本值仍为 0（原版如此），仅日期更改对话框使用
+    uint32_t lastConfirmedDate = 0;
 
     // [RE 0x497164] byte_497164 日历显示模式（0=大数字日历, 1=月历网格）
     // 依据: 0x411E8F loadConfig 读 cfg 第12字节(默认0); 0x417E26 gameWndProc 点击

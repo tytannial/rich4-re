@@ -332,6 +332,8 @@ bool hotkeyEventHandler(const SDL_Event* event, void* user) {
                 state.app->input().setBindings(state.working);
                 uint8_t cfg[kCfgSize] = {};
                 std::memcpy(cfg, state.app->gameState().settings, 16);
+                // byte_497158+8..11 与 dword_497160（游戏日期）重叠，随设置区一并存盘
+                std::memcpy(cfg + 8, &state.app->gameState().gameDate, 4);
                 std::memcpy(cfg + 16, state.working, kKeyCount * sizeof(uint16_t));
                 saveCfgRaw(state.app->gameDir() + "/RICH4.CFG", cfg);
                 RICH4_LOGI("hotkeys saved (RE 0x411F80)");
