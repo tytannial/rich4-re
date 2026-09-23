@@ -4,7 +4,7 @@
 > （地址、公式、常量、字段偏移）。执行前请阅读 AGENTS.md 与
 > `docs/reverse/functions/gameplay-map-mechanics.md`（机制总览与验收检查表）。
 > **最新进度（2026-09-23）**：任务 A..E ✅ + 计划外股市/specPt/转盘 ✅；仅剩任务 F 建造菜单；
-> P2 事件格已起步（得點券 ✅，见 §9）。
+> P2 事件格已起步（得點券/卡片格 ✅，见 §9）。
 
 ## 执行进度（2026-09-21..23 会话）
 
@@ -66,6 +66,16 @@
     `landingEvent` case 10/11/12 + `drawEventFlcFrame`（`game_loop.cpp` 色键跳过）+
     `FliDecoder::colorKey()`；角色语音 sub_44EF41 → P4
   - 文档：`41982d-p2-events.md` §2/§11 更新、help-checklist idx 29/30/31 ✅、本文件 §9
+- ✅ **P2 事件格第二步：卡片格（case 13）**（2026-09-23）：
+  - 原版依据：0x41B302（反汇编）+ `sub_441E12` 抽卡（赠卡池 `g_propStock` 0x499198 按数量展开 +
+    `rand()%n`）+ `sub_4412E4/441262/44128F/441343`（卡包 `cardState60` 0x499120 15 槽/满则舍弃
+    最低价 `byte_47FDEF`/池恢复）+ `sub_441F73` 显示（data.mkf[570+id] 165×256 @ (138,200) +
+    提示框 (220,129) + 音效槽 23 + `sub_4528B9(1500)`）+ 卡片表 `dword_47FDEA`（30 项：
+    名称/+4 池初值/+5 价格）
+  - 实现：`drawFreeCard`/`giveCardToBag`/`cardBag*` + `showCardGet`（`turn_system.cpp`）；
+    新表 `kCardNames[31]`/`kCardPrices[31]`（map_tables）
+  - 文档：`41982d-p2-events.md` §3 全面归档（含旧文档订正：sub_441F73 参数是卡 id 非玩家、
+    case 12 无语音、propStock 是卡片赠卡池）、help-checklist idx 25 ✅
 - ⬜ **任务 F：建造菜单（未开始，P2 第一步完成后实施）**——IDA 结论：
   - `sub_423B3B(player, tab)` 5 页签筛选：0=我的地产+公司 / 1=我的地产 / 2=我的公司 /
     **3=普通地块（owner=me && level≠0 && type==0）** / **4=大地块（owner=me && level≠0 && type≠0）**
@@ -241,7 +251,7 @@
 **A..E ✅ → 计划外股市/specPt ✅ → P2 事件格由简到繁（进行中）**：
 
 1. ~~得點券（case 10/11/12）~~ ✅ 2026-09-23（建立事件格 FLC 阻塞播放模板 `playEventFlc`）
-2. 卡片格（case 13，抽卡链路，P4 前置）
+2. ~~卡片格（case 13）~~ ✅ 2026-09-23（赠卡池抽卡 + 卡包 15 槽 + `showCardGet` 卡片图显示）
 3. **任务 F 建造菜单**（入口 IDA 定位）
 4. 監獄/醫院（case 4/5 + cellNo 回合状态）
 5. 銀行（case 14）+ 物價指數月度更新

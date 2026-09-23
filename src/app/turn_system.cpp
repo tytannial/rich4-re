@@ -6,12 +6,14 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <vector>
 
 #include <SDL3/SDL.h>
 
 #include "game/application.h"
 #include "game/app/confirm_dialog.h"
 #include "game/app/economy.h"
+#include "game/app/event_stack.h"
 #include "game/app/facility_dialog.h"
 #include "game/app/game_loop.h"
 #include "game/app/map_render.h"
@@ -22,6 +24,10 @@
 #include "game/app/stock_system.h"
 #include "game/core/encoding.h"
 #include "game/core/log.h"
+#include "game/render/blit.h"
+#include "game/render/surface.h"
+#include "game/render/text.h"
+#include "game/render/ui_image.h"
 
 namespace rich4 {
 
@@ -414,6 +420,164 @@ void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId) {
     RICH4_LOGI("eventFlc: data.mkf[%d] played @(%d,%d) (RE 0x45144F)", mkfIndex, x, y);
 }
 
+// ===== 卡片卡包（P2 卡片格 case 13；0x4412E4/0x441262/0x44128F/0x441343/0x441E12）=====
+// 数据结构: g_cardState60（0x499120，4 玩家 × 15 槽，槽内存卡 id，0 = 空）；
+//           g_propStock（0x499198，byte_499197+1，30 种卡的赠卡池剩余数量）
+
+// [RE 0x441262] cardBagCount：卡包非空槽数量
+int cardBagCount(const GameState& st, int player) {
+    int n = 0;
+    for (int i = 0; i < 15; ++i) {
+        if (st.cardState60[15 * player + i] != 0) {
+            ++n;
+        }
+    }
+    return n;
+}
+
+// [RE 0x44128F] cardBagLowestValue：卡包中价格最低（byte_47FDEF 最小）的卡 id（舍弃候选）
+int cardBagLowestValue(const GameState& st, int player) {
+    int best = 10000;
+    int card = 0;
+    for (int i = 0; i < 15; ++i) {
+        const int c = st.cardState60[15 * player + i];
+        if (c != 0 && best > kCardPrices[c]) {
+            best = kCardPrices[c];
+            card = c;
+        }
+    }
+    return card;
+}
+
+// [RE 0x441343] cardBagRemove：移除指定卡（后槽前移 + 尾槽清 0 + 赠卡池恢复）
+void cardBagRemove(GameState& st, int player, int card) {
+    const size_t off = static_cast<size_t>(15 * player);
+    for (int i = 0; i < 15; ++i) {
+        if (st.cardState60[off + i] == card) {
+            std::memmove(&st.cardState60[off + i], &st.cardState60[off + i + 1], 14 - i);
+            st.cardState60[off + 14] = 0;
+            ++st.propStock[card - 1]; // [RE 0x4413A2] ++byte_499197[card]
+            return;
+        }
+    }
+}
+
+// [RE 0x4412E4] giveCardToBag：放入玩家卡包（满 15 → 先舍弃最低价；赠卡池递减）
+void giveCardToBag(GameState& st, int player, int card) {
+    if (cardBagCount(st, player) == 15) {
+        cardBagRemove(st, player, cardBagLowestValue(st, player));
+    }
+    const size_t off = static_cast<size_t>(15 * player);
+    for (int i = 0; i < 15; ++i) {
+        if (st.cardState60[off + i] == 0) {
+            st.cardState60[off + i] = static_cast<uint8_t>(card);
+            --st.propStock[card - 1]; // [RE 0x44133B] --byte_499197[card]
+            return;
+        }
+    }
+}
+
+// [RE 0x441E12] drawFreeCard：从赠卡池按数量展开后 rand() 抽一张放入卡包（0 = 池空）
+int drawFreeCard(GameState& st, int player) {
+    uint8_t list[136]; // 原版栈缓冲 136（kPropStockInit 总和 = 100 ≤ 136）
+    int n = 0;
+    for (int v4 = 0; v4 < 30; ++v4) {
+        for (int i = 0; i < st.propStock[v4] && n < 136; ++i) {
+            list[n++] = static_cast<uint8_t>(v4);
+        }
+    }
+    if (n == 0) {
+        return 0;
+    }
+    const int card = list[std::rand() % n] + 1;
+    giveCardToBag(st, player, card);
+    return card;
+}
+
+// [RE 0x441F73] showCardGet：卡片获得显示（卡片图 data.mkf[570+id] @ (138,200) 不透明 +
+//   提示框 g_tipFrame 帧 5 @ (220,129) + 文本；音效槽 23；停留 1500ms）
+// 依据: 0x441F73 反编译; 0x441204 内嵌元素头 = 0x010000A5（w=165,h=256）；
+//       blitElementFullscreen(dst, elem, 138, 200)；audioPlayEffect(dword_482402 = 槽 23)；
+//       sub_4528B9(0x5DC = 1500)；原版另保存/恢复 (0,40,440,480) 背景（重写逐帧重绘等价）
+namespace {
+struct CardGetCtx {
+    Application* app = nullptr;
+    const char* text = nullptr;
+    std::vector<uint16_t> pixels;
+    int w = 0;
+    int h = 0;
+    uint64_t startMs = 0;
+};
+
+void cardGetDraw(CardGetCtx& ctx) {
+    Application& app = *ctx.app;
+    Surface& dst = app.surface();
+    renderGameFrame(app); // 地图背景
+    if (ctx.w > 0 && ctx.h > 0) {
+        uint16_t* d = dst.pixels();
+        for (int row = 0; row < ctx.h; ++row) {
+            const int py = 200 + row; // [RE 0x441F73] (138,200)（元素偏移 0）
+            if (py < 0 || py >= Surface::kHeight) {
+                continue;
+            }
+            for (int col = 0; col < ctx.w; ++col) {
+                const int px = 138 + col;
+                if (px < 0 || px >= Surface::kWidth) {
+                    continue;
+                }
+                d[static_cast<size_t>(py) * Surface::kWidth + px] =
+                    ctx.pixels[static_cast<size_t>(row) * ctx.w + col];
+            }
+        }
+    }
+    const UiImage& tip = app.gameState().estateTiles; // [RE 0x48BAD8] g_tipFrame
+    if (tip.frameCount() > 5) {
+        blitElement(dst, tip.frame(5), 220, 129, false); // [RE 0x456418]
+    }
+    app.text().setFont(16, 0xF0F0F0, 0x101010, kTextStyleShadow | kTextStyleBold, 1);
+    app.text().drawText(dst, ctx.text, 220, 129, 4); // [RE 0x44FABC]
+}
+
+bool cardGetHandler(const SDL_Event* event, void* user) {
+    CardGetCtx& ctx = *static_cast<CardGetCtx*>(user);
+    if (!event) {
+        ctx.startMs = SDL_GetTicks();
+        cardGetDraw(ctx);
+        return true;
+    }
+    if (event->type == kModalTimerEvent) {
+        if (SDL_GetTicks() - ctx.startMs >= 1500) {
+            ctx.app->events().requestExit(0);
+        } else {
+            cardGetDraw(ctx);
+        }
+        return true;
+    }
+    return true; // [RE 0x4528B9(1500)] 纯延时，期间不响应输入
+}
+} // namespace
+
+void showCardGet(Application& app, int cardId, const char* text) {
+    GameState& st = app.gameState();
+    CardGetCtx ctx;
+    ctx.app = &app;
+    ctx.text = text;
+    constexpr int kCardW = 165; // [RE 0x441204] 内嵌元素头 0x010000A5（w=0x00A5,h=0x0100）
+    constexpr int kCardH = 256;
+    auto blob = st.data.read(static_cast<size_t>(570 + cardId));
+    if (blob && blob->size() >= static_cast<size_t>(kCardW) * kCardH * 2) {
+        ctx.w = kCardW;
+        ctx.h = kCardH;
+        ctx.pixels.resize(static_cast<size_t>(kCardW) * kCardH);
+        std::memcpy(ctx.pixels.data(), blob->data(), ctx.pixels.size() * sizeof(uint16_t));
+    } else {
+        RICH4_LOGW("card get: data.mkf[%d] unavailable (RE 0x441F73)", 570 + cardId);
+    }
+    app.audio().playEffectSlot(23); // [RE 0x482402] 槽 23（Effect.mkf[62]）
+    RICH4_LOGI("card get: id %d -> %s (RE 0x441F73)", cardId, text);
+    runModal(app, &cardGetHandler, &ctx, 16);
+}
+
 // [RE 0x41D559] ownerCanCollectRent：地主状态免收租检查（false = 免收，已显示提示）
 // 依据: 0x41D559 反编译; 依次判断（命中即 showMessage(文本, 1500) 并返回 false）：
 //   flag(+23) 高/低半字节均非 0 = 房屋查封中; 地主 +65 同盟对象 == 付款人+1 = 與%s同盟中;
@@ -498,7 +662,10 @@ int32_t applyGodRentModifier(Application& app, int payer, int32_t rent, const ch
 //     → showMessage("此地屬%s請付%d元過路費") → transferMoney(flags=0 收款入银行)
 //   事件格 case 10/11/12 得點券（0x41B184/0x41B21E/0x41B2A3）：data.mkf[537] FLC（阻塞）+
 //     showMessage("得點券ＮＮ點") + 点券 50/30/10；角色语音 sub_44EF41 待 P4（case 12 原版无）
-// 差异: 事件格 case 2..9/13..16（P2 后续）、商業用地/行業設施點特殊点（loc_41A168）、
+//   事件格 case 13 卡片（0x41B302）：data.mkf[536] FLC + drawFreeCard（0x441E12 赠卡池抽卡，
+//     满 15 舍弃最低价，见 cardBag* 辅助）+ showCardGet（0x441F73 卡片图/提示框/1500ms）；
+//     卡片获得语音 sub_44F230 待 P4
+// 差异: 事件格 case 2..9/14..16（P2 后续）、商業用地/行業設施點特殊点（loc_41A168）、
 //       AI 决策（sub_41D7D4）、收租的同盟分账/死神代付/免租卡片/浮动数字（P4）
 int landingEvent(Application& app, uint16_t cellEntId) {
     GameState& st = app.gameState();
@@ -531,6 +698,23 @@ int landingEvent(Application& app, uint16_t cellEntId) {
         // [RE 0x41B211] sub_44EF41(player, 0, 语音)：P4 语音系统接入；case 12 无语音
         RICH4_LOGI("landingEvent: cellType %u 得點券 +%d (total %u) RE 0x41982D case %u", cellType,
                    kPoints[i], st.players[p].points, cellType);
+        return 0x80;
+    }
+    if (cellType == 13) {
+        // [RE 0x41B302] case 13 卡片格：
+        //   data.mkf[536] FLC（28x40 @ (208,180)，透明，音效 Effect.mkf[99]）→
+        //   drawFreeCard（0x441E12：从赠卡池抽卡入卡包；池空返回 0 → 不弹提示直接下一位）→
+        //   sprintf("得到%s！", 卡名) → sub_441F73 显示卡片图 → 语音 sub_44F230（P4）→ 0x80
+        playEventFlc(app, 536, 0xD0, 0xB4, 99); // [RE 0x45144F(res, 0xD0, 0xB4, 1, 0x63)]
+        const int cardId = drawFreeCard(st, p);
+        if (cardId == 0) {
+            return 0x80; // [RE 0x41B34F] 0 → jmp default（不弹提示）
+        }
+        char text[64];
+        std::snprintf(text, sizeof(text), "得到%s！", kCardNames[cardId]); // [RE 0x463AA8]
+        showCardGet(app, cardId, text);                                    // [RE 0x441F73]
+        // [RE 0x44F230] 卡片获得语音 byte_47FDEF[cardId*8]：P4 语音系统
+        RICH4_LOGI("landingEvent: card cell -> %s (RE 0x41982D case 13)", text);
         return 0x80;
     }
     if (cellType != 0) {

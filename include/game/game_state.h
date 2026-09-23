@@ -392,7 +392,7 @@ struct GameState {
     int32_t misc37Pos = 0;           // [RE 0x4990B4] dword_4990B4
 
     uint32_t miscTable80[10][2] = {}; // [RE 0x498E28] g_miscTable80
-    uint8_t misc8A[8] = {};          // [RE 0x496B30] g_misc8A
+    uint8_t misc8A[8] = {};          // [RE 0x497320] byte_497320 道具池（8 种；kMisc8Init 初值）
     uint8_t misc8B[8] = {};          // [RE 0x496B60] g_misc8B
 
     // [RE 0x499088] dword_499088 地图旋转方向（0-7）

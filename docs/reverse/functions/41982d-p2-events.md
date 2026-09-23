@@ -20,7 +20,7 @@
 | 10 | 得５０點 | 10 | 0x41B184 | ✅ 已实现（+50 點券） |
 | 11 | 得３０點 | 11 | 0x41B21E | ✅ 已实现（+30 點券） |
 | 12 | 得１０點 | 12 | 0x41B2A3 | ✅ 已实现（+10 點券） |
-| 13 | 卡片 | 13 | 0x41B302（`sub_441E12` 抽卡） | ✅ 机制已明 |
+| 13 | 卡片 | 13 | 0x41B302（`sub_441E12` 抽卡） | ✅ 已实现 |
 | 14 | 銀行 | 14 | `sub_4379C9`（UI）+ `sub_436668`（停留） | 🟡 入口已明 |
 | 15 | 百貨公司 | 15 | `sub_42E931`（商店） | 🟡 入口已明 |
 | 16 | 魔法屋 | 16 | `sub_43380A` | 🟡 入口已明 |
@@ -162,23 +162,62 @@ g_playerPoints += 50/30/10
   `landingEvent` case 10/11/12 分支；`game_loop.cpp` `drawEventFlcFrame`（色键跳过）；
   `FliDecoder::colorKey()`；角色语音 → P4
 
-## 3. case 13 卡片（机制已明）
+## 3. case 13 卡片（✅ 已实现）
 
 流程（0x41B302）：
 ```
-res = data.mkf[536]（0x218）
-sub_45144F(res, 0xD0, 0xB4, 1, 0x63)       // FLC 536
-v = sub_441E12(currentPlayer)              // 抽卡：返回卡片 id（0 = 无卡可抽）
-if (v == 0) return;                        // 不弹提示
-name = cardNames[v]（dword_47FDEA[v*8]）
-sprintf(chText, "得到%s！"（0x463AA8）, name)
-sub_441F73(currentPlayer, chText)          // 给卡 + 显示
-sub_44F230(currentPlayer, byte_47FDEF[v*8]) // 卡片获得语音
+res = sub_450441(data.mkf, 536, 0)          // data.mkf[536]
+sub_45144F(res, 0xD0, 0xB4, flags=1, soundId=0x63)  // 阻塞：x=208,y=180,透明,Effect.mkf[99]
+sub_456E11(res)
+v = sub_441E12(currentPlayer)               // 从赠卡池抽卡入卡包；0 = 池空
+if (v == 0) jmp default                     // 不弹提示
+sprintf(chText, "得到%s！", dword_47FDEA[v*8])  // 卡片名（0x463AA8 格式串）
+sub_441F73(v, chText)                       // 卡片图 + 提示框 + 1500ms
+sub_44F230(currentPlayer, byte_47FDEF[v*8]) // 卡片获得语音（P4）
 ```
 
-- `sub_441E12`（0x441E12）：抽卡（从 `cardPool60` 库存随机取，可能受"大衰神"等影响）
-- `sub_441F73`（0x441F73）：给玩家卡片（上限 10 张，额满需舍弃）
-- 卡片名表 `dword_47FDEA`（0x47FDEA）、稀有度/语音索引 `byte_47FDEF`（0x47FDEF）
+### 3.1 卡片表 `dword_47FDEA`（0x47FDEA，30 项 × 8 字节；项 0 为空占位）
+
+| 偏移 | 含义 |
+|------|------|
+| +0 | 名称指针（BIG5） |
+| +4 | **赠卡池初始数量**（`byte_47FDF6`，newGameInit 0x4071AC 写入 `g_propStock[]`） |
+| +5 | **价格（点券）** `byte_47FDEF`；卡包满时舍弃最小值（0x44128F） |
+| +6 | 目标类型（0/2，P4 使用流程待深入） |
+| +7 | 标志（0/1/2，P4 待深入） |
+
+卡 id 1..30 顺序：均富/均貧/購地/換地/換屋/轉向/改建/拍賣/天使/惡魔/怪獸/拆除/搶奪/停留/
+冬眠/夢遊/陷害/復仇/嫁禍/免費/免罪/送神符/請神符/紅/黑/查稅/漲價/查封/同盟/烏龜
+（改建卡 = 7，与 `cardRebuildEffect` 0x44309B 的"卡片 7"吻合；价格见 `kCardPrices`）。
+
+### 3.2 卡包与赠卡池
+
+| 数组 | 地址 | 语义 |
+|------|------|------|
+| `g_cardState60` | 0x499120 | 4 玩家 × 15 槽（`15*p+i`），槽内存**卡 id**，0=空；卡片格的抽卡放入此处 |
+| `g_propStock` | 0x499198 | 30 种卡的**赠卡池**剩余数量（= `byte_499197[1..30]`；命名旧称"道具库存"有误） |
+| `g_playerCards` | 0x49915B/0x49915C | givePlayerCard（0x445A4D）计数数组（15/玩家，同名卡上限 9，card≤8 受 `g_cardPool` 限制）；与 cardState 的分工待 P4 卡片使用流程厘清 |
+
+辅助函数：
+
+| 函数 | 地址 | 语义 |
+|------|------|------|
+| `sub_441262` | 0x441262 | 卡包非空槽计数 |
+| `sub_44128F` | 0x44128F | 找价格最低（`byte_47FDEF` 最小）的卡（舍弃候选） |
+| `sub_441343` | 0x441343 | 移除指定卡（后槽前移 + 尾槽清零 + 池恢复 `++byte_499197[card]`） |
+| `sub_4412E4` | 0x4412E4 | 放入卡包：满 15 → 先舍弃最低价 → 找空槽 → `--byte_499197[card]` |
+| `sub_441E12` | 0x441E12 | 抽卡：按池数量展开 0-based 索引列表（栈 136B）→ `rand()%n` → 返回索引+1 |
+
+### 3.3 显示函数 `sub_441F73`（0x441F73）
+
+- 卡片图 `data.mkf[570+cardId]`（**165×256 RGB555 无头位图** 84480B；头部 12B 是像素数据）
+- 内嵌元素头 `dword_441204` = `{0x010000A5, 0, 0}`（w=0x00A5=165, h=0x0100=256, 偏移 0）
+- `blitElementFullscreen(dst, elem, 138, 200)`（不透明）
+- 提示框 `g_tipFrame + 72`（帧 5）@ (220,129) + 文本（居中 align 4）
+- `audioPlayEffect(dword_482402)` = 游戏音效**槽 23**（Effect.mkf[62]）
+- `sub_4528B9(0x5DC = 1500)` 延时；期间原版保存/恢复 (0,40,440,480) 背景
+  （`sub_451E7E`/`sub_451EDB`，重写逐帧 `renderGameFrame` 等价）
+- 重写：`turn_system.cpp` `drawFreeCard`/`giveCardToBag`/`cardBag*` + `showCardGet`（runModal 模态）
 
 ## 4. case 2 新聞（`newsEvent`，36 事件）
 
@@ -287,7 +326,7 @@ case 14:
 ### 建议顺序（由简到繁）
 
 1. ~~**case 10/11/12 得點券**~~ ✅ 已完成（2026-09-23；建立事件格 FLC 阻塞播放模板 `playEventFlc`）
-2. **case 13 卡片格**（依赖 `sub_441E12` 抽卡 + `givePlayerCard` 链路，P4 卡片系统的前置）
+2. ~~**case 13 卡片格**~~ ✅ 已完成（2026-09-23；赠卡池抽卡/卡包 15 槽/舍弃最低价 + `showCardGet` 显示）
 3. **case 4/5 監獄/醫院**（状态系统 + 保释界面；与 P3 `onPlayerActionPhase` cellNo 联动）
 4. **case 2/3 新聞/命運**（事件表 + 36/37 个效果函数——可先实现"空效果+插画+标题"骨架）
 5. **case 6/7/8 小游戏**（需输入/计时/得分逻辑）
@@ -297,6 +336,7 @@ case 14:
 
 | 项 | 原版地址 | 说明 |
 |----|---------|------|
+| 卡片表/卡包/赠卡池 | 0x47FDEA / 0x499120 / 0x499198 | ✅ 已建模（`kCardNames`/`kCardPrices`/`cardState60`/`propStock`）；`g_playerCards`（0x49915B）与 `g_cardPool` 分工待 P4 |
 | `g_jailFlags` / `g_hospitalFlags` | 0x496B30 / 0x496B60 | 監獄/醫院在押标志（8 字节）—— 未建模 |
 | `byte_498DF3` | 0x498DF3 | 玩家到达门外状态（16B/玩家）—— 未建模 |
 | 事件槽 NPC 犯人表 | 0x498E28 起 16B×4 | 保释人/目标格/坐标/状态 —— 未建模 |

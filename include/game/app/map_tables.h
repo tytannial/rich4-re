@@ -25,8 +25,13 @@ extern const uint8_t kCellTypeInit[46];
 extern const int32_t kStockInit[8][12][9];
 // [RE 0x47F072] off_47F072 股票名（各组 field0 名称指针，UTF-8）
 extern const char* const kStockNames[8][12];
-// [RE 0x47FDF6] byte_47FDF6 道具初始库存
+// [RE 0x47FDF6] byte_47FDF6 卡片赠卡池初始数量（卡 id 1..30 → propStock[0..29]；
+//   0x4071AC newGameInit 初始化；旧称"道具初始库存"有误，详见 41982d-p2-events.md §3）
 extern const uint8_t kPropStockInit[30];
+// [RE 0x47FDEA] dword_47FDEA 卡片名表（30 项，id 1..30；项 0 为空占位）
+extern const char* const kCardNames[31];
+// [RE 0x47FDEA+5] byte_47FDEF 卡片价格（点券；0x44128F 舍弃时取最小值）
+extern const uint8_t kCardPrices[31];
 // [RE 0x47FEE6] byte_47FEE6
 extern const uint8_t kMisc8Init[8];
 // [RE 0x47ECEC] unk_47ECEC

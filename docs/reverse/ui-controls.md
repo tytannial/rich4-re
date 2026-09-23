@@ -27,7 +27,7 @@
 | 金额/数字格式化 | 0x452793/0x429691 | `game_panel/stock` | 全局 | §12 |
 | 数字输入框 | 0x453544/0x452C02 | `number_input_dialog.cpp` | 买卖/认购 | §13 |
 | 键位捕获编辑 | 0x411122 | `hotkey_dialog.cpp` | 热键设置 | §14 |
-| 提示/消息/气泡/拾取 | 0x440CAC/0x417559 | `message/object_tip` | 全局 | §15 |
+| 提示/消息/气泡/拾取/卡片获得 | 0x440CAC/0x417559/0x441F73 | `message/object_tip/turn_system` | 全局 | §15 |
 | HUD 常驻（工具条/页签/日历/小地图/前进面板） | 0x417E26/0x417191 | `game_panel/game_loop` | 游戏内 | §16 |
 | 头像/精灵选择网格 | 0x40423C/0x404E44 | `new_game_dialog.cpp` | 选人 | §17 |
 | 动画（转盘/进场/闪烁/棋子/FLC/事件FLC 阻塞播放） | 0x43F7C6/0x404E44/0x45144F | `roulette/new_game/game_loop/turn_system` | 事件、开局 | §18 |
@@ -319,6 +319,7 @@ void pressDown(Surface& dst, int l, int t, int r, int b, int SHIFT, const uint8_
 | 确认框/askDialog | 0x453A32/0x440BA8 | 半区 YES/NO（§3.3），带文本变体先画提示框再居中 |
 | 物件信息气泡 `object_tip` | 0x417559 | 像素掩码拾取（§2）取最上层 → 生成多行文本 → **方向感知**画框 `data.mkf[517]` 帧 0..3（`v5 = (y-40<框高)?+1 | (x>440-框宽)?+2`，帧自带方向偏移），逐行 `align 2`、行距 18 |
 | 悬停信息条 | 0x41DB91 等 | 悬停行画变暗条 + 居中名（§4/§7） |
+| 卡片获得显示 `showCardGet` | 0x441F73 | 卡片图 `data.mkf[570+id]`（165×256 **无头 RGB555** @(138,200) 不透明拷贝）+ 帧 5 提示框 @(220,129) + 文本；音效槽 23；`runModal(...,16ms)` 停留 1500ms 吞输入（重写逐帧 `renderGameFrame` 免背景保存/恢复） |
 
 **提示框族资源**：`data.mkf[517]`（`g_tipFrame`，`st.estateTiles`）——帧 4 设施图标底、**帧 5 通用提示框**、
 帧 0..3 方向气泡、帧 18..21 小地图旋转箭头。
