@@ -51,7 +51,7 @@
 ### 1.1 物價指數 `g_moneyMul`（0x4990E8）
 
 - 初始 1（`newGameInit` 0x4073B4 `mov ds:g_moneyMul, imm`；`[HELP 5]` "遊戲開始時，物價指數為１"）。
-- 更新：`updateMoneyIndex`（0x423ACF，月底结算链路调用）：
+- 更新：`updateMoneyIndex`（0x423ACF，**每日** `advanceDay` 调用 0x41CFBF；✅ 已接入 `economy.cpp`）：
   ```
   idx = Σ playerTotalAssets(p)（仅存活） / 存活人数 / g_startMoneyVal(0x49908C)
   if (idx > g_moneyMul) g_moneyMul = idx      // 只升不降
@@ -290,7 +290,7 @@ owner 自己停留：index4 → 轮盘(3) 免费投保；index11 → 施工抽�
 | 研究所（corp type4）研发 `labDevelopDialog` | ❌ 本文 §4（P4 道具系统依赖；入口条件已实现为日志） |
 | 行業設施點（specPt）收费 | ✅ 本文 §5（`landingEvent` 6000..7999：航空/保險轮盘、電腦 `dayCount`、汽車/石油载具×步数、房地產按地价、index12；公库 `fund` 收款）；出國 n 天状态 `sub_40D375` ❌ 未接入（仅完成付款） |
 | 監獄/醫院罚款（保险理赔）+ 保险期 | ✅ 入狱/住院 `jailPlayer`/`hospitalizePlayer`（`turn_system.cpp`）+ `insurancePayout` 0x44BA63；保险期（+62 `g_playerCardCnt`，非卡片数）递减 0x41CC4B |
-| `g_moneyMul` 月度更新 | ❌ 本文 §1.1（`updateMoneyIndex` 0x423ACF 未接入，当前恒 1） |
+| `g_moneyMul` 更新 | ✅ 本文 §1.1（`updateMoneyIndex` 0x423ACF 每日接入 `advanceDay`；已消除"恒 1"） |
 | `playerTotalAssets` | ✅ `economy.cpp`（股票市值 + 地产 + 公司；贷款/存款已计入） |
 | 轮盘/老虎机读数（3/4 位） | ✅ **完整转盘 UI**（`roulette_dialog.cpp` `roulettePrompt`）：panel.mkf[68+theme] 14 帧 + 指针逐格步进（40ms/帧）+ 减速停止（间隔 1..5）+ 停留 40 帧；读数 = `byte_475D0C` 终格值。神明轮盘（`slotMachineValue` 4 滚轮）❌ 未接入 |
 | 到期处理 `sub_40AC7B` | 🟡 期限写入已有（`g_landPermDays`），到期清算 ❌ |

@@ -1765,12 +1765,14 @@ void updatePlayerStates(Application& app, int p) {
 // 依据: 0x41CF67 反编译; byte_46CB06 音乐淡出；sub_452117 日期推进；++g_dayCount；
 //       checkVictory(0) 未结束则每日处理（股票/月度事件/住宅用地/商業用地到期）
 // 差异: 音乐淡出（sub_454ACB/sub_454D91）、checkVictory（M3）、
-//       stockTick/sub_423ACF/sub_428475/sub_452444/sub_42BA97/sub_431712/sub_439BFA 待接入；
-//       当前实现日期推进 + 住宅用地/商業用地到期回收 + 小地图标记刷新
+//       sub_428475/sub_42BA97/sub_431712/sub_439BFA 待接入；
+//       当前实现日期推进 + 物價指數 + 住宅用地/商業用地到期回收 + 小地图标记刷新
 void advanceDay(Application& app) {
     GameState& st = app.gameState();
     const int newMonth = advanceDate(st);
     ++st.dayCount;
+    // [RE 0x41CFBF] 物價指數每日更新（只升不降；原版位于 checkVictory 之后）
+    updateMoneyIndex(app);
 
     // 住宅用地/商業用地到期回收（原版 estates+23/+48、corps+28/+52 与 dword_497160 比较）
     bool refreshed = false;

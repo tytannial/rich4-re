@@ -165,7 +165,8 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
 也可趁拍卖买地或透过【交易】指令买卖房屋 `[HELP 21]`。物价指数（`g_moneyMul`）以全体总财产平均值计算，
 平均值加倍时上升，过路费/事件金额/地价随之倍数上涨，月底结算公布 `[HELP 5]`
 ——**公式**：`g_moneyMul = max(旧值, Σ存活玩家总资产 / 存活数 / 初始资金)`（`updateMoneyIndex` 0x423ACF，只升不降；
-总资产口径 `playerTotalAssets` 0x4239B9 = 现金+存款−贷款+持股×现价+地产/设施估值）→ `pricing-formulas.md` §1.1。
+**每日** `advanceDay` 0x41CFBF 调用，已接入 `economy.cpp`）；
+总资产口径 `playerTotalAssets` 0x4239B9 = 现金+存款−贷款+持股×现价+地产/设施估值 → `pricing-formulas.md` §1.1。
 
 ## 4. 通用辅助函数
 
@@ -189,7 +190,7 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
 | `roulettePrompt` | **转盘 UI**：帧 `(a1&3)+68` 弹轮盘（0..3 主题），指针逐格步进+减速停止，读数 = `byte_475D0C` 终格值；供航空/保險/旅館/購物 费用乘数 | 0x44090E | ✅（`roulette_dialog.cpp` 完整还原；神明 `slotMachineValue` 4 滚轮 0x43F23E ❌ 未接入） |
 | `selectFacilityDialog` | 「請選擇設施類別」建设选择 UI（返回 corp type） | 0x440AAC | ✅（`facility_dialog.cpp`；0x41A22A 建设施接入，改建卡 flag=1 0x4431C4） |
 | `labDevelopDialog` | 研究所（corp type4）「請選擇欲開發道具」：逐级研发槽选 1，写 +29/+30 | 0x44101D | ❌ |
-| `updateMoneyIndex` | **物价指数**：`g_moneyMul = max(M, Σ存活 playerTotalAssets / 存活数 / g_startMoneyVal)`（只升不降） | 0x423ACF | ❌ |
+| `updateMoneyIndex` | **物价指数**：`g_moneyMul = max(M, Σ存活 playerTotalAssets / 存活数 / g_startMoneyVal)`（只升不降；**每日** advanceDay 0x41CFBF） | 0x423ACF | ✅（`economy.cpp`；玩家面板 idx 5 显示 ❌） |
 | `playerTotalAssets` | 总资产 = 现金+存款−贷款+Σ持股×现价+Σestate(+28+30×级/连锁)+Σcorp(+34+36×级) | 0x4239B9 | ✅（`economy.cpp`） |
 | `expireAssets` | **到期清算**：estate/corp 降级或归公，地主欠 `30×M×level`；事件槽释放 | 0x40AC7B | ❌ |
 | `rollDice` / `g_diceValue` | 本次行走总步数（掷骰后保留，供加油/修车/过路×步数公式） | 0x419572 / 0x40D9B7 | ✅（`GameState.diceValue` 0x48BAFC，掷骰定格记录） |

@@ -31,4 +31,8 @@ void eliminatePlayer(Application& app, int p);
 //   地产(priceAdd + type?priceBase:priceBase×level) + 公司(buildPrice + feeTable[0]×sub)
 int32_t playerTotalAssets(Application& app, int player);
 
+// [RE 0x423ACF] updateMoneyIndex（物價指數）：g_moneyMul = max(旧值,
+//   Σ存活 playerTotalAssets / 存活数 / g_startMoneyVal)（只升不降；advanceDay 每日调用 0x41CFBF）
+void updateMoneyIndex(Application& app);
+
 } // namespace rich4

@@ -261,7 +261,7 @@
 - 任务 F 建造菜单未实现（入口待 IDA 定位；大地块特殊建筑外观资源待查）
 - 事件格 case 2..16（P2；得點券为下一步）
 - AI 买地决策 `sub_41D7D4`（未实现，AI 不买地）；`alive&6` 自动行动（P5）
-- `updateMoneyIndex` 物價指數月度更新未实现（`g_moneyMul` 恒 1）；到期清算 `expireAssets` 未实现
+- ~~`updateMoneyIndex` 物價指數月度更新~~ ✅ 2026-09-23 接入（每日 advanceDay；面板显示待做）；到期清算 `expireAssets` 未实现
 - 银行贷款/存款利息（case 14 銀行格）、股市交易市场/挂单/每月 15 号分红、资产清单（idx 16）
 - 研究所研发 `labDevelopDialog`（P4 道具系统）
 - 收租的同盟分账 / 死神代付 / 免租卡片 / 浮动数字（P4 卡片与神明系统）

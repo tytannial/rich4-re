@@ -70,6 +70,32 @@ int32_t playerTotalAssets(Application& app, int player) {
     return total;
 }
 
+// [RE 0x423ACF] updateMoneyIndex
+// 依据: 0x423ACF 反编译; g_moneyMul = max(旧值, Σ存活 playerTotalAssets / 存活数 / g_startMoneyVal)
+//   （只升不降；advanceDay 每日调用 0x41CFBF）
+// 差异: 存活数为 0 / 起始资金 ≤0 时保持原值（原版未防护除零）
+void updateMoneyIndex(Application& app) {
+    GameState& st = app.gameState();
+    int64_t sum = 0;
+    int alive = 0;
+    for (int i = 0; i < st.playerCount && i < 8; ++i) {
+        if (st.players[i].alive) {
+            sum += playerTotalAssets(app, i);
+            ++alive;
+        }
+    }
+    if (alive == 0 || st.startMoneyVal <= 0) {
+        return;
+    }
+    const int32_t avg = static_cast<int32_t>(sum / alive);
+    const int32_t idx = avg / st.startMoneyVal;
+    if (idx > st.moneyMul) {
+        st.moneyMul = idx;
+    }
+    RICH4_LOGI("money index: avg %d start %d -> mul %d (RE 0x423ACF)", avg, st.startMoneyVal,
+               st.moneyMul);
+}
+
 // [RE 0x41D2C6] transferMoney
 // 依据: 0x41D2C6 反编译; 详见 economy.h 注释
 void transferMoney(Application& app, int from, int to, int32_t amount, int flags) {
