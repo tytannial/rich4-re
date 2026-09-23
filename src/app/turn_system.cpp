@@ -56,6 +56,13 @@ int daysInMonth(int year, int month) {
     return kDays[month];
 }
 
+// [RE 0x41D7D4] AI 买地决策：现金+存款−地价 > 物價指數 × min(初始资金×5%, 7000) → 购买
+// 依据: 0x41D7D4 反编译（dbl_463CC8=0.05，上限 7000；g_startMoneyVal/g_moneyMul/g_currentPlayer）
+bool aiBuyDecision(const GameState& st, const Player& pl, int32_t price) {
+    const int32_t reserve = std::min(static_cast<int32_t>(st.startMoneyVal * 0.05), 7000);
+    return (pl.bank + pl.cash - price) > st.moneyMul * reserve;
+}
+
 // [RE 0x452117] 日期推进；返回是否跨月（原版返回 v2）
 int advanceDate(GameState& st) {
     int year = static_cast<int>((st.gameDate >> 16) & 0xFFFF);
@@ -810,7 +817,7 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                           price);
             bool buy = false;
             if ((pl.alive & 6) != 0) {
-                buy = false; // TODO [RE 0x41D7D4] AI 决策 sub_41D7D4(price)
+                buy = aiBuyDecision(st, pl, price); // [RE 0x41D7D4] AI 买地决策
             } else if (pl.alive == 1) {
                 // [RE 0x440BA8] askDialog：文本居中 (220,140) + YES/NO 框 (220,320)
                 buy = confirmDialog(app, text, 220, 320);
@@ -956,7 +963,7 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                           price);
             bool buy = false;
             if ((pl.alive & 6) != 0) {
-                buy = false; // TODO [RE 0x41D7D4] AI 决策（与 estate 共用）
+                buy = aiBuyDecision(st, pl, price); // [RE 0x41D7D4] AI 买地决策（与 estate 共用）
             } else if (pl.alive == 1) {
                 buy = confirmDialog(app, text, 220, 320);
             }
