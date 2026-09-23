@@ -61,10 +61,10 @@
 **经验**：
 - 原版画到"元素画布"再 blit（`sub_456418`/`sub_4563F5` 目标常为 `dword_48A08C`=640×480 后台缓冲）；
   重写直接画到 `app.surface()`，每帧全量重绘，故无需原版"保存/恢复背景"。
-- **帧锚点 offset**：SMP/SPR 帧头 `x/y` 是锚点偏移，原版 blit 落点 = 实参 − offset
-  （0x455B3A/0x455C52/0x455E24）；重写 `blitElement*`/`blitSpriteFrame*` 以参数为左上角
-  （不应用 offset）→ 移植时 offset 非 0 的帧必须补偿（`x - f.offsetX`）。校验工具与
-  全部已扫描清单见 **`frame-anchor.md`**。
+- **帧锚点 offset**：SMP/SPR 帧头 `x/y` 是锚点偏移，原版与重写 blit 的落点都是
+  **实参 − offset**（重写见 `clipBlit`；原版 0x455B3A/0x455C52/0x455E24）→
+  **移植直接抄原版实参，勿自行加减 offset**（曾双重补偿踩坑）。校验工具与全部已扫描
+  清单见 **`frame-anchor.md`**。
 - 色值一律以 **RGB888 常量**书写再 `rgb888To555()`；原版栈上 `push 16776960` 之类即 RGB888 十进制。
 
 ## 2. 坐标基准与命中检测
@@ -137,6 +137,12 @@ void pressDown(Surface& dst, int l, int t, int r, int b, int SHIFT, const uint8_
 `confirm_dialog`（0x453A32/0x45367E，`data.mkf[440]`）：背景帧 0、YES 高亮帧 1、NO 高亮帧 2。
 命中只按**水平中线** `x < ox + w/2` 分左右半区，不用矩形表。ESC/右键=NO(0)，左键=按半区返回 1/0。
 带文本变体 = `askDialog 0x440BA8`：先 `blitElement(data.mkf[517] 帧5)` 提示框 @(cx,140)，再 `drawText(...,align 4)` 居中（§15）。
+
+**嵌套模态须保存/恢复背景**（原版 0x453A32：进入 `sub_451E7E`=saveBackground 框矩形、
+退出 `sub_451EDB` 写回）：重写为单 Surface 事件驱动绘制，外层模态不会自动重绘 →
+确认框退出后不恢复会**残留**（表现为"点 NO 后卡住/无法交互"）。重写用公共
+`saveRegion/restoreRegion`（`blit.h`，0x451A97/0x451EDB）在 `runModal` 前后包裹。
+同一机制适用于任何"叠加在外层画面上的嵌套模态/悬停板"。
 
 ### 3.4 步进 ±按钮
 
@@ -459,10 +465,12 @@ UI 音效与游戏音效槽**是两套**，勿混：
   重写 OGG 从头恢复）；语音由 drawText `#NNNN` 前缀自动播（0x45441A→playVoice 单通道）。
 - **重写位置**：底座 `src/app/float_message.cpp`（`FloatMessage`）；`src/app/jail_dialog.cpp`
   含 **監獄保释**（0x43D304 人类 UI + AI）与 **醫院办理出院**（0x43E9A4 阶段机 + 护士动画
-  0x43EB28-0x43ECF3：上窗行走 {5,6,5}/{10,11,10}@139/165,158 + 下窗小像 7/8、12/13 驻留复位）；
-  NPC 格按③占位。
+  0x43EB28-0x43ECF3：眼/嘴覆盖帧 @139/165,158/180(183)）；**NPC 格释放动画**见坑③。
 - **坑**：① 浮动消息判定"超时未完语音→继续等"（静音=纯 2s）；② 两面板格坐标/板位置不同勿混用；
-  ③ NPC 格（i≥4）头像帧号在底图帧表内，显示可点但释放依赖事件槽 NPC（P5）；
+  ③ NPC 格（i≥4）保释/出院动画已实现：**panel[64] 帧 (i-4) 全身像**（小偷/強盜/流氓/間諜）
+  @監獄(365,450)/醫院(420,450)（落点 = 实参 − 帧 offset）+ **答谢消息** `dword_475BE2[i]`
+  （#0123~#0126，監獄板 @(210,150)/醫院 @(200,200)）→ 消息播完重绘退出；人类费用 **300 点券**
+  （`>=700` 仅 AI 分支）；事件槽 NPC 路面行走待 P5；
   ④ **阶段机的转换必须覆盖"消息被点击跳过"路径**——原版依赖 `floatMsgAdvance(0)` 在下一次
   WM_TIMER 返回 1（0x43DB7C）；重写若把转换写在 `msg.active()` 分支内，点击跳过开场白后阶段
   会卡住（症状：点格/右键全无反应）。写法：`msgDone = msg.active() ? msg.advance() : true;`
@@ -473,8 +481,8 @@ UI 音效与游戏音效槽**是两套**，勿混：
   **原版复位帧 8/13 实参 (179,198)/(205,198) 是 `Rect.right/bottom` 笔误**（对帧 4 的
   像素对齐误差 300，正确嘴部 (139,180) 误差 19），重写按嘴部左上角修正；
   帧 5/6/7/8 为不透明整矩形（无透明像素，用 `blitElementOpaque` 保真）；
-  ⑦ **帧锚点 offset 通病**见 `frame-anchor.md`（面板头像等 offset 非 0 的帧必须
-  `x - f.offsetX` 补偿；panel[63]/[65] 头像已补偿）。
+  ⑦ **帧锚点 offset**：blit 内部已按 offset 定位（`clipBlit`），直接抄原版实参即可；
+  错位排查流程见 `frame-anchor.md`。
 
 ## 新增控件模板（发现新控件时复制填写）
 

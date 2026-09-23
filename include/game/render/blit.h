@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 namespace rich4 {
 
@@ -73,5 +74,13 @@ void grayscaleImage(uint16_t* pixels, size_t pixelCount);
 // 依据: 0x456180 反编译; 每行 1280 字节按 offset(&~3) 环绕拷贝到 640x480 缓冲
 //       （dst 行 = src[off..1280) + src[0..off)），实现地图预览水平无限滚动
 void blitScrolledMap(Surface& dst, const uint8_t* src, int offset);
+
+// [RE 0x451A97 saveBackground / 0x451EDB 恢复] 区域背景保存/恢复
+// 依据: yesNoDialog 0x453A32 进入时 sub_451E7E（内部 saveBackground(word_46CAEC, 0,
+//       rect)）保存框矩形，退出时 sub_451EDB 原样写回；悬停信息板等同机制。
+// 用途: 嵌套模态（确认框/悬停板）覆盖外层画面后，退出时必须还原，否则残留
+//       （重写为单 Surface 事件驱动绘制，无原版逐模态 WM_PAINT 全量重绘）
+bool saveRegion(std::vector<uint16_t>& out, const Surface& dst, int x, int y, int w, int h);
+void restoreRegion(Surface& dst, const std::vector<uint16_t>& bg, int x, int y, int w, int h);
 
 } // namespace rich4

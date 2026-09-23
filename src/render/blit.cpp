@@ -261,4 +261,48 @@ void blitScrolledMap(Surface& dst, const uint8_t* src, int offset) {
     }
 }
 
+bool saveRegion(std::vector<uint16_t>& out, const Surface& dst, int x, int y, int w, int h) {
+    if (w <= 0 || h <= 0) {
+        return false;
+    }
+    out.assign(static_cast<size_t>(w) * h, 0);
+    const uint16_t* src = dst.pixels();
+    for (int row = 0; row < h; ++row) {
+        const int py = y + row;
+        if (py < 0 || py >= Surface::kHeight) {
+            continue;
+        }
+        for (int col = 0; col < w; ++col) {
+            const int px = x + col;
+            if (px < 0 || px >= Surface::kWidth) {
+                continue;
+            }
+            out[static_cast<size_t>(row) * w + col] =
+                src[static_cast<size_t>(py) * Surface::kWidth + px];
+        }
+    }
+    return true;
+}
+
+void restoreRegion(Surface& dst, const std::vector<uint16_t>& bg, int x, int y, int w, int h) {
+    if (w <= 0 || h <= 0 || bg.size() < static_cast<size_t>(w) * h) {
+        return;
+    }
+    uint16_t* d = dst.pixels();
+    for (int row = 0; row < h; ++row) {
+        const int py = y + row;
+        if (py < 0 || py >= Surface::kHeight) {
+            continue;
+        }
+        for (int col = 0; col < w; ++col) {
+            const int px = x + col;
+            if (px < 0 || px >= Surface::kWidth) {
+                continue;
+            }
+            d[static_cast<size_t>(py) * Surface::kWidth + px] =
+                bg[static_cast<size_t>(row) * w + col];
+        }
+    }
+}
+
 } // namespace rich4

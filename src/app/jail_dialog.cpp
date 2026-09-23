@@ -34,6 +34,11 @@ constexpr int kBailPanelH = 95;
 constexpr int kBailCost[8] = {30, 30, 30, 30, 300, 300, 300, 300};
 // [RE 0x47ED5A] 事件槽 NPC 名表（索引 4..7；0..3 为占位 0x11111111 不用）
 const char* const kNpcNames[8] = {"", "", "", "", "小偷", "強盜", "流氓", "間諜"};
+// [RE 0x475BE2] NPC 答谢消息 4 条（監獄/醫院共用；原版 `&dword_475BE2[i]+2`，i=4..7 → 0..3）
+//   顺序 = NPC 4..7（小偷/強盜/流氓/間諜），文本含 #NNNN 语音前缀
+constexpr const char* kNpcThanks[4] = {
+    "#0124謝謝你！你真是\n我的再生父母!", "#0125我先走了！大恩\n大德來日再報!",
+    "#0123太感激了！我一\n定會報答你的!", "#0126受人點水之恩，\n必當湧泉已報!"};
 
 // [RE 0x43C8FB] panel.mkf[63] 帧表（资源+12+12*帧）
 enum BailFrame : int {
@@ -50,51 +55,21 @@ enum BailFrame : int {
 struct BailCtx {
     Application* app = nullptr;
     UiImage* sheet = nullptr;
+    UiImage* npcMark = nullptr; // panel[64]（NPC 出狱标记 4 帧：小偷/強盜/流氓/間諜头像）
     int hover = -1; // dword_48C4C4（-1 无）
     std::vector<uint16_t> hoverBg;
     int hoverBgX = 0;
     int hoverBgY = 0;
-    FloatMessage msg; // 0x44EC30/44ECB6/44EE18（点券不足）
+    std::vector<uint16_t> npcBg; // 标记区域背景（原版 saveBackground）
+    int npcBgX = 0;
+    int npcBgY = 0;
+    int npcBgW = 0;
+    int npcBgH = 0;
+    bool npcReleased = false; // [RE 0x48C4C9] 已释放 NPC → 答谢消息播完退出
+    FloatMessage msg; // 0x44EC30/44ECB6/44EE18（点券不足/答谢）
 };
 
-// ===== 背景保存/恢复（原版 saveBackground word_46CAEC / blitElementFullscreen 恢复）=====
-
-void saveRegion(std::vector<uint16_t>& out, const Surface& dst, int x, int y, int w, int h) {
-    out.assign(static_cast<size_t>(w) * h, 0);
-    const uint16_t* src = dst.pixels();
-    for (int row = 0; row < h; ++row) {
-        const int py = y + row;
-        if (py < 0 || py >= Surface::kHeight) {
-            continue;
-        }
-        for (int col = 0; col < w; ++col) {
-            const int px = x + col;
-            if (px < 0 || px >= Surface::kWidth) {
-                continue;
-            }
-            out[static_cast<size_t>(row) * w + col] =
-                src[static_cast<size_t>(py) * Surface::kWidth + px];
-        }
-    }
-}
-
-void restoreRegion(Surface& dst, const std::vector<uint16_t>& bg, int x, int y, int w, int h) {
-    uint16_t* d = dst.pixels();
-    for (int row = 0; row < h; ++row) {
-        const int py = y + row;
-        if (py < 0 || py >= Surface::kHeight) {
-            continue;
-        }
-        for (int col = 0; col < w; ++col) {
-            const int px = x + col;
-            if (px < 0 || px >= Surface::kWidth) {
-                continue;
-            }
-            d[static_cast<size_t>(py) * Surface::kWidth + px] =
-                bg[static_cast<size_t>(row) * w + col];
-        }
-    }
-}
+// ===== 背景保存/恢复 → 公共 blit.h saveRegion/restoreRegion（0x451A97/0x451EDB）=====
 
 // ===== 绘制 =====
 
@@ -111,10 +86,9 @@ void drawPanel(BailCtx& ui) {
             const int avatar =
                 i >= 4 ? i + 13 : st.players[i].charIndex + kFrameAvatarBase;
             if (avatar < ui.sheet->frameCount()) {
-                // [RE 0x43C8FB] sub_456418(帧, dword_475C04/08)：落点 = 格坐标 - 帧锚点 offset
-                //   （头像帧 5..20 offset 非 0，不补偿会偏左上）
-                const UiFrameView& f = ui.sheet->frame(avatar);
-                blitElement(dst, f, x - f.offsetX, y - f.offsetY, false);
+                // [RE 0x43C8FB] sub_456418(帧, dword_475C04/08)：blit 内部按帧锚点 offset
+                //   定位（clipBlit：落点 = 实参 − offset），直接用格坐标即可
+                blitElement(dst, ui.sheet->frame(avatar), x, y, false);
             }
             blitElement(dst, ui.sheet->frame(kFrameIncarc), x, y, false);
         } else {
@@ -266,10 +240,45 @@ bool bailHandler(const SDL_Event* event, void* user) {
         }
         clearHover(ui); // [RE 0x43D01D] 点中格子先恢复悬停板区域
         if (hit >= 4) {
-            // TODO(P5 事件槽 NPC): 原版 NPC 格点选 = panel[64] 帧 (i-4) @(365,450) +
-            //   浮动消息 dword_475BE2[i]+2 + releaseJailNpc(i) + 扣点券（点数需 >=700）。
-            //   当前按占位策略：显示点券不足，不进入释放阶段。
-            showNotEnough(ui);
+            // [RE 0x43D0DA..0x43D11B] NPC 保释（人类）：点券 < 300 → #0002；否则 yesNo →
+            //   擦格（帧0 同区域 140×137 + 帧4 空格框）→ panel[64] 帧(i-4) @(365,450)
+            //   → 答谢消息（板帧1 @(210,150)，文本 dword_475BE2[i]）→ releaseJailNpc(i)
+            //   → 扣点券 300 + byte_48C4C9（消息播完退出）
+            if (st.players[st.currentPlayer].points < kBailCost[hit]) {
+                showNotEnough(ui);
+                return true;
+            }
+            if (confirmDialog(app, nullptr, 320, 240)) { // [RE 0x453A32] yesNoDialog(320,240)
+                clearHover(ui);
+                Surface& dst = app.surface();
+                const int gx = kBailCellX[hit];
+                const int gy = kBailCellY[hit];
+                blitElementRegionOpaque(dst, ui.sheet->frame(kFrameBg), gx, gy, gx, gy, 140, 137,
+                                        false); // [RE 0x43D0F2] blitOpaqueToBackbuffer(帧0)
+                blitElement(dst, ui.sheet->frame(kFrameEmpty), gx, gy, false); // [RE 0x43D117] 帧4
+                if (ui.npcMark && ui.npcMark->frameCount() > static_cast<size_t>(hit - 4)) {
+                    // [RE 0x43D13E] sub_456418(panel[64] 帧(i-4), 365, 450)：blit 内部按帧 offset
+                    //   定位；背景保存用实际落点 (365−offsetX, 450−offsetY)
+                    const UiFrameView& nf = ui.npcMark->frame(hit - 4);
+                    const int nx = 365 - nf.offsetX;
+                    const int ny = 450 - nf.offsetY;
+                    saveRegion(ui.npcBg, dst, nx, ny, nf.width, nf.height);
+                    ui.npcBgX = nx;
+                    ui.npcBgY = ny;
+                    ui.npcBgW = nf.width;
+                    ui.npcBgH = nf.height;
+                    blitElement(dst, nf, 365, 450, false);
+                }
+                ui.msg.setup(*ui.sheet, kFrameMsg, 210, 150, 0, -6, 0x101010, 0); // [RE 0x43D189]
+                ui.msg.show(app, kNpcThanks[hit - 4]); // [RE 0x43D19E] dword_475BE2[i]+2
+                st.jailFlags[hit] = 0; // [RE 0x43D7BF releaseJailNpc] 事件槽 16B×4 记录待 P5
+                st.players[st.currentPlayer].points = static_cast<uint16_t>(
+                    st.players[st.currentPlayer].points - kBailCost[hit]);
+                ui.npcReleased = true; // [RE 0x48C4C9]
+                RICH4_LOGI("jailBail: NPC %d released by %d, cost %d (event-slot walk TODO P5, "
+                           "RE 0x43CFDB)",
+                           hit, st.currentPlayer, kBailCost[hit]);
+            }
             return true;
         }
         if (st.players[st.currentPlayer].points < kBailCost[hit]) {
@@ -284,12 +293,19 @@ bool bailHandler(const SDL_Event* event, void* user) {
         return true;
     }
     case kModalTimerEvent: {
-        // [RE 0x43CB7A] 100ms tick：消息推进；完成→全重绘；已保释→退出
+        // [RE 0x43CB7A] 100ms tick：消息推进；完成→全重绘；已释放 NPC→退出（byte_48C4C9）
         if (!ui.msg.active()) {
+            if (ui.npcReleased) { // 消息已被点击跳过
+                drawPanel(ui); // [RE 0x43CBBA] jailBailDraw + InvalidateRect
+                app.events().requestExit(0); // [RE 0x43D1A3] PostMessage(0x205)
+            }
             return true;
         }
         if (ui.msg.advance(app)) {
             drawPanel(ui); // [RE 0x43CBBA] sub_43C8FB + InvalidateRect
+            if (ui.npcReleased) {
+                app.events().requestExit(0);
+            }
         }
         return true;
     }
@@ -405,11 +421,7 @@ enum HospFrame : int {
     kHPoints = 30,   // +372 点券板 @(8,432)，数字 @(88,452)
 };
 
-// [RE 0x475BE2 表 4 项] NPC 出院答谢消息（P5 前占位不触发）
-constexpr const char* kHospNpcThanks[4] = {
-    "#0124謝謝你！你真是\n我的再生父母!", "#0125我先走了！大恩\n大德來日再報!",
-    "#0123太感激了！我一\n定會報答你的!", "#0126受人點水之恩，\n必當湧泉已報!",
-};
+// [RE 0x475BE2 表 4 项] NPC 答谢消息见文件顶部 kNpcThanks（監獄/醫院共用）
 constexpr const char* kHospOpen = "#0127您好！請問您要替誰\n辦理出院手續？"; // off_475CC4
 constexpr const char* kHospOk = "#0129ＯＫ！您的朋友已經\n可以出院了！";     // off_475CCC
 constexpr const char* kHospBye = "#0130要保重身體喔！";                      // off_475CD0
@@ -454,10 +466,9 @@ void drawPanelHosp(HospCtx& ui) {
         }
         const int avatar = i >= 4 ? i + kHNpcBase : st.players[i].charIndex + kHAvatarBase;
         if (avatar < ui.sheet->frameCount()) {
-            // [RE 0x43D88F] sub_456418(帧, dword_475C64/68)：落点 = 格坐标 - 帧锚点 offset
-            //   （头像帧 14..29 offset 非 0，不补偿会偏左上）
-            const UiFrameView& f = ui.sheet->frame(avatar);
-            blitElement(dst, f, kHospCellX[i] - f.offsetX, kHospCellY[i] - f.offsetY, false);
+            // [RE 0x43D88F] sub_456418(帧, dword_475C64/68)：blit 内部按帧锚点 offset
+            //   定位（clipBlit：落点 = 实参 − offset），直接用格坐标即可
+            blitElement(dst, ui.sheet->frame(avatar), kHospCellX[i], kHospCellY[i], false);
         }
     }
     blitElement(dst, ui.sheet->frame(kHPoints), 8, 432, false);
@@ -605,8 +616,9 @@ void doDischarge(HospCtx& ui) {
         st.hospitalFlags[i] = 0;
         ui.released = true;
     } else {
-        // [RE 0x43F014] NPC 出院：panel[64] 帧 (i-4) @ (420,450) + 答谢消息 + releaseHospitalNpc
-        //   当前 NPC 格为占位（点券不足），此分支仅 P5 事件槽启用后触发
+        // [RE 0x43DC76..0x43DE4C] NPC 出院：panel[64] 帧 (i-4) @(420,450)（落点 = 实参 − offset）
+        //   + 答谢消息（板帧1 @(200,200)，文本 dword_475BE2[i]）+ releaseHospitalNpc(i)
+        //   → byte_48C4F6=1（答谢播完退出）；事件槽记录/路面行走待 P5
         ui.phase = kHNpcClean;
         const UiFrameView& nf = ui.npcMark->frame(i - 4 < ui.npcMark->frameCount() ? i - 4 : 0);
         ui.npcBgX = 420 - nf.offsetX;
@@ -614,11 +626,14 @@ void doDischarge(HospCtx& ui) {
         ui.npcBgW = nf.width;
         ui.npcBgH = nf.height;
         saveRegion(ui.npcBg, dst, ui.npcBgX, ui.npcBgY, ui.npcBgW, ui.npcBgH);
-        blitElement(dst, nf, 420, 450, false);
+        blitElement(dst, nf, 420, 450, false); // blit 内部按帧 offset 定位
         ui.msg.setup(*ui.sheet, kHMsg, 200, 200, 0, -6, 0x101010, 0);
-        ui.msg.show(app, kHospNpcThanks[i - 4]);
-        st.hospitalFlags[i] = 0; // TODO(P5): releaseHospitalNpc 事件槽表记录
-        RICH4_LOGI("hospital visit: NPC %d released (P5 事件槽未建模)", i);
+        ui.msg.show(app, kNpcThanks[i - 4]); // [RE 0x43DE3C] dword_475BE2[i]+2
+        st.hospitalFlags[i] = 0; // [RE 0x43EE6E releaseHospitalNpc] 事件槽 16B×4 待 P5
+        ui.released = true;      // [RE 0x48C4F6]
+        RICH4_LOGI("hospital visit: NPC %d released by %d, cost %d (event-slot walk TODO P5, "
+                   "RE 0x43DE4C)",
+                   i, st.currentPlayer, kHospCost[i]);
     }
     st.players[st.currentPlayer].points =
         static_cast<uint16_t>(st.players[st.currentPlayer].points - kHospCost[i]);
@@ -696,21 +711,17 @@ bool hospHandler(const SDL_Event* event, void* user) {
             return true;
         }
         clearHoverHosp(ui);
-        if (hit >= 4) {
-            // TODO(P5 事件槽 NPC): 同監獄版占位——原版 NPC 出院 = 确认消息 → 阶段6 标记+答谢
-            ui.phase = kHPNotEnough;
-            ui.msg.show(app, kHospNotEnough);
-            return true;
-        }
+        // [RE 0x43E686..0x43E7B8] 玩家/NPC 共用：点券 < 费用 → #0002；否则 yesNo →
+        //   阶段4 + #0129「您的朋友已經可以出院了」→ 播完 doDischarge（NPC 走标记+答谢分支）
         if (st.players[st.currentPlayer].points < kHospCost[hit]) {
-            ui.phase = kHPNotEnough; // [RE 0x43D0DA 医院版 0x43F0xx]
+            ui.phase = kHPNotEnough; // [RE 0x43E7B8 医院版 0x43E77A]
             ui.msg.show(app, kHospNotEnough);
             return true;
         }
-        if (confirmDialog(app, nullptr, 320, 240)) {
-            ui.target = hit;
+        if (confirmDialog(app, nullptr, 320, 240)) { // [RE 0x453A32] yesNoDialog(320,240)
+            ui.target = hit;      // [RE 0x48C4F5]
             ui.phase = kHPDischarge;
-            ui.msg.show(app, kHospOk); // [RE 0x43F0DE] 消息播完 → doDischarge
+            ui.msg.show(app, kHospOk); // [RE 0x43E7AB off_475CCC] 消息播完 → doDischarge
         }
         return true;
     }
@@ -910,10 +921,18 @@ void jailBailDialog(Application& app) {
         RICH4_LOGW("jailBail: panel.mkf[63] load failed (RE 0x43D353)");
         return;
     }
+    // [RE 0x43D35D] panel.mkf[64]（dword_48C4BC）：NPC 出狱标记 4 帧
+    UiImage npcMark;
+    if (auto blobNpc = st.panel.read(64)) {
+        npcMark.load(std::move(*blobNpc));
+    } else {
+        RICH4_LOGW("jailBail: panel.mkf[64] unavailable (RE 0x43D35D)");
+    }
     app.audio().pushSceneMusic(15); // [RE 0x43D38E] musicPlayScene(15)
     BailCtx ui;
     ui.app = &app;
     ui.sheet = &sheet;
+    ui.npcMark = &npcMark;
     runModal(app, &bailHandler, &ui, 100);
     app.audio().resumeSceneMusic(); // [RE 0x454BCC] sub_454BCC 弹栈恢复
     RICH4_LOGI("jailBail done (RE 0x43D304)");

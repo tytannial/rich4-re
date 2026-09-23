@@ -103,10 +103,13 @@ byte_496BAA[player] += days                        // 累计入狱天数（统�
 > 0x43CAAB/0x43C8FB + AI 还原 0x43D3DF + 音乐栈 push/resume + FloatMessage 点券不足；
 > `landingEvent` case 4 接入）；**醫院办理出院 ✅**（`hospitalVisitDialog`：人类 UI 还原 0x43DA27
 > 阶段机（#0127 开场 → 选择 → #0129 出院 → released 退出 / #0130 告别 / #0002 不足）+
-> 护士行走/小像微动画（帧 5/6、10/11 序列 + 小窗 7/8、12/13 驻留）+ AI 0x43EAA5 + case 5 接入）。
-> NPC 格（i≥4）占位策略：**显示可点但一律「點數不足」消息，不进入释放**，
-> `// TODO(P5 事件槽 NPC)` 注释就位（原版：panel[64] 帧 (i-4)@(420,450 医院/365,450 監獄) +
-> 答谢消息 `dword_475BE2` 四文本表（#0123/#0124/#0125/#0126）+ release* 函数 + 点数 >=700）。
+> 护士眼睛/嘴部微动画 + AI 0x43EAA5 + case 5 接入）。
+> **NPC 格（i≥4）保释/出院动画 ✅**（人类面板，2026-09-23）：点券 < 300 → #0002；否则
+> `yesNoDialog(320,240)` → **擦格 + panel[64] 帧(i-4) 全身像标记**（監獄 @(365,450)、
+> 醫院 @(420,450)；落点 = 实参 − 帧 offset）+ **答谢浮动消息**（監獄板帧1 @(210,150)、
+> 醫院 @(200,200)；文本 `dword_475BE2[i]` = #0123~#0126）→ `releaseJailNpc`/`releaseHospitalNpc`
+> → 消息播完面板重绘并退出（監獄 `byte_48C4C9` / 醫院 `byte_48C4F6`）。
+> **事件槽数据与路面行走（release* 另一半）待 P5**（`// TODO(P5 事件槽 NPC)` 注释就位）。
 
 case 4 进入 `jailBailDialog`（case 5 为 `hospitalVisitDialog`，结构相同）：
 
@@ -157,6 +160,19 @@ loadWalkResources(a1)
 
 - `word_48BAE0` = special 8002 的 cellEnt（監獄格）；`word_48BAE2` = special 8001（醫院格）
   （`loadMapData` 0x408023..0x408068 扫描）
+- **每项 16 字节**（`i = a1-4`，共 4 项 = 0x498E28..0x498E68）：
+  `+0 u16 格坐标 x`（`g_miscTable80`） / `+2 u16 格坐标 y`（`word_498E2A`） /
+  `+4 u16 監獄/醫院格 cellEnt`（`word_498E2C`） / `+6 u16 = 0`（`word_498E2E`） /
+  `+8 u8 保释人`（`byte_498E30`） / `+10 u8 = 0`（`byte_498E32`） /
+  `+11 u8 状态`（`byte_498E33`：1=監獄 / 2=醫院，格子类型 == 4/5 时再 `|= 0x80`）
+- `releaseJailNpc` 0x43D7BF / `releaseHospitalNpc` 0x43EE6E：`a1 < 4` 走 `sub_40D6BE(a1)`（玩家
+  恢复占用/朝向）；`a1 >= 4` 填上表 + 清标志；末尾都调 `loadWalkResources(a1)`（供该槽在地图现身）
+- **答谢消息表 `dword_475BE2`**（0x475BE2，内存布局实测）：`u32 voice[4]`（= 0x96/0xB7/0xA7/0x3E）
+  + `u16 pad` + `LPCSTR thanks[4]`；原版代码 `&dword_475BE2[i]+2`（i=4..7）正好取到
+  `thanks[i-4]` = #0124/#0125/#0123/#0126（对应 NPC 4..7：小偷/強盜/流氓/間諜），
+  文本 `#NNNN` 前缀自动触发对应语音。重写 `kNpcThanks[4]`（jail_dialog.cpp）監獄/醫院共用
+- **人类面板的点数检查 = 费用表本身**（NPC 300，0x43D0DA/0x43E77A），**`>=700` 只在 AI 分支**
+  （`jailBailDialog`/`visitAi` 的 NPC 目标）——两者勿混
 - 玩家 0..3 释放：`sub_40D6BE(player)` + 清 `g_jailFlags/8B`
 - 四大惡人（小偷/流氓/強盜/間諜）即保释出狱的事件槽 NPC（帮助 `[HELP 47/52/53/56]`），
   出狱后在路面行动（行窃/保护费/抢卡/盗领）—— P5 事件槽 NPC 实现依据

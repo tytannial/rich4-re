@@ -25,7 +25,8 @@
 大地图填色 ✅、买地面板背景 ✅；**仅剩建造菜单 ❌**（任务 F，`sub_423B3B/4225A3/423CF3`
 已调研，**入口已确认 = 工具条 case 6（`sub_424492`→`sub_423CF3`）**）；**P2 事件格推进中**
 （得點券 case 10/11/12 ✅、卡片格 case 13 ✅、監獄/醫院 case 4/5 ✅ 含保释·出院面板+护士动画
-+ **开局默认在押 NPC**（小偷·強盜/流氓·間諜，0x40734F；NPC 格释放待 P5）；事件格 FLC 阻塞播放模板 `playEventFlc` + `drawEventFlcFrame` +
++ **开局默认在押 NPC**（小偷·強盜/流氓·間諜，0x40734F）+ **NPC 释放动画**（panel[64] 全身像
++ 答谢消息，0x43CFDB/0x43DE4C；事件槽路面行走待 P5）；事件格 FLC 阻塞播放模板 `playEventFlc` + `drawEventFlcFrame` +
 `showCardGet` + `jailPlayer`/`hospitalizePlayer`/`insurancePayout`；面板底座
 `FloatMessage`/语音 `playVoice`/音乐栈见 `ui-controls.md` §25）。
 **M2 股市 ✅**：`stock_system.cpp`（stockTick/认购/控股/买卖交易量）+ `spec_pt_dialog.cpp`
@@ -40,8 +41,8 @@
 **M2 待办**（详见 `docs/reverse/functions/` 各档案「差异」段，按选定路线排序）：
 
 - P2 事件格实现（研究已完成，见 `41982d-p2-events.md`；**得點券/卡片格/監獄/醫院（含保释·
-  出院面板+护士动画）✅ 2026-09-23**，继续：銀行/物價 → 新聞/命運 → 小游戏/樂透/百貨/魔法屋；
-  面板底座 `ui-controls.md` §25，NPC 格占位待 P5）
+  出院面板+护士动画+NPC 释放动画）✅ 2026-09-23**，继续：銀行/物價 → 新聞/命運 → 小游戏/樂透/百貨/魔法屋；
+  面板底座 `ui-controls.md` §25，事件槽 NPC 路面行走待 P5）
 - 任务 F 建造菜单（大地块特殊建筑外观 + 5 页签；入口待 IDA 定位）
 - 经济系统剩余：银行贷款（case 14 銀行格）、物價指數月度更新（`updateMoneyIndex` 未实现，
   `g_moneyMul` 当前恒 1）、股市交易市场/挂单/每月 15 号分红、卡片与道具使用（P4）
@@ -157,11 +158,11 @@ python tools/re_map.py
 - **帧头公式**：精灵/元素帧头 = `资源基址 + 12 + 12*帧号`
   （如 `+84`=帧6、`+72`=帧5、`+24`=帧1）；结构数组内偏移如
   `&dword_48231A + 8*控件 + 8`。误读会画错帧或错位。
-- **帧锚点 offset**：SMP/SPR 帧头 `x/y` 是**锚点偏移**，原版 blit 落点 = 实参 − offset；
-  重写 `blitElement*`/`blitSpriteFrame*` 以参数为左上角（**不应用 offset**）→ offset 非 0
-  的帧直接绘制会偏（面板头像常见偏 10~30px）。用
-  `python tools/frame_align.py align` 做像素差扫描校准，**勿肉眼判断**；原版实参偶有笔误
-  （医院复位帧 8/13 传了 Rect.right/bottom）。方法/清单见 `docs/reverse/frame-anchor.md`。
+- **帧锚点 offset**：SMP/SPR 帧头 `x/y` 是**锚点偏移**，原版与重写 blit 的落点都是
+  **实参 − offset**（重写见 `blit.cpp` `clipBlit`）→ **移植直接抄原版实参，勿自行加减
+  offset**（曾双重补偿踩坑）。元素错位用 `python tools/frame_align.py align` 做像素差扫描
+  验证原版实参，**勿肉眼判断**；原版实参偶有笔误（医院复位帧 8/13 传了 Rect.right/bottom）。
+  方法/清单见 `docs/reverse/frame-anchor.md`。
 - **时序精确到调用点**：同一功能在不同阶段表现不同（例：掷骰——扔骰动画无音效 →
   骰子 FLC 第30帧与结束各播一次落地槽 → 转移动才播载具槽）；必须看反编译中
   调用发生的**具体位置**，不能想当然。

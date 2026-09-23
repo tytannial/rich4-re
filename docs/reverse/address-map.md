@@ -96,7 +96,7 @@
 | `0x4291D6` | stockTick | `src/app/new_game.cpp:507` | 0x4291D6 反编译; 12 只股票随机初始涨跌（rand），历史记录 dword_497328 差异: 股票行情在游戏内经济阶段接入；当前仅保持 kStockInit 初值 |
 | `0x4291D6` | stockTick | `src/app/stock_system.cpp:98` | 0x4291D6 反编译; ① 停市判定 sub_428D01（dword_4990DC \|\| isSpecialDate）→ 跳过； ② 全局扰动 dword_4990EC = (rand()-0x4000)/4097； ③ 每支：昨收 = 当前价 → 停牌（动量 = 0）/新闻（bit4 ? +10 : -10）/正常（个股扰动 (rand()-0x4000)/1171 → 动量 += 扰动×波动率 + 全局扰动；价格远离基准（上市=面值/10000、 非上市=基准价）时动量 ×0.5 或 ×2）→ clamp ±10 → 当前价 = sub_428EC5(昨收,动量) → stockHistory[144*i + turnCounter]； ④ turnCounter = (+1) % 144；大盘 = Σ价格 × 10 差异: 休市 = stockMarketClosed \|\| isSpecialDate（已接入）；事件设 stockMarketClosed 待卡片系统 |
 | `0x4294D5` | updateSpecPtControl | `src/app/stock_system.cpp:164` | 0x4294D5 反编译; ① 从 shareholders[4] 移除该玩家（memmove 压缩）； ② 若持股 > 0：从索引 2 倒序比较（空位跳过、持股 >= 我则停、否则后移）→ 插入； ③ owner = shareholders[0]（第一大股东）；owner 变化 → rebuildMiniMap 并返回 1 |
-| `0x43D1B3` | 保释玩家 | `src/app/jail_dialog.cpp:180` | 0x43D13E blitOpaque 底图帧 0 区域 (格,140×137) + 0x43D189 空格框； 0x43CF2C days=BYTE2&0x7F（0 则 1），addPlayerDebt(i,cur,-100×M×days)（欠款矩阵未建模）； 0x43CF5F PostMessage(0x205) = 立即退出（原版释放无浮动消息） |
+| `0x43D1B3` | 保释玩家 | `src/app/jail_dialog.cpp:154` | 0x43D13E blitOpaque 底图帧 0 区域 (格,140×137) + 0x43D189 空格框； 0x43CF2C days=BYTE2&0x7F（0 则 1），addPlayerDebt(i,cur,-100×M×days)（欠款矩阵未建模）； 0x43CF5F PostMessage(0x205) = 立即退出（原版释放无浮动消息） |
 | `0x43D593` | jailPlayer | `src/app/turn_system.cpp:1586` | 0x43D593 反编译; 已入狱（BYTE2 非 0）→ 天数累加 &0x7F；首次： sub_40D761 清旧状态（監獄/醫院标志 + stateFlags 全清）→ alive &= 0x0F → 释放当前格占用 → cellEntId = 監獄格（word_48BAE0）→ sprite = evtCells[2]（綠島）→ BYTE2 = days → g_jailFlags=1 → FLC 538 @(0,40)（settings[1] 动画过程）→ 语音（P4）→ 保险理赔 M×2000×days → byte66 += days（累计） 差异: cellTable/cellNo 位置表（word_496D0A）P5；语音 P4；FLC 背景保存由逐帧重绘等价 |
 | `0x44090E` | roulettePrompt(theme, | `include/game/app/roulette_dialog.h:7` | 0x44090E → panel.mkf[(theme&3)+68]（14 帧：帧 0 底盘/帧 1 中心/帧 2..13 十二格） + g_tipFrame 帧 5 @(220,140) + 文本 off_475CF8[theme]（%s = arg）+ 帧 0 @(265,230)； 动画 sub_43F7C6/sub_43F127：起始格 rand%12 → 指针逐格 +1（12 格循环，40ms/帧）→ 滚动 40 帧 → 画中心 → 减速步进（间隔 1..5，每 3 步 +1）→ 落在有效格（表值≠0xFF） 且间隔达 5 → 停留 40 帧 → 返回 byte_475D0C[12*theme+终格] 音效: Effect.mkf[52]（dword_475D4C） 返回表值（出國天數/旅館天數/購物倍數/投保天數） |
 | `0x44090E` | roulettePrompt | `src/app/roulette_dialog.cpp:145` | 0x44090E 反编译; panel.mkf[(theme&3)+68] 14 帧（0 底盘/1 天使/2..13 十二格）+ data.mkf[517] 帧 5 提示框 @(220,140) + off_475CF8 文本 + sub_43F7C6 动画状态机（迁移: 原版阻塞消息泵 + 离屏表面 → runModal 模态事件栈（覆盖层优先，事件不再传给场景）+ 逐帧 renderGameFrame 重绘（离屏表面恢复背景的效果等价）） |
@@ -122,19 +122,19 @@
 | `0x453A32` | confirmDialog（data.mkf[440]，YES/NO | `include/game/app/confirm_dialog.h:7` | 0x453A32 → sub_450441(data, 440) + 居中 (x,y) + runModal(sub_45367E); sub_45367E 鼠标 x 左/右半 → 帧 1/2 高亮; 左键抬起左半→1(YES)/右半→0(NO); 右键抬起或取消键 → 0 [RE 0x440BA8] askDialog 形式：text 非空时先在 (cx, 140) 居中绘制文本 （setTextFont(16, 0xF0F0F0, 0x101010, 3, 1)，原版另有 g_tipFrame+72 背景框待补） 返回: true = YES（确定）, false = NO（取消） |
 | `0x454FE1` | sub_454FE1 | `src/app/turn_system.cpp:75` | 0x454FE1 查表 word_48242C（atan(min/max)），0x454FB4 映射 8 方向 差异: 用标准 atan2 等价替代查表（结果一致，避免硬编码 2049 项表） |
 | `0x45523E` | sub_45523E（经 | `include/game/render/surface.h:44` | 0x45523E 返回 (c>>3)&0x1F \| (c>>6)&0x3E0 \| (c>>9)&0x7C00（RGB888→RGB555）（迁移: SDL 侧内部固定 RGB555，原版 dword_47637C 显示格式分支（sub_45175D 检测）不再需要） |
-| `0x4552B7` | convertImageChannels（经 | `include/game/render/blit.h:55` | 0x455337 对每像素 R/G/B 各 5bit 查 32 字节表后重组 RGB555 （表 = unk_485D68 + 32*a6，-16 = kChannelHalf，-20 = kChannelThird） 用于地图预览暗化（选人界面滚动背景） |
-| `0x4552E7` | scaleElementChannels | `include/game/render/blit.h:62` | 0x4552E7 对元素内 (x, y, w, h) 区域逐像素做 convertImageChannels 变换 用于已选头像变暗（-16）与悬停名字条（-20） |
-| `0x4553DA` | grayscaleImage（经 | `include/game/render/blit.h:67` | 0x455442 反汇编; gray = (R + G + B + 16) >> 2, 重组 R=G=B=gray; 0 保持 用于 AI 玩家头像灰度化 |
+| `0x4552B7` | convertImageChannels（经 | `include/game/render/blit.h:56` | 0x455337 对每像素 R/G/B 各 5bit 查 32 字节表后重组 RGB555 （表 = unk_485D68 + 32*a6，-16 = kChannelHalf，-20 = kChannelThird） 用于地图预览暗化（选人界面滚动背景） |
+| `0x4552E7` | scaleElementChannels | `include/game/render/blit.h:63` | 0x4552E7 对元素内 (x, y, w, h) 区域逐像素做 convertImageChannels 变换 用于已选头像变暗（-16）与悬停名字条（-20） |
+| `0x4553DA` | grayscaleImage（经 | `include/game/render/blit.h:68` | 0x455442 反汇编; gray = (R + G + B + 16) >> 2, 重组 R=G=B=gray; 0 保持 用于 AI 玩家头像灰度化 |
 | `0x4557A1` | 等距地块四边形纹理映射 | `include/game/render/iso_blit.h:9` | 0x4557A1 反编译; 4 顶点四边形 + 32x32 8bit 纹理逐行扫描填充, 纹理索引 = vInt*32 + uInt（原版 0x4557A1 内 (u>>16)&0x1F \| (v>>11)&0x3E0）, 像素经 g_gndPalette 取 RGB555; 0 不透明覆盖 重写: 原版 0x45596A 边光栅化（16.16 定点 span 缓冲）等价实现为 标准扫描线 + u/v 线性插值（等距地块为平行四边形，仿射映射等价） quad 顶点顺序: (col,row)→(col+1,row)→(col+1,row+1)→(col,row+1) 纹理坐标对应: (0,0)→(32,0)→(32,32)→(0,32) |
-| `0x455B3A` | sub_455B3A | `include/game/render/blit.h:33` | 不透明 blit（整元素, qmemcpy 快速拷贝）, 裁剪到目标尺寸 |
-| `0x455C52` | sub_455C52 | `include/game/render/blit.h:18` | 逐像素 `if (v19) *v16 = v19`（色键 0 透明）; 目标位置 = (x - offsetX, y - offsetY); 裁剪模式 0 用目标尺寸, 1 用 dword_4861B8..C4; 返回是否实际绘制 |
-| `0x455E24` | sub_455E24 | `include/game/render/blit.h:28` | 不透明 blit + 源区域（qmemcpy 快速拷贝，无色键判断） |
-| `0x455FD9` | sub_455FD9 | `include/game/render/blit.h:23` | 色键 blit + 源区域 (srcX, srcY, w, h); 裁剪时同步调整源偏移 (a6/a7) |
-| `0x456180` | blitScrolledMap | `include/game/render/blit.h:72` | 0x456180 反编译; 每行 1280 字节按 offset(&~3) 环绕拷贝到 640x480 缓冲 （dst 行 = src[off..1280) + src[0..off)），实现地图预览水平无限滚动 |
+| `0x455B3A` | sub_455B3A | `include/game/render/blit.h:34` | 不透明 blit（整元素, qmemcpy 快速拷贝）, 裁剪到目标尺寸 |
+| `0x455C52` | sub_455C52 | `include/game/render/blit.h:19` | 逐像素 `if (v19) *v16 = v19`（色键 0 透明）; 目标位置 = (x - offsetX, y - offsetY); 裁剪模式 0 用目标尺寸, 1 用 dword_4861B8..C4; 返回是否实际绘制 |
+| `0x455E24` | sub_455E24 | `include/game/render/blit.h:29` | 不透明 blit + 源区域（qmemcpy 快速拷贝，无色键判断） |
+| `0x455FD9` | sub_455FD9 | `include/game/render/blit.h:24` | 色键 blit + 源区域 (srcX, srcY, w, h); 裁剪时同步调整源偏移 (a6/a7) |
+| `0x456180` | blitScrolledMap | `include/game/render/blit.h:73` | 0x456180 反编译; 每行 1280 字节按 offset(&~3) 环绕拷贝到 640x480 缓冲 （dst 行 = src[off..1280) + src[0..off)），实现地图预览水平无限滚动 |
 | `0x4561BE` | sub_4561BE | `include/game/render/surface.h:32` | 0x4561BE 以 memset32 按行填充 (x,y,w,h)，颜色由 sub_4551F0 转换 |
-| `0x45620F` | sub_45620F | `include/game/render/blit.h:37` | 0x45620F 用 memset32 画上下边、循环画左右边的空心矩形（颜色经 convertColor） 用于存档槽悬停高亮（0xFFFF00）与地图选择框 |
-| `0x45663E` | blitSpriteFrame | `include/game/render/blit.h:42` | 0x45663E 反编译; 帧头 = 资源基址 + 12 + 12*帧号; 调色板 = 基址 + data_offset; 8bit 索引像素经调色板取色, 索引 0 透明; 目标 = (x - offsetX, y - offsetY) 裁剪 640x480 用于选人界面底部玩家角色动画（JUMP.MKF 角色 SPR） |
-| `0x456770` | sub_456770 | `include/game/render/blit.h:48` | 0x456770 反编译; 帧头 12 字节 {w,h,offX,offY,size}, 8bit 索引 + 调色板, 目标 = (x - offX, y - offY), 裁剪到 dword_4861B8/C0/BC/C4 用于游戏内地图精灵（棋子/住宅用地/商業用地/行業設施點/事件格） |
+| `0x45620F` | sub_45620F | `include/game/render/blit.h:38` | 0x45620F 用 memset32 画上下边、循环画左右边的空心矩形（颜色经 convertColor） 用于存档槽悬停高亮（0xFFFF00）与地图选择框 |
+| `0x45663E` | blitSpriteFrame | `include/game/render/blit.h:43` | 0x45663E 反编译; 帧头 = 资源基址 + 12 + 12*帧号; 调色板 = 基址 + data_offset; 8bit 索引像素经调色板取色, 索引 0 透明; 目标 = (x - offsetX, y - offsetY) 裁剪 640x480 用于选人界面底部玩家角色动画（JUMP.MKF 角色 SPR） |
+| `0x456770` | sub_456770 | `include/game/render/blit.h:49` | 0x456770 反编译; 帧头 12 字节 {w,h,offX,offY,size}, 8bit 索引 + 调色板, 目标 = (x - offX, y - offY), 裁剪到 dword_4861B8/C0/BC/C4 用于游戏内地图精灵（棋子/住宅用地/商業用地/行業設施點/事件格） |
 | `0x45709C` | start | `src/main.cpp:13` | 0x45709C 为 CRT 入口 thunk（jmp sub_458CED）; sub_458CED 初始化 CRT 后调用 WinMain(GetModuleHandleA(0), 0, lpCmdLine, 10)（迁移: CRT 启动 + WinMain → 标准 main(argc, argv); lpCmdLine → --game <dir> 参数） |
 | `0x46CAD8` | nIDEvent | `include/game/app/event_stack.h:58` | 栈顶索引; 0x4018E7 中 ++nIDEvent 压栈、--nIDEvent 出栈 |
 | `0x46CAFC` | byte_46CAFC | `include/game/game_state.h:201` | WinMain case 0/4 调 sub_406DE7(byte_46CAFC)；进入游戏后置 1， 再次进入时 lParam!=0 → 0x406DE7 保留上次选人配置并自动確定 |
@@ -145,7 +145,7 @@
 | `0x47EDFA` | 可绑定键表（78 | `src/platform/input.cpp:14` | 0x411122 WM_KEYDOWN 以 wParam(VK) 查表；0x401010 钩子以 wParam 匹配键位表 |
 | `0x47FDF6` | byte_47FDF6 | `src/app/map_tables.cpp:586` | 0x4071A3..0x4071B6 newGameInit：g_propStock[i] = byte_47FDF6[8*i] |
 | `0x47FF4A` | byte_47FF4A.. | `src/app/map_tables.cpp:669` | 0x4521F0; type 0=固定月日 1=每年同月日 2=第N个星期X(用 weekday) |
-| `0x4861B8` | dword_4861B8/C0/BC/C4 | `include/game/render/blit.h:13` | 0x455C52/0x455FD9/0x455E24 裁剪模式 1 使用该矩形 (left, right, top, bottom) |
+| `0x4861B8` | dword_4861B8/C0/BC/C4 | `include/game/render/blit.h:14` | 0x455C52/0x455FD9/0x455E24 裁剪模式 1 使用该矩形 (left, right, top, bottom) |
 | `0x48A010` | dword_48A010 | `include/game/app/event_stack.h:18` | 0x48A010 为 20 项函数指针数组; 0x4019DD 窗口过程把消息转发给 dword_48A010[nIDEvent]; 0x4018E7 压栈/出栈并返回 handler 的结果码 |
 | `0x48A054` | dword_48A054 | `include/game/game_state.h:168` | 0x4015D6 中 sub_4502FE("speaking.mkf") 的返回值 |
 | `0x48A058` | dword_48A058 | `include/game/game_state.h:176` | 0x4015D6 中 sub_4502FE("effect.mkf") 的返回值 |

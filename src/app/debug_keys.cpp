@@ -209,6 +209,11 @@ bool handleDebugKey(Application& app, int code, bool shift) {
                 advanceDay(app);
                 RICH4_LOGI("debug: Ctrl+Shift+D advanceDay dayCount=%d", st.dayCount);
                 return true;
+            case 'p': // 当前玩家点券 +1000（测试監獄/醫院 NPC 保释 300 点券）
+                st.players[cur].points = static_cast<uint16_t>(st.players[cur].points + 1000);
+                RICH4_LOGI("debug: Ctrl+Shift+P player %d points -> %u", cur,
+                           st.players[cur].points);
+                return true;
             case 'c': { // 清空玩家全部状态 + 携带神明
                 Player& pl = st.players[cur];
                 pl.stateFlags = 0;

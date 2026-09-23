@@ -124,9 +124,18 @@ bool confirmDialog(Application& app, const char* text, int cx, int cy) {
     st.cy = cy;
     st.originX = cx - ui.frame(0).width / 2;
     st.originY = cy - ui.frame(0).height / 2;
+    // [RE 0x451E7E/0x451EDB] yesNoDialog 进入保存框区域背景、退出原样恢复：
+    //   重写为单 Surface 事件驱动绘制，外层模态不会自动重绘 → 不恢复会残留确认框
+    //   （表现为"点 NO 后画面卡住"）
+    std::vector<uint16_t> bg;
+    const int w = ui.frame(0).width;
+    const int h = ui.frame(0).height;
+    saveRegion(bg, app.surface(), st.originX, st.originY, w, h);
     RICH4_LOGI("confirm dialog at (%d,%d)%s (RE 0x453A32)", cx, cy,
                text ? " +text (RE 0x440BA8)" : "");
-    return runModal(app, &confirmEventHandler, &st) == 1;
+    const int result = runModal(app, &confirmEventHandler, &st);
+    restoreRegion(app.surface(), bg, st.originX, st.originY, w, h);
+    return result == 1;
 }
 
 } // namespace rich4
