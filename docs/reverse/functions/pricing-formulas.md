@@ -288,8 +288,9 @@ owner 自己停留：index4 → 轮盘(3) 免费投保；index11 → 施工抽�
 | 商業用地（corp）购买/建设/升级/收费（type1..3） | ✅ 本文 §4（landingEvent corp 分支 0x41A86B/0x41A1E0/0x41A2B3/0x41A370；`selectFacilityDialog` UI 完整还原） |
 | 旅館住宿状态（BYTE0 天数） | ✅ 收费后设置（0x41A761）；住宿欠款/保险理赔仅日志（欠款矩阵/保险期 P4） |
 | 研究所（corp type4）研发 `labDevelopDialog` | ❌ 本文 §4（P4 道具系统依赖；入口条件已实现为日志） |
-| 行業設施點（specPt）收费 + 出國 n 天 | ❌ 本文 §5（依赖 `sub_40D375` 出国状态） |
-| `g_moneyMul` 月度更新 + `playerTotalAssets` | ❌ 本文 §1.1（当前重写恒 1） |
+| 行業設施點（specPt）收费 | ✅ 本文 §5（`landingEvent` 6000..7999：航空/保險轮盘、電腦 `dayCount`、汽車/石油载具×步数、房地產按地价、index12；公库 `fund` 收款）；出國 n 天状态 `sub_40D375` ❌ 未接入（仅完成付款） |
+| `g_moneyMul` 月度更新 | ❌ 本文 §1.1（`updateMoneyIndex` 0x423ACF 未接入，当前恒 1） |
+| `playerTotalAssets` | ✅ `economy.cpp`（股票市值 + 地产 + 公司；贷款/存款已计入） |
 | 轮盘/老虎机读数（3/4 位） | ✅ **完整转盘 UI**（`roulette_dialog.cpp` `roulettePrompt`）：panel.mkf[68+theme] 14 帧 + 指针逐格步进（40ms/帧）+ 减速停止（间隔 1..5）+ 停留 40 帧；读数 = `byte_475D0C` 终格值。神明轮盘（`slotMachineValue` 4 滚轮）❌ 未接入 |
 | 到期处理 `sub_40AC7B` | 🟡 期限写入已有（`g_landPermDays`），到期清算 ❌ |
 | 事件格金额 | 见 `41982d-p2-events.md` |

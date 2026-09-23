@@ -66,7 +66,7 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
 |------|---------|------|------|
 | 移动中每格 | `onPlayerActionPhase` 0x41B42D | 日志 stub | ❌ |
 | 移动结束（面向目标 + 30×物价记账 + FLC 526） | `playerActionStateMachine` case 3（0x40DA4B），由 `sub_448A7E` 触发 | case 3 修正（仅日志/面向，不再转账） | ✅ |
-| 停留格结算（购地/升级/收租/事件） | `landingEvent`（`sub_41982D`，case 0..16） | 购地 ✅ / 升级 ✅ / **他人住宅用地收租 ✅** / 商業用地·行業設施點收费（corp/specPt）❌ → `pricing-formulas.md` §4/§5 / 事件 ❌ | 🚧 |
+| 停留格结算（购地/升级/收租/事件） | `landingEvent`（`sub_41982D`，case 0..16） | 购地 ✅ / 升级 ✅ / 他人住宅用地收租 ✅ / **商業用地 corp 收费 ✅**（旅館轮盘+住宿/購物轮盘/加油站步数） / **行業設施點 specPt 收费 ✅**（6 公式+公库） / 事件格 case 2..16 ❌ | 🚧 |
 
 > **收租在 landingEvent，不在 case 3**：case 3（`sub_448A7E` 触发，步行落在他人有建筑的住宅用地/商業用地）
 > 仅 `addPlayerDebt(owner-1, cur, 30*g_moneyMul)` **记账**（欠款矩阵 `dword_496BB4`，不扣现金）+
@@ -186,13 +186,13 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
 | `sub_41D559` | **ownerCanCollectRent**：地主免收租检查（查封/與付款人同盟/死神顯靈/住宿/消失/坐牢/住院/冬眠/夢遊 → showMessage + 返回 0） | 0x41D559 | `ownerCanCollectRent` ✅ |
 | `sub_41D709` | **applyGodRentModifier**：付款方神明调整（小財神减半/大財神免付/小窮神+50%/大窮神加倍） | 0x41D709 | `applyGodRentModifier` ✅ |
 | `sub_448A7E` | case 3 触发：步行（travel&0x83==3）落在他人有建筑的住宅用地/商業用地 → state=3 | 0x448A7E | case 3 入口 ✅ |
-| `roulettePrompt`→`slotMachineValue` | **轮盘/老虎机**：帧 `(a1&3)+68` 弹轮盘 UI；4 滚轮各定格 0..9，返回读数（第 41 参=0 → 4 位 0..9999，否则 3 位 0..999）；供航空/保險/旅館/購物 费用乘数 | 0x44090E / 0x43F23E | ❌（公式 → `pricing-formulas.md` §1.5） |
-| `selectFacilityDialog` | 「請選擇設施類別」建设选择 UI（返回 corp type） | 0x440AAC | ❌ |
+| `roulettePrompt` | **转盘 UI**：帧 `(a1&3)+68` 弹轮盘（0..3 主题），指针逐格步进+减速停止，读数 = `byte_475D0C` 终格值；供航空/保險/旅館/購物 费用乘数 | 0x44090E | ✅（`roulette_dialog.cpp` 完整还原；神明 `slotMachineValue` 4 滚轮 0x43F23E ❌ 未接入） |
+| `selectFacilityDialog` | 「請選擇設施類別」建设选择 UI（返回 corp type） | 0x440AAC | ✅（`facility_dialog.cpp`；0x41A22A 建设施接入，改建卡 flag=1 0x4431C4） |
 | `labDevelopDialog` | 研究所（corp type4）「請選擇欲開發道具」：逐级研发槽选 1，写 +29/+30 | 0x44101D | ❌ |
 | `updateMoneyIndex` | **物价指数**：`g_moneyMul = max(M, Σ存活 playerTotalAssets / 存活数 / g_startMoneyVal)`（只升不降） | 0x423ACF | ❌ |
-| `playerTotalAssets` | 总资产 = 现金+存款−贷款+Σ持股×现价+Σestate(+28+30×级/连锁)+Σcorp(+34+36×级) | 0x4239B9 | 🟡（胜利判定已有？） |
+| `playerTotalAssets` | 总资产 = 现金+存款−贷款+Σ持股×现价+Σestate(+28+30×级/连锁)+Σcorp(+34+36×级) | 0x4239B9 | ✅（`economy.cpp`） |
 | `expireAssets` | **到期清算**：estate/corp 降级或归公，地主欠 `30×M×level`；事件槽释放 | 0x40AC7B | ❌ |
-| `rollDice` / `g_diceValue` | 本次行走总步数（掷骰后保留，供加油/修车/过路×步数公式） | 0x419572 / 0x40D9B7 | ❌（重写有骰子，未缓存副本） |
+| `rollDice` / `g_diceValue` | 本次行走总步数（掷骰后保留，供加油/修车/过路×步数公式） | 0x419572 / 0x40D9B7 | ✅（`GameState.diceValue` 0x48BAFC，掷骰定格记录） |
 | `sub_41D2C6` | 转账（flags&4 付款方银行优先；flags&1 收款方入现金，否则入银行；不足 → `sub_40CD87` 破产） | 0x41D2C6 | `transferMoney` ✅（收租 flags=0） |
 | `sub_415215/4DC/5FC` | 挖宝/射气球/接钱小游戏（返回得分，调用方 `g_playerPoints += ax`） | 0x415215 等 | ❌ |
 | `sub_441E12` | 抽卡（返回卡片 id，0=无） | 0x441E12 | ❌ |
@@ -303,6 +303,8 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
 ### P2 事件格（`sub_41982D` case 2..16，语义见 §3）
 
 > 研究详情见 **`41982d-p2-events.md`**（各 case 的处理函数、数据结构、实现顺序与待深入清单）。
+> 🚧 进行中：路线 = 得點券（10/11/12）→ 卡片格（13）→ 監獄/醫院（4/5）→ 銀行（14）+ 物價 →
+> 新聞/命運（2/3）→ 小游戏/樂透/百貨/魔法屋。
 
 - [ ] case 10/11/12 得點券（FLC 537 + `"得點券ＮＮ點"` + 50/30/10 點券 + 角色语音）
 - [ ] case 13 卡片（FLC 536 + `sub_441E12` 抽卡 + `sub_441F73` 给卡 + `"得到%s！"`；上限 10 张须舍弃）

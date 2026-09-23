@@ -3,8 +3,9 @@
 > 本文档归档 `landingEvent`（0x41982D）case 0 他人**住宅用地**收租（loc_419A67）的完整逆向结论。
 > 总览见 `gameplay-map-mechanics.md` §5 P1；P2 事件格见 `41982d-p2-events.md`；
 > 全量收费公式（物價指數/轮盘/商業用地/行業設施點/到期）见 `pricing-formulas.md`。
-> **实现状态**：他人住宅用地收租 ✅（`src/app/turn_system.cpp`）；商業用地·行業設施點收費 / 同盟分账 / 死神代付 / 卡片
-> 免租 → P4（本文档保留结论供后续接入）。
+> **实现状态**：他人住宅用地收租 ✅（`src/app/turn_system.cpp`）；商業用地 corp / 行業設施點 specPt 收费 ✅
+> （`turn_system.cpp` + `facility_dialog.cpp`/`roulette_dialog.cpp`，公式见 `pricing-formulas.md` §4/§5）；
+> 同盟分账 / 死神代付 / 卡片免租 → P4（本文档保留结论供后续接入）。
 
 ## 0. 时机与入口
 
@@ -14,7 +15,7 @@
 | 停留结算 | `sub_418E7F` → `landingEvent`（0x41982D）case 0 → **loc_419A67** | 实际收租：音效槽 20 → 状态免收 → 联合租金 → 神明调整 → showMessage → 转账 |
 
 - case 0 分派：objId 2000..3999 = **住宅用地 estate**、4000..5999 = **商業用地 corp**（0x41A168 起，
-  公式已逆向 → `pricing-formulas.md` §4，实现待做）、6000..7999 = **行業設施點 specPt**（同上 §5）、
+  公式 → `pricing-formulas.md` §4，✅ 已实现）、6000..7999 = **行業設施點 specPt**（同上 §5，✅ 已实现）、
   8000+ = evtCell（仅提示）。
 - 重写中 `landingEvent` 由 `calcPlayerWait`（0x418E7F）在**移动后 case 0 倒计时结束**时调用，
   返回值 = 等待帧数（`kLandingWait=0x90`，原版 0x88）。
@@ -206,13 +207,14 @@ return g_moneyMul * 总和
 
 - **已实现**：音效槽 20、地主状态免收、联合租金（同路段/連鎖店）、flag 翻倍、付款方神明调整、
   showMessage 提示、`transferMoney(p, owner, rent, 0)`、`estate.price = rent`、
-  **联动高亮**（`highlightBlink` 还原）、**连锁店收费 + Ctrl+4 创建**（debug）、`estateRouteRent` 诊断日志。
+  **联动高亮**（`highlightBlink` 还原）、**连锁店收费 + Ctrl+4 创建**（debug）、`estateRouteRent` 诊断日志、
+  **商業用地 / 行業設施點收费**（0x41A168，公式 `pricing-formulas.md` §4/§5，含旅館轮盘+住宿/購物轮盘/
+  加油站步数/6 行业公式 + 公库 `fund`）。
 - **未实现（P4）**：
   - 同盟分账（`g_playerAlly` 双方按 `v134/(v8+v134)` 拆分；重写字段已建模）
   - 死神/恶魔代付（`findDeathGodCarrier`）
   - 免費卡/嫁禍卡检查（依赖卡片系统 `useCardFlow`）
   - 浮动数字（`sub_44F354`）
-  - 商業用地 / 行業設施點收費（0x41A168，公式已逆向 → `pricing-formulas.md` §4/§5）
 - **case 3 语义修正**：早期重写在 case 3 立即转账 30×`moneyMul`，与 landingEvent 收租重复；
   已移除（保留面向 + 记账日志 + `stepDwell`）。
 - **调试**：`estateRouteRent` 打印每个匹配地块明细 + 联动块数/总额（定位"整条街未联动"类问题）；

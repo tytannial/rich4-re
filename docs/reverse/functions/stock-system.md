@@ -107,19 +107,19 @@
 
 | 项 | 状态 | 备注 |
 |----|------|------|
-| `stockTick` 行情/历史/大盘 | ✅ | `advanceDay` 接入；停市（`isSpecialDate`）未接 |
+| `stockTick` 行情/历史/大盘 | ✅ | `advanceDay` 接入；停市判定已接入（`stockMarketClosed` + `stockIsHoliday`） |
 | `buyStock` / `sellStock` | ✅ | 现金/银行路径 |
 | 控股 `updateSpecPtControl` + 小地图刷新 | ✅ | 地块颜色/小地图/收费/提示/面板全部动态读 owner |
 | `specPt.sharesLeft` 初始化 | ✅ | `10000 - stocks[index][2]`（修复认购被 0 拦截） |
 | 银行可售股数 `sub_42915A` | ✅ | `loadMapData` + 每回合 |
 | 认购对话框 + 数字输入框 | ✅ | `spec_pt_dialog.cpp` / `number_input_dialog.cpp` |
 | `playerTotalAssets` | ✅ | 股票市值 + 地产 + 公司 |
-| **行情界面**（工具条 10） | ✅ | `stock_market_dialog.cpp`（简化文本版：列表/买/卖/现金银行总资产） |
+| **行情界面**（工具条 10） | ✅ | `stock_market_dialog.cpp` **精确图形面板**（0x42B58F/0x42AAFF：行情/持股切换·買/賣· 走勢圖饼+折线·休市·浮雕按钮·涨跌五态配色；`panel.mkf[75]` 帧 0/1/2） |
 | 交易市场（工具条 9） | ❌ | `sub_4284BE`/`sub_427C21`/`sub_42704E`/`sub_4255DA` 已调研 |
 | 挂单创建 + AI 自动交易 | ❌ | 4 子对话框 + AI 分支已调研 |
 | 每月 15 分红 / 亏损分摊 | ❌ | 依赖月度事件框架 |
-| 行情界面原版化（panel 背景/列头排序/K 线） | ❌ | `sub_4297F7`/`sub_429D65` 已调研 |
-| 停市判定 | ❌ | `isSpecialDate` 0x4523D5 |
+| 行情界面原版化（panel 背景/列头排序/K 线） | ✅ | 见 `42b58f-stock-panel.md`（差异：分红数值口径待月度框架） |
+| 停市判定 | ✅ | `isSpecialDate` 0x4523D5 → `stockIsHoliday`（`stockTick` + 面板休市显示） |
 | 资产清单股票页签 | ❌ | `sub_4225A3` case 2（股票清單） |
 
 ## 6. 待办
@@ -128,5 +128,5 @@
 2. **挂单创建**：股票/地产/卡片/道具 4 子对话框 + `sub_42483E` 清理
 3. **AI 自动交易**：`sub_4284BE` AI 分支（挂卖卡片/道具、改价、低价买入）
 4. **分红/亏损**：每月 15 号（月度事件框架）
-5. **行情界面原版化**：panel 背景 + 列头排序 + K 线走势图
-6. **停市判定**：`isSpecialDate`（0x4523D5）
+5. **资产清单股票页签**：`sub_4225A3` case 2（股票清單）——同时是任务 F 建造菜单的列表绘制复用点
+6. **走势图数值口径**：公司分红/月末结算（`sub_42BA97/431712/439BFA`）未实现，走势图"累積盈餘/本月盈餘"暂用 specPts 现值（见 `42b58f-stock-panel.md` 差异段）

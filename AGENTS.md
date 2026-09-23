@@ -19,22 +19,27 @@
 **M2（进行中）**：P0 买地 ✅、P1 升级 ✅ / **他人住宅用地收租 ✅**（`landingEvent` 0x419A67：
 同路段联合租金/连锁×2000/查封翻倍/免收状态/神明调整/showMessage/收款入银行；
 同盟分账/死神代付/卡片抵用 → P4）、收费公式全部逆向归档 ✅（`pricing-formulas.md`）；
-Debug 工具（Ctrl+1..8）✅、大地图填色 ✅、买地面板背景 ✅；
-建造菜单/连锁店 ❌（任务 F，`sub_423B3B/4225A3/423CF3` 已调研）、
-商業用地·行業設施點收费（`pricing-formulas.md` §4/§5 公式已明）❌ 未实现。
-**M2 股市面板 ✅**：`stock_market_dialog.cpp`（0x42B58F/0x42AAFF 行情/持股切换·買/賣·走勢圖饼+折线·休市，
-`panel.mkf[75]` 帧0/1/2）+ `stock_system.cpp`（sellStock/refreshBankStockShares 交易量/buyStock 修正）+
-`advanceDay` 每日维护（停牌/新闻倒计时·休市·交易量·stockTick）；`kStockNames[8][12]`；详见 `42b58f-stock-panel.md`。
+**商業用地 corp 全流程 ✅**（购地/建设施 `selectFacilityDialog`/升级/他人收费/旅館住宿，
+`facility_dialog.cpp`+`roulette_dialog.cpp`）、**行業設施點 specPt 收费 ✅**（6 公式 + 公库 `fund`）、
+**连锁店 ✅**（改建卡 0x44309B + `Ctrl+4`）；Debug 工具（Ctrl+1..9 + Ctrl+Shift 扩展）✅、
+大地图填色 ✅、买地面板背景 ✅；**仅剩建造菜单 ❌**（任务 F，`sub_423B3B/4225A3/423CF3`
+已调研，入口待查）。
+**M2 股市 ✅**：`stock_system.cpp`（stockTick/认购/控股/买卖交易量）+ `spec_pt_dialog.cpp`
+（0x41D1A9 认购 + 数字输入框）+ `stock_market_dialog.cpp`（0x42B58F/0x42AAFF 行情/持股切换·買/賣·
+走勢圖饼+折线·休市，`panel.mkf[75]` 帧0/1/2）+ `advanceDay` 每日维护（停牌/新闻倒计时·休市·
+交易量·stockTick）；`kStockNames[8][12]`；详见 `42b58f-stock-panel.md`。
 
-**功能总览**：`docs/help-checklist.md`（帮助文档 99 条 → 实现状态，当前 ✅ 9 / 🟡 6 / ❌ 84）。
+**功能总览**：`docs/help-checklist.md`（帮助文档 99 条 → 实现状态，当前 ✅ 9 / 🟡 7 / ❌ 83）。
 
 **M2 执行计划**：见 `docs/m2-plan.md`
 
-**M2 待办**（详见 `docs/reverse/functions/` 各档案「差异」段）：
+**M2 待办**（详见 `docs/reverse/functions/` 各档案「差异」段，按选定路线排序）：
 
-- P2 事件格实现（研究已完成，见 `41982d-p2-events.md`）：得點券（最简单）→ 卡片格 →
-  監獄/醫院 → 新聞/命運 → 小游戏 → 樂透/銀行/百貨/魔法屋
-- 经济系统：银行/贷款/股票行情（`sub_4291D6` 等）、卡片与道具使用（P4）
+- P2 事件格实现（研究已完成，见 `41982d-p2-events.md`；推进顺序：得點券 → 卡片格 →
+  監獄/醫院 → 銀行/物價 → 新聞/命運 → 小游戏/樂透/百貨/魔法屋）
+- 任务 F 建造菜单（大地块特殊建筑外观 + 5 页签；入口待 IDA 定位）
+- 经济系统剩余：银行贷款（case 14 銀行格）、物價指數月度更新（`updateMoneyIndex` 未实现，
+  `g_moneyMul` 当前恒 1）、股市交易市场/挂单/每月 15 号分红、卡片与道具使用（P4）
 - AI 决策：`alive & 6`（电脑/托管）自动行动（`landingEvent` 0x41982D 回合主流程）
 - 存档完整恢复：`loadGameFromSlot` 目前仅恢复地图/模式/玩家数
 - 事件槽 NPC（玩家 4-7：流氓/间谍/小偷等）—— 保释机制/犯人表（0x498E28）已研究
@@ -130,6 +135,7 @@ python tools/re_map.py
 - `docs/reverse/functions/gameplay-map-mechanics.md` — 地块机制总览与验收检查表
 - `docs/reverse/functions/pricing-formulas.md` — **收费/价格公式总汇**（物价指数、轮盘、住宅用地/商業用地/行業設施點、到期清算、MAPDAT 数值）
 - `docs/reverse/functions/41982d-p2-events.md` — P2 事件格（case 2..16）专项研究
+- `docs/reverse/functions/41982d-estate-rent.md` — 收租/收费专项（case 0 他人住宅用地收租全流程）
 - `docs/reverse/functions/stock-system.md` — **股市系统**（行情 stockTick/控股/认购/行情界面/交易市场/数字输入框）
 - `docs/reverse/functions/42b58f-stock-panel.md` — **股市面板**（0x42B58F 行情/持股/买卖/走勢圖/休市 精确实现）
 - `docs/reverse/ui-controls.md` — **游戏内 UI 控件指南**（浮雕按钮/变暗表/文本对齐/数字框/模态框架/…；**发现新控件必须更新此文件**）
