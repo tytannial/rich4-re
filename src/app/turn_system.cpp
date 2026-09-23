@@ -21,6 +21,7 @@
 #include "game/app/facility_dialog.h"
 #include "game/app/game_loop.h"
 #include "game/app/jail_dialog.h"
+#include "game/app/map_objects.h"
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
 #include "game/app/message_dialog.h"
@@ -102,49 +103,205 @@ int facingFromDelta(int dx, int dy) {
     return kDirTable[idx];
 }
 
-// [RE 0x40FC00] sub_40FC00 玩家携带物件跟随移动（byte_496BA7 / g_playerCellNo）
-void updatePlayerCarriedObjects(GameState& st, int p) {
-    Player& pl = st.players[p];
-    if (pl.cellTableIdx) {
-        // word_496D0A[4*(cellTableIdx-1)] = cellEntId（物件位置）
-    }
-    if (pl.cellNo) {
-        // word_496D0A[12*cellNo-12] = cellEntId
-    }
-}
-
-// [RE 0x41B42D] onPlayerActionPhase 每格落地事件（M2 起步：银行路过）
-// 依据: 0x41B42D 反编译; 161 基本块。变量：var_18 = cellEnt+36 低字节（格子类型）、
-//   var_14 = +36 的 0xFF0000（cellTable 槽号）、var_1C = 槽物件类型（g_cellTable[24*(slot-1)]）
-// 已实现: 路过銀行格（0x41B540：cellType==14 && state37==0 && 剩余步数!=0 && 物件类型!=0x10）
-//   → sub_4379C9 柜员机（停留由 landingEvent case 14 处理）
-// 差异: 购地/收租/税务/卡片/机会等落地尚未在此实现（当前由 landingEvent 统一结算）；
-//       事件槽 NPC 行走（p>=4 分支，P5）、移动音效停止/恢复待补
+// [RE 0x41B42D] onPlayerActionPhase 每格落地事件（路过/停留双判定；物件分派主体）
+// 依据: 0x41B42D 反编译 + docs/reverse/functions/map-object-refresh.md §5。变量：
+//   cellType = cellEnt+36 低字节、玩家在场掩码 = +36 bit8..15、objId = +36 bit16..23
+// 已实现: 路过銀行格柜员机（0x41B540，处理后仍续行物件 LABEL_22 流程）；
+//   同格死亡玩家=乞丐施捨（0x41B4D4 段：停留 +1000×M 给银行 + 乞丐随机换位 0x40CC56）；
+//   挂身道具(cellNo)每步寿命递减、归零爆炸（删物件+拆该格地产一级+damagePlayer+
+//   爆炸 FLC525+停止+住院5）、同格他人转移（0x41B68E 段）；switch(物件类型)：
+//   神明 1..10/12 停留 attachObject（0x41B82D）、惡犬11（0x41B847 停留删→轮替土地公；
+//   步行=咬伤 FLC532+住院3、有车=碾过 FLC552 无事）、禮物13（0x41B8A2 drawGiftCard 道具）、
+//   寶箱14（0x41B960 删+500点券）、路障16（0x41BAF9 路过删+强制停止）、
+//   地雷17（0x41BB0A 停留删+炸+住院3）、炸彈18（0x41BC2B 停留无挂件→挂身 life38）
+// 差异: 角色台词/语音 sub_44EF41（哭 off_4808A2/笑 off_48086A/路障等地雷台词 off_480D92..）
+//   与道具/卡片语音 sub_44F230 → [TODO P4]；事件槽 NPC（p≥4，小偷/強盜/流氓/間諜物件分支、
+//   word_498DEC 格）与工程车虚拟角色（p==8，拆除卡 0x446AFB 弹飞删除）→ [TODO P5/P4]；
+//   乞丐施捨在原版为无条件检查（bankVisit 标志仅影响音效恢复）
 void onPlayerActionPhase(Application& app) {
     GameState& st = app.gameState();
     const int p = st.currentPlayer;
-    if (p < 0 || p >= st.playerCount || st.players[p].cellEntId == 0) {
+    if (p < 0 || p >= 4 || st.players[p].cellEntId == 0) {
+        // [TODO P5] 事件槽 NPC（p 4..7）与 p==8 工程车（bounceObject+deleteMapObject）
         return;
     }
-    const Player& pl = st.players[p];
-    const CellEnt& ce = st.cellEnts[pl.cellEntId];
+    Player& pl = st.players[p];
+    const uint16_t cellEntId = pl.cellEntId;
+    CellEnt& ce = st.cellEnts[cellEntId];
     const uint8_t cellType = static_cast<uint8_t>(ce.occMask & 0xFF);
+    const uint8_t presentMask = static_cast<uint8_t>((ce.occMask >> 8) & 0xFF);
+    const int objId = static_cast<int>((ce.occMask >> 16) & 0xFF);
     uint8_t objType = 0;
-    const int slot = static_cast<int>((ce.occMask >> 16) & 0xFF);
-    if (slot > 0) {
-        const size_t off = static_cast<size_t>(24 * (slot - 1));
-        if (off < st.cellTable.size()) {
-            objType = st.cellTable[off];
+    if (objId > 0 && objId <= 46) {
+        objType = st.cellTable[static_cast<size_t>(24 * (objId - 1))];
+    }
+    const bool stopped = st.remainingSteps == 0;  // 停留（步数走完）
+
+    if (stopped) {
+        app.audio().stopEffectSlot(st.moveSoundIndex);  // [RE 0x41B447] 到达（步数尽）停移动音
+    }
+    if (cellType == 14 && pl.state37 == 0 && !stopped && objType != 0x10) {
+        // [RE 0x41B540] 路过銀行格 → 柜员机（可提存款；离开即继续移动）
+        app.audio().stopEffectSlot(st.moveSoundIndex);
+        if (pl.cellNo != 0) {
+            app.audio().stopEffectSlot(3);  // [RE g_effectSlot3] 炸弹挂身循环音
+        }
+        bankVisitDialog(app);
+        if (st.sceneRequest != 0) {
+            return;
+        }
+        if (!stopped) {
+            app.audio().playEffectSlot(st.moveSoundIndex);
+            if (pl.cellNo != 0) {
+                app.audio().playEffectSlot(3);
+            }
         }
     }
-    if (cellType == 14 && pl.state37 == 0 && st.remainingSteps != 0 && objType != 0x10) {
-        // [RE 0x41B540] 路过銀行格 → 柜员机（可提存款；离开即继续移动）
-        bankVisitDialog(app);
-        return;
+
+    // [RE 0x41B5B6..0x41B669] 同格死亡玩家 = 乞丐：停留付 1000×M 打发、其随机换位
+    const int beggar = bitScanPlayer(~(1u << p) & presentMask);
+    if (beggar != -1 && beggar < 9 && st.players[beggar].alive == 0 && stopped) {
+        const int32_t alms = 1000 * st.moneyMul;
+        char text[64];
+        std::snprintf(text, sizeof(text), "施捨給乞丐%d元", alms);
+        showMessage(app, text, 1500);
+        transferMoney(app, p, -1, alms, 0);
+        relocatePlayer(st, beggar);
     }
-    RICH4_LOGI("onPlayerActionPhase: player %d cellEnt %u cellType %u (RE 0x41B42D, M2 TODO)", p,
-               pl.cellEntId, cellType);
+
+    // [RE 0x41B66A..0x41B79B] 挂身道具（炸彈/路障 cellNo）每步寿命递减
+    if (pl.cellNo != 0) {
+        uint8_t& life = st.cellTable[static_cast<size_t>(24 * (pl.cellNo - 1)) + 4];
+        if (life != 0) {
+            --life;
+            if (life == 0) {
+                // 爆炸：删物件、拆该格地产一级、车毁受伤、爆炸插图、停止、住院5
+                app.audio().stopEffectSlot(3);
+                const int boom = pl.cellNo;
+                pl.cellNo = 0;
+                releaseCellTableSlot(app, boom);
+                const uint16_t cellObj = ce.special;
+                if (cellObj != 0) {
+                    demolishAtObjId(app, cellObj, 0);
+                }
+                damagePlayer(app, p);
+                playEventFlc(app, 525, 0, 40, 82);  // [RE 爆炸插图+音效82]
+                st.remainingSteps = 0;
+                hospitalizePlayer(app, p, 5);
+                return;
+            }
+        }
+        // [RE 0x41B700..0x41B79B] 同格存活且未挂件的玩家 → 炸弹转移
+        const int to = bitScanPlayer(~(1u << p) & presentMask);
+        if (to != -1 && to < 4 && st.players[to].alive != 0 && st.players[to].cellNo == 0) {
+            const int carried = pl.cellNo;
+            st.cellTable[static_cast<size_t>(24 * (carried - 1)) + 5] =
+                static_cast<uint8_t>(to + 1);
+            st.players[to].cellNo = static_cast<uint8_t>(carried);
+            pl.cellNo = 0;
+            app.audio().stopEffectSlot(3);
+            RICH4_LOGI("bomb transferred p%d -> p%d (RE 0x41B42D)", p, to);
+        }
+    }
+
+    char text[256];
+    switch (objType) {
+        case 1:
+        case 2:
+        case 3:
+        case 4:
+        case 5:
+        case 6:
+        case 7:
+        case 8:
+        case 9:
+        case 10:
+        case 12:
+            // [RE 0x41B82D] 神明：仅停留触发附身
+            if (stopped) {
+                attachObject(app, p, cellEntId, objId);
+            }
+            break;
+        case 11: {  // [RE 0x41B847] 惡犬：停留触发（路过无视）
+            if (!stopped) {
+                break;
+            }
+            releaseCellTableSlot(app, 11);  // 删恶犬 → 轮替土地公
+            if (pl.travel == 0) {
+                damagePlayer(app, p);
+                playEventFlc(app, 532, 0, 40, 93);  // [RE 咬伤插图+音效93]
+                st.remainingSteps = 0;
+                hospitalizePlayer(app, p, 3);       // 咬伤住院 3 天 [HELP 51]
+            } else {
+                playEventFlc(app, 552, 0, 40, 85);  // [RE 有车碾过，无事]
+            }
+            break;
+        }
+        case 13: {  // [RE 0x41B8A2] 禮物：停留得 1 件道具
+            if (!stopped) {
+                break;
+            }
+            const int item = drawGiftCard(app, p);
+            if (item != 0) {
+                app.audio().playEffectSlot(6);  // [RE dword_48237A] 礼物音效
+                releaseCellTableSlot(app, 13);  // 删除（月度重定位）
+                std::snprintf(text, sizeof(text), "得到%s！", kItemNames[item - 1]);
+                showMessage(app, text, 1500);
+                // [TODO P4] 道具语音 sub_44F230
+            }
+            break;
+        }
+        case 14:  // [RE 0x41B960] 寶箱：停留 +500 点券
+            if (!stopped) {
+                break;
+            }
+            app.audio().playEffectSlot(7);      // [RE dword_482382] 宝箱音效
+            releaseCellTableSlot(app, 14);
+            showMessage(app, "得到５００點券", 1500);  // [RE 0x463AD3]
+            pl.points = static_cast<uint16_t>(pl.points + 500);
+            // [TODO P4] 大笑台词 sub_44EF41(p,0,off_48084A[char])
+            break;
+        case 16:  // [RE 0x41BAF9] 路障：路过即触发 → 删除 + 强制停止
+            app.audio().stopEffectSlot(st.moveSoundIndex);
+            releaseCellTableSlot(app, objId);
+            st.remainingSteps = 0;
+            // [TODO P4] 哭台词 sub_44EF41(p,1,off_480D92[char])
+            break;
+        case 17:  // [RE 0x41BB0A] 地雷：停留触发 → 炸 + 车毁 + 住院3
+            if (!stopped) {
+                break;
+            }
+            releaseCellTableSlot(app, objId);
+            damagePlayer(app, p);
+            playEventFlc(app, 525, 0, 40, 82);
+            // [TODO P4] 哭台词 off_480D96
+            st.remainingSteps = 0;
+            hospitalizePlayer(app, p, 3);
+            break;
+        case 18:  // [RE 0x41BC2B] 定時炸彈：停留且无挂件 → 挂身（life=38 步）
+            if (pl.cellNo != 0 || !stopped) {
+                break;
+            }
+            pl.cellNo = static_cast<uint8_t>(objId);
+            st.cellTable[static_cast<size_t>(24 * (objId - 1)) + 5] =
+                static_cast<uint8_t>(p + 1);
+            st.cellTable[static_cast<size_t>(24 * (objId - 1)) + 4] = 38;
+            ce.occMask &= ~0x00FF0000u;  // 本格占用让位给挂身物件
+            app.audio().playEffectSlot(3);  // [RE g_effectSlot3] 滴答循环
+            // [TODO P4] 哭台词 off_480D9A
+            RICH4_LOGI("bomb attached: p%d obj %d life=38 (RE 0x41BC2B)", p, objId);
+            break;
+        default:
+            break;
+    }
+    RICH4_LOGI("onPlayerActionPhase: player %d cellEnt %u cellType %u obj %d/%u (RE 0x41B42D)", p,
+               cellEntId, cellType, objId, objType);
 }
+
+} // namespace
+
+// 行走资源加载/释放（供 updatePlayerStates/attachEnd/damagePlayer 等跨文件复用，
+// 定义于 map_objects.h / 本文件；map_objects 引用）
 
 // [RE 0x40B93B] 行走资源加载（定义见下方 loadWalkResources；本地辅助）
 void loadWalkRes(GameState& st, int p, int slot, size_t index) {
@@ -308,8 +465,6 @@ void updateParachute(Application& app) {
         }
     }
 }
-
-} // namespace
 
 // [RE 0x419744] estateRouteRent：同路段/连锁店联合租金（导出：landingEvent 收租 + object_tip 显示）
 // 依据: 0x419744 反编译; 普通住宅用地（type==0）→ 遍历全部地产，owner 相同且地名相同
@@ -1667,6 +1822,7 @@ void jailPlayer(Application& app, int player, int days) {
         pl.spriteY = static_cast<uint16_t>(st.evtCells[2].y);
     }
     pl.stateFlags = (pl.stateFlags & 0xFF00FFFFu) | (static_cast<uint32_t>(days) << 16); // BYTE2
+    updatePlayerCarriedObjects(st, player);  // [RE 0x43D668] 挂身物件随玩家换位
     st.jailFlags[player] = 1;       // [RE 0x43D674]
     if (st.settings[1] != 0) {      // [RE 0x43D67B] byte_497159 动画过程开关
         playEventFlc(app, 538, 0, 40, 94); // [RE 0x45144F(res, 0, 40, 0x120001, 94)]
@@ -1709,6 +1865,7 @@ void hospitalizePlayer(Application& app, int player, int days) {
         pl.spriteY = static_cast<uint16_t>(st.evtCells[1].y);
     }
     pl.stateFlags = (pl.stateFlags & 0x00FFFFFFu) | (static_cast<uint32_t>(days) << 24); // BYTE3
+    updatePlayerCarriedObjects(st, player);  // [RE 0x43ED14] 挂身物件随玩家换位
     st.hospitalFlags[player] = 1;   // [RE 0x43ED20]
     if (st.settings[1] != 0) {      // [RE 0x43ED2E]
         playEventFlc(app, 524, 0, 210, 92); // [RE 0x45144F(res, 0, 210, 0x1E0001, 92)]
@@ -1763,7 +1920,7 @@ static void checkLoanDue(Application& app, int p) {
 //   byte54 冬眠 / state37 夢遊 在 stateFlags==0 时倒计时（0→0x80）；
 //   保险期 +62：0x41CC4B 递减、0x41CAE3 到期清 0
 // 差异: 原版结束分支未见状态字节清零（实测会永久卡在"住宿中"），重写在结束时清零对应 BYTE；
-//       cellTable 物件回合递减（0x41CC6F，P3 神明/道具）、同盟天数 +61（P4）、NPC 释放（P5）
+//       同盟天数 +61（P4）、NPC 释放（P5）。附身神明寿命递减已接（attachEnd，0x41CC6F）
 void updatePlayerStates(Application& app, int p) {
     GameState& st = app.gameState();
     if (p < 0 || p >= 4) {
@@ -1865,10 +2022,22 @@ void updatePlayerStates(Application& app, int p) {
             pl.insuranceDays = decay(pl.insuranceDays, 0x7F);
         }
     }
+    // [RE 0x41CC6F] 附身神明寿命递减（cellTable[cellTableIdx-1].life = +4），归零 → 飘走（轮替）
+    // 依据: 0x41C84F 尾段 0x41CC6F..0x41CC9B；attachEnd 内部已 releaseCellTableSlot
+    if (pl.cellTableIdx != 0) {
+        uint8_t& life =
+            st.cellTable[static_cast<size_t>(24 * (pl.cellTableIdx - 1)) + 4];
+        if (life != 0) {
+            --life;
+            if (life == 0) {
+                attachEnd(app, p);
+            }
+        }
+    }
     RICH4_LOGI("player states: p=%d flags=%08X byte54=%u state37=%u ins=%u bankRefuse=%u bankFin=%u "
-               "(RE 0x41C84F)",
+               "god=%u (RE 0x41C84F)",
                p, pl.stateFlags, pl.byte54, pl.state37, pl.insuranceDays, pl.bankRefuseDays,
-               pl.bankFinanceFlags);
+               pl.bankFinanceFlags, pl.cellTableIdx);
 }
 
 // [RE 0x41CF67] advanceDay
@@ -1955,8 +2124,9 @@ void advanceDay(Application& app) {
     // [RE 0x41CF67] 新月（跨月 1 号）：月初结息（sub_439BFA → sub_437E61）+ 事件格换位 + 月份计数
     if (newMonth) {
         monthlySettle(app); // [RE 0x41D09E] 月初结息（panel.mkf[25] + 存款 ×1.1 + 排行演出）
-        // 卡片格(13)/銀行格(14)：先记旧位置，清槽后就近（≥300px）随机换位
-        // （原版 sub_40E14D(13/14) + randomCellEnt(旧 cellEnt) + createMapObject）
+        // [RE 0x41D0A5..0x41D0F1] 禮物(cellTable 类型13)/寶箱(14) 每月 1 号重定位：
+        //   先记旧格 → deleteMapObject（槽12/13，≥12 不轮替）→ randomCellEnt(旧格) →
+        //   createMapObject（原注释"卡片格/銀行格"为误——那是 cellType 格子属性，非 cellTable 物件）
         for (int slot = 13; slot <= 14; ++slot) {
             const size_t off = static_cast<size_t>(24 * (slot - 1));
             const int oldEnt = st.cellTable[off + 2] | (st.cellTable[off + 3] << 8);

@@ -2,23 +2,10 @@
 
 #include "game/application.h"
 #include "game/app/map_render.h"
+#include "game/app/map_tables.h"
 #include "game/core/log.h"
 
 namespace rich4 {
-
-namespace {
-
-// [RE 0x4749E2] word_4749E2 神明属性加成（索引 = cellTable 类型 0..18，i16 攻击）
-constexpr int16_t kCellBonusAtk[19] = {0,  0,    -100, -200, -100, -200, 100, 200, 100, 200,
-                                       -100, 100, 0,    -500, 0,    0,    1000, 0,  0};
-// [RE 0x474A06] word_474A06 神明属性加成（i16 防御）
-constexpr int16_t kCellBonusDef[19] = {0,   100,  150, 0,    0,    -60, -100, 0,   0,   60,
-                                       -60, 0,    0,   0,    0,    0,   -200, 0,   0};
-// [RE 0x474A2A] word_474A2A 神明属性加成（i16 移动）
-constexpr int16_t kCellBonusMove[19] = {0, 0, 0, 0, 0, 0,   100, 150, 0,   0,
-                                        0, -60, -100, 60, -60, 0, 0,   0,   -200};
-
-} // namespace
 
 // [RE 0x40D293] bitScanPlayer
 // 依据: 0x40D293 反编译; 掩码低 8 位中第一个置位的玩家号
@@ -193,8 +180,14 @@ void transferMoney(Application& app, int from, int to, int32_t amount, int flags
                paid, flags);
 }
 
-// [RE 0x40E14D] releaseCellTableSlot
-// 依据: 0x40E14D 反编译; 详见 economy.h 注释
+// [RE 0x40E14D] releaseCellTableSlot = deleteMapObject
+// 依据: 0x40E14D 反编译；详见 map-object-refresh.md §2.1/§6。流程：
+//   type<16 → 拥有者属性回退（cellTableIdx 清 + luckA/B/C −= kLuck*[type]）
+//   type16/17 → 回收计数 trapStock +1（**不走**属性回退分支）
+//   type18 → trapStock+1 + 拥有者 cellNo 清
+//   无主 → cellEnt+38 物件占用清；清槽（cellEnt/life/owner）
+//   slot<12 → **配对轮替**：在对向槽以 randomCellEnt(旧格,距>300) 重建配对类型
+// 差异: 原版 type16/17 也跳回退（trap 表恒 0，等价）；原版 a1（距离参数）传垃圾值，忽略
 void releaseCellTableSlot(Application& app, int slot) {
     GameState& st = app.gameState();
     if (slot <= 0) {
@@ -209,30 +202,43 @@ void releaseCellTableSlot(Application& app, int slot) {
     const uint16_t entId =
         static_cast<uint16_t>(st.cellTable[off + 2] | (st.cellTable[off + 3] << 8));
     const uint8_t occ = st.cellTable[off + 5];
-    if (occ != 0 && occ - 1 < 9) {
-        // 占用者属性回退 + 清 cellTableIdx（原版 byte_496BA7[v5*2] = 0）
-        Player& owner = st.players[occ - 1];
-        owner.cellTableIdx = 0;
-        if (type < 19) {
-            owner.bonusAtk -= kCellBonusAtk[type];
-            owner.bonusDef -= kCellBonusDef[type];
-            owner.bonusMove -= kCellBonusMove[type];
+    if (type < 16) {
+        if (occ != 0 && occ - 1 < 9) {
+            Player& owner = st.players[occ - 1];
+            owner.cellTableIdx = 0;
+            if (type < 18) {
+                owner.luckA -= kLuckA[type];
+                owner.luckB -= kLuckB[type];
+                owner.luckC -= kLuckC[type];
+            }
         }
+    } else if (type == 16) {
+        ++st.trapStock[0];
+    } else if (type == 17) {
+        ++st.trapStock[1];
+    } else if (type == 18) {
+        ++st.trapStock[2];
+        if (occ != 0 && occ - 1 < 9) {
+            st.players[occ - 1].cellNo = 0;
+        }
+    }
+    if (occ == 0 && entId != 0 && entId < st.cellEnts.size()) {
+        st.cellEnts[entId].occMask &= ~0x00FF0000u;  // [RE 0x40E243] cellEnt+38 = 0
     }
     st.cellTable[off + 2] = 0;
     st.cellTable[off + 3] = 0;
     st.cellTable[off + 4] = 0;
     st.cellTable[off + 5] = 0;
-    // 前 12 槽为 cellEnt 物件：重新随机放置（原版 createMapObject(v9+1, randomCellEnt(...))）
-    if (idx < 12 && entId != 0) {
-        const int v9 = ((idx & 1) != 0) ? (slot - 2) : slot;
+    // [RE 0x40E278] 槽 0..11 配对轮替（小↔大、福神↔窮神按对、惡犬↔土地公…）
+    if (idx < 12) {
+        const int pairType = ((idx & 1) != 0) ? idx + 1 : idx + 2;
         const int newEnt = randomCellEnt(st, entId);
         if (newEnt > 0) {
-            createMapObject(st, v9 + 1, newEnt, 0, 0);
+            createMapObject(st, pairType, newEnt, 0, 0);
         }
     }
-    RICH4_LOGI("releaseCellTableSlot: slot %d type %u ent %u occ %u (RE 0x40E14D)", slot, type,
-               entId, occ);
+    RICH4_LOGI("deleteMapObject: slot %d type %u ent %u occ %u (RE 0x40E14D)", slot, type, entId,
+               occ);
 }
 
 // [RE 0x40CD87] eliminatePlayer

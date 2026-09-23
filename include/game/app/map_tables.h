@@ -21,6 +21,12 @@ extern const int32_t kPieceOffset18[8][2];
 // [RE 0x47ED3C] g_cellTypeInit 格子类型初值
 extern const uint8_t kCellTypeInit[46];
 
+// [RE 0x4749E2/0x474A06/0x474A2A] 神明三属性修正表（索引 = cellTable 类型；实际仅 1..15 被索引，
+//   attachObject 0x40EAD7 += / deleteMapObject 0x40E14D -=，见 map-object-refresh.md §3）
+extern const int16_t kLuckA[18];  // 排名评分 10×A（sub_437D1A）
+extern const int16_t kLuckB[18];  // AI 建设门槛 + 台词吉凶（sub_41FACC / sub_44B896）
+extern const int16_t kLuckC[18];  // 台词吉凶（sub_44B896 a3 分支）
+
 // [RE 0x47F072] off_47F072 股票初始表（8 = 4 地图 x 2 模式）
 extern const int32_t kStockInit[8][12][9];
 // [RE 0x47F072] off_47F072 股票名（各组 field0 名称指针，UTF-8）
@@ -32,8 +38,12 @@ extern const uint8_t kPropStockInit[30];
 extern const char* const kCardNames[31];
 // [RE 0x47FDEA+5] byte_47FDEF 卡片价格（点券；0x44128F 舍弃时取最小值）
 extern const uint8_t kCardPrices[31];
-// [RE 0x47FEE6] byte_47FEE6
+// [RE 0x47FEE6] byte_47FEE6 礼物池初值（道具表 +0，8 种）
 extern const uint8_t kMisc8Init[8];
+// [RE 0x47FEE7] byte_47FEE7 道具价格（点券；13 种，道具结构 +1；0x445B3F 没收计价）
+extern const uint8_t kItemPrice[13];
+// [RE 0x47FEEA] 道具名表（13 种，道具结构 +4 指针；0x445ADA 礼物显示）
+extern const char* const kItemNames[13];
 // [RE 0x47ECEC] unk_47ECEC
 extern const uint32_t kMiscTable80[10][2];
 

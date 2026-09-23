@@ -345,7 +345,7 @@ int findDepressed(const GameState& st, const SettleCtx& ui) {
     for (int i = 0; i < ui.alive; ++i) {
         const Player& pl = listPlayer(st, ui, i);
         score[i] = 2500LL * st.moneyMul * pl.byte66 + pl.monthSettleA - pl.monthSettleB +
-                   10 * pl.bonusAtk;
+                   10 * pl.luckA;
     }
     int64_t best = 0;
     int bestIdx = 0;

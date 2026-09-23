@@ -19,6 +19,10 @@ int createMapObject(GameState& state, int type, int cellEntId, uint8_t a3, uint8
 // [RE 0x40AA6C] randomCellEnt（定义见 src/app/map_render.cpp）
 int randomCellEnt(const GameState& state, int nearCellEnt);
 
+// [PORT 0x40829D] 世界像素坐标 → 当前视口屏幕坐标（renderMap 的 projectItem 同源公式：
+//   以 state.viewX/viewY 为视口中心；越出 29x29 可视格返回 false）
+bool projectMapPoint(const GameState& state, int px, int py, int& sx, int& sy);
+
 // [RE 0x407AD2] 地图物件/棋子资源初始化（loadMapData 末尾段；定义见 new_game.cpp loadMap）
 // 每玩家棋子动画 = data.mkf[21*charIndex + 128 + 3*travel]
 void initMapEntities(Application& app);

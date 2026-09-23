@@ -39,7 +39,15 @@
 （15 号分红 0x42BA97/0x42B3EB）；`advanceDay` 接入 15 号分红/新月结息/卡片格·銀行格换位；
 AI 买地 0x41D7D4；`transferMoney` 累计 monthSettleA/B；详见 `bank-system.md`。
 
-**功能总览**：`docs/help-checklist.md`（帮助文档 99 条 → 实现状态，当前 ✅ 14 / 🟡 8 / ❌ 77）。
+**M2 P3 地图物件生命周期 ✅（2026-09-24）**：`map_objects.cpp`（attachObject 0x40EAD7 附身/
+老虎机 0x440706/送丢卡/死神没收 + attachEnd 0x40E32C 飘走动画 + relocatePlayer 0x40CC56 +
+damagePlayer/demolish/givePlayerItem）；`economy.cpp` deleteMapObject **配对轮替**（小↔大、惡犬↔土地公…）；
+`onPlayerActionPhase` 物件分派（神明/惡犬/禮物/寶箱/路障/地雷/炸彈挂身·转移·爆炸 + 乞丐施捨）；
+`updatePlayerStates` 附身寿命 7·13 天递减；渲染 8 方向帧/跟随玩家/浮空寿命数字/弹飞 flt；
+`Player.luckA/B/C` + `GameState.trapStock`；详见 `map-object-refresh.md`。
+[TODO P4] 道具放置入口（0x446BAA/C88/D69/拆除卡 0x446AFB 已留桩）+ 角色台词语音；[TODO P5] NPC 分支。
+
+**功能总览**：`docs/help-checklist.md`（帮助文档 99 条 → 实现状态，当前 ✅ 19 / 🟡 19 / ❌ 61）。
 
 **M2 执行计划**：见 `docs/m2-plan.md`
 

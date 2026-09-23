@@ -59,6 +59,8 @@
 | `Ctrl+Shift+E` | **15 号分红** | `dividendMeeting`（0x42BA97/0x42B3EB）：panel[76] 按持股比例分配 12 家上市公司 `specPt.fund` → 确认界面（3 秒自动退/点击退）→ 分红入银行 |
 | `Ctrl+Shift+P` | **点券 +1000** | 测试監獄/醫院 NPC 保释·出院（费用 300 点券） |
 | `Ctrl+Shift+C` | 清空玩家状态+神明 | `stateFlags`/`byte54`/`state37`/`cellTableIdx` 归零 |
+| `Ctrl+Shift+O` | **当前格生成物件** | `createMapObject` 类型 1..18 循环（神明/禮物/寶箱/死神/路障/地雷/炸彈），测附身挂身、渲染跟随、寿命 |
+| `Ctrl+Shift+X` | **附身/挂身寿命→1** | `cellTable[..].life` 置 1，下次落地/回合开始归零 → 测飘走轮替 / 炸弹爆炸链 |
 
 拾取与右键物件提示同一套：鼠标位置 → `pickMapObject`（复用渲染期 `mapHitRegions`，
 含 SPR 像素掩码精确命中）。日志前缀 `debug:`。

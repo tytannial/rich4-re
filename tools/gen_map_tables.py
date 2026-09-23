@@ -19,6 +19,7 @@
     off_475274      0x475274  玩家信息页签文本指针 x4
     off_47511C      0x47511C  月份名指针 x12
     byte_415D1D     0x415D1D  金额前缀模板 u8[20]
+    word_4749E2     0x4749E2  神明三属性修正表 i16[19] x3（0x4749E2/474A06/474A2A）
     g_charData      0x47E80C  角色模板 12 x 104B（提取 +4 颜色 u16 与 +8..+103 96B）
 
 用法:
@@ -52,6 +53,7 @@ HOLIDAY_VA, HOLIDAY_GROUPS, HOLIDAY_N, HOLIDAY_STRIDE = 0x47FF4A, 8, 24, 12
 MONEY_PREFIX_VA, MONEY_PREFIX_LEN = 0x415D1D, 20
 OBJECT_NAME_VA, OBJECT_NAME_N = 0x47ED76, 19
 BUILDING_NAME_VA, BUILDING_NAME_N = 0x475138, 16
+LUCK_TABLE_VA, LUCK_TABLE_N = 0x4749E2, 18  # 三表间隔 0x24=36B=18×i16（type18 不索引，LABEL_11 仅 type<16）
 CHAR_DATA_VA, CHAR_DATA_N, CHAR_DATA_SIZE = 0x47E80C, 12, 104
 
 FLT_AI_ASSET_VA = 0x463190   # 100.0f
@@ -124,6 +126,11 @@ def main(argv: list[str]) -> int:
     prop_stock = [prop_raw[8 * i] for i in range(PROP_STOCK_N)]
     misc8_raw = r.bytes_at(MISC8_VA, MISC8_N * 8)
     misc8 = [misc8_raw[8 * i] for i in range(MISC8_N)]
+    # 道具表 byte_47FEE6 13×8B：+0 礼物池初值、+1 价格（点券，sub_445B3F 用）、+4 名称指针
+    item_raw = r.bytes_at(MISC8_VA, 13 * 8)
+    item_price = [item_raw[8 * i + 1] for i in range(13)]
+    item_names = [r.cstr_big5(struct.unpack_from("<I", item_raw, 8 * i + 4)[0])
+                  for i in range(13)]
 
     misc80 = [tuple(r.u32(MISC80_VA, 2 * i + k) for k in range(2)) for i in range(MISC80_N)]
     calendar_res = [r.u16(CALENDAR_RES_VA, i) for i in range(CALENDAR_RES_N)]
@@ -138,6 +145,11 @@ def main(argv: list[str]) -> int:
     holiday = [[[holiday_raw[g * HOLIDAY_N * HOLIDAY_STRIDE + i * HOLIDAY_STRIDE + f]
                  for f in range(5)] for i in range(HOLIDAY_N)] for g in range(HOLIDAY_GROUPS)]
     money_prefix = list(r.bytes_at(MONEY_PREFIX_VA, MONEY_PREFIX_LEN))
+
+    # 神明三属性修正表 word_4749E2/474A06/474A2A i16[18]（索引 = cellTable 类型；表间隔 36B）
+    luck_raw = r.bytes_at(LUCK_TABLE_VA, 3 * 18 * 2)
+    luck = [list(struct.unpack_from(f"<{LUCK_TABLE_N}h", luck_raw, t * LUCK_TABLE_N * 2))
+            for t in range(3)]
 
     char_color = []
     char_tmpl = []
@@ -207,6 +219,15 @@ def main(argv: list[str]) -> int:
     w("// [RE 0x47ED3C] g_cellTypeInit 格子类型初值 u8[46]")
     w("const uint8_t kCellTypeInit[46] = {" + ", ".join(str(v) for v in cell_type) + "};")
     w("")
+    w("// [RE 0x4749E2/0x474A06/0x474A2A] 神明三属性修正表 i16[18]（索引 = cellTable 类型；")
+    w("//   attachObject 0x40EAD7 +=、deleteMapObject 0x40E14D -=；语义见 map-object-refresh.md §3）")
+    for name, comment in (("kLuckA", "排名评分 10×A (0x437D1A)"),
+                          ("kLuckB", "AI 建设门槛 + 台词吉凶 (0x41FACC/0x44B896)"),
+                          ("kLuckC", "台词吉凶 (0x44B896 a3)")):
+        w(f"// {comment}")
+        w(f"const int16_t {name}[{LUCK_TABLE_N}] = " + "{ " +
+          ", ".join(str(v) for v in luck[("kLuckA", "kLuckB", "kLuckC").index(name)]) + " };")
+    w("")
     w("// [RE 0x47F072] off_47F072 股票初始表 i32[8][12][9]（8 = 4 地图 x 2 模式）")
     w("const int32_t kStockInit[8][12][9] = {")
     for g in range(8):
@@ -222,6 +243,13 @@ def main(argv: list[str]) -> int:
     w("")
     w("// [RE 0x47FEE6] byte_47FEE6 u8[8]（每 8 字节结构取首字节）")
     w("const uint8_t kMisc8Init[8] = {" + ", ".join(str(v) for v in misc8) + "};")
+    w("")
+    w("// [RE 0x47FEE7] byte_47FEE7 道具价格（13 种，道具结构 +1；0x445B3F 没收计价）")
+    w("const uint8_t kItemPrice[13] = {" + ", ".join(str(v) for v in item_price) + "};")
+    w("")
+    w("// [RE 0x47FEEA] 道具名表（13 种，道具结构 +4 指针；0x445ADA 礼物显示）")
+    w("const char* const kItemNames[13] = {" +
+      ", ".join('"%s"' % s for s in item_names) + "};")
     w("")
     w("// [RE 0x47ECEC] unk_47ECEC u32[10][2]")
     w("const uint32_t kMiscTable80[10][2] = {")

@@ -71,4 +71,18 @@ bool moveOneStep(Application& app);
 // [RE 0x41982D] landingEvent（落地事件；M2 实现，M1 返回 0x80）
 int landingEvent(Application& app, uint16_t cellEntId);
 
+// [RE 0x45144F] playEventFlc：阻塞播放 data.mkf[mkfIndex] FLC（定义见 turn_system.cpp；
+//   事件格/神明插图共用；soundId<0 无声）
+void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId);
+
+// [RE 0x40B93B] loadWalkResources（行走资源加载，定义见 turn_system.cpp；
+//   状态结束/载具损毁/住院等复用）
+void loadWalkResources(GameState& st, int p);
+
+// ===== 卡片卡包（0x441262/0x441343/0x4412E4/0x441E12；定义见 turn_system.cpp）=====
+int cardBagCount(const GameState& st, int player);
+void cardBagRemove(GameState& st, int player, int card);
+void giveCardToBag(GameState& st, int player, int card);
+int drawFreeCard(GameState& st, int player);
+
 } // namespace rich4

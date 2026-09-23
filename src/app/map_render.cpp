@@ -14,6 +14,7 @@
 #include "game/render/blit.h"
 #include "game/render/iso_blit.h"
 #include "game/render/surface.h"
+#include "game/render/text.h"
 
 namespace rich4 {
 
@@ -43,6 +44,7 @@ struct SpriteDraw {
     uint16_t id = 0;   // 物件 ID（0xF000+=玩家 / 2000+=estate / 4000+=corp / 6000+=specPt / 8000+=evtCell）
     const UiImage* hitSpr = nullptr; // [RE 0x409B18] 拾取形状（null = 用 spr）
     int hitFrame = 0;
+    bool objLife = false;  // [RE 0x4098BD] cellTable 炸弹挂身 → 头顶画寿命数字
 };
 
 // [RE 0x407A2C] 像素坐标 -> 等距屏幕偏移
@@ -307,20 +309,78 @@ void renderMap(Application& app, int centerX, int centerY) {
                 static_cast<uint16_t>(8000 + i));
     }
 
-    // [RE 0x40E033] cellTable 物件（神明/商店等；图块 = cellTypeSprites[类型]，ID = 槽号<<8）
+    // [RE 0x40E033/0x40829D 0x408C5E..0x4090AC] cellTable 物件绘制（图块 = cellTypeSprites[类型]，
+    //   ID = 槽号<<8）。三分支：①拥有者挂身 → 跟随玩家（屏幕偏移 kPieceOffset/kPieceOffset18、
+    //   帧 (+4)、type18 且玩家另有附身时头顶画寿命）；②flyCount(+6)≠0 → 弹飞（f32 坐标
+    //   +速度逐帧推进、出视口清除）；③常规 → 逻辑格投影、帧 = (朝向+8−视角)&7
     for (int slot = 0; slot < 46; ++slot) {
-        const int type = state.cellTable[24 * slot];
-        if (type <= 0 || type > 20) {
+        const size_t off = static_cast<size_t>(24 * slot);
+        uint8_t* e = &state.cellTable[off];
+        const int type = e[0];
+        const int cellEntId = e[2] | (e[3] << 8);
+        const int owner = e[5];
+        uint8_t& fly = e[6];
+        if (type <= 0 || type > 45) {
             continue;
         }
-        const int cellEntId =
-            state.cellTable[24 * slot + 2] | (state.cellTable[24 * slot + 3] << 8);
+        UiImage& img = state.cellTypeSprites[type];
+        const uint16_t objDrawId = static_cast<uint16_t>((slot + 1) << 8);
+        if (owner != 0 && owner - 1 < 9) {
+            const Player& o = state.players[owner - 1];
+            if (o.stateFlags != 0) {
+                continue;  // [RE 0x408FBD] 挂起态（住院/出国/…）不绘制
+            }
+            int px = 0;
+            int py = 0;
+            if (!projectItem(o.spriteX, o.spriteY, px, py)) {
+                continue;
+            }
+            const int dirv = (o.dir + 8 - state.mapRotation) & 7;
+            const bool bombCarry = type == 18 && o.cellTableIdx != 0;
+            const int32_t* oofs = bombCarry ? &kPieceOffset18[dirv][0] : &kPieceOffset[dirv][0];
+            SpriteDraw sd;
+            sd.spr = &img;
+            sd.frame = (dirv + 4) & 7;  // [RE 0x4090A2] 附身帧翻转
+            sd.x = px + static_cast<int>(oofs[0]);
+            sd.y = py + static_cast<int>(oofs[1]);
+            sd.id = objDrawId;
+            sd.objLife = bombCarry;
+            items.push_back(sd);
+            continue;
+        }
+        if (fly != 0) {
+            float wx = 0.0f;
+            float wy = 0.0f;
+            float vx = 0.0f;
+            float vy = 0.0f;
+            std::memcpy(&wx, e + 8, 4);
+            std::memcpy(&wy, e + 12, 4);
+            std::memcpy(&vx, e + 16, 4);
+            std::memcpy(&vy, e + 20, 4);
+            int px = 0;
+            int py = 0;
+            if (!projectItem(static_cast<int>(wx), static_cast<int>(wy), px, py)) {
+                fly = 0;  // [RE 0x408D3B] 出视口 → 停止飞行绘制
+                continue;
+            }
+            --fly;
+            wx += vx;
+            wy += vy;
+            std::memcpy(e + 8, &wx, 4);
+            std::memcpy(e + 12, &wy, 4);
+            SpriteDraw sd;
+            sd.spr = &img;
+            sd.frame = (e[7] + 8 - state.mapRotation) & 7;
+            sd.x = px;
+            sd.y = py;
+            items.push_back(sd);
+            continue;
+        }
         if (cellEntId <= 0 || cellEntId >= static_cast<int>(state.cellEnts.size())) {
             continue;
         }
         const CellEnt& ce = state.cellEnts[cellEntId];
-        addItem(&state.cellTypeSprites[type], 0, ce.x, ce.y, -1,
-                static_cast<uint16_t>((slot + 1) << 8));
+        addItem(&img, (e[1] + 8 - state.mapRotation) & 7, ce.x, ce.y, -1, objDrawId);
     }
 
     // 住宅用地：有主绘制旗帜（玩家色）；无主空地不绘制（地形自带虚线框），仅记录命中
@@ -444,6 +504,15 @@ void renderMap(Application& app, int centerX, int centerY) {
         } else {
             blitElement(dst, it.spr->frame(it.frame), it.x, it.y, true);
         }
+        if (it.objLife) {
+            // [RE 0x4098BD] 炸弹挂身：寿命数字（16 号字，y−60，样式 2）
+            const int slotIdx = (it.id >> 8) - 1;
+            char ltext[8];
+            std::snprintf(ltext, sizeof(ltext), "%d",
+                          state.cellTable[static_cast<size_t>(24 * slotIdx) + 4]);
+            app.text().setFont(16, 0xF0F0F0, 0x101010, kTextStyleShadow, 0);
+            app.text().drawText(dst, ltext, it.x, it.y - 60, 2);
+        }
     }
 
     setClipRect(0, 0, 640, 480);
@@ -534,6 +603,36 @@ void blitColorMask(std::vector<uint16_t>& dst, int dstW, int dstH, const UiFrame
     }
 }
 
+// [PORT 0x40829D] 世界像素坐标 → 当前视口屏幕坐标（与 renderMap 内 projectItem 同源公式）
+bool projectMapPoint(const GameState& state, int px, int py, int& sx, int& sy) {
+    const int centerX = state.viewX;
+    const int centerY = state.viewY;
+    const int cellX = centerX >> 5;
+    const int cellY = centerY >> 5;
+    const int dir = state.mapRotation & 7;
+    int projX = 0;
+    int projY = 0;
+    isoProject(state, centerX, centerY, projX, projY);
+    const int baseX = projX + kViewCenterX;
+    const int baseY = projY + kViewCenterY;
+    const int cr = (py >> 5) - cellY + kViewHalf;
+    const int cc = (px >> 5) - cellX + kViewHalf;
+    if (cr < 0 || cr > 28 || cc < 0 || cc > 28) {
+        return false;
+    }
+    const uint8_t* isoBytes = reinterpret_cast<const uint8_t*>(&kIsoProjection[0][0][0][0]);
+    auto isoAt = [isoBytes](int byteOffset) {
+        return *reinterpret_cast<const int16_t*>(isoBytes + byteOffset);
+    };
+    int ox = 0;
+    int oy = 0;
+    isoProject(state, px, py, ox, oy);
+    const int idx = 3364 * dir + 116 * cr + 4 * cc;
+    sx = baseX + isoAt(idx + 2) - ox;
+    sy = baseY + isoAt(idx) - oy;
+    return true;
+}
+
 // [RE 0x40A4E1] 单份工作副本重建（a1=0 小地图 / a1=1 大地图）
 // 依据: 0x40A4E1 反编译; 底图 = g_miniMapRaw 帧 a1（尺寸即缓冲尺寸）→ g_miniMapWork 帧 a1;
 //       标记 = sub_456384(目标, g_tipFrame 帧, (scale*x)>>16, (scale*y)>>16, g_playerColor[owner-1])
@@ -617,9 +716,12 @@ void initMapEntities(Application& app) {
     buildMiniMapMarks(app);
 }
 
-// [RE 0x40E033] createMapObject（神明/商店等物件写入 cellTable 空槽）
-// 依据: 0x40E033 反编译; 槽结构 +0 类型、+1 朝向、+2 cellEnt u16、+4 a3、+5 a4；
-//       cellEnt 占用位 |= (槽+1)<<16
+// [RE 0x40E033] createMapObject（物件写入 cellTable 空槽）
+// 依据: 0x40E033 反编译; 槽结构 +0 类型、+1 朝向、+2 cellEnt u16、+4 life、+5 owner+1；
+//   **空槽判定 = cellEnt(+2) == 0**（原版各槽 +0 类型常驻：loadMapData 预置
+//   kCellTypeInit[46]，deleteMapObject 只清 +2/+4/+5 不清类型）；
+//   类型搜索段 15→14..15、16→16..25、17→26..35、18→36..45、其他→type-1 单槽；
+//   cellEnt 占用位 |= (槽+1)<<16；a4≠0 且 type==15 → 创建即附身 a4-1（请神卡场景，P4 未接）
 int createMapObject(GameState& state, int type, int cellEntId, uint8_t a3, uint8_t a4) {
     int lo = type - 1;
     int hi = type;
@@ -638,7 +740,7 @@ int createMapObject(GameState& state, int type, int cellEntId, uint8_t a3, uint8
     }
     for (int slot = lo; slot < hi && slot < 46; ++slot) {
         uint8_t* e = &state.cellTable[24 * slot];
-        if (e[0] != 0) {
+        if ((e[2] | e[3]) != 0) {
             continue;
         }
         e[0] = static_cast<uint8_t>(type);
@@ -657,6 +759,12 @@ int createMapObject(GameState& state, int type, int cellEntId, uint8_t a3, uint8
             e[2] = static_cast<uint8_t>(cellEntId & 0xFF);
             e[3] = static_cast<uint8_t>((cellEntId >> 8) & 0xFF);
             state.cellEnts[cellEntId].occMask |= static_cast<uint32_t>(slot + 1) << 16;
+        }
+        // [RE 0x40E0CB] 死神(15) 带拥有者登记 → 创建即附身（请神卡 P4，暂仅同步字段）
+        if (a4 != 0 && type == 15) {
+            Player& pl = state.players[a4 - 1];
+            pl.cellTableIdx = static_cast<uint8_t>(slot + 1);
+            e[4] = 13;
         }
         return slot + 1;
     }

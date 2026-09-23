@@ -48,14 +48,27 @@ void serializePlayer(uint8_t out[kPlayerSize], const Player& p) {
     std::memcpy(out + 28, &p.cash, 4);
     std::memcpy(out + 32, &p.bank, 4);
     std::memcpy(out + 36, &p.loan, 4);
+    std::memcpy(out + 40, &p.bankAdvance, 4);
     std::memcpy(out + 44, &p.loanDate, 4);
     std::memcpy(out + 48, &p.points, 2);
     std::memcpy(out + 50, &p.stateFlags, 4);
     out[54] = p.byte54;
     out[55] = p.state37;
+    out[56] = p.skipMove;
+    out[57] = p.fixedStep;
+    out[59] = p.bankRefuseDays;
+    out[60] = p.bankFinanceFlags;
     out[62] = p.insuranceDays;
-    out[63] = p.cellTableIdx;
+    out[63] = p.cellTableIdx;   // [RE 0x496BA7] 附身神明物件
+    out[64] = p.cellNo;         // [RE 0x496BA8] 挂身道具物件（路障/炸彈）
     out[65] = p.ally;
+    out[66] = p.byte66;
+    std::memcpy(out + 68, &p.luckA, 2);   // [RE 0x496BAC] 神明三属性修正
+    std::memcpy(out + 70, &p.luckB, 2);
+    std::memcpy(out + 72, &p.luckC, 2);
+    std::memcpy(out + 74, &p.stayCorpIdx, 2);
+    std::memcpy(out + 92, &p.monthSettleA, 4);
+    std::memcpy(out + 96, &p.monthSettleB, 4);
     out[100] = p.kind;
 }
 
@@ -152,7 +165,8 @@ bool saveGameToSlot(const std::string& gameDir, int slot, const GameState& state
     wbuf(state.cardState60, 60);                       // g_cardState60
     wbuf(state.itemStock, 60);                         // byte_49915C g_playerCards 道具库存
     wbuf(state.propStock, 30);                         // g_propStock
-    wbuf(state.misc8A, 8);                             // byte_497320
+    wbuf(state.misc8A, 8);                             // byte_497320 礼物卡池
+    wbuf(state.trapStock, 3);                          // byte_497321..23 路障/地雷/炸彈回收
     w32(static_cast<uint32_t>(state.turnCounter));
     wbuf(state.stockHistory, 4 * 1728);                // g_stockHistory
     wbuf(state.playerShares, 8 * 48);                  // g_playerShares

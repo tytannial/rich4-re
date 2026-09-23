@@ -83,7 +83,11 @@ struct Player {
     // [RE 0x496BA6] g_playerCardCnt（**保险期**剩余天数；原误名 cardCount）
     // 依据: 0x41AC6E 保險收费 += 轮盘天数；0x44BA63 非 0 时保险理赔；0x41CAE3 到期清 0
     uint8_t insuranceDays = 0;  // +62
+    // [RE 0x496BA7] 附身神明物件 ID（cellTable 槽+1；0=无）。寿命计数在
+    //   cellTable[槽].life（+4，死神13/其余7），每回合 updatePlayerStates 递减
     uint8_t cellTableIdx = 0;   // +63 byte_496BA7
+    // [RE 0x496BA8] 挂身道具物件 ID（路障/定時炸彈，cellTable 槽+1；0=无）。
+    //   寿命 cellTable[槽].life（炸弹38），每次落地 onPlayerActionPhase 递减
     uint8_t cellNo = 0;         // +64 g_playerCellNo 0x496BA8
     // [RE 0x496BA9] g_playerVehicle 实为同盟对象（1-based 玩家号，0=无）
     // 依据: 0x41D559 用 g_playerVehicle[地主] == 当前玩家+1 → "與%s同盟中\n\n免收%s！";
@@ -92,9 +96,13 @@ struct Player {
     uint8_t ally = 0;           // +65 同盟对象（重写原误名 vehicle）
     uint8_t byte66 = 0;         // +66 byte_496BAA（月度结息排名累计，见 monthSettleA）
     uint8_t pad67 = 0;          // +67
-    int16_t bonusAtk = 0;       // +68 word_496BAC（神明属性加成，sub_40EAD7 加 / sub_40E14D 减）
-    int16_t bonusDef = 0;       // +70 word_496BAE
-    int16_t bonusMove = 0;      // +72 word_496BB0
+    // [RE 0x496BAC/496BAE/496BB0] 附身神明三属性修正（attachObject 0x40EAD7 加 /
+    //   deleteMapObject 0x40E14D 减；表 kLuckA/B/C 0x4749E2/474A06/474A2A）
+    // 语义（读取点）：A = 悲情/领先排名 10×A（0x437D1A）；B = AI 建设门槛 ≥0 +
+    //   角色台词吉凶（0x41FACC/0x44B896）；C = 另一类台词（0x44B896 a3）
+    int16_t luckA = 0;          // +68 word_496BAC（原误名 bonusAtk）
+    int16_t luckB = 0;          // +70 word_496BAE（原误名 bonusDef）
+    int16_t luckC = 0;          // +72 word_496BB0（原误名 bonusMove）
     uint16_t stayCorpIdx = 0;   // +74 word_496BB2（住宿的旅館 corp 索引，走进/走出移动目标）
     uint8_t pad76[16] = {};     // +76..+91 未建模（原版字段占位）
     // [RE 0x496BC4/0x496BC8] 月度结息累计（sub_437D1A 排名：2500×M×byte66 + A − B + 10×bonusAtk）
@@ -418,7 +426,13 @@ struct GameState {
     int32_t misc37Pos = 0;           // [RE 0x4990B4] dword_4990B4
 
     uint32_t miscTable80[10][2] = {}; // [RE 0x498E28] g_miscTable80
-    uint8_t misc8A[8] = {};          // [RE 0x497320] byte_497320 道具池（8 种；kMisc8Init 初值）
+    // [RE 0x497320] byte_497320 **礼物卡池**（8 种可赠卡库存；drawGiftCard 0x445ADA 展开随机抽；
+    //   死神没收卡片 0x445B3F 归还；kMisc8Init 初值）
+    uint8_t misc8A[8] = {};
+    // [RE 0x497321] byte_497321..23 路障/地雷/定時炸彈 回收计数（deleteMapObject 0x40E14D
+    //   删除对应类型 +1；[TODO P4] 消耗点未定位——放置函数 0x446BAA/446C88/446D69 仅扣
+    //   玩家道具库存 byte_49915D/E/F，未递减本组）
+    uint8_t trapStock[3] = {};
     // [RE 0x496B30 / 0x496B60] 監獄/醫院在押标志（8 字节；索引 0..3 玩家 / 4..7 事件槽 NPC）
     uint8_t jailFlags[8] = {};
     uint8_t hospitalFlags[8] = {};

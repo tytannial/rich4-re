@@ -603,6 +603,12 @@ const uint8_t kCardPrices[31] = {0,   200, 200, 35, 25, 20, 20, 15, 20, 160, 180
 // [RE 0x47FEE6] byte_47FEE6 u8[8]（每 8 字节结构取首字节）
 const uint8_t kMisc8Init[8] = {10, 10, 10, 10, 10, 10, 10, 10};
 
+// [RE 0x47FEEA] 道具名表（13 种，道具表 byte_47FEE6 各项 +4 指针；0x445ADA 礼物显示；
+//   idx12 核子飛彈价格 250 的名称指针原版无效（0x01010001），置空）
+const char* const kItemNames[13] = {"路障", "地雷", "定時炸彈", "機車", "汽車", "飛彈",
+                                    "遙控骰子", "機器工人", "時光機", "傳送機", "工程車",
+                                    "核子飛彈", ""};
+
 // [RE 0x47ECEC] unk_47ECEC u32[10][2]
 const uint32_t kMiscTable80[10][2] = {
     {0, 0},
@@ -907,4 +913,20 @@ const float kAiAssetRatio = 100.0f;
 // [RE 0x463194] flt_463194（股票总市值系数）
 const float kStockTotalRatio = 10.0f;
 
+// [RE 0x4749E2/0x474A06/0x474A2A] 神明三属性修正表 i16[18]（索引 = cellTable 类型；
+//   三表间隔 36B；attachObject 0x40EAD7 +=、deleteMapObject 0x40E14D -=；
+//   语义见 docs/reverse/functions/map-object-refresh.md §3：A=排名评分 10×A(0x437D1A)、
+//   B=AI 建设门槛+台词吉凶(0x41FACC/0x44B896)、C=台词吉凶(0x44B896 a3)）
+const int16_t kLuckA[18] = {0, -100, -200, -100, -200, 100, 200, 100, 200, -100,
+                            100, 0, -500, 0, 0, 1000, 0, 0};
+const int16_t kLuckB[18] = {0, 100, 150, 0, 0, -60, -100, 0, 0, 60,
+                            -60, 0, 0, 0, 0, -200, 0, 0};
+const int16_t kLuckC[18] = {0, 0, 0, 100, 150, 0, 0, -60, -100, 60,
+                            -60, 0, 0, 0, 0, -200, 0, 0};
+
+// [RE 0x47FEE7] byte_47FEE7 道具价格（点券；道具表 byte_47FEE6 13×8B 各项 +1；
+//   0x445B3F confiscateItems 没收计价）
+const uint8_t kItemPrice[13] = {15, 30, 25, 25, 80, 150, 100, 30, 30, 40, 95, 150, 250};
+
 } // namespace rich4
+

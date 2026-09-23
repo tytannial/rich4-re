@@ -264,6 +264,30 @@ bool handleDebugKey(Application& app, int code, bool shift) {
                 RICH4_LOGI("debug: Ctrl+Shift+C player %d states cleared", cur);
                 return true;
             }
+            case 'o': { // [NEW] 当前格生成 cellTable 物件（类型 1..18 循环；测附身/挂身/渲染）
+                static int sDebugObjType = 1;
+                const uint16_t cell = st.players[cur].cellEntId;
+                const int obj = createMapObject(st, sDebugObjType, cell, 0, 0);
+                RICH4_LOGI("debug: Ctrl+Shift+O createMapObject type %d -> obj %d cell %u "
+                           "(cellTableIdx=%u cellNo=%u)",
+                           sDebugObjType, obj, cell, st.players[cur].cellTableIdx,
+                           st.players[cur].cellNo);
+                sDebugObjType = sDebugObjType % 18 + 1;
+                return true;
+            }
+            case 'x': { // [NEW] 附身/挂身物件寿命 -1（测飘走轮替 / 炸弹爆炸）
+                Player& pl = st.players[cur];
+                for (int idx : {pl.cellTableIdx, pl.cellNo}) {
+                    if (idx != 0) {
+                        uint8_t& life = st.cellTable[static_cast<size_t>(24 * (idx - 1)) + 4];
+                        if (life > 1) {
+                            life = 1;
+                        }
+                        RICH4_LOGI("debug: Ctrl+Shift+X obj %d life -> %u", idx, life);
+                    }
+                }
+                return true;
+            }
             default:
                 return false;
         }
