@@ -112,6 +112,9 @@ void appendVisitDigit(VisitCtx& ui, char ch) {
 }
 
 // [RE 0x436D3A] 金额数字逐位 + 进度条（数字帧 19..28；左端空白清理；滑条动态裁剪）
+// 帧布局（smp 实测 panel[24] 30 帧）：帧 0 主面板 320×338 / 帧 1·2·3 顶三按钮高亮
+//   80×41·80×41·43×41 / 帧 4 进度条填充 204×26 / 帧 5..16 数字键高亮 33×17 /
+//   帧 17·18 确认·結束高亮 49×25·57×25 / 帧 19..28 数字 0..9（18×32）/ 帧 29 融资标志 29×29
 void drawVisitAmount(VisitCtx& ui) {
     Surface& dst = ui.app->surface();
     const UiImage& sheet = *ui.sheet;
@@ -126,8 +129,8 @@ void drawVisitAmount(VisitCtx& ui) {
         x -= 20;
     }
     if (count < 10 && x - 102 > 0) {
-        // 清理数字左侧空白（源 = 帧 4 的 (62,101) 背景块）
-        blitElementRegionOpaque(dst, sheet.frame(4), 122, 172, 62, 101, x - 102, 32, false);
+        // 清理数字左侧空白：源坐标 = 目标 − 面板原点（即帧 0 对应背景块）
+        blitElementRegionOpaque(dst, sheet.frame(0), 122, 172, 62, 101, x - 102, 32, false);
     }
     const int width = ui.limit > 0
                           ? 6 * static_cast<int>(atoiVisit(ui.amount) * kVisitBarScale / ui.limit)
@@ -145,16 +148,16 @@ void redrawVisit(VisitCtx& ui) {
     Surface& dst = ui.app->surface();
     const UiImage& sheet = *ui.sheet;
     blitElementOpaque(dst, sheet.frame(0), kVisitX, kVisitY);
-    // 按钮高亮：按下优先，其次悬停（原版按下 blit 帧 v10+1，松开恢复）
+    // 当前模式按钮常亮：模式 0 → 帧 1 @按钮0；模式 1 → 帧 2 @按钮1
+    // （原版初始化 0x437020/0x437055 即高亮当前模式按钮；切换时用帧 0 覆盖旧按钮）
+    const int modeBtn = ui.mode == 0 ? 0 : 1;
+    blitElement(dst, sheet.frame(modeBtn + 1), kVisitX + kVisitRects[modeBtn].x0,
+                kVisitY + kVisitRects[modeBtn].y0, false);
+    // hover/按下高亮：画在该按钮命中区左上角（原版 Rect = word_475888[4*v10] + 60/71）
     const int lit = ui.pressed >= 0 ? ui.pressed : ui.hover;
-    if (lit >= 0 && sheet.frameCount() > static_cast<size_t>(lit + 1)) {
-        blitElement(dst, sheet.frame(lit + 1), kVisitX, kVisitY, false);
-    }
-    // 金额框：模式 0 → 帧 1 @(117,120)；模式 1 → 帧 2 @(199,120)（0x437020/0x437055）
-    if (ui.mode == 0) {
-        blitElement(dst, sheet.frame(1), 117, 120, false);
-    } else {
-        blitElement(dst, sheet.frame(2), 199, 120, false);
+    if (lit >= 0 && lit != modeBtn && sheet.frameCount() > static_cast<size_t>(lit + 1)) {
+        blitElement(dst, sheet.frame(lit + 1), kVisitX + kVisitRects[lit].x0,
+                    kVisitY + kVisitRects[lit].y0, false);
     }
     // [RE 0x437002] 暫停放款中：帧 29 @(157,141)
     const GameState& st = ui.app->gameState();
