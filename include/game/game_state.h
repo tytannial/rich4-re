@@ -538,6 +538,11 @@ struct GameState {
     bool parachuteActive = false;
     int parachuteTimer = 0;
     uint32_t parachuteLastMs = 0;
+    // [RE 0x45144F / 0x4506C7] 事件 FLC 叠加（得點券等；透明模式：索引 0 保留目标像素）
+    FliDecoder eventFlc;
+    bool eventFlcActive = false;
+    int eventFlcX = 0;
+    int eventFlcY = 0;
 };
 
 } // namespace rich4

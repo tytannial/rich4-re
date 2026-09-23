@@ -4,7 +4,7 @@
 > （地址、公式、常量、字段偏移）。执行前请阅读 AGENTS.md 与
 > `docs/reverse/functions/gameplay-map-mechanics.md`（机制总览与验收检查表）。
 > **最新进度（2026-09-23）**：任务 A..E ✅ + 计划外股市/specPt/转盘 ✅；仅剩任务 F 建造菜单；
-> 下一阶段按选定路线推进 P2 事件格（见 §9）。
+> P2 事件格已起步（得點券 ✅，见 §9）。
 
 ## 执行进度（2026-09-21..23 会话）
 
@@ -58,7 +58,14 @@
   - **Debug Ctrl+Shift 扩展**（`91c0e14`）：瞬移结算/载具/神明/状态/设施/银行/过天/股市面板
   - 开局日期链修复（`d3304ca`：还原 0x411E8F/0x4119E3/0x406DE7，去 1998-1-1 硬编码）
   - UI 控件指南 `docs/reverse/ui-controls.md`（浮雕按钮/变暗表/文本对齐/数字框/模态框架）
-- ⬜ **P2 事件格第一步：得點券**（case 10/11/12，本次会话实现）
+- ✅ **P2 事件格第一步：得點券（case 10/11/12）**（2026-09-23）：
+  - 原版依据：0x41B184/0x41B21E/0x41B2A3（反汇编）+ `sub_45144F` flcPlay（阻塞；flags&1 透明 =
+    调色板索引 0，见 0x4506C7）+ FLC 537（31x39/14 帧@71ms）+ Effect.mkf[98] + BIG5 文本
+    0x463A81/8E/9B；**case 12 原版无语音**（0x41B2FD 直接 jmp default，修正旧文档）
+  - 实现：`playEventFlc`（阻塞逐帧 render+pumpEvents+音频续喂；`turn_system.cpp`）+
+    `landingEvent` case 10/11/12 + `drawEventFlcFrame`（`game_loop.cpp` 色键跳过）+
+    `FliDecoder::colorKey()`；角色语音 sub_44EF41 → P4
+  - 文档：`41982d-p2-events.md` §2/§11 更新、help-checklist idx 29/30/31 ✅、本文件 §9
 - ⬜ **任务 F：建造菜单（未开始，P2 第一步完成后实施）**——IDA 结论：
   - `sub_423B3B(player, tab)` 5 页签筛选：0=我的地产+公司 / 1=我的地产 / 2=我的公司 /
     **3=普通地块（owner=me && level≠0 && type==0）** / **4=大地块（owner=me && level≠0 && type≠0）**
@@ -233,7 +240,7 @@
 
 **A..E ✅ → 计划外股市/specPt ✅ → P2 事件格由简到繁（进行中）**：
 
-1. 得點券（case 10/11/12）——本次会话
+1. ~~得點券（case 10/11/12）~~ ✅ 2026-09-23（建立事件格 FLC 阻塞播放模板 `playEventFlc`）
 2. 卡片格（case 13，抽卡链路，P4 前置）
 3. **任务 F 建造菜单**（入口 IDA 定位）
 4. 監獄/醫院（case 4/5 + cellNo 回合状态）

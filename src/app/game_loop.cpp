@@ -64,6 +64,39 @@ void drawParachuteFrame(Application& app) {
     }
 }
 
+// [RE 0x45144F / 0x4506C7] 事件 FLC 帧叠加到场景（得點券等；透明模式色键 = 调色板索引 0）
+// 依据: 0x45144F flcOpen(res, x, y, flags) flags&1 = g_flcTransparent；透明像素 = 调色板索引 0
+//       （0x4506C7 中索引 0 保留目标像素值）
+void drawEventFlcFrame(Application& app) {
+    GameState& st = app.gameState();
+    Surface& dst = app.surface();
+    const int w = st.eventFlc.width();
+    const int h = st.eventFlc.height();
+    if (w <= 0 || h <= 0) {
+        return;
+    }
+    const uint16_t* src = st.eventFlc.pixels();
+    const uint16_t key = st.eventFlc.colorKey();
+    uint16_t* d = dst.pixels();
+    for (int row = 0; row < h; ++row) {
+        const int py = st.eventFlcY + row;
+        if (py < 0 || py >= Surface::kHeight) {
+            continue;
+        }
+        for (int col = 0; col < w; ++col) {
+            const int px = st.eventFlcX + col;
+            if (px < 0 || px >= Surface::kWidth) {
+                continue;
+            }
+            const uint16_t c = src[static_cast<size_t>(row) * w + col];
+            if (c == key) {
+                continue; // 色键：调色板索引 0 透明
+            }
+            d[static_cast<size_t>(py) * Surface::kWidth + px] = c;
+        }
+    }
+}
+
 // [NEW] 小地图点击平滑跳转：每 tick 向目标视口中心插值（原版直接跳转）
 void updateScroll(Application& app) {
     GameState& state = app.gameState();
@@ -492,6 +525,10 @@ void renderGameFrame(Application& app) {
     }
     if (state.parachuteActive && state.parachute.valid()) {
         drawParachuteFrame(app);
+    }
+    // [RE 0x45144F] 事件 FLC 叠加（得點券；地图图元之上、面板之下）
+    if (state.eventFlcActive && state.eventFlc.valid()) {
+        drawEventFlcFrame(app);
     }
     // [RE 0x451985] 收租联动高亮（整条街/连锁店闪烁；地图图元之上、提示框之下）
     drawEstateHighlight(app);

@@ -378,6 +378,42 @@ void playHighlightBlink(Application& app) {
     st.highlightEstates.clear();
 }
 
+// [RE 0x45144F] playEventFlc：阻塞播放事件 FLC 帧（得點券 data.mkf[537] 等）
+// 依据: 0x45144F flcPlay(res, x, y, flags, soundId)：flcOpen（flags&1 透明 = 调色板索引 0；
+//       见 0x4506C7）→ 阻塞逐帧 flcDecodeFrame，帧间隔 = FLC 头 speed（flags BYTE1 = 0 时）；
+//       首帧解码后 sub_45434F 播放 Effect.mkf[soundId]（-1 不播）；播完释放资源。
+// 迁移: 逐帧 renderGameFrame（经 eventFlc 叠加）+ renderFrame + pumpEvents + 分段延时，
+//       音频续喂同 playHighlightBlink
+void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId) {
+    GameState& st = app.gameState();
+    auto blob = st.data.read(mkfIndex);
+    if (!blob || !st.eventFlc.open(std::move(*blob))) {
+        RICH4_LOGW("eventFlc: data.mkf[%d] unavailable (RE 0x45144F)", mkfIndex);
+        return;
+    }
+    st.eventFlcX = x;
+    st.eventFlcY = y;
+    st.eventFlcActive = true;
+    const int interval = std::max(1, st.eventFlc.speedMs());
+    bool soundPlayed = false;
+    while (st.eventFlc.nextFrame()) {
+        renderGameFrame(app);
+        app.renderFrame();
+        app.pumpEvents();
+        if (!soundPlayed && soundId >= 0) {
+            // [RE 0x45434F] 首帧解码后播放 FLC 音效（Effect.mkf[soundId]）
+            app.audio().playEffect(soundId);
+            soundPlayed = true;
+        }
+        for (int t = 0; t < interval; t += 5) {
+            app.audio().update();
+            SDL_Delay(5);
+        }
+    }
+    st.eventFlcActive = false;
+    RICH4_LOGI("eventFlc: data.mkf[%d] played @(%d,%d) (RE 0x45144F)", mkfIndex, x, y);
+}
+
 // [RE 0x41D559] ownerCanCollectRent：地主状态免收租检查（false = 免收，已显示提示）
 // 依据: 0x41D559 反编译; 依次判断（命中即 showMessage(文本, 1500) 并返回 false）：
 //   flag(+23) 高/低半字节均非 0 = 房屋查封中; 地主 +65 同盟对象 == 付款人+1 = 與%s同盟中;
@@ -460,8 +496,10 @@ int32_t applyGodRentModifier(Application& app, int payer, int32_t rent, const ch
 //     → estateRouteRent（0x419744 同路段 fees[level] 之和 / 连锁店数×2000）× moneyMul
 //     → flag(+23) 翻倍 → applyGodRentModifier（0x41D709 付款方神明调整）
 //     → showMessage("此地屬%s請付%d元過路費") → transferMoney(flags=0 收款入银行)
-// 差异: 事件格 case 2..16、商業用地/行業設施點收費/特殊点（loc_41A168）、AI 决策（sub_41D7D4）、
-//       收租的同盟分账/死神代付/免租卡片/同路段高亮/浮动数字（P4）
+//   事件格 case 10/11/12 得點券（0x41B184/0x41B21E/0x41B2A3）：data.mkf[537] FLC（阻塞）+
+//     showMessage("得點券ＮＮ點") + 点券 50/30/10；角色语音 sub_44EF41 待 P4（case 12 原版无）
+// 差异: 事件格 case 2..9/13..16（P2 后续）、商業用地/行業設施點特殊点（loc_41A168）、
+//       AI 决策（sub_41D7D4）、收租的同盟分账/死神代付/免租卡片/浮动数字（P4）
 int landingEvent(Application& app, uint16_t cellEntId) {
     GameState& st = app.gameState();
     const int p = st.currentPlayer;
@@ -476,6 +514,24 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                                                10, 16, 16, 16, 16, 10, 10, 10};
     if (cellType >= 2 && cellType <= 16) {
         app.audio().playEffectSlot(kCellTypeSound[cellType]);
+    }
+    if (cellType >= 10 && cellType <= 12) {
+        // [RE 0x41B184/0x41B21E/0x41B2A3] case 10/11/12 得點券（type 10/11/12 = 50/30/10 點）：
+        //   data.mkf[537] FLC（31x39 @ (204,180)，透明，14 帧 @71ms，音效 Effect.mkf[98]）→
+        //   showMessage("得點券ＮＮ點", 1000) → g_playerPoints += 50/30/10
+        //   → 角色语音 sub_44EF41（case 10 槽 charIndex*27+rand&1 / case 11 每角色槽 +2；
+        //     case 12 原版无语音）→ 返回 0x80（default）
+        static const int kPoints[3] = {50, 30, 10};
+        static const char* kText[3] = {"得點券５０點", "得點券３０點", "得點券１０點"};
+        const int i = cellType - 10;
+        // [RE 0x45144F(res, 0xCC, 0xB4, flags=1 透明, soundId=0x62)] 阻塞播放
+        playEventFlc(app, 537, 0xCC, 0xB4, 98);
+        showMessage(app, kText[i], 1000); // [RE 0x41B1BE] 3E8 = 1000ms
+        st.players[p].points = static_cast<uint16_t>(st.players[p].points + kPoints[i]);
+        // [RE 0x41B211] sub_44EF41(player, 0, 语音)：P4 语音系统接入；case 12 无语音
+        RICH4_LOGI("landingEvent: cellType %u 得點券 +%d (total %u) RE 0x41982D case %u", cellType,
+                   kPoints[i], st.players[p].points, cellType);
+        return 0x80;
     }
     if (cellType != 0) {
         RICH4_LOGI("landingEvent: cellType %u objId %u (RE 0x41982D, P2 TODO)", cellType, objId);

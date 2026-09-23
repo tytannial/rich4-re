@@ -30,7 +30,7 @@
 | 提示/消息/气泡/拾取 | 0x440CAC/0x417559 | `message/object_tip` | 全局 | §15 |
 | HUD 常驻（工具条/页签/日历/小地图/前进面板） | 0x417E26/0x417191 | `game_panel/game_loop` | 游戏内 | §16 |
 | 头像/精灵选择网格 | 0x40423C/0x404E44 | `new_game_dialog.cpp` | 选人 | §17 |
-| 动画（转盘/进场/闪烁/棋子/FLC） | 0x43F7C6/0x404E44 | `roulette/new_game/game_loop` | 事件、开局 | §18 |
+| 动画（转盘/进场/闪烁/棋子/FLC/事件FLC 阻塞播放） | 0x43F7C6/0x404E44/0x45144F | `roulette/new_game/game_loop/turn_system` | 事件、开局 | §18 |
 | 资源绘制（SPR索引/区域/RAW/灰度/暗化） | 0x456512/0x4553DA | `number_input/blit.cpp` | 全局 | §19 |
 | 全屏面板底图/帧布局 | — | `UiImage` | 各面板 | §20 |
 | 软件光标 | 0x4021F8 | `cursor.cpp` | 数字框 | §21 |
@@ -358,6 +358,7 @@ void pressDown(Surface& dst, int l, int t, int r, int b, int SHIFT, const uint8_
 | 闪烁 | 0x417E26 / 0x411122 | `kModalTimerEvent` 翻转 `advancePanelBlink`（GO）/ `blink`（热键反白） |
 | 棋子/角色动画 | 0x45663E | `blitSpriteFrame(frame++ % count)` |
 | 跳伞入场 FLC | 0x45144F | `FliDecoder` 帧画到地图区（色键 0），入场期间**锁定交互**（§24） |
+| 事件 FLC 阻塞播放 | 0x45144F/0x4506C7 | `playEventFlc`（`turn_system.cpp`）：landingEvent 内**同步阻塞**播放（得點券 537 @(204,180)，14 帧 @71ms），逐帧 `renderGameFrame`+`pumpEvents`+音频续喂；**透明模式（flags&1）= 调色板索引 0 色键**（`FliDecoder::colorKey()`；勿用 `c==0`，537 的 palette[0]=(0,139,83)≠0）；首帧后播 `Effect.mkf[soundId]`（`sub_454304`/`sub_45434F`） |
 
 **经验**：动画统一用 `runModal` 的 `tickMs` + `kModalTimerEvent`，不另起线程；
 `event==nullptr` 分支 = 原版 `PostMessage(WM_USER+1)`（进入/初始化）。

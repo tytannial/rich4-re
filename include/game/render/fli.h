@@ -28,6 +28,8 @@ public:
     int speedMs() const { return m_speed; }
     const uint16_t* pixels() const { return m_pixels.data(); }
     bool valid() const { return m_valid; }
+    // [RE 0x4506C7] 透明模式（sub_45144F flags&1）色键 = 调色板索引 0（原版解码时该索引保留目标像素）
+    uint16_t colorKey() const { return paletteColor(0); }
 
 private:
     bool decodeChunk(const uint8_t* p, int size);
