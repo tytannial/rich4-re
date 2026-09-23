@@ -1534,14 +1534,135 @@ void endPlayerState(Application& app, int p) {
     }
 }
 
+// [RE 0x44BA63] insurancePayout：保险期内费用由保险公司给付（入狱/住院罚款）
+// 依据: 0x44BA63 反编译; g_playerCardCnt(+62 保险期) 非 0 → 找 costType==4 的保险公司 specPt
+//       （第一个）→ showMessage("保險期間\n\n得到理賠金\n\n%d元" 0x4658FA, 2000) →
+//       sub_41D2C6(保险公司索引+100, player, amount, 1)（收款入现金）
+// 差异: 原版循环越界时仍取索引（未防护）；重写找不到返回 0
+int32_t insurancePayout(Application& app, int player, int32_t amount) {
+    GameState& st = app.gameState();
+    if (player < 0 || player >= 4 || st.players[player].insuranceDays == 0) {
+        return 0;
+    }
+    int specIdx = 0;
+    for (size_t i = 1; i < st.specPts.size(); ++i) {
+        if (st.specPts[i].costType == 4) { // kSpecPtCostMap index4 = 保險費（保險公司）
+            specIdx = static_cast<int>(i);
+            break;
+        }
+    }
+    if (specIdx == 0) {
+        return 0;
+    }
+    char text[96];
+    std::snprintf(text, sizeof(text), "保險期間\n\n得到理賠金\n\n%d元", amount); // [RE 0x4658FA]
+    showMessage(app, text, 2000);
+    transferMoney(app, 100 + specIdx, player, amount, 1); // [RE 0x41D2C6(i+100, a2, a3, 1)]
+    RICH4_LOGI("insurance payout: p=%d +%d (specPt %d) (RE 0x44BA63)", player, amount, specIdx);
+    return amount;
+}
+
+// [RE 0x43D593] jailPlayer：入狱（days 天）
+// 依据: 0x43D593 反编译; 已入狱（BYTE2 非 0）→ 天数累加 &0x7F；首次：
+//   sub_40D761 清旧状态（監獄/醫院标志 + stateFlags 全清）→ alive &= 0x0F →
+//   释放当前格占用 → cellEntId = 監獄格（word_48BAE0）→ sprite = evtCells[2]（綠島）→
+//   BYTE2 = days → g_jailFlags=1 → FLC 538 @(0,40)（settings[1] 动画过程）→ 语音（P4）→
+//   保险理赔 M×2000×days → byte66 += days（累计）
+// 差异: cellTable/cellNo 位置表（word_496D0A）P5；语音 P4；FLC 背景保存由逐帧重绘等价
+void jailPlayer(Application& app, int player, int days) {
+    GameState& st = app.gameState();
+    if (player < 0) {
+        return;
+    }
+    if (player >= 4) {
+        RICH4_LOGI("jailPlayer: NPC %d days=%d ignored (P5 事件槽未建模)", player, days);
+        return;
+    }
+    Player& pl = st.players[player];
+    const uint8_t cur = static_cast<uint8_t>((pl.stateFlags >> 16) & 0xFF);
+    if (cur != 0) {
+        const int total = ((cur & 0x7F) + days) & 0x7F; // [RE 0x43D6C5]
+        pl.stateFlags = (pl.stateFlags & 0xFF00FFFFu) | (static_cast<uint32_t>(total) << 16);
+        RICH4_LOGI("jailPlayer: p=%d days 累加 -> %d (RE 0x43D593)", player, total);
+        return;
+    }
+    // [RE 0x40D761] 设置新状态前清旧状态（監獄/醫院标志 + stateFlags 全清；重写另清 cellTableIdx）
+    st.jailFlags[player] = 0;
+    st.hospitalFlags[player] = 0;
+    pl.stateFlags = 0;
+    // [RE 0x44F2C2] 入狱语音（P4）
+    pl.alive &= 0x0F; // [RE 0x43D601]
+    if (pl.cellEntId > 0 && pl.cellEntId < st.cellEnts.size()) {
+        st.cellEnts[pl.cellEntId].occMask &= ~(256u << player); // [RE 0x43D61D]
+    }
+    pl.cellEntId = st.jailCellEntId; // [RE 0x43D627]
+    pl.prevCellEnt = 0;              // [RE 0x43D630]
+    pl.byte27 = 15;                  // [RE 0x43D637] g_playerRestoreDir = 15
+    if (st.evtCells.size() > 2) {    // [RE 0x43D63E] evtCells[2] = 綠島（監獄）
+        pl.spriteX = static_cast<uint16_t>(st.evtCells[2].x);
+        pl.spriteY = static_cast<uint16_t>(st.evtCells[2].y);
+    }
+    pl.stateFlags = (pl.stateFlags & 0xFF00FFFFu) | (static_cast<uint32_t>(days) << 16); // BYTE2
+    st.jailFlags[player] = 1;       // [RE 0x43D674]
+    if (st.settings[1] != 0) {      // [RE 0x43D67B] byte_497159 动画过程开关
+        playEventFlc(app, 538, 0, 40, 94); // [RE 0x45144F(res, 0, 40, 0x120001, 94)]
+    }
+    insurancePayout(app, player, 2000 * days * st.moneyMul); // [RE 0x43D749]
+    pl.byte66 = static_cast<uint8_t>(pl.byte66 + days);      // [RE 0x43D755] byte_496BAA 累计
+    RICH4_LOGI("jailPlayer: p=%d days=%d (RE 0x43D593)", player, days);
+}
+
+// [RE 0x43EC3F] hospitalizePlayer：住院（days 天；同 jailPlayer，用 BYTE3/醫院格/evtCells[1]/FLC 524）
+void hospitalizePlayer(Application& app, int player, int days) {
+    GameState& st = app.gameState();
+    if (player < 0) {
+        return;
+    }
+    if (player >= 4) {
+        RICH4_LOGI("hospitalizePlayer: NPC %d days=%d ignored (P5 事件槽未建模)", player, days);
+        return;
+    }
+    Player& pl = st.players[player];
+    const uint8_t cur = static_cast<uint8_t>((pl.stateFlags >> 24) & 0xFF);
+    if (cur != 0) {
+        const int total = ((cur & 0x7F) + days) & 0x7F; // [RE 0x43ED74]
+        pl.stateFlags = (pl.stateFlags & 0x00FFFFFFu) | (static_cast<uint32_t>(total) << 24);
+        RICH4_LOGI("hospitalizePlayer: p=%d days 累加 -> %d (RE 0x43EC3F)", player, total);
+        return;
+    }
+    st.jailFlags[player] = 0;
+    st.hospitalFlags[player] = 0;
+    pl.stateFlags = 0;
+    pl.alive &= 0x0F; // [RE 0x43ECAD]
+    if (pl.cellEntId > 0 && pl.cellEntId < st.cellEnts.size()) {
+        st.cellEnts[pl.cellEntId].occMask &= ~(256u << player); // [RE 0x43ECC9]
+    }
+    pl.cellEntId = st.hospitalCellEntId; // [RE 0x43ECD3]
+    pl.prevCellEnt = 0;                  // [RE 0x43ECDC]
+    pl.byte27 = 15;                      // [RE 0x43ECE3]
+    if (st.evtCells.size() > 1) {        // [RE 0x43ECEA] evtCells[1] = 醫院
+        pl.spriteX = static_cast<uint16_t>(st.evtCells[1].x);
+        pl.spriteY = static_cast<uint16_t>(st.evtCells[1].y);
+    }
+    pl.stateFlags = (pl.stateFlags & 0x00FFFFFFu) | (static_cast<uint32_t>(days) << 24); // BYTE3
+    st.hospitalFlags[player] = 1;   // [RE 0x43ED20]
+    if (st.settings[1] != 0) {      // [RE 0x43ED2E]
+        playEventFlc(app, 524, 0, 210, 92); // [RE 0x45144F(res, 0, 210, 0x1E0001, 92)]
+    }
+    insurancePayout(app, player, 2000 * days * st.moneyMul); // [RE 0x43EDF8]
+    pl.byte66 = static_cast<uint8_t>(pl.byte66 + days);      // [RE 0x43EE04]
+    RICH4_LOGI("hospitalizePlayer: p=%d days=%d (RE 0x43EC3F)", player, days);
+}
+
 // [RE 0x41C84F] updatePlayerStates：回合开始状态倒计时（nextPlayer 切换玩家后调用）
 // 依据: 0x41C84F 反编译; BYTE0..BYTE3 编码 = 剩余天数（1..0x7F），bit7 = 结束标志：
 //   n>0 → n-1；n==1 → (n-1)|0x80（BYTE1 出國为 (n-1)&0x3F==0 时置位）；bit7 → 结束处理：
 //   BYTE0 住宿 → sub_40D6BE / BYTE1 出國 → sub_40D4E5（清位+恢复占用+loadWalkResources）/
-//   BYTE2 監獄 → releaseJailNpc / BYTE3 醫院 → releaseHospitalNpc；
-//   byte54 冬眠 / state37 夢遊 在 stateFlags==0 时倒计时（0→0x80）
-// 差异: 原版结束分支未见状态字节清零（实测会永久卡在"住宿中"），重写在结束时清零对应 BYTE
-//       （与監獄 g_jailFlags 同模式）；出國/監獄/醫院结束的 FLC 动画与 NPC 释放 M3
+//   BYTE2 監獄 → releaseJailNpc / BYTE3 醫院 → releaseHospitalNpc（清 g_jailFlags/g_hospitalFlags）；
+//   byte54 冬眠 / state37 夢遊 在 stateFlags==0 时倒计时（0→0x80）；
+//   保险期 +62：0x41CC4B 递减、0x41CAE3 到期清 0
+// 差异: 原版结束分支未见状态字节清零（实测会永久卡在"住宿中"），重写在结束时清零对应 BYTE；
+//       cellTable 物件回合递减（0x41CC6F，P3 神明/道具）、同盟天数 +61（P4）、NPC 释放（P5）
 void updatePlayerStates(Application& app, int p) {
     GameState& st = app.gameState();
     if (p < 0 || p >= 4) {
@@ -1581,7 +1702,8 @@ void updatePlayerStates(Application& app, int p) {
     // BYTE2 監獄
     const uint8_t b2 = static_cast<uint8_t>((pl.stateFlags >> 16) & 0xFF);
     if ((b2 & 0x80) != 0) {
-        // [RE 0x43D7BF] releaseJailNpc：sub_40D6BE（不清 BYTE2，走出監獄格移动半程清）
+        // [RE 0x43D7BF] releaseJailNpc：g_jailFlags 清 0 + sub_40D6BE（不清 BYTE2，走出移动半程清）
+        st.jailFlags[p] = 0;
         endPlayerState(app, p);
     } else if (b2 != 0) {
         pl.stateFlags =
@@ -1590,7 +1712,8 @@ void updatePlayerStates(Application& app, int p) {
     // BYTE3 醫院
     const uint8_t b3 = static_cast<uint8_t>((pl.stateFlags >> 24) & 0xFF);
     if ((b3 & 0x80) != 0) {
-        // [RE 0x43EE6E] releaseHospitalNpc 同构（走出醫院格）
+        // [RE 0x43EE6E] releaseHospitalNpc 同构
+        st.hospitalFlags[p] = 0;
         endPlayerState(app, p);
     } else if (b3 != 0) {
         pl.stateFlags =
@@ -1605,8 +1728,16 @@ void updatePlayerStates(Application& app, int p) {
             pl.state37 = decay(pl.state37, 0xFF);
         }
     }
-    RICH4_LOGI("player states: p=%d flags=%08X byte54=%u state37=%u (RE 0x41C84F)", p,
-               pl.stateFlags, pl.byte54, pl.state37);
+    // 保险期（+62）：0x41CC4B 递减（1 → 0x80），0x41CAE3 到期清 0（不受 stateFlags 限制）
+    if (pl.insuranceDays != 0) {
+        if ((pl.insuranceDays & 0x80) != 0) {
+            pl.insuranceDays = 0;
+        } else {
+            pl.insuranceDays = decay(pl.insuranceDays, 0x7F);
+        }
+    }
+    RICH4_LOGI("player states: p=%d flags=%08X byte54=%u state37=%u ins=%u (RE 0x41C84F)", p,
+               pl.stateFlags, pl.byte54, pl.state37, pl.insuranceDays);
 }
 
 // [RE 0x41CF67] advanceDay

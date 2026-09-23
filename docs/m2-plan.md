@@ -4,7 +4,7 @@
 > （地址、公式、常量、字段偏移）。执行前请阅读 AGENTS.md 与
 > `docs/reverse/functions/gameplay-map-mechanics.md`（机制总览与验收检查表）。
 > **最新进度（2026-09-23）**：任务 A..E ✅ + 计划外股市/specPt/转盘 ✅；仅剩任务 F 建造菜单；
-> P2 事件格已起步（得點券/卡片格 ✅，见 §9）。
+> P2 事件格已起步（得點券/卡片格 ✅、監獄·醫院状态系统 ✅，见 §9）。
 
 ## 执行进度（2026-09-21..23 会话）
 
@@ -76,6 +76,19 @@
     新表 `kCardNames[31]`/`kCardPrices[31]`（map_tables）
   - 文档：`41982d-p2-events.md` §3 全面归档（含旧文档订正：sub_441F73 参数是卡 id 非玩家、
     case 12 无语音、propStock 是卡片赠卡池）、help-checklist idx 25 ✅
+- ✅ **P2 事件格第三步：監獄/醫院状态系统**（2026-09-23）：
+  - 原版依据：`jailPlayer` 0x43D593 / `hospitalizePlayer` 0x43EC3F（移格/标志/FLC 538·524）+
+    `sub_41C84F` 回合递减 + `releaseJailNpc`/`releaseHospitalNpc`（0x43D7BF/0x43EE6E 玩家分支）+
+    `sub_44BA63` 保险理赔（0x4658FA）+ 0x41CC4B/0x41CAE3 保险期递减/清零
+  - **订正**：`Player +62 g_playerCardCnt` 实为**保险期**（重写原误名 `cardCount` 且用于"发卡计数"，
+    已改 `insuranceDays`）；`givePlayerCard` 实为**给道具**（`g_playerCards` 0x49915C = 道具库存，
+    重写 `cardPool60` 改名 `itemStock`）；开局 6 次发放按原版改为"每玩家道具 1/2/3/4/8/9 +
+    道具池（`misc8A`）递减"
+  - 实现：`jailPlayer`/`hospitalizePlayer`/`insurancePayout`（`turn_system.cpp`）；`updatePlayerStates`
+    补保险期递减与 `jailFlags`/`hospitalFlags` 清理；`jailCellEntId`/`hospitalCellEntId`
+    （loadMapData 扫描 special 8002/8001）；debug `Ctrl+Shift+J` 入狱 / `Ctrl+Shift+L` 住院
+  - 待做：门外保释/办出院 UI（`sub_43CAAB`/`sub_43DA27` + panel.mkf[63/64/65]）+ AI 保释
+    （费用表 `dword_475C44/475CA4` = 玩家 30/NPC 300 点券；NPC 释放 P5）
 - ⬜ **任务 F：建造菜单（未开始，P2 第一步完成后实施）**——IDA 结论：
   - `sub_423B3B(player, tab)` 5 页签筛选：0=我的地产+公司 / 1=我的地产 / 2=我的公司 /
     **3=普通地块（owner=me && level≠0 && type==0）** / **4=大地块（owner=me && level≠0 && type≠0）**
@@ -252,8 +265,9 @@
 
 1. ~~得點券（case 10/11/12）~~ ✅ 2026-09-23（建立事件格 FLC 阻塞播放模板 `playEventFlc`）
 2. ~~卡片格（case 13）~~ ✅ 2026-09-23（赠卡池抽卡 + 卡包 15 槽 + `showCardGet` 卡片图显示）
-3. **任务 F 建造菜单**（入口 IDA 定位）
-4. 監獄/醫院（case 4/5 + cellNo 回合状态）
+3. ~~監獄/醫院（case 4/5）~~ 状态系统 ✅ 2026-09-23（入狱/住院/回合递减/到期释放/保险理赔）；
+   **保释 UI ❌ 待做**（`sub_43CAAB`/`sub_43DA27`）
+4. **任务 F 建造菜单**（入口 IDA 定位）
 5. 銀行（case 14）+ 物價指數月度更新
 6. 新聞/命運（case 2/3，先插画+标题骨架）
 7. 小游戏/樂透/百貨/魔法屋

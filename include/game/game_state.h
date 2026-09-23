@@ -65,7 +65,9 @@ struct Player {
     uint8_t skipMove = 0;       // +56 byte_496BA0（跳过移动）
     uint8_t fixedStep = 0;      // +57 byte_496BA1（固定步数）
     uint8_t byte58 = 0;         // +58
-    uint8_t cardCount = 0;      // +62 g_playerCardCnt 0x496BA6
+    // [RE 0x496BA6] g_playerCardCnt（**保险期**剩余天数；原误名 cardCount）
+    // 依据: 0x41AC6E 保險收费 += 轮盘天数；0x44BA63 非 0 时保险理赔；0x41CAE3 到期清 0
+    uint8_t insuranceDays = 0;  // +62
     uint8_t cellTableIdx = 0;   // +63 byte_496BA7
     uint8_t cellNo = 0;         // +64 g_playerCellNo 0x496BA8
     // [RE 0x496BA9] g_playerVehicle 实为同盟对象（1-based 玩家号，0=无）
@@ -384,8 +386,10 @@ struct GameState {
     int32_t stockTotalValue = 0;     // [RE 0x49907C] dword_49907C 股票总市值（Σ基准价×10）
     int32_t marketIndex = 0;         // [RE 0x499078] dword_499078 大盘指数（Σ价格×10）
     float stockGlobalDrift = 0.0f;   // [RE 0x4990EC] dword_4990EC 全局扰动
-    uint8_t cardState60[60] = {};    // [RE 0x499120] g_cardState60
-    uint8_t cardPool60[60] = {};     // [RE 0x49915C] byte_49915C
+    uint8_t cardState60[60] = {};    // [RE 0x499120] g_cardState60 卡片卡包（4 玩家 × 15 槽，存卡 id）
+    // [RE 0x49915C] byte_49915C / g_playerCards 玩家**道具库存**（4 × 15 槽，索引 = 道具 id 1..9，
+    //   每槽数量上限 9；givePlayerCard 0x445A4D 写/ takePlayerCard 0x445AA2 减；原误名 cardPool60）
+    uint8_t itemStock[60] = {};
     uint8_t cardShuffle[36] = {};    // [RE 0x499090] g_miscTable36B
     uint8_t misc37[37] = {};         // [RE 0x496B38] g_miscTable37
     int32_t cardShufflePos = 0;      // [RE 0x4990E0] dword_4990E0
@@ -393,6 +397,12 @@ struct GameState {
 
     uint32_t miscTable80[10][2] = {}; // [RE 0x498E28] g_miscTable80
     uint8_t misc8A[8] = {};          // [RE 0x497320] byte_497320 道具池（8 种；kMisc8Init 初值）
+    // [RE 0x496B30 / 0x496B60] 監獄/醫院在押标志（8 字节；索引 0..3 玩家 / 4..7 事件槽 NPC）
+    uint8_t jailFlags[8] = {};
+    uint8_t hospitalFlags[8] = {};
+    // [RE 0x48BAE0 / 0x48BAE2] loadMapData 扫描 special 8002（監獄）/ 8001（醫院）的 cellEnt
+    uint16_t jailCellEntId = 0;
+    uint16_t hospitalCellEntId = 0;
     uint8_t misc8B[8] = {};          // [RE 0x496B60] g_misc8B
 
     // [RE 0x499088] dword_499088 地图旋转方向（0-7）
@@ -532,8 +542,7 @@ struct GameState {
     UiImage walkRes[9][13];
 
     // [RE 0x475114] dword_475114 待入场玩家（+1；0 = 无）
-    int pendingSpawnPlayer = 0;
-    // [RE 0x45144F] 跳伞动画（data.mkf[charIndex+559] FLC）
+    int pendingSpawnPlayer = 0;    // [RE 0x45144F] 跳伞动画（data.mkf[charIndex+559] FLC）
     FliDecoder parachute;
     bool parachuteActive = false;
     int parachuteTimer = 0;

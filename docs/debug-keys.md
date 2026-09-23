@@ -50,6 +50,8 @@
 | `Ctrl+Shift+T` | **循环携带神明** | 无→小財神→大財神→小窮神→大窮神→小衰神→大衰神→死神（测试神明调整租金/阻止购地/地主死神免收） |
 | `Ctrl+Shift+S` | **循环玩家状态** | 无→住宿→出國→監獄→醫院→冬眠→夢遊（测试 `ownerCanCollectRent` 免收租；每回合自动倒计时结束并恢复行动） |
 | `Ctrl+Shift+B` | 银行存款 +100000 | 测试收款入银行/贷款 |
+| `Ctrl+Shift+J` | **当前玩家入狱 3 天** | `jailPlayer` 0x43D593：移到監獄格（綠島）/sprite/stateFlags BYTE2/`jailFlags`/FLC 538/保险理赔 |
+| `Ctrl+Shift+L` | **当前玩家住院 3 天** | `hospitalizePlayer` 0x43EC3F：醫院格/stateFlags BYTE3/`hospitalFlags`/FLC 524 |
 | `Ctrl+Shift+K` | 买入指向 specPt 的股票 100 股 | 测试控股/经营権转移（先 `Ctrl+7` 备现金；持股超过他人 → owner 变更/小地图刷新；日志含 shares/owner/control） |
 | `Ctrl+Shift+M` | 打开**股市面板** | `stockMarketDialog`（0x42B58F）；测行情/持股切换、買/賣、走势图、休市 |
 | `Ctrl+Shift+D` | 过一天 | `advanceDay`（日期/到期回收/每日事件/股票行情） |
@@ -142,6 +144,16 @@
 4. 边界：卡包满 15 张 → 先舍弃价格最低的一张（`kCardPrices`）；赠卡池（`propStock`）空 → 不弹提示；
    `Ctrl+7` 可多次触发观察不同卡
 
+**監獄/醫院**（入狱 `jailPlayer` 0x43D593 / 住院 `hospitalizePlayer` 0x43EC3F）：
+1. `Ctrl+Shift+J` 入狱 → 角色消失并移到監獄格（綠島），播 FLC 538（`settings[1]` 动画过程开启时）
+2. `Ctrl+Shift+D` 过天 3 次 → 日志 `player states: ... flags=00030000`（BYTE2 递减）→ 到期后
+   自动出狱（`flags=00800000` → 下回合恢复占用/朝向，角色重现）
+3. 收租验证：入狱期间他人踩其地 → 「ＸＸ坐牢中 免收過路費！」（`ownerCanCollectRent`）
+4. 保险理赔：先踩 specPt 保險公司（转盘投保天数）→ `Ctrl+Shift+J` → 弹「保險期間 得到理賠金 N元」
+   （N = 2000×M×天数，由保险公司付款；无保险则不弹不扣）
+5. `Ctrl+Shift+L` 住院同理（FLC 524）；`Ctrl+Shift+S` 可辅助验证免收租状态
+6. 门外保释/办出院 UI 未实现（P2 后续；`jailBailDialog`/`hospitalVisitDialog`）
+
 **升级/加盖**（`priceBase × moneyMul`）：
 1. `Ctrl+1` 指向地块归己（或 `Ctrl+5` 全归己）
 2. 走到该格 → 弹出「升級費用N元 是否升級?」→ 确认后 `level + 1`
@@ -158,4 +170,4 @@
 - 大地块（`estate.type != 0`）不能通过升级分支加盖，应走**建造菜单**（任务 F，未实现）。
 - 不修改 `dword_496BB4` 欠款矩阵（重写未建模，见任务 D 说明）。
 - 联动高亮不含**同盟地块**（`g_playerAlly`，P4）。
-- 事件格已实现得點券（case 10/11/12）与卡片格（case 13）；其余事件格（監獄/醫院/新聞/命運/小游戏等）尚未实现（P2 进行中）。
+- 事件格已实现得點券/卡片格/監獄·醫院状态系统；監獄·醫院门外保释/办出院 UI、新聞/命運/小游戏等尚未实现（P2 进行中）。

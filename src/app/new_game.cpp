@@ -208,12 +208,12 @@ bool newGameInit(Application& app, bool mode1) {
 
     // 卡片状态清零 + 道具/库存初值
     std::memset(state.cardState60, 0, sizeof(state.cardState60));
-    std::memset(state.cardPool60, 0, sizeof(state.cardPool60));
+    std::memset(state.itemStock, 0, sizeof(state.itemStock));
     for (int i = 0; i < 30; ++i) {
         state.propStock[i] = kPropStockInit[i]; // g_propStock[i] = byte_47FDF6[8*i]
     }
     for (int j = 0; j < 8; ++j) {
-        state.misc8A[j] = kMisc8Init[j]; // byte_497320[j] = byte_47FEE6[8*j]
+        state.misc8A[j] = kMisc8Init[j]; // byte_497320[j] = byte_47FEE6[8*j]（道具池）
     }
 
     // 玩家初始化（每 104 字节；k >= playerCount 时清空）
@@ -222,12 +222,19 @@ bool newGameInit(Application& app, bool mode1) {
             state.players[k] = Player{};
             continue;
         }
-        // [RE 0x445A4D] givePlayerCard(k, 1/2/3/4/8/9)（卡片系统阶段 3 接入，此处仅计数）
-        for (int card : {1, 2, 3, 4, 8, 9}) {
-            if (card < 9 && state.cardPool60[card] < 9) {
-                ++state.cardPool60[card];
-                state.players[k].cardCount = static_cast<uint8_t>(state.players[k].cardCount + 1);
+        // [RE 0x407281..0x4072C0] givePlayerCard(k, 1/2/3/4/8/9)（实为**给道具**，见 0x445A4D：
+        //   g_playerItems[15k+item]++，item<=8 受道具池 g_cardPool(0x497320-1) 限制；上限 9/种）
+        for (int item : {1, 2, 3, 4, 8, 9}) {
+            if (state.itemStock[15 * k + item] >= 9) {
+                continue;
             }
+            if (item <= 8) {
+                if (state.misc8A[item - 1] == 0) {
+                    continue; // 池空：原版直接返回不给
+                }
+                --state.misc8A[item - 1];
+            }
+            ++state.itemStock[15 * k + item];
         }
         // memcpy(&g_players[26*k], &g_charData + 104*charId, 104)
         const int charId = state.newGameConfig.charId[k];
@@ -361,6 +368,20 @@ bool loadMap(Application& app) {
                "evtCells=%zu (Map.mkf[%zu/%zu])",
                state.gnd.size(), state.cellEnts.size(), state.estates.size(), state.corps.size(),
                state.specPts.size(), state.evtCells.size(), gndIndex, gndIndex + 1);
+    // [RE 0x408023..0x408068] loadMapData 扫描 special 8002（監獄）/ 8001（醫院）格 → word_48BAE0/E2
+    state.jailCellEntId = 0;
+    state.hospitalCellEntId = 0;
+    for (size_t i = 1; i < state.cellEnts.size(); ++i) {
+        if (state.cellEnts[i].special == 8002) {
+            state.jailCellEntId = static_cast<uint16_t>(i);
+        } else if (state.cellEnts[i].special == 8001) {
+            state.hospitalCellEntId = static_cast<uint16_t>(i);
+        }
+    }
+    if (state.jailCellEntId == 0 || state.hospitalCellEntId == 0) {
+        RICH4_LOGW("loadMap: 監獄/醫院格缺失 jail=%u hospital=%u (RE 0x408023)",
+                   state.jailCellEntId, state.hospitalCellEntId);
+    }
     // [RE 0x407AD2] specPt+48（sharesLeft）= 10000 - word_496988[18*stockNo]
     //   word_496988（g_stocks +4）初值 = kStockInit[stockNo][2]（银行渠道初始发行量）
     //   总股本固定 10000；现金认购剩余 = 10000 - 银行渠道发行量

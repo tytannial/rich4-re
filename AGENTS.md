@@ -23,21 +23,22 @@
 `facility_dialog.cpp`+`roulette_dialog.cpp`）、**行業設施點 specPt 收费 ✅**（6 公式 + 公库 `fund`）、
 **连锁店 ✅**（改建卡 0x44309B + `Ctrl+4`）；Debug 工具（Ctrl+1..9 + Ctrl+Shift 扩展）✅、
 大地图填色 ✅、买地面板背景 ✅；**仅剩建造菜单 ❌**（任务 F，`sub_423B3B/4225A3/423CF3`
-已调研，入口待查）；**P2 事件格已起步**（得點券 case 10/11/12 ✅、卡片格 case 13 ✅；
-事件格 FLC 阻塞播放模板 `playEventFlc` + 透明叠加 `drawEventFlcFrame` + 卡片显示 `showCardGet`）。
+已调研，入口待查）；**P2 事件格已起步**（得點券 case 10/11/12 ✅、卡片格 case 13 ✅、
+監獄·醫院状态系统 ✅；事件格 FLC 阻塞播放模板 `playEventFlc` + 透明叠加 `drawEventFlcFrame` +
+卡片显示 `showCardGet` + 入狱/住院 `jailPlayer`/`hospitalizePlayer`/保险理赔 `insurancePayout`）。
 **M2 股市 ✅**：`stock_system.cpp`（stockTick/认购/控股/买卖交易量）+ `spec_pt_dialog.cpp`
 （0x41D1A9 认购 + 数字输入框）+ `stock_market_dialog.cpp`（0x42B58F/0x42AAFF 行情/持股切换·買/賣·
 走勢圖饼+折线·休市，`panel.mkf[75]` 帧0/1/2）+ `advanceDay` 每日维护（停牌/新闻倒计时·休市·
 交易量·stockTick）；`kStockNames[8][12]`；详见 `42b58f-stock-panel.md`。
 
-**功能总览**：`docs/help-checklist.md`（帮助文档 99 条 → 实现状态，当前 ✅ 13 / 🟡 7 / ❌ 79）。
+**功能总览**：`docs/help-checklist.md`（帮助文档 99 条 → 实现状态，当前 ✅ 13 / 🟡 9 / ❌ 77）。
 
 **M2 执行计划**：见 `docs/m2-plan.md`
 
 **M2 待办**（详见 `docs/reverse/functions/` 各档案「差异」段，按选定路线排序）：
 
-- P2 事件格实现（研究已完成，见 `41982d-p2-events.md`；**得點券/卡片格 ✅ 2026-09-23**，
-  继续：監獄/醫院 → 銀行/物價 → 新聞/命運 → 小游戏/樂透/百貨/魔法屋）
+- P2 事件格实现（研究已完成，见 `41982d-p2-events.md`；**得點券/卡片格/監獄·醫院状态 ✅ 2026-09-23**，
+  继续：監獄·醫院保释 UI → 銀行/物價 → 新聞/命運 → 小游戏/樂透/百貨/魔法屋）
 - 任务 F 建造菜单（大地块特殊建筑外观 + 5 页签；入口待 IDA 定位）
 - 经济系统剩余：银行贷款（case 14 銀行格）、物價指數月度更新（`updateMoneyIndex` 未实现，
   `g_moneyMul` 当前恒 1）、股市交易市场/挂单/每月 15 号分红、卡片与道具使用（P4）

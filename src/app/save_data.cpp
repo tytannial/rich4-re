@@ -53,7 +53,7 @@ void serializePlayer(uint8_t out[kPlayerSize], const Player& p) {
     std::memcpy(out + 50, &p.stateFlags, 4);
     out[54] = p.byte54;
     out[55] = p.state37;
-    out[62] = p.cardCount;
+    out[62] = p.insuranceDays;
     out[63] = p.cellTableIdx;
     out[65] = p.ally;
     out[100] = p.kind;
@@ -150,7 +150,7 @@ bool saveGameToSlot(const std::string& gameDir, int slot, const GameState& state
     wbuf(state.miscTable80, 80);                       // g_miscTable80 16x5
     wbuf(state.cellTable.data(), 24 * 46);             // g_cellTable
     wbuf(state.cardState60, 60);                       // g_cardState60
-    wbuf(state.cardPool60, 60);                        // byte_49915C
+    wbuf(state.itemStock, 60);                         // byte_49915C g_playerCards 道具库存
     wbuf(state.propStock, 30);                         // g_propStock
     wbuf(state.misc8A, 8);                             // byte_497320
     w32(static_cast<uint32_t>(state.turnCounter));

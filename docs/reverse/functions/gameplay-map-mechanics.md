@@ -92,8 +92,8 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
 | 1 | 公園 | 1 | 24 | 0 | case 1 = default：无事件（返回 0x80） | ❌ |
 | 2 | 新聞 | 3 | 33 | 10 | `newsEvent`（新闻事件全屏 UI） | ❌ |
 | 3 | 命運 | 5 | 28 | 10 | `fateEvent`（命运事件） | ❌ |
-| 4 | 監獄 | 7 | 34 | 10 | `jailBailDialog`（入狱/保释） | ❌ |
-| 5 | 醫院 | 9 | 37 | 10 | `hospitalVisitDialog`（住院/出院） | ❌ |
+| 4 | 監獄 | 7 | 34 | 10 | `jailBailDialog`（入狱 `jailPlayer` ✅ / 门外保释 UI ❌） | 🟡 |
+| 5 | 醫院 | 9 | 37 | 10 | `hospitalVisitDialog`（住院 `hospitalizePlayer` ✅ / 门外办出院 UI ❌） | 🟡 |
 | 6 | 企鵝挖寶 | 11 | 26 | 10 | `sub_415215` → `g_playerPoints += ax`（挖宝小游戏） | ❌ |
 | 7 | 七彩氣球 | 15 | 23 | 10 | `sub_4154DC` → `g_playerPoints += ax`（射气球小游戏） | ❌ |
 | 8 | 喜從天降 | 13 | 32 | 10 | `sub_4155FC` → `g_playerPoints += ax`（接钱小游戏） | ❌ |
@@ -303,16 +303,19 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
 ### P2 事件格（`sub_41982D` case 2..16，语义见 §3）
 
 > 研究详情见 **`41982d-p2-events.md`**（各 case 的处理函数、数据结构、实现顺序与待深入清单）。
-> 🚧 进行中：**得點券 ✅ / 卡片格 ✅（2026-09-23）**；路线 = 監獄/醫院（4/5）→ 銀行（14）+ 物價 →
-> 新聞/命運（2/3）→ 小游戏/樂透/百貨/魔法屋。
+> 🚧 进行中：**得點券 ✅ / 卡片格 ✅ / 監獄·醫院状态系统 ✅（2026-09-23）**；
+> 路线 = 監獄/醫院保释 UI（4/5 剩余）→ 銀行（14）+ 物價 → 新聞/命運（2/3）→ 小游戏/樂透/百貨/魔法屋。
 
 - [x] case 10/11/12 得點券（FLC 537 阻塞播放（透明=索引 0）+ showMessage + 50/30/10 點券；
       语音 P4）：`playEventFlc` + `landingEvent` case 10/11/12 + `drawEventFlcFrame`（详见 `41982d-p2-events.md` §2）
 - [x] case 13 卡片（FLC 536 + `drawFreeCard` 赠卡池抽卡入卡包（15 槽，满则舍弃最低价）+ `showCardGet`
       卡片图/提示框/1500ms；语音 P4；详见 `41982d-p2-events.md` §3）
 - [ ] case 13 卡片（FLC 536 + `sub_441E12` 抽卡 + `sub_441F73` 给卡 + `"得到%s！"`；上限 10 张须舍弃）
-- [ ] case 4/5 監獄/醫院（`jailBailDialog`/`hospitalVisitDialog` 門外保釋/辦理出院；入狱 `jailPlayer`/住院 `hospitalizePlayer`：
-      移到 8002/8001 格 + `stateFlags` BYTE2/BYTE3 天数 + 罚款 2000×moneyMul×天数 + FLC 538/524）
+- [x] case 4/5 入狱/住院状态（`jailPlayer`/`hospitalizePlayer`：移到 8002/8001 格 + `stateFlags`
+      BYTE2/BYTE3 天数 + FLC 538/524 + 保险理赔 2000×M×天）+ 回合递减/到期释放（`updatePlayerStates`
+      + `endPlayerState`）+ 保险期（+62）递减与 `insurancePayout`；debug `Ctrl+Shift+J`/`L`
+- [ ] case 4/5 門外保釋/辦理出院 UI（`jailBailDialog`/`hospitalVisitDialog` + `sub_43CAAB`/`sub_43DA27`
+      + panel.mkf[63/64/65]）与 AI 保释（费用表 `dword_475C44/475CA4` = 玩家 30/NPC 300 点券）
 - [ ] case 2/3 新聞/命運（`newsEvent` 36 事件表 `g_newsOrder` / `fateEvent` 37 事件表 `g_fateOrder`；
       插画 + 6 类标题 + `funcs_44B7BD`/`funcs_44DC44` 效果函数表）
 - [ ] case 6/7/8 小游戏（企鵝挖寶 `sub_415215`/七彩氣球 `sub_4154DC`/喜從天降 `sub_4155FC`，得分入 `g_playerPoints`）

@@ -11,8 +11,8 @@
 | 1 | 公園 | 1 = default | —（无事件） | 已实现（返回 0x80） |
 | 2 | 新聞 | 2 | `newsEvent`（36 事件表） | ✅ 结构已明 |
 | 3 | 命運 | 3 | `fateEvent`（37 事件表） | ✅ 结构已明 |
-| 4 | 監獄 | 4 | `jailBailDialog`（门外保释） | ✅ 机制已明 |
-| 5 | 醫院 | 5 | `hospitalVisitDialog`（门外辦理出院） | ✅ 机制已明 |
+| 4 | 監獄 | 4 | `jailBailDialog`（门外保释） | 🟡 入狱/回合/免收租 ✅；保释 UI ❌ |
+| 5 | 醫院 | 5 | `hospitalVisitDialog`（门外辦理出院） | 🟡 住院/回合/免收租 ✅；出院 UI ❌ |
 | 6 | 企鵝挖寶 | 6 | `sub_415215`（小游戏，得分） | 🟡 入口已明 |
 | 7 | 七彩氣球 | 7 | `sub_4154DC`（小游戏，得分） | 🟡 入口已明 |
 | 8 | 喜從天降 | 8 | `sub_4155FC`（小游戏，得分） | 🟡 入口已明 |
@@ -26,6 +26,18 @@
 | 16 | 魔法屋 | 16 | `sub_43380A` | 🟡 入口已明 |
 
 ## 1. case 4 監獄 / case 5 醫院
+
+> **实现状态（2026-09-23）**：入狱/住院（`jailPlayer` 0x43D593 / `hospitalizePlayer` 0x43EC3F：移格/
+> 标志/FLC 538·524/保险理赔/累计）✅；回合递减与到期释放（`updatePlayerStates` 0x41C84F +
+> `endPlayerState` 0x40D6BE）✅；保险期（**+62 = 保险期**，非卡片数）递减与理赔（`insurancePayout`
+> 0x44BA63）✅；**门口保释/办出院（case 4/5 停留用 `jailBailDialog`/`hospitalVisitDialog`）与 AI 保释
+> ❌ 待做**（人类界面 `sub_43CAAB`/`sub_43DA27` + panel.mkf[63/64/65] 尚未逆向）。
+> debug 测试：`Ctrl+Shift+J` 入狱 / `Ctrl+Shift+L` 住院（3 天）。
+>
+> **关键字段**：`Player.insuranceDays`（+62 `g_playerCardCnt` 0x496BA6，**保险期**剩余天数；原重写
+> 误名 cardCount 并用于"发卡计数"——已订正：原版开局给的是**道具**（givePlayerCard 实为给道具，
+> 见 §3.2）；`g_jailFlags` 0x496B30 / `g_hospitalFlags` 0x496B60（重写 `jailFlags`/`hospitalFlags`）；
+> 監獄格/醫院格 = loadMapData 扫描 special 8002/8001（重写 `jailCellEntId`/`hospitalCellEntId`）。
 
 ### 1.1 入狱（`jailPlayer`，0x43D593）
 
@@ -58,10 +70,22 @@ byte_496BAA[player] += days                        // 累计入狱天数（统�
 - 住院同理：`hospitalizePlayer`（0x43EC3F）—— `g_hospitalFlags`（0x496B60）、FLC 524、
   sprite = `evtCells[1]`（醫院，+28/+30）、`stateFlags` **BYTE3** = 天数、
   目标格 = `word_48BAE2`（special=8001 的 cellEnt）、罚款同样 2000×moneyMul×天数
+- **罚款 = 保险理赔**（0x44BA63）：`+62 保险期` 非 0 时由保险公司 specPt（costType==4）支付给玩家
+  （`"保險期間\n\n得到理賠金\n\n%d元"` 0x4658FA + `transferMoney(保险公司+100, player, M×2000×days, 1)`）；
+  无保险时**无扣款**（原版如此，帮助"入院付 1000/天"仅指保险理赔口径）
+- **每回合递减**（0x41C84F 玩家分支）：stateFlags BYTE2/BYTE3 天数 -1，1 → 0x80（到期标记）；
+  下回合 0x80 → `releaseJailNpc`/`releaseHospitalNpc`（玩家 <4：`sub_40D6BE` 恢复占用/朝向 +
+  清 g_jailFlags/8B；重写在结束时同时清 BYTE2/BYTE3）
+- **保险期递减**（0x41CC4B）：+62 每回合 -1，1 → 0x80；到期（0x41CAE3）清 0
+- **入狱 FLC**：538 @ (0,40) flags=0x120001 sound=94（`settings[1]` 动画过程开启时）；
+  **住院 FLC**：524 @ (0,210) flags=0x1E0001 sound=92（重写 `playEventFlc` 阻塞播放）
 
 > 帮助 `[HELP 37]` 称"入院每天一千元"，实测代码为 **2000×物价指数/天**（帮助文本与实现不一致）。
 
 ### 1.2 门外保释/辦理出院（`jailBailDialog` / `hospitalVisitDialog`）
+
+> ⬜ **未实现**（case 4/5 停留入口）；以下逻辑已归档，人类选择界面（`sub_43CAAB`/`sub_43DA27` +
+> panel.mkf[63/64/65]）与 `releaseJailNpc` 的事件槽 NPC 分支（P5）待专项逆向。
 
 case 4 进入 `jailBailDialog`（case 5 为 `hospitalVisitDialog`，结构相同）：
 
@@ -327,7 +351,8 @@ case 14:
 
 1. ~~**case 10/11/12 得點券**~~ ✅ 已完成（2026-09-23；建立事件格 FLC 阻塞播放模板 `playEventFlc`）
 2. ~~**case 13 卡片格**~~ ✅ 已完成（2026-09-23；赠卡池抽卡/卡包 15 槽/舍弃最低价 + `showCardGet` 显示）
-3. **case 4/5 監獄/醫院**（状态系统 + 保释界面；与 P3 `onPlayerActionPhase` cellNo 联动）
+3. **case 4/5 監獄/醫院**（状态系统 ✅：入狱/住院/回合递减/到期释放/保险理赔；**保释界面 ❌ 待做**：
+   `sub_43CAAB`/`sub_43DA27` UI + panel.mkf[63/64/65]；与 P3 `onPlayerActionPhase` cellNo 联动）
 4. **case 2/3 新聞/命運**（事件表 + 36/37 个效果函数——可先实现"空效果+插画+标题"骨架）
 5. **case 6/7/8 小游戏**（需输入/计时/得分逻辑）
 6. **case 9/14/15/16 樂透/銀行/百貨/魔法屋**（各自独立子系统，建议按需推进）

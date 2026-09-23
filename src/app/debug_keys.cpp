@@ -156,6 +156,12 @@ bool handleDebugKey(Application& app, int code, bool shift) {
                 st.players[cur].bank += 100000;
                 RICH4_LOGI("debug: Ctrl+Shift+B player %d bank=%d", cur, st.players[cur].bank);
                 return true;
+            case 'j': // 当前玩家入狱 3 天（jailPlayer 0x43D593：移格/标志/FLC 538/保险理赔）
+                jailPlayer(app, cur, 3);
+                return true;
+            case 'l': // 当前玩家住院 3 天（hospitalizePlayer 0x43EC3F：FLC 524）
+                hospitalizePlayer(app, cur, 3);
+                return true;
             case 'm': // 打开股市面板（测试 0x42B58F）
                 if (st.gameLoopActive) {
                     stockMarketDialog(app);

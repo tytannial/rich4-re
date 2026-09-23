@@ -58,6 +58,10 @@ void updatePlayerStates(Application& app, int p);
 // [RE 0x40D6BE] endPlayerState（状态结束恢复：alive|=0x10 + 朝向重算 + 恢复格占用）
 void endPlayerState(Application& app, int p);
 
+// [RE 0x43D593 / 0x43EC3F] jailPlayer / hospitalizePlayer（入狱/住院 days 天；P2 監獄/醫院）
+void jailPlayer(Application& app, int player, int days);
+void hospitalizePlayer(Application& app, int player, int days);
+
 // [RE 0x419572] rollDice（点数 = byte_496B7A 个 rand()%6+1 之和）
 int rollDice(Application& app);
 
