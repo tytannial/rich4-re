@@ -51,7 +51,8 @@
 | `Ctrl+Shift+S` | **循环玩家状态** | 无→住宿→出國→監獄→醫院→冬眠→夢遊（测试 `ownerCanCollectRent` 免收租；每回合自动倒计时结束并恢复行动） |
 | `Ctrl+Shift+B` | 银行存款 +100000 | 测试收款入银行/贷款 |
 | `Ctrl+Shift+K` | 买入指向 specPt 的股票 100 股 | 测试控股/经营権转移（先 `Ctrl+7` 备现金；持股超过他人 → owner 变更/小地图刷新；日志含 shares/owner/control） |
-| `Ctrl+Shift+D` | 过一天 | `advanceDay`（日期/到期回收/每日事件） |
+| `Ctrl+Shift+M` | 打开**股市面板** | `stockMarketDialog`（0x42B58F）；测行情/持股切换、買/賣、走势图、休市 |
+| `Ctrl+Shift+D` | 过一天 | `advanceDay`（日期/到期回收/每日事件/股票行情） |
 | `Ctrl+Shift+C` | 清空玩家状态+神明 | `stateFlags`/`byte54`/`state37`/`cellTableIdx` 归零 |
 
 拾取与右键物件提示同一套：鼠标位置 → `pickMapObject`（复用渲染期 `mapHitRegions`，

@@ -22,8 +22,11 @@
 Debug 工具（Ctrl+1..8）✅、大地图填色 ✅、买地面板背景 ✅；
 建造菜单/连锁店 ❌（任务 F，`sub_423B3B/4225A3/423CF3` 已调研）、
 商業用地·行業設施點收费（`pricing-formulas.md` §4/§5 公式已明）❌ 未实现。
+**M2 股市面板 ✅**：`stock_market_dialog.cpp`（0x42B58F/0x42AAFF 行情/持股切换·買/賣·走勢圖饼+折线·休市，
+`panel.mkf[75]` 帧0/1/2）+ `stock_system.cpp`（sellStock/refreshBankStockShares 交易量/buyStock 修正）+
+`advanceDay` 每日维护（停牌/新闻倒计时·休市·交易量·stockTick）；`kStockNames[8][12]`；详见 `42b58f-stock-panel.md`。
 
-**功能总览**：`docs/help-checklist.md`（帮助文档 99 条 → 实现状态，当前 ✅ 8 / 🟡 6 / ❌ 85）。
+**功能总览**：`docs/help-checklist.md`（帮助文档 99 条 → 实现状态，当前 ✅ 9 / 🟡 6 / ❌ 84）。
 
 **M2 执行计划**：见 `docs/m2-plan.md`
 
@@ -128,6 +131,8 @@ python tools/re_map.py
 - `docs/reverse/functions/pricing-formulas.md` — **收费/价格公式总汇**（物价指数、轮盘、住宅用地/商業用地/行業設施點、到期清算、MAPDAT 数值）
 - `docs/reverse/functions/41982d-p2-events.md` — P2 事件格（case 2..16）专项研究
 - `docs/reverse/functions/stock-system.md` — **股市系统**（行情 stockTick/控股/认购/行情界面/交易市场/数字输入框）
+- `docs/reverse/functions/42b58f-stock-panel.md` — **股市面板**（0x42B58F 行情/持股/买卖/走勢圖/休市 精确实现）
+- `docs/reverse/ui-controls.md` — **游戏内 UI 控件指南**（浮雕按钮/变暗表/文本对齐/数字框/模态框架/…；**发现新控件必须更新此文件**）
 
 ## 工作经验（踩坑与约定）
 
@@ -200,6 +205,9 @@ python tools/re_map.py
   （处理函数/数据结构/实现顺序/待深入清单），避免重复逆向与遗漏依赖。
 - **状态同步**：完成功能后更新 `help-checklist.md`（对应帮助条目状态）与
   `gameplay-map-mechanics.md`（阶段勾选）；IDB 重命名后同步文档中的符号名。
+- **控件沉淀**：实现中用到/发现任何可复用 UI 控件（浮雕按钮、变暗表、数字框、列表框、
+  滑块、光标、模态叠加…），**必须**总结进 `docs/reverse/ui-controls.md`（按文末模板），
+  记录原版地址/资源/交互/重写位置/踩坑经验，供后续功能复用、避免重复逆向。
 - IDB 批量操作：`rename`（函数/全局）、`set_comments`、`get_bytes`（表/jpt）、
   `analyze_batch`（多函数概览）→ 完成后 `idb_save`。
 

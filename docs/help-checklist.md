@@ -50,7 +50,7 @@
 | 11 | 交易 | 公佈欄：玩家间公开交易房产/股票/卡片/道具 | ❌ | — |
 | 12 | 地圖 | 调整地图角度（旋转）、观察各角落 | ✅ | `mapDialog`（大地图）+ 小地图左右旋转箭头（`mapRotation`） |
 | 13 | 系統 | 速度/動畫過程/音樂/音效/自動存檔/重新遊戲/認輸投降/結束遊戲 | ✅ | `settings_dialog.cpp`（原始設定页 + 游戏内系统菜单页）；認輸投降为简化实现（出局+交棒，未接死神/魔法屋） |
-| 14 | 股市 | 股票买卖 | ❌ | `stockTick`（0x4291D6）TODO；买卖/行情 UI 未实现 |
+| 14 | 股市 | 股票买卖 | ✅ | `stock_market_dialog.cpp`（0x42B58F/0x42AAFF 行情/持股切换·買/賣·走勢圖饼+折线·休市）+ `stock_system.cpp`（stockTick/buyStock/sellStock/refreshBankStockShares 交易量）；`advanceDay` 每日维护；详见 `42b58f-stock-panel.md` |
 | 15 | 前進 | 依载具选择骰子数（步行 1 / 机车 2 / 轿车 3） | ✅ | 前进面板 GO + 骰子选择（`game_loop.cpp` + `drawAdvancePanel`） |
 | 16 | 查詢 | 資產清單 / 地產清單 / 股票清單 | ❌ | — |
 | 17 | 託管 | 交给电脑托管（个性/资金运用比例/使用卡片道具开关） | ✅ | `ai_dialog.cpp`（`[RE 0x41E345]`，配置写回 `aiCardItem/aiPersonality/aiCashPct/aiStockPct`） |
