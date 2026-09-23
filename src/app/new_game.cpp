@@ -268,6 +268,7 @@ bool newGameInit(Application& app, bool mode1) {
     // [RE 0x40734F..0x407363] 开局默认在押事件槽 NPC（4..7）：
     //   byte_496B34/B35 = g_jailFlags[4]/[5] = 1（小偷/強盜，監獄）
     //   byte_496B66/B67 = g_hospitalFlags[6]/[7] = 1（流氓/間諜，醫院）
+    // TODO(P5): 保释后地面行走/恶人效果/回归監獄·醫院链见 41982d-p2-events.md §1.7
     state.jailFlags[4] = 1;
     state.jailFlags[5] = 1;
     state.hospitalFlags[6] = 1;

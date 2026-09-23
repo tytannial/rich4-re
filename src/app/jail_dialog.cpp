@@ -271,7 +271,9 @@ bool bailHandler(const SDL_Event* event, void* user) {
                 }
                 ui.msg.setup(*ui.sheet, kFrameMsg, 210, 150, 0, -6, 0x101010, 0); // [RE 0x43D189]
                 ui.msg.show(app, kNpcThanks[hit - 4]); // [RE 0x43D19E] dword_475BE2[i]+2
-                st.jailFlags[hit] = 0; // [RE 0x43D7BF releaseJailNpc] 事件槽 16B×4 记录待 P5
+                // [RE 0x43D7BF releaseJailNpc] 事件槽记录待 P5：行走/效果/回归链见
+                //   41982d-p2-events.md §1.7（犯人表 0x498E28 16B×4 + onPlayerActionPhase 事件槽分支）
+                st.jailFlags[hit] = 0;
                 st.players[st.currentPlayer].points = static_cast<uint16_t>(
                     st.players[st.currentPlayer].points - kBailCost[hit]);
                 ui.npcReleased = true; // [RE 0x48C4C9]
@@ -372,7 +374,8 @@ void bailAi(Application& app) {
     st.players[cur].points = static_cast<uint16_t>(pts - cost);
     if (target >= 4) {
         RICH4_LOGI("bail AI: NPC %d released (P5 事件槽未建模, RE 0x43D580)", target);
-        st.jailFlags[target] = 0; // TODO(P5): releaseJailNpc 事件槽表 16B 记录
+        // TODO(P5): releaseJailNpc 事件槽表 16B 记录 —— 行走/效果/回归链见 41982d-p2-events.md §1.7
+        st.jailFlags[target] = 0;
         return;
     }
     // [RE 0x43D56E] 玩家释放：BYTE2 = 0x80 + 清标志（下回合走出恢复）
@@ -629,7 +632,9 @@ void doDischarge(HospCtx& ui) {
         blitElement(dst, nf, 420, 450, false); // blit 内部按帧 offset 定位
         ui.msg.setup(*ui.sheet, kHMsg, 200, 200, 0, -6, 0x101010, 0);
         ui.msg.show(app, kNpcThanks[i - 4]); // [RE 0x43DE3C] dword_475BE2[i]+2
-        st.hospitalFlags[i] = 0; // [RE 0x43EE6E releaseHospitalNpc] 事件槽 16B×4 待 P5
+        // [RE 0x43EE6E releaseHospitalNpc] 事件槽记录待 P5：行走/效果/回归链见
+        //   41982d-p2-events.md §1.7（犯人表 0x498E28 16B×4 + onPlayerActionPhase 事件槽分支）
+        st.hospitalFlags[i] = 0;
         ui.released = true;      // [RE 0x48C4F6]
         RICH4_LOGI("hospital visit: NPC %d released by %d, cost %d (event-slot walk TODO P5, "
                    "RE 0x43DE4C)",
@@ -826,7 +831,8 @@ void visitAi(Application& app) {
     st.players[cur].points = static_cast<uint16_t>(pts - cost);
     if (target >= 4) {
         RICH4_LOGI("hospital visit AI: NPC %d released (P5 事件槽未建模)", target);
-        st.hospitalFlags[target] = 0; // TODO(P5): releaseHospitalNpc
+        // TODO(P5): releaseHospitalNpc 事件槽表 16B 记录 —— 行走/效果/回归链见 41982d-p2-events.md §1.7
+        st.hospitalFlags[target] = 0;
         return;
     }
     st.players[target].stateFlags =

@@ -254,6 +254,52 @@ return !byte_498EA2[cur] && !sceneRequest && !quitGame;
   则循环继续选卡；AI 分支按个性/可用性从 `g_cardState60` 前 8 槽试选（`sub_41E69E` 判定）
 - **P4 卡片系统实现时按 `sub_40DEFE` 接入回合推进**（debug `Ctrl+Shift+J`/`L` 已按此对齐）
 
+### 1.7 事件槽 NPC 地面行走 → 恶人效果 → 回归監獄/醫院（**P5 待做标记**，2026-09-23 调研）
+
+> **现状**：释放动画（面板内擦格 + panel[64] 全身像 + 答谢消息）✅ 已实现；以下链条**未实现**，
+> 代码 `TODO(P5 事件槽 NPC)` 就位（`jail_dialog.cpp`/`turn_system.cpp`/`new_game.cpp`）。
+> 本节为 P5 开工入口：**函数链已定位，效果细节待逆向**。
+
+**状态字段全表（0x498DF0..0x498E70）**
+
+| 字段 | 地址 | 语义 |
+|------|------|------|
+| `byte_498DF0[16*p]` | 0x498DF0 | 事件槽 NPC 棋子外观（角色 ID；绘制 `pieceSprites[+24]` 帧，p=4..7） |
+| `byte_498DF2[16*p]` | 0x498DF2 | 事件槽占用/行动调度（`nextPlayer` 选槽 + `onPlayerActionPhase` 行动；重写 `slotBusy2`） |
+| `byte_498DF3[16*p]` | 0x498DF3 | bit0-6 状态（1=監獄/2=醫院）、bit7 触发（"到达门外"→ 踩格抓回） |
+| `byte_498E70` | 0x498E70 | 当前事件槽 NPC 索引（`currentPlayer==8` 时使用） |
+| 犯人表 0x498E28 | +1 `byte_498E31` | 朝向（`sub_40C78C` 转向用） |
+| （16B×4，见 §1.3） | +10/+12/+14 | `byte_498E32/498E34/498E36` 行动状态/计数（`sub_40C912` 全 0 → 返回 2） |
+
+**实现链（函数入口，均已 IDA 核实）**
+
+1. **释放写入**（已有占位）：`releaseJailNpc` 0x43D7BF / `releaseHospitalNpc` 0x43EE6E
+   （填犯人表 + `loadWalkResources`；重写目前只清 `jailFlags/hospitalFlags`）
+2. **右侧面板显示**：`sub_415F69` 0x415F69（宽版 440,0,200×280）/ `sub_4166F8` 0x4166F8（窄版）
+   —— 当前玩家 ≥ 玩家数时画 `dword_47ED5A[cur]`（小偷/強盜/流氓/間諜）+ `byte_498DF0[16*cur]` 棋子
+3. **回合调度**：`nextPlayer` 0x418EBD（`byte_498DF2` 选择事件槽）→ 事件槽回合进入 `onPlayerActionPhase`
+4. **行走/转向/坐标**：
+   - `onPlayerActionPhase` 0x41B42D：**23 处引用 `byte_498DF0`**（0x41B9D6..0x41C78B）——
+     事件槽 NPC 每步行动/恶人效果主体
+   - `moveOneStep` 0x40C05C：读犯人表（0x498E28/0x498E2C 目标格）处理下一步
+   - `sub_40C78C` 0x40C78C：转向（`byte_498E31` 朝向 +4/180°，从相邻格中排除回头格随机选）
+   - `sub_40AF12` 0x40AF12：编号 → 坐标（`0x8000|0x10<<slot` 走犯人表坐标 `miscTable80/word_498E2A`）
+   - `sub_40C912` 0x40C912：行动前状态检查（事件槽 `byte_498E32/34/36` 全 0 → 返回 2）
+5. **回归/踩格抓回**：`word_498E2C` = 監獄/醫院格 cellEnt（走完一圈的回归目标）；
+   `onPlayerActionPhase` @0x41C7A6 用 `byte_498DF3` 判定"状态 + 到达对应格" → `jailPlayer`/`hospitalizePlayer`
+6. **四大恶人效果**（帮助 `[HELP 47/52/53/56]`，具体函数 P5 逆向；保释人 = 犯人表 `byte_498E30`）：
+   - 小偷：偷路人点券给保释人；流氓：按地价收保护费给保释人；
+   - 強盜：抢路人一张卡给保释人；間諜：窃取土地上次租金 / 盗领公司累积红利
+   - 全部在 `onPlayerActionPhase` 事件槽分支（0x41B9D6 起）
+
+**待查清单（P5 开工时）**
+
+- [ ] `onPlayerActionPhase` 事件槽分支逐 case 反汇编（0x41B9D6..0x41C7A6）
+- [ ] 行走路径/圈数规则（`byte_498E32/34/36` 语义、回归条件）
+- [ ] 恶人效果四函数定位（按帮助文本搜索）
+- [ ] 玩家淘汰 `sub_40CD87` 对犯人表的清理（0x40CE95/0x40CED2 已引用）
+- [ ] `sub_4440EA`（0x4440EA）卡片选人中的事件槽处理
+
 ## 2. case 10/11/12 得點券（✅ 已实现）
 
 | case | type | FLC | 文本（BIG5 地址） | 点数 | 语音 |
