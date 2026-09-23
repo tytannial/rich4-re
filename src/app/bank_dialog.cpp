@@ -15,6 +15,7 @@
 #include "game/core/log.h"
 #include "game/platform/audio.h"
 #include "game/render/blit.h"
+#include "game/render/cursor.h"
 #include "game/render/surface.h"
 #include "game/render/ui_image.h"
 
@@ -67,8 +68,7 @@ struct VisitCtx {
     int mode = 0;             // dword_48C3F0：0=銀行帳戶（取款）1=身上現金（存款）
     char amount[16] = "0";    // byte_48C3F8
     int limit = 0;            // dword_48C3EC 当前模式余额
-    int hover = -1;
-    int pressed = -1;
+    int pressed = -1;         // 仅按下高亮（原版无 hover 效果）
     bool dragging = false;
     std::vector<uint16_t> bg;
     int bgX = 0;
@@ -156,10 +156,10 @@ void redrawVisit(VisitCtx& ui) {
     const int modeBtn = ui.mode == 0 ? 0 : 1;
     blitElement(dst, sheet.frame(modeBtn + 1), kVisitX + kVisitRects[modeBtn].x0,
                 kVisitY + kVisitRects[modeBtn].y0, false);
-    // hover/按下高亮：画在该按钮命中区左上角（原版 Rect = word_475888[4*v10] + 60/71）
+    // 按下高亮：仅鼠标按下时显示（原版 MOUSE_DOWN 画帧 v10+1，松开恢复；无 hover 效果）
     // [RE 0x4371D4] 原版条件 `v10 != 3`：滑条不高亮（否则帧 4 刻度叠加错位一格）；
     //   当前模式按钮不重复高亮；融资中按钮 0 视作模式按钮（不高亮）
-    const int lit = ui.pressed >= 0 ? ui.pressed : ui.hover;
+    const int lit = ui.pressed;
     const GameState& st = ui.app->gameState();
     const bool financeBlock0 = lit == 0 && st.players[st.currentPlayer].bankFinanceFlags != 0;
     if (lit >= 0 && lit != 3 && lit != modeBtn && !financeBlock0 &&
@@ -219,51 +219,31 @@ bool visitHandler(const SDL_Event* event, void* user) {
     GameState& st = app.gameState();
     Player& pl = st.players[st.currentPlayer];
     if (!event) {
-        ui.hover = -1;
+        ui.pressed = -1;
         redrawVisit(ui);
-        return true;
-    }
-    if (event->type == kModalTimerEvent) {
-        // 兜底：按当前鼠标逻辑坐标同步悬停（防快速移动丢事件导致高亮残留）
-        if (!ui.dragging) {
-            int mx = 0;
-            int my = 0;
-            app.mouseLogicalPos(mx, my);
-            const int hit = hitVisitButton(mx, my);
-            if (hit != ui.hover) {
-                ui.hover = hit;
-                redrawVisit(ui);
-            }
-        }
         return true;
     }
     switch (event->type) {
         case SDL_EVENT_MOUSE_MOTION: {
+            if (!ui.dragging) {
+                return true; // 原版无 hover 效果（仅拖动滑块时处理移动，0x436F9D）
+            }
+            // [RE 0x437422] 滑条：v = (上限/34+1) * (相对x/6+1)，clamp 到上限
             const int mx = static_cast<int>(event->motion.x);
-            const int my = static_cast<int>(event->motion.y);
-            if (ui.dragging) {
-                // [RE 0x437422] 滑条：v = (上限/34+1) * (相对x/6+1)，clamp 到上限
-                const int rel = mx - 118;
-                int v = 0;
-                if (rel <= 0) {
-                    v = 0;
-                } else if (rel >= kVisitBarMax) {
-                    v = ui.limit;
-                } else {
-                    v = (ui.limit / 34 + 1) * (rel / 6 + 1);
-                }
-                if (v > ui.limit) {
-                    v = ui.limit;
-                }
-                std::snprintf(ui.amount, sizeof(ui.amount), "%d", v);
-                redrawVisit(ui);
-                return true;
+            const int rel = mx - 118;
+            int v = 0;
+            if (rel <= 0) {
+                v = 0;
+            } else if (rel >= kVisitBarMax) {
+                v = ui.limit;
+            } else {
+                v = (ui.limit / 34 + 1) * (rel / 6 + 1);
             }
-            const int hit = hitVisitButton(mx, my);
-            if (hit != ui.hover) {
-                ui.hover = hit;
-                redrawVisit(ui);
+            if (v > ui.limit) {
+                v = ui.limit;
             }
+            std::snprintf(ui.amount, sizeof(ui.amount), "%d", v);
+            redrawVisit(ui);
             return true;
         }
         case SDL_EVENT_MOUSE_BUTTON_DOWN: {
@@ -467,7 +447,10 @@ void bankVisitDialog(Application& app) {
             showMessage(app, text, 1500);
         }
         RICH4_LOGI("bank visit: player %d mode %d limit %d (RE 0x4379C9)", p, ui.mode, ui.limit);
-        runModal(app, &visitHandler, &ui, 100); // 100ms tick：悬停兜底同步
+        // [RE 0x4370BA/0x43714D] cursorSelect(27,1,0) 面板交互光标；退出恢复默认箭头 41
+        app.cursor().select(27, 1, 0);
+        runModal(app, &visitHandler, &ui);
+        app.cursor().select(41, 1, 0);
         restoreRegion(app.surface(), ui.bg, ui.bgX, ui.bgY, ui.bgW, ui.bgH);
         return;
     }
