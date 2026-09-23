@@ -971,6 +971,8 @@ bool stayHandler(const SDL_Event* event, void* user) {
             }
         }
         // [RE 0x435669] 浮动消息推进 → 状态机
+        //   原版分支分组：state<7 { <3 / <=3 / ==5 } else if (<=7) {} else { <9 滑出 / <=9 / ==11 }
+        //   （重写曾把 <9/<=9 写成开放区间，导致 state 4 每 tick 误触发滑出把面板拉回 440）
         if (ui.msg.advance(app)) {
             if (ui.state < 3) {
                 if (ui.state == 1) {
@@ -985,11 +987,11 @@ bool stayHandler(const SDL_Event* event, void* user) {
             } else if (ui.state == 7) {
                 ui.state = 8;
                 ui.msg.show(app, "#0080請於三個月內\n還清貸款。"); // [RE 0x475844]
-            } else if (ui.state < 9) { // state 8 → 滑出退出
+            } else if (ui.state == 8) { // 收尾 → 滑出（完成且 exitAfterSlide 时转 11）
                 ui.slideDir = 40;
                 ui.slideX = kPanelX;
                 ui.state = 4;
-            } else if (ui.state <= 9) {
+            } else if (ui.state == 9) {
                 ui.state = 10;
                 doRepayInput(ui); // [RE 0x435360]（原版 PostMessage 0x40A 异步）
             } else if (ui.state == 11) {
@@ -1023,6 +1025,11 @@ bool stayHandler(const SDL_Event* event, void* user) {
         app.mouseLogicalPos(x, y);
         const int hit = hitStayButton(x, y);
         if (hit < 0) {
+            ui.pressed = 0;
+            return true;
+        }
+        // 非自家银行点击中央帘子区：完全屏蔽（原版仅屏蔽动作仍播音效；按反馈连音效屏蔽）
+        if (hit == 3 && !ui.own) {
             ui.pressed = 0;
             return true;
         }
