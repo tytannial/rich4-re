@@ -38,6 +38,9 @@ namespace {
 // 音量增益（原版 DirectSound 音量 0/-2000/-1000/-316/0 百分之一分贝 → 16 分制线性）
 constexpr int kVolumeGain[5] = {0, 2, 5, 11, 16};
 
+// 语音专用"槽"标记（-2；不参与 24 个游戏音效槽的同槽替换，voicePlaying 据此查询）
+constexpr int kVoiceSlot = -2;
+
 // 输出流目标缓冲（字节；8bit mono）。
 // 延迟权衡: 音效响应延迟 ≈ 水位/采样率（1024B @22050Hz ≈ 46ms，接近原版 DirectSound）；
 // 每帧 update 补充，帧率 60fps 时每帧消耗约 370B，水位可稳定维持。
@@ -157,6 +160,7 @@ struct Audio::Impl {
     // 音效：Effect.mkf 解码缓存（8bit mono PCM）+ 活动声部
     using PcmBuffer = std::shared_ptr<const std::vector<uint8_t>>;
     std::unordered_map<int, PcmBuffer> effectCache;
+    std::unordered_map<int, PcmBuffer> speakingCache; // 角色语音（Speaking.mkf）
     struct Voice {
         PcmBuffer pcm;
         size_t pos = 0;
@@ -210,6 +214,8 @@ void Audio::close() {
     stopMusic();
     m_impl->voices.clear();
     m_impl->effectCache.clear();
+    m_impl->speakingCache.clear();
+    m_musicStack.clear();
     if (m_impl->stream) {
         SDL_DestroyAudioStream(m_impl->stream);
         m_impl->stream = nullptr;
@@ -356,6 +362,56 @@ void Audio::stopEffectSlot(int slot) {
                  voices.end());
 }
 
+// ---- 角色语音（Speaking.mkf；0x45441A/0x4544B9/0x454493）----
+// 原版 dword_47E750 单 DirectSound buffer：sub_45441A 播新语音前先 sub_454493 停旧；
+// 迁移: 单槽声部（slot = kVoiceSlot），update 混音与其他音效同路。
+
+// [RE 0x45441A] 播放语音（voiceId = Speaking.mkf 索引；'#NNNN' 前缀数字）
+bool Audio::playVoice(int voiceId) {
+    if (!m_impl->stream || !m_speakingMkf || m_effectVolume <= 0) {
+        return false; // 原版 g_effectVolume 为 0 时 sub_45441A 不播
+    }
+    stopVoice(); // [RE 0x454493] 单通道：打断旧语音
+    auto& cache = m_impl->speakingCache;
+    auto it = cache.find(voiceId);
+    if (it == cache.end()) {
+        auto blob = m_speakingMkf->read(static_cast<size_t>(voiceId));
+        if (!blob) {
+            RICH4_LOGW("playVoice: Speaking.mkf[%d] unavailable", voiceId);
+            return false;
+        }
+        WavInfo info;
+        if (!parseWav(*blob, info) || info.channels != 1 || info.bits != 8 ||
+            info.rate != static_cast<uint32_t>(m_impl->sampleRate)) {
+            RICH4_LOGW("playVoice: Speaking.mkf[%d] not 22050/8bit/mono RIFF", voiceId);
+            return false;
+        }
+        auto pcm = std::make_shared<std::vector<uint8_t>>(info.pcm, info.pcm + info.size);
+        it = cache.emplace(voiceId, Impl::PcmBuffer(std::move(pcm))).first;
+    }
+    Impl::Voice voice;
+    voice.pcm = it->second;
+    voice.pos = 0;
+    voice.slot = kVoiceSlot;
+    m_impl->voices.push_back(std::move(voice));
+    return true;
+}
+
+// [RE 0x4544B9] 语音是否仍在播放（原版 Status&DSBSTATUS_PLAYING；播完声部由 update 清理）
+bool Audio::voicePlaying() {
+    for (const auto& v : m_impl->voices) {
+        if (v.slot == kVoiceSlot) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// [RE 0x454493] 停止语音（Release）
+void Audio::stopVoice() {
+    stopEffectSlot(kVoiceSlot);
+}
+
 bool Audio::playMusic(int trackIndex) {
     // [RE 0x454D91] 原版 if (byte_49715A)：音乐音量为 0 时不播放
     if (!m_impl->stream || m_musicDir.empty() || m_musicVolume <= 0) {
@@ -409,6 +465,27 @@ bool Audio::playSceneMusic(int sceneIndex) {
     m_impl->sceneIndex = sceneIndex;
     RICH4_LOGI("playSceneMusic: index %d (%s) (RE 0x4549CF)", sceneIndex, name);
     return true;
+}
+
+// [RE 0x4549CF] 面板进入：当前为可选曲目（byte_47E772<0 判定）时 musicOnTrackEnd(0x454B1A)
+//   压栈（记曲目+位置）再切场景音乐。重写不记播放位置（OGG 从头播，见 resumeSceneMusic）。
+bool Audio::pushSceneMusic(int sceneIndex) {
+    const int t = m_impl->track;
+    if (t >= 1 && t <= 8) {
+        m_musicStack.push_back(t - 1);
+    }
+    return playSceneMusic(sceneIndex);
+}
+
+// [RE 0x454BCC] 面板退出：弹栈恢复之前播放的可选曲目（原版 "play mid from 位置" 续播）。
+// 差异: 重写 OGG 从头播放；栈空时不动作（原版无条件弹栈）。
+void Audio::resumeSceneMusic() {
+    if (m_musicStack.empty()) {
+        return;
+    }
+    const int idx = m_musicStack.back();
+    m_musicStack.pop_back();
+    playMusic(idx);
 }
 
 void Audio::stopMusic() {

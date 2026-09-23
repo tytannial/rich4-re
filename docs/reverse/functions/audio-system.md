@@ -78,3 +78,18 @@
 
 `third_party/stb/stb_vorbis.c`（v1.22，公共领域；实现编译单元 `src/platform/stb_vorbis_impl.cpp`，
 声明以 `STB_VORBIS_HEADER_ONLY` 方式包含于 `audio.cpp`）。CMake 已加入 `third_party/stb` include 路径。
+
+## 角色语音与音乐栈（2026-09-23，面板底座）
+
+| 原版 | 重写 | 说明 |
+|------|------|------|
+| `sub_45441A`（drawText 遇 `#NNNN` 播语音；查 g_effectVolume） | `Audio::playVoice(id)`（`text.cpp` drawText 解析 4 位十进制触发） | **单通道**：新语音打断旧（对齐 sub_454493 先停后播）；Speaking.mkf = 22050/8bit/mono RIFF（1374 项，懒加载缓存）；effectVolume=0 不播 |
+| `sub_4544B9`（Status&PLAYING；完成即释放） | `Audio::voicePlaying()` | 语音声部 = `voices[slot == -2]`，播完由 update 清理 |
+| `sub_454493`（Stop+Release） | `Audio::stopVoice()` | |
+| `sub_4549CF`（musicPlayScene；当前可选曲目时先 `sub_454B1A` push） | `Audio::pushSceneMusic(i)` | 仅 track 1-8 入栈（场景音乐重复进入不叠栈，对齐 byte_47E772<0 判定） |
+| `sub_454B1A`（push {曲目\|0x80, 播放位置 dword_48CB50}） | 栈仅记曲目索引 | **差异：OGG 从头播放**（MIDI 位置续播省略） |
+| `sub_454BCC`（弹栈恢复可选曲目） | `Audio::resumeSceneMusic()` | 栈空不动作（原版无条件弹栈） |
+
+- 接线：`gameInit` `setSpeakingArchive(&state.speaking)` + `app.text().setAudio(&app.audio())`
+- 使用方：`FloatMessage`（0x44EC30/44ECB6/044EE18/044EF3B，见 `ui-controls.md` §25）——
+  面板消息最短停留 2000ms（0x7D0），超时后每 100ms tick 查 `voicePlaying()`，播完恢复背景

@@ -1,6 +1,7 @@
 #include "game/render/text.h"
 
 #include "game/core/log.h"
+#include "game/platform/audio.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
 #include "game/render/ui_image.h"
@@ -198,9 +199,20 @@ void TextRenderer::drawText(Surface& dst, const char* text, int x, int y, int al
         return;
     }
 
-    // [RE 0x45441A] '#NNNN' 前缀 = 语音编号（speaking.mkf），文本从 +5 开始绘制
-    // TODO(RE 0x45441A): 语音播放（Audio 迁移后接入）
+    // [RE 0x45441A] '#NNNN' 前缀 = 语音编号（Speaking.mkf，十进制 4 位），触发播放后文本从 +5 开始绘制
     if (text[0] == '#') {
+        int id = 0;
+        bool valid = true;
+        for (int i = 1; i <= 4; ++i) {
+            if (text[i] < '0' || text[i] > '9') {
+                valid = false;
+                break;
+            }
+            id = id * 10 + (text[i] - '0');
+        }
+        if (valid && m_audio) {
+            m_audio->playVoice(id);
+        }
         text += 5;
     }
     if (!*text) {

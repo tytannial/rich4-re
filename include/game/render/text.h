@@ -6,6 +6,7 @@
 namespace rich4 {
 
 class Surface;
+class Audio;
 
 // 文本样式位（原版 dword_4762D8）。
 // 依据: 0x44FABC 中 bit0=阴影绘制(偏移 1,1), bit2=四向描边, bit3=特殊 blit 路径
@@ -31,6 +32,10 @@ public:
     bool init();
     void shutdown();
 
+    // [RE 0x45441A] 接入语音播放：drawText 的 '#NNNN' 前缀触发 Audio::playVoice（原版
+    //   sub_44FABC→sub_45441A 直调全局 DirectSound 语音 buffer）；未设置时仅跳过前缀
+    void setAudio(Audio* audio) { m_audio = audio; }
+
     // [RE 0x44F9D8] setFont
     // 依据: CreateFontA(-size, 0,0,0, weight, 0,0,0, 0x88(CHINESEBIG5_CHARSET), 0,0,0,0,
     //       "細明體"); style bit1 时 weight=700 否则 400; spacing 存入 dword_4762DC;
@@ -51,6 +56,7 @@ public:
 private:
     struct Impl;
     Impl* m_impl = nullptr;
+    Audio* m_audio = nullptr;
 };
 
 } // namespace rich4

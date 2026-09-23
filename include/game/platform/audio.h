@@ -46,6 +46,16 @@ public:
     void setEffectVolume(int volume) { m_effectVolume = volume; }
     int effectVolume() const { return m_effectVolume; }
 
+    // ---- 角色语音（Speaking.mkf；'#NNNN' 前缀经 drawText 0x45441A 触发）----
+    void setSpeakingArchive(const MkfArchive* mkf) { m_speakingMkf = mkf; }
+    // [RE 0x45441A/0x4544F6] 播放语音：**单通道**（新语音打断旧；原版 dword_47E750 单
+    //   DirectSound buffer，先 sub_454493 停旧再播新）；effectVolume=0 不播（原版同检查）
+    bool playVoice(int voiceId);
+    // [RE 0x4544B9] 语音是否仍在播放（false = 已播完/无，并清理）
+    bool voicePlaying();
+    // [RE 0x454493] 停止语音
+    void stopVoice();
+
     // ---- 音乐（Media/Music/trackNN.ogg；回退游戏目录 *.MID）----
     void setMusicDir(const std::string& dir) { m_musicDir = dir; }
     // [RE 0x454D91] 切换可选曲目（0-7 → CD 音轨 track02-09；原版 "play cdtrack from N"）
@@ -54,6 +64,12 @@ public:
     bool playNextMusic();
     // [RE 0x4549CF] 播放场景音乐（sceneIndex → track10-26；原版 off_47E793 MIDI 表）
     bool playSceneMusic(int sceneIndex);
+    // [RE 0x4549CF/0x454B1A] 面板进入：当前为可选曲目（track 1-8）时压栈（原版 musicOnTrackEnd
+    //   记曲目+播放位置 dword_48CB50/byte_48CB70[dword_47E7D7]）再切场景音乐
+    bool pushSceneMusic(int sceneIndex);
+    // [RE 0x454BCC] 面板退出：弹栈恢复之前播放的可选曲目（原版 "play mid from 位置" 续播；
+    //   重写 OGG 从头播，位置恢复省略）
+    void resumeSceneMusic();
     void stopMusic();
     // [RE 0x454F5B] 当前曲目（1-8；0 = 未播放）
     int currentTrack() const;
@@ -71,6 +87,8 @@ private:
     struct Impl;
     std::unique_ptr<Impl> m_impl;
     const MkfArchive* m_effectMkf = nullptr;
+    const MkfArchive* m_speakingMkf = nullptr;
+    std::vector<int> m_musicStack; // [RE 0x48CB70/dword_47E7D7] 面板音乐栈（可选曲目索引 0-7）
     int m_effectVolume = 4;
     int m_musicVolume = 4;
     std::string m_musicDir;

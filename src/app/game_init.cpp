@@ -59,6 +59,9 @@ bool gameInit(Application& app) {
         RICH4_LOGW("gameInit: audio unavailable (silent mode)");
     }
     app.audio().setEffectArchive(&state.effect);
+    // [RE 0x45441A] 角色语音（Speaking.mkf）：drawText '#NNNN' 前缀触发播放
+    app.audio().setSpeakingArchive(&state.speaking);
+    app.text().setAudio(&app.audio());
     app.audio().setMusicDir(app.mediaDir() + "/Music");
     app.audio().setEffectVolume(state.settings[3]);
     app.audio().setMusicVolume(state.settings[2]);
