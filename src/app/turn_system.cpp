@@ -11,6 +11,7 @@
 #include <SDL3/SDL.h>
 
 #include "game/application.h"
+#include "game/app/bank_dialog.h"
 #include "game/app/confirm_dialog.h"
 #include "game/app/date_util.h"
 #include "game/app/economy.h"
@@ -102,16 +103,37 @@ void updatePlayerCarriedObjects(GameState& st, int p) {
     }
 }
 
-// [RE 0x41B42D] onPlayerActionPhase 格子类型 11..18 落地事件（M2）
-// 依据: 0x41B42D 反编译; 161 基本块，购地/收租/税/卡片/机会等
+// [RE 0x41B42D] onPlayerActionPhase 每格落地事件（M2 起步：银行路过）
+// 依据: 0x41B42D 反编译; 161 基本块。变量：var_18 = cellEnt+36 低字节（格子类型）、
+//   var_14 = +36 的 0xFF0000（cellTable 槽号）、var_1C = 槽物件类型（g_cellTable[24*(slot-1)]）
+// 已实现: 路过銀行格（0x41B540：cellType==14 && state37==0 && 剩余步数!=0 && 物件类型!=0x10）
+//   → sub_4379C9 柜员机（停留由 landingEvent case 14 处理）
+// 差异: 购地/收租/税务/卡片/机会等落地尚未在此实现（当前由 landingEvent 统一结算）；
+//       事件槽 NPC 行走（p>=4 分支，P5）、移动音效停止/恢复待补
 void onPlayerActionPhase(Application& app) {
     GameState& st = app.gameState();
     const int p = st.currentPlayer;
     if (p < 0 || p >= st.playerCount || st.players[p].cellEntId == 0) {
         return;
     }
-    RICH4_LOGI("onPlayerActionPhase: player %d cellEnt %u (RE 0x41B42D, M2 TODO)", p,
-               st.players[p].cellEntId);
+    const Player& pl = st.players[p];
+    const CellEnt& ce = st.cellEnts[pl.cellEntId];
+    const uint8_t cellType = static_cast<uint8_t>(ce.occMask & 0xFF);
+    uint8_t objType = 0;
+    const int slot = static_cast<int>((ce.occMask >> 16) & 0xFF);
+    if (slot > 0) {
+        const size_t off = static_cast<size_t>(24 * (slot - 1));
+        if (off < st.cellTable.size()) {
+            objType = st.cellTable[off];
+        }
+    }
+    if (cellType == 14 && pl.state37 == 0 && st.remainingSteps != 0 && objType != 0x10) {
+        // [RE 0x41B540] 路过銀行格 → 柜员机（可提存款；离开即继续移动）
+        bankVisitDialog(app);
+        return;
+    }
+    RICH4_LOGI("onPlayerActionPhase: player %d cellEnt %u cellType %u (RE 0x41B42D, M2 TODO)", p,
+               pl.cellEntId, cellType);
 }
 
 // [RE 0x40B93B] 行走资源加载（定义见下方 loadWalkResources；本地辅助）
@@ -720,6 +742,16 @@ int landingEvent(Application& app, uint16_t cellEntId) {
         // [RE 0x41B211] sub_44EF41(player, 0, 语音)：P4 语音系统接入；case 12 无语音
         RICH4_LOGI("landingEvent: cellType %u 得點券 +%d (total %u) RE 0x41982D case %u", cellType,
                    kPoints[i], st.players[p].points, cellType);
+        return 0x80;
+    }
+    if (cellType == 14) {
+        // [RE 0x41B396] case 14 銀行格：柜员机（sub_4379C9）→ sceneRequest==0 时停留处理
+        //   （sub_436668 贷款/週轉，1.4 实现，见 bank-system.md §3）
+        RICH4_LOGI("landingEvent: case 14 銀行格 cellEnt=%u cur=%d (RE 0x41982D)", cellEntId, p);
+        bankVisitDialog(app);
+        if (st.sceneRequest == 0) {
+            // TODO(1.4): bankStayDialog(app, cellEntId) 停留贷款/週轉面板（sub_436668）
+        }
         return 0x80;
     }
     if (cellType == 13) {
