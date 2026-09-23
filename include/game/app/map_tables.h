@@ -23,6 +23,8 @@ extern const uint8_t kCellTypeInit[46];
 
 // [RE 0x47F072] off_47F072 股票初始表（8 = 4 地图 x 2 模式）
 extern const int32_t kStockInit[8][12][9];
+// [RE 0x47F072] off_47F072 股票名（各组 field0 名称指针，UTF-8）
+extern const char* const kStockNames[8][12];
 // [RE 0x47FDF6] byte_47FDF6 道具初始库存
 extern const uint8_t kPropStockInit[30];
 // [RE 0x47FEE6] byte_47FEE6
@@ -54,8 +56,6 @@ extern const uint8_t kFacilityMaxLevel[5];
 extern const uint8_t kCorpCostMap[5];
 // [RE 0x47528E] g_specPtCostMap 行業設施點费用名映射（specPt.index 0..15 → kCostNames 索引）
 extern const uint8_t kSpecPtCostMap[16];
-// [RE 0x46677D..] 股票名称表（kStockInit 字段 0 的 VA 字符串，BIG5→UTF-8）
-extern const char* const kStockNames[12];
 // [RE 0x415D1D] byte_415D1D 金额前缀模板
 extern const uint8_t kMoneyPrefix[20];
 
