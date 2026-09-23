@@ -96,6 +96,28 @@ void updateMoneyIndex(Application& app) {
                st.moneyMul);
 }
 
+// [RE 0x433BD8] payFromBank
+// 依据: 0x433BD8 反编译; bank -= amount；不足 → cash += bank(负值) → bank = 0；
+//   cash < 0 → cash = 0 + eliminatePlayer（0x40CD87）
+void payFromBank(Application& app, int player, int32_t amount) {
+    GameState& st = app.gameState();
+    if (player < 0 || player >= 9 || amount <= 0) {
+        return;
+    }
+    Player& pl = st.players[player];
+    pl.bank -= amount;
+    if (pl.bank < 0) {
+        pl.cash += pl.bank;
+        pl.bank = 0;
+        if (pl.cash < 0) {
+            pl.cash = 0;
+            eliminatePlayer(app, player);
+        }
+    }
+    RICH4_LOGI("payFromBank: player %d amount %d -> bank %d cash %d (RE 0x433BD8)", player, amount,
+               pl.bank, pl.cash);
+}
+
 // [RE 0x41D2C6] transferMoney
 // 依据: 0x41D2C6 反编译; 详见 economy.h 注释
 void transferMoney(Application& app, int from, int to, int32_t amount, int flags) {

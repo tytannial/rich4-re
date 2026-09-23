@@ -35,4 +35,8 @@ int32_t playerTotalAssets(Application& app, int player);
 //   Σ存活 playerTotalAssets / 存活数 / g_startMoneyVal)（只升不降；advanceDay 每日调用 0x41CFBF）
 void updateMoneyIndex(Application& app);
 
+// [RE 0x433BD8] payFromBank（银行扣款）：bank -= amount；不足由 cash 补；再不足破产（eliminatePlayer）
+//   用于偿还贷款/贷款强执/週轉归还（0x436668 / 0x436A5A / 0x434492 等）
+void payFromBank(Application& app, int player, int32_t amount);
+
 } // namespace rich4

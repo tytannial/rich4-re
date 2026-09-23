@@ -12,6 +12,7 @@
 
 #include "game/application.h"
 #include "game/app/confirm_dialog.h"
+#include "game/app/date_util.h"
 #include "game/app/economy.h"
 #include "game/app/event_stack.h"
 #include "game/app/facility_dialog.h"
@@ -1675,11 +1676,48 @@ void hospitalizePlayer(Application& app, int player, int days) {
     RICH4_LOGI("hospitalizePlayer: p=%d days=%d (RE 0x43EC3F)", player, days);
 }
 
+// [RE 0x436A5A] checkLoanDue：贷款到期检查（回合开始，每玩家回合一次）
+// 依据: 0x436A5A 反编译; v = sub_4521AA(当前日期, loanDate)（= 距到期剩余天数）
+//   v==0 强执（showMessage 0x464B2C → sub_433BD8 扣款 → 清 loan/loanDate）；
+//   v==1/2 提醒（0x464B43/0x464B5C）；v==3 催收演出 sub_43695E（柜员动画窗，1.4 银行 UI 接入）
+// 差异: sub_43695E 演出与 sub_41906A 刷新暂以日志占位
+static void checkLoanDue(Application& app, int p) {
+    GameState& st = app.gameState();
+    Player& pl = st.players[p];
+    if (pl.loanDate == 0) {
+        return;
+    }
+    const int32_t v = dateDiff(st.gameDate, pl.loanDate);
+    switch (v) {
+        case 0:
+            showMessage(app, "貸款到期日\n\n強制執行！", 1500); // [RE 0x464B2C]
+            payFromBank(app, p, pl.loan);
+            pl.loan = 0;
+            pl.loanDate = 0;
+            RICH4_LOGI("loan due: player %d forced repayment done (RE 0x436A5A)", p);
+            break;
+        case 1:
+            showMessage(app, "距貸款到期日\n\n還剩１天！", 1500); // [RE 0x464B43]
+            break;
+        case 2:
+            showMessage(app, "距貸款到期日\n\n還剩２天！", 1500); // [RE 0x464B5C]
+            break;
+        case 3:
+            // [RE 0x43695E] 催收演出（panel[23] + 柜员动画窗 sub_436034 runModal）
+            RICH4_LOGI("loan due: player %d 3 days left, collect UI TODO (RE 0x43695E)", p);
+            break;
+        default:
+            break;
+    }
+}
+
 // [RE 0x41C84F] updatePlayerStates：回合开始状态倒计时（nextPlayer 切换玩家后调用）
-// 依据: 0x41C84F 反编译; BYTE0..BYTE3 编码 = 剩余天数（1..0x7F），bit7 = 结束标志：
+// 依据: 0x41C84F 反编译; 0x41C868 refreshBankStockShares / 0x41C86D sub_436A5A 贷款到期（alive 检查前）；
+//   BYTE0..BYTE3 编码 = 剩余天数（1..0x7F），bit7 = 结束标志：
 //   n>0 → n-1；n==1 → (n-1)|0x80（BYTE1 出國为 (n-1)&0x3F==0 时置位）；bit7 → 结束处理：
 //   BYTE0 住宿 → sub_40D6BE / BYTE1 出國 → sub_40D4E5（清位+恢复占用+loadWalkResources）/
 //   BYTE2 監獄 → releaseJailNpc / BYTE3 醫院 → releaseHospitalNpc（清 g_jailFlags/g_hospitalFlags）；
+//   fixedStep/skipMove/银行停业(+59)/融资(+60) 先清 bit7 再倒计时（0→0x80，下回清 0）；
 //   byte54 冬眠 / state37 夢遊 在 stateFlags==0 时倒计时（0→0x80）；
 //   保险期 +62：0x41CC4B 递减、0x41CAE3 到期清 0
 // 差异: 原版结束分支未见状态字节清零（实测会永久卡在"住宿中"），重写在结束时清零对应 BYTE；
@@ -1689,9 +1727,24 @@ void updatePlayerStates(Application& app, int p) {
     if (p < 0 || p >= 4) {
         return;
     }
+    // [RE 0x41C86D] 贷款到期检查（位于 alive/sceneRequest 检查之前）
+    checkLoanDue(app, p);
     Player& pl = st.players[p];
     if (pl.alive == 0 || st.sceneRequest != 0) {
         return;
+    }
+    // [RE 0x41CA7B..0x41CAC5] 上回合到期置 bit7 的计数项清零（fixedStep/skipMove/银行停业/融资）
+    if ((pl.fixedStep & 0x80) != 0) {
+        pl.fixedStep = 0;
+    }
+    if ((pl.skipMove & 0x80) != 0) {
+        pl.skipMove = 0;
+    }
+    if ((pl.bankRefuseDays & 0x80) != 0) {
+        pl.bankRefuseDays = 0;
+    }
+    if ((pl.bankFinanceFlags & 0x80) != 0) {
+        pl.bankFinanceFlags = 0;
     }
     auto decay = [](uint8_t v, uint8_t lowMask) -> uint8_t {
         if (v == 0) {
@@ -1740,7 +1793,7 @@ void updatePlayerStates(Application& app, int p) {
         pl.stateFlags =
             (pl.stateFlags & 0x00FFFFFFu) | (static_cast<uint32_t>(decay(b3, 0xFF)) << 24);
     }
-    // byte54 冬眠 / state37 夢遊（stateFlags 全 0 时才倒计时）
+    // byte54 冬眠 / state37 夢遊 / fixedStep（stateFlags 全 0 时才倒计时）
     if (pl.stateFlags == 0) {
         if (pl.byte54 != 0) {
             pl.byte54 = decay(pl.byte54, 0xFF);
@@ -1748,6 +1801,19 @@ void updatePlayerStates(Application& app, int p) {
         if (pl.state37 != 0) {
             pl.state37 = decay(pl.state37, 0xFF);
         }
+        if (pl.fixedStep != 0) {
+            pl.fixedStep = decay(pl.fixedStep, 0x7F);
+        }
+    }
+    // [RE 0x41CB6D..0x41CBB5] 无条件递减（stateFlags 非 0 也执行）
+    if (pl.skipMove != 0) {
+        pl.skipMove = decay(pl.skipMove, 0x7F);
+    }
+    if (pl.bankRefuseDays != 0) {
+        pl.bankRefuseDays = decay(pl.bankRefuseDays, 0xFF);
+    }
+    if (pl.bankFinanceFlags != 0) {
+        pl.bankFinanceFlags = decay(pl.bankFinanceFlags, 0x7F);
     }
     // 保险期（+62）：0x41CC4B 递减（1 → 0x80），0x41CAE3 到期清 0（不受 stateFlags 限制）
     if (pl.insuranceDays != 0) {
@@ -1757,8 +1823,10 @@ void updatePlayerStates(Application& app, int p) {
             pl.insuranceDays = decay(pl.insuranceDays, 0x7F);
         }
     }
-    RICH4_LOGI("player states: p=%d flags=%08X byte54=%u state37=%u ins=%u (RE 0x41C84F)", p,
-               pl.stateFlags, pl.byte54, pl.state37, pl.insuranceDays);
+    RICH4_LOGI("player states: p=%d flags=%08X byte54=%u state37=%u ins=%u bankRefuse=%u bankFin=%u "
+               "(RE 0x41C84F)",
+               p, pl.stateFlags, pl.byte54, pl.state37, pl.insuranceDays, pl.bankRefuseDays,
+               pl.bankFinanceFlags);
 }
 
 // [RE 0x41CF67] advanceDay

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -35,6 +36,10 @@ struct NewGameConfig {
 // [RE 0x496B68] g_players 玩家数据（原版 104 字节/项，字段按原偏移标注）
 // 依据: 0x406DE7 memcpy(&g_players[26*k], &g_charData + 104*charId, 104);
 //       0x417E26/0x40829D/0x415F69 等以 g_playerCash/g_playerSpriteX/... 偏移访问
+// ⚠️ 字段注释中的 `+N` 为**原版 32 位 pack(1) 布局偏移**（g_players 每记录 104 字节）。
+// 重写为 64 位且 `name` 为 8 字节指针，实际偏移与原版不同（姓名之后整体后移 4+ 对齐差），
+// 代码一律按成员名访问；存档映射见 `save_data.cpp`（按原版偏移手工序列化）。
+// padN 字段用于维持字段相对次序（便于按原版布局推理），不参与逻辑。
 struct Player {
     const char* name = nullptr; // +0  角色名（BIG5→UTF-8）
     uint32_t color = 0;         // +4  g_playerColor 0x496B6C（u32 RGB888，绘制前经 convertColor 转 555）
@@ -57,6 +62,9 @@ struct Player {
     int32_t cash = 0;           // +28 g_playerCash 0x496B84
     int32_t bank = 0;           // +32 g_playerBank 0x496B88
     int32_t loan = 0;           // +36 g_playerLoan 0x496B8C
+    // [RE 0x496B90] dword_496B90 週轉（预支）金额：週轉現金存入时累加、归还时递减
+    // 依据: 0x435260 sub_434492 週轉現金（bank += v; dword_496B90 += v）；0x436B0A 银行资金准备/垫付
+    int32_t bankAdvance = 0;    // +40
     uint32_t loanDate = 0;      // +44 g_playerLoanDate 0x496B94
     uint16_t points = 0;        // +48 g_playerPoints 0x496B98
     uint32_t stateFlags = 0;    // +50 dword_496B9A（BYTE0-3 各状态效果剩余回合）
@@ -64,7 +72,14 @@ struct Player {
     uint8_t state37 = 0;        // +55 g_playerState37 0x496B9F
     uint8_t skipMove = 0;       // +56 byte_496BA0（跳过移动）
     uint8_t fixedStep = 0;      // +57 byte_496BA1（固定步数）
-    uint8_t byte58 = 0;         // +58
+    uint8_t byte58 = 0;            // +58
+    // [RE 0x496BA3] byte_496BA3 银行拒绝往来剩余天数（非 0 显示"銀行拒絕往來 還剩%d天！"）
+    // 依据: 0x4379DA sub_4379C9（(b&0x7F)+1 → 0x464BED）；0x43667B sub_436668 停留守卫
+    uint8_t bankRefuseDays = 0;    // +59
+    // [RE 0x496BA4] byte_496BA4 银行融资状态：bit0-6 特别融资期数（+1 显示）、bit7 标志
+    // 依据: 0x4351CE（(b&0x7F)+1 期数消息 0x464AD5）；0x4341E7 週轉/0x4368CE AI 贷款守卫
+    uint8_t bankFinanceFlags = 0;  // +60
+    uint8_t pad61 = 0;             // +61
     // [RE 0x496BA6] g_playerCardCnt（**保险期**剩余天数；原误名 cardCount）
     // 依据: 0x41AC6E 保險收费 += 轮盘天数；0x44BA63 非 0 时保险理赔；0x41CAE3 到期清 0
     uint8_t insuranceDays = 0;  // +62
@@ -75,12 +90,19 @@ struct Player {
     //       0x40DF69 记账后命中同盟 → sub_40CC1A 解除同盟（清双方 +65 与 byte_496BA5）;
     //       0x416256 面板用 pieceSprites[+65-1] 帧 2 画同盟对象棋子头像
     uint8_t ally = 0;           // +65 同盟对象（重写原误名 vehicle）
-    uint8_t byte66 = 0;         // +66 byte_496BAA
+    uint8_t byte66 = 0;         // +66 byte_496BAA（月度结息排名累计，见 monthSettleA）
+    uint8_t pad67 = 0;          // +67
     int16_t bonusAtk = 0;       // +68 word_496BAC（神明属性加成，sub_40EAD7 加 / sub_40E14D 减）
     int16_t bonusDef = 0;       // +70 word_496BAE
     int16_t bonusMove = 0;      // +72 word_496BB0
     uint16_t stayCorpIdx = 0;   // +74 word_496BB2（住宿的旅館 corp 索引，走进/走出移动目标）
+    uint8_t pad76[16] = {};     // +76..+91 未建模（原版字段占位）
+    // [RE 0x496BC4/0x496BC8] 月度结息累计（sub_437D1A 排名：2500×M×byte66 + A − B + 10×bonusAtk）
+    // 依据: 0x437D4A sub_437D1A；0x439E5B 月初面板结束逐玩家清零 —— 语义待查
+    int32_t monthSettleA = 0;   // +92 dword_496BC4
+    int32_t monthSettleB = 0;   // +96 dword_496BC8
     uint8_t kind = 0;           // +100 g_playerKind 0x496BCC（1=人类 2=AI）
+    uint8_t pad101[3] = {};     // +101..+103
 };
 
 // MAPDAT 五表（docs/formats/mapdat.md）；原版各表 index 0 保留
