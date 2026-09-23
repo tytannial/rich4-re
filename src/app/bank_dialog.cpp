@@ -57,8 +57,8 @@ constexpr VisitRect kVisitRects[18] = {
 constexpr char kVisitDigits[12] = {'7', '8', '9', '4', '5', '6', '1', '2', '3', 'C', '0', 8};
 // 数字显示帧 = ASCII − 29（'0'=48 → 帧 19，'9'=57 → 帧 28；面板仅 30 帧，越界会读垃圾导致卡死）
 constexpr int kDigitFrameBase = 19;
-// [RE 0x464BD0] flt_464BD0 = 32.0f（金额/上限 → 进度条宽度系数）
-constexpr double kVisitBarScale = 32.0;
+// [RE 0x464BD0] flt_464BD0 = 34.0f（金额/上限 → 进度条宽度系数；满额 6×34=204 = 条宽）
+constexpr double kVisitBarScale = 34.0;
 constexpr int kVisitBarMax = 204;
 
 struct VisitCtx {
