@@ -270,15 +270,18 @@ bool visitHandler(const SDL_Event* event, void* user) {
             // [RE 0x4373B3/0x4373EB/0x43748B] 音效在**按下**时播：
             //   顶部存/取 = g_uiSoundClick；EXIT/数字键/MAX/確定 = g_effectSlots[0]
             app.audio().playEffect((hit == 0 || hit == 1) ? kVisitSfxClick : kVisitSfxKey);
-            // [RE 0x4373D7] 模式切换在按下时生效（0x4373B3/0x4373EB）
+            // [RE 0x4373D7] 模式切换在按下时生效（0x4373B3/0x4373EB）：
+            //   dword_48C3EC = 新余额 + sub_436EDB(1) → **金额重置为 "0"** 并重绘
             if (hit == 0) {
                 if (pl.bankFinanceFlags == 0) { // [RE 0x4371E5] 暫停放款中禁用"銀行帳戶"
                     ui.mode = 0;
                     ui.limit = pl.bank;
                 }
+                std::snprintf(ui.amount, sizeof(ui.amount), "0");
             } else if (hit == 1) {
                 ui.mode = 1;
                 ui.limit = pl.cash;
+                std::snprintf(ui.amount, sizeof(ui.amount), "0");
             }
             redrawVisit(ui);
             return true;
