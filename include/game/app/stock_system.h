@@ -7,7 +7,7 @@ namespace rich4 {
 class Application;
 
 // [RE 0x4291D6] stockTick：每日股票行情（12 支随机涨跌 + 历史 + 大盘指数）
-//   差异: sub_428D01 停市判定（dword_4990DC / isSpecialDate）未建模，暂不停市
+//   休市（stockMarketClosed || isSpecialDate）时直接返回，不推进行情/历史
 void stockTick(Application& app);
 
 // [RE 0x428CAF] refreshStockSpecPtMap：按 specPt.index 反查股票→specPt 映射

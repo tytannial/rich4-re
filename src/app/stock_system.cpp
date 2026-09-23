@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "game/app/game_panel.h"
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
 #include "game/application.h"
@@ -102,9 +103,13 @@ void refreshStockSpecPtMap(Application& app) {
 //      非上市=基准价）时动量 ×0.5 或 ×2）→ clamp ±10 → 当前价 = sub_428EC5(昨收,动量) →
 //      stockHistory[144*i + turnCounter]；
 //   ④ turnCounter = (+1) % 144；大盘 = Σ价格 × 10
-// 差异: isSpecialDate 停市未接入（暂不停市）
+// 差异: 休市 = stockMarketClosed || isSpecialDate（已接入）；事件设 stockMarketClosed 待卡片系统
 void stockTick(Application& app) {
     GameState& st = app.gameState();
+    // [RE 0x428D01] 休市：stockMarketClosed（事件设的剩余天数）或周末/节日 → 跳过行情
+    if (st.stockMarketClosed != 0 || stockIsHoliday(st)) {
+        return;
+    }
     st.stockGlobalDrift = static_cast<float>((std::rand() - 0x4000) / 4097.0);
     double sum = 0.0;
     for (int i = 0; i < 12; ++i) {
@@ -212,7 +217,8 @@ int updateSpecPtControl(Application& app, int player, int stock) {
 
 // [RE 0x428D2A] buyStock
 // 依据: 0x428D2A 反编译; viaBank=false（现金）：价格 = specPt.feeBase/10000 × count，
-//   sharesLeft -= count，现金扣款；viaBank=true：金额 = 当前价 × count，银行扣款（市场股数未建模）；
+//   sharesLeft -= count，现金扣款；viaBank=true：金额 = 当前价 × count，银行扣款，
+//   交易量/保留股份(word_49698A/88) -= count；
 //   末尾：持股 += count；均价 = (旧持股×旧均价 + 金额) / 新持股；再调 updateSpecPtControl
 //   返回 1 表示经营権（owner）变化
 int buyStock(Application& app, int player, int stock, int count, bool viaBank) {
@@ -224,6 +230,8 @@ int buyStock(Application& app, int player, int stock, int count, bool viaBank) {
     if (viaBank) {
         amount = static_cast<int32_t>(static_cast<double>(count) * st.stocks[stock][5]); // 当前价
         st.players[player].bank -= amount;
+        st.stockVolume[stock] -= count;   // [RE 0x428D2A] word_49698A 交易量回归
+        st.stockReserved[stock] -= count; // [RE 0x428D2A] word_496988 保留股份
     } else {
         const int si = static_cast<int>(st.stocks[stock][1]);
         if (si > 0 && si < static_cast<int>(st.specPts.size())) {
@@ -246,6 +254,54 @@ int buyStock(Application& app, int player, int stock, int count, bool viaBank) {
     RICH4_LOGI("buyStock: player %d stock %d count %d amount %d bank=%d (RE 0x428D2A)", player,
                stock, count, amount, viaBank ? 1 : 0);
     return updateSpecPtControl(app, player, stock);
+}
+
+// [RE 0x428E23] sellStock
+// 依据: 0x428E23 反编译; 持股 -= count（归零则均价清 0）；收入 = 现价(flt_496994) × count；
+//   word_49698A/88 += count（回归市场）；toBank 入 g_playerBank 否则入 dword_499080 公库；
+//   末尾 updateSpecPtControl；返回 1 表示经营権变化
+int sellStock(Application& app, int player, int stock, int count, bool toBank) {
+    GameState& st = app.gameState();
+    if (player < 0 || player >= 4 || stock < 0 || stock >= 12 || count <= 0) {
+        return 0;
+    }
+    int32_t& shares = st.playerShares[player][stock];
+    shares -= count;
+    if (shares < 0) {
+        shares = 0;
+    }
+    if (shares == 0) {
+        st.playerAvgCost[player][stock] = 0.0f;
+    }
+    const int32_t amount =
+        static_cast<int32_t>(static_cast<double>(count) * st.stocks[stock][5]); // 现价
+    st.stockVolume[stock] += count;   // [RE 0x428E23] word_49698A
+    st.stockReserved[stock] += count; // [RE 0x428E23] word_496988
+    if (toBank) {
+        st.players[player].bank += amount;
+    } else {
+        st.stockPublicFund += amount;
+    }
+    RICH4_LOGI("sellStock: player %d stock %d count %d amount %d toBank=%d (RE 0x428E23)", player,
+               stock, count, amount, toBank ? 1 : 0);
+    return updateSpecPtControl(app, player, stock);
+}
+
+// [RE 0x42915A] refreshBankStockShares
+// 依据: 0x42915A 反编译; 每支：保留股份 word_496988 <= 1000 → 交易量 = 保留；
+//   否则 交易量 = 保留 × (rand()%2000 + 1000) / 10000（即 10%~30%）
+// 调用点: loadMapData 初始化 + advanceDay 每日
+void refreshBankStockShares(Application& app) {
+    GameState& st = app.gameState();
+    for (int i = 0; i < 12; ++i) {
+        const int32_t res = st.stockReserved[i];
+        if (res <= 1000) {
+            st.stockVolume[i] = res;
+        } else {
+            st.stockVolume[i] =
+                static_cast<int32_t>(static_cast<double>(res) * ((std::rand() % 2000 + 1000) / 10000.0));
+        }
+    }
 }
 
 } // namespace rich4

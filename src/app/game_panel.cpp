@@ -502,6 +502,11 @@ void drawAdvancePanel(Application& app) {
 
 } // namespace
 
+// [RE 0x4523D5] 股市休市日封装（isSpecialDate 为匿名 ns，此处导出供 stockTick/面板复用）
+bool stockIsHoliday(const GameState& st) {
+    return isSpecialDate(st, st.gameDate);
+}
+
 void renderGamePanel(Application& app) {
     // [RE 0x417E26] WM_PAINT 分支：顶部工具条 + 按 byte_49715D 布局
     const int layout = app.gameState().settings[5] & 3;

@@ -1412,8 +1412,36 @@ void advanceDay(Application& app) {
     }
     (void)newMonth;
     (void)refreshed;
-    // [RE 0x41CF67] stockTick：每日股票行情（12 支随机涨跌 + 历史 + 大盘）
+    // [RE 0x41CF67] 休市倒计时（dword_4990DC）：bit7 未置且有值→--，==1 时置 bit7；bit7 已置→清 0
+    if ((st.stockMarketClosed & 0x80) == 0) {
+        if (st.stockMarketClosed != 0) {
+            const int32_t was = st.stockMarketClosed;
+            --st.stockMarketClosed;
+            if (was == 1) {
+                st.stockMarketClosed |= 0x80;
+            }
+        }
+    } else {
+        st.stockMarketClosed = 0;
+    }
+    // [RE 0x41CF67] 停牌/新闻每日倒计时（byte_496986 递减；byte_496987 高4位、低4位分别递减）
+    for (int i = 0; i < 12; ++i) {
+        if (st.stockHalted[i] != 0) {
+            --st.stockHalted[i];
+        }
+        if (st.stockNews[i] != 0) {
+            if ((st.stockNews[i] & 0xF0) != 0) {
+                st.stockNews[i] = static_cast<uint8_t>(st.stockNews[i] - 16);
+            }
+            if ((st.stockNews[i] & 0x0F) != 0) {
+                st.stockNews[i] = static_cast<uint8_t>(st.stockNews[i] - 1);
+            }
+        }
+    }
+    // [RE 0x41CF67] stockTick：每日股票行情（12 支随机涨跌 + 历史 + 大盘；休市则跳过）
     stockTick(app);
+    // [RE 0x42915A] 每日交易量刷新（保留股份 → 交易量 10%~30%）
+    refreshBankStockShares(app);
     // [RE 0x41CF67] 音乐切换计时器（byte_46CB06）：低4位递减到0 → 切下一首可选曲目
     if ((st.musicTimer & 0xF) != 0) {
         --st.musicTimer;

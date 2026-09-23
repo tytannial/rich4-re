@@ -284,8 +284,18 @@ bool newGameInit(Application& app, bool mode1) {
     std::memset(state.stockHistory, 0, sizeof(state.stockHistory));
     std::memset(state.stockHalted, 0, sizeof(state.stockHalted));
     std::memset(state.stockNews, 0, sizeof(state.stockNews));
+    std::memset(state.stockVolume, 0, sizeof(state.stockVolume));
+    // [RE 0x496988] 保留股份初值 = kStockInit 字段[2] 低 u16（10000/5000）
+    for (int i = 0; i < 12; ++i) {
+        state.stockReserved[i] = static_cast<int32_t>(
+            static_cast<uint16_t>(*reinterpret_cast<const int32_t*>(&state.stocks[i][2])));
+    }
+    state.stockMarketClosed = 0;
+    state.stockDivPeriod = 1;
+    state.stockPublicFund = 0;
     state.marketIndex = 0;
     state.stockGlobalDrift = 0.0f;
+    refreshBankStockShares(app); // [RE 0x42915A] 初始交易量
     // 注: specPt 初始化与股票→specPt 映射在 loadMap（parseMapDat）之后执行（见下方）
 
     // [RE 0x448B81/0x44BAEA] 卡片/事件洗牌
