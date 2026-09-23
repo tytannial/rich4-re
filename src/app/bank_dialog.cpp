@@ -157,13 +157,17 @@ void redrawVisit(VisitCtx& ui) {
     blitElement(dst, sheet.frame(modeBtn + 1), kVisitX + kVisitRects[modeBtn].x0,
                 kVisitY + kVisitRects[modeBtn].y0, false);
     // hover/按下高亮：画在该按钮命中区左上角（原版 Rect = word_475888[4*v10] + 60/71）
+    // [RE 0x4371D4] 原版条件 `v10 != 3`：滑条不高亮（否则帧 4 刻度叠加错位一格）；
+    //   当前模式按钮不重复高亮；融资中按钮 0 视作模式按钮（不高亮）
     const int lit = ui.pressed >= 0 ? ui.pressed : ui.hover;
-    if (lit >= 0 && lit != modeBtn && sheet.frameCount() > static_cast<size_t>(lit + 1)) {
+    const GameState& st = ui.app->gameState();
+    const bool financeBlock0 = lit == 0 && st.players[st.currentPlayer].bankFinanceFlags != 0;
+    if (lit >= 0 && lit != 3 && lit != modeBtn && !financeBlock0 &&
+        sheet.frameCount() > static_cast<size_t>(lit + 1)) {
         blitElement(dst, sheet.frame(lit + 1), kVisitX + kVisitRects[lit].x0,
                     kVisitY + kVisitRects[lit].y0, false);
     }
     // [RE 0x437002] 暫停放款中：帧 29 @(157,141)
-    const GameState& st = ui.app->gameState();
     if (st.players[st.currentPlayer].bankFinanceFlags != 0 && sheet.frameCount() > 29) {
         blitElement(dst, sheet.frame(29), 157, 141, false);
     }
@@ -217,6 +221,20 @@ bool visitHandler(const SDL_Event* event, void* user) {
     if (!event) {
         ui.hover = -1;
         redrawVisit(ui);
+        return true;
+    }
+    if (event->type == kModalTimerEvent) {
+        // 兜底：按当前鼠标逻辑坐标同步悬停（防快速移动丢事件导致高亮残留）
+        if (!ui.dragging) {
+            int mx = 0;
+            int my = 0;
+            app.mouseLogicalPos(mx, my);
+            const int hit = hitVisitButton(mx, my);
+            if (hit != ui.hover) {
+                ui.hover = hit;
+                redrawVisit(ui);
+            }
+        }
         return true;
     }
     switch (event->type) {
@@ -447,7 +465,7 @@ void bankVisitDialog(Application& app) {
             showMessage(app, text, 1500);
         }
         RICH4_LOGI("bank visit: player %d mode %d limit %d (RE 0x4379C9)", p, ui.mode, ui.limit);
-        runModal(app, &visitHandler, &ui);
+        runModal(app, &visitHandler, &ui, 100); // 100ms tick：悬停兜底同步
         restoreRegion(app.surface(), ui.bg, ui.bgX, ui.bgY, ui.bgW, ui.bgH);
         return;
     }
