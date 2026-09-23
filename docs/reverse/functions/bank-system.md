@@ -77,6 +77,11 @@ if (人类 alive==1) {
     滑条 v10==3 不高亮（否则帧 4 刻度叠加错位）；当前模式按钮不重复高亮；融资中按钮 0 忽略
   - **光标**：进入 `cursorSelect(27,1,0)`（面板交互）、退出 `cursorSelect(41,1,0)`（默认箭头）；
     重写接入 `bank_dialog.cpp`（`app.cursor().select`）
+  - **音效**（与股票数字输入框 `number_input_dialog` 同映射，均在**按下**时播）：
+    顶部存/取（v10=0/1）= `g_uiSoundClick`（Effect.mkf[1]）；
+    EXIT/数字键/MAX/確定 = `g_effectSlots[0]`（Effect.mkf[7]，键盘输入同 0x43756F）；
+    滑条 = `dword_482352`（Effect.mkf[9]，0x43741A）；右键退出无音效（0x437920）
+  - **模式切换在按下时生效**（0x4373D7 `dword_48C3EC = 余额; sub_436EDB(1)`），松开无操作
   - 数字区擦除原版 `blitOpaqueToBackbuffer(base+60(帧4), 122,172, 62,101, w,32)` 源区越界（应为
     帧 0 → 重写取源坐标 = 目标 − (60,71)，即帧 0 背景 patch）
 - **模式**（`dword_48C3F0`）：0=銀行帳戶（取款 bank→cash）/ 1=身上現金（存款 cash→bank）；

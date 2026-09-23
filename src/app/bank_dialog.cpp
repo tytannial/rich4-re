@@ -58,6 +58,12 @@ constexpr VisitRect kVisitRects[18] = {
 constexpr char kVisitDigits[12] = {'7', '8', '9', '4', '5', '6', '1', '2', '3', 'C', '0', 8};
 // 数字显示帧 = ASCII − 29（'0'=48 → 帧 19，'9'=57 → 帧 28；面板仅 30 帧，越界会读垃圾导致卡死）
 constexpr int kDigitFrameBase = 19;
+// 音效（映射同股票数字输入框 number_input_dialog）：
+// [RE 0x48234A] 键盘/EXIT/MAX/確定 按下 = g_effectSlots[0]（Effect.mkf[7]）
+// [RE 0x482352] 滑条 = Effect.mkf[9]；[RE 0x482322] 顶部存/取 = g_uiSoundClick（Effect.mkf[1]）
+constexpr int kVisitSfxKey = 7;
+constexpr int kVisitSfxSlider = 9;
+constexpr int kVisitSfxClick = 1;
 // [RE 0x464BD0] flt_464BD0 = 34.0f（金额/上限 → 进度条宽度系数；满额 6×34=204 = 条宽）
 constexpr double kVisitBarScale = 34.0;
 constexpr int kVisitBarMax = 204;
@@ -191,7 +197,7 @@ void confirmVisitTrade(VisitCtx& ui) {
     GameState& st = app.gameState();
     Player& pl = st.players[st.currentPlayer];
     const int v = atoiVisit(ui.amount);
-    app.audio().playEffect(2); // 确定音（g_uiSoundConfirm）
+    // 原版确认路径（0x4377E6）无额外音效：按下时已播按键音
     if (v <= 0) {
         app.events().requestExit(0);
         return;
@@ -256,17 +262,30 @@ bool visitHandler(const SDL_Event* event, void* user) {
                 return true;
             }
             if (hit == 3) {
+                app.audio().playEffect(kVisitSfxSlider); // [RE 0x43741A] 滑条音效
                 ui.dragging = true;
                 return true;
             }
             ui.pressed = hit;
+            // [RE 0x4373B3/0x4373EB/0x43748B] 音效在**按下**时播：
+            //   顶部存/取 = g_uiSoundClick；EXIT/数字键/MAX/確定 = g_effectSlots[0]
+            app.audio().playEffect((hit == 0 || hit == 1) ? kVisitSfxClick : kVisitSfxKey);
+            // [RE 0x4373D7] 模式切换在按下时生效（0x4373B3/0x4373EB）
+            if (hit == 0) {
+                if (pl.bankFinanceFlags == 0) { // [RE 0x4371E5] 暫停放款中禁用"銀行帳戶"
+                    ui.mode = 0;
+                    ui.limit = pl.bank;
+                }
+            } else if (hit == 1) {
+                ui.mode = 1;
+                ui.limit = pl.cash;
+            }
             redrawVisit(ui);
             return true;
         }
         case SDL_EVENT_MOUSE_BUTTON_UP: {
             if (event->button.button == SDL_BUTTON_RIGHT) {
-                app.audio().playEffect(4); // 取消音
-                app.events().requestExit(0);
+                app.events().requestExit(0); // [RE 0x437920 0x205] 右键退出（原版无音效）
                 return true;
             }
             if (event->button.button != SDL_BUTTON_LEFT) {
@@ -281,24 +300,16 @@ bool visitHandler(const SDL_Event* event, void* user) {
             const int hit = hitVisitButton(static_cast<int>(event->button.x),
                                            static_cast<int>(event->button.y));
             ui.pressed = -1;
-            app.audio().playEffect(1); // 点击音（g_uiSoundClick）
             if (hit < 0) {
                 redrawVisit(ui);
                 return true;
             }
-            if (hit == 0) {
-                // [RE 0x4371E5] 暫停放款中禁用"銀行帳戶"按钮
-                if (pl.bankFinanceFlags == 0) {
-                    ui.mode = 0;
-                    ui.limit = pl.bank;
-                }
-            } else if (hit == 1) {
-                ui.mode = 1;
-                ui.limit = pl.cash;
-            } else if (hit == 2) {
+            if (hit == 2) {
+                // [RE 0x437774] 離開（EXIT）：松开退出
                 app.events().requestExit(0);
                 return true;
-            } else if (hit >= 4 && hit <= 15) {
+            }
+            if (hit >= 4 && hit <= 15) {
                 appendVisitDigit(ui, kVisitDigits[hit - 4]);
             } else if (hit == 16) {
                 // [RE 0x4378DD LABEL_131] MAX：金额直接设为上限（dword_48C3EC）
@@ -314,10 +325,12 @@ bool visitHandler(const SDL_Event* event, void* user) {
         case SDL_EVENT_KEY_DOWN: {
             const SDL_Keycode k = event->key.key;
             if (k == SDLK_ESCAPE) {
-                app.audio().playEffect(4);
+                app.audio().playEffect(4); // 重写增强：ESC 退出（原版仅右键 0x205）
                 app.events().requestExit(0);
                 return true;
             }
+            // [RE 0x43756F LABEL_87] 键盘输入按下音效（g_effectSlots[0]）
+            app.audio().playEffect(kVisitSfxKey);
             if (k >= SDLK_0 && k <= SDLK_9) {
                 appendVisitDigit(ui, static_cast<char>('0' + (k - SDLK_0)));
                 redrawVisit(ui);
