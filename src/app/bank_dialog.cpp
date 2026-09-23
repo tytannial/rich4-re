@@ -321,10 +321,12 @@ bool visitHandler(const SDL_Event* event, void* user) {
             } else if (hit >= 4 && hit <= 15) {
                 appendVisitDigit(ui, kVisitDigits[hit - 4]);
             } else if (hit == 16) {
+                // [RE 0x4378DD LABEL_131] MAX：金额直接设为上限（dword_48C3EC）
+                std::snprintf(ui.amount, sizeof(ui.amount), "%d", ui.limit);
+            } else if (hit == 17) {
+                // [RE 0x4377E6] 確定（↲）：确认交易（原版 MOUSE_UP 时 byte_48C40B-1 → 17）
                 confirmVisitTrade(ui);
                 return true;
-            } else if (hit == 17) {
-                std::snprintf(ui.amount, sizeof(ui.amount), "0");
             }
             redrawVisit(ui);
             return true;
