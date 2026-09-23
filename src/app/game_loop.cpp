@@ -425,11 +425,12 @@ bool gameEventHandler(const SDL_Event* event, void* user) {
         renderGameFrame(app);
         return true;
     }
-    // [RE 0x418C55/0x45144F] 跳伞入场期间禁止交互：原版 sub_45144F 阻塞播放跳伞动画，
-    //   期间 PeekMessage 只取走消息不派发（窗口过程不处理）；落地初始化完成后才恢复
+    // [RE 0x418C55/0x45144F] 跳伞入场 / 事件 FLC（得點券/卡片/入狱住院等阻塞播放）期间禁止交互：
+    //   原版 sub_45144F 阻塞播放期间 PeekMessage 只取走消息不派发（窗口过程不处理）
     {
         GameState& st = app.gameState();
-        if ((st.pendingSpawnPlayer != 0 || st.parachuteActive) && event->type != SDL_EVENT_QUIT) {
+        if ((st.pendingSpawnPlayer != 0 || st.parachuteActive || st.eventFlcActive) &&
+            event->type != SDL_EVENT_QUIT) {
             return true;
         }
     }

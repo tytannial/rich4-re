@@ -50,7 +50,7 @@
 | `Ctrl+Shift+T` | **循环携带神明** | 无→小財神→大財神→小窮神→大窮神→小衰神→大衰神→死神（测试神明调整租金/阻止购地/地主死神免收） |
 | `Ctrl+Shift+S` | **循环玩家状态** | 无→住宿→出國→監獄→醫院→冬眠→夢遊（测试 `ownerCanCollectRent` 免收租；每回合自动倒计时结束并恢复行动） |
 | `Ctrl+Shift+B` | 银行存款 +100000 | 测试收款入银行/贷款 |
-| `Ctrl+Shift+J` | **当前玩家入狱 3 天** | `jailPlayer` 0x43D593：移到監獄格（綠島）/sprite/stateFlags BYTE2/`jailFlags`/FLC 538/保险理赔 |
+| `Ctrl+Shift+J` | **当前玩家入狱 3 天** | `jailPlayer` 0x43D593：移到監獄格（綠島）/sprite/stateFlags BYTE2/`jailFlags`/FLC 538/保险理赔；**入狱后自动结束当前回合**（防悬空）；FLC 播放中忽略重复触发 |
 | `Ctrl+Shift+L` | **当前玩家住院 3 天** | `hospitalizePlayer` 0x43EC3F：醫院格/stateFlags BYTE3/`hospitalFlags`/FLC 524 |
 | `Ctrl+Shift+K` | 买入指向 specPt 的股票 100 股 | 测试控股/经营権转移（先 `Ctrl+7` 备现金；持股超过他人 → owner 变更/小地图刷新；日志含 shares/owner/control） |
 | `Ctrl+Shift+M` | 打开**股市面板** | `stockMarketDialog`（0x42B58F）；测行情/持股切换、買/賣、走势图、休市 |

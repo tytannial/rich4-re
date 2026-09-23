@@ -157,10 +157,28 @@ bool handleDebugKey(Application& app, int code, bool shift) {
                 RICH4_LOGI("debug: Ctrl+Shift+B player %d bank=%d", cur, st.players[cur].bank);
                 return true;
             case 'j': // 当前玩家入狱 3 天（jailPlayer 0x43D593：移格/标志/FLC 538/保险理赔）
+                if (st.eventFlcActive) {
+                    return true; // FLC 播放中防重入（键盘重复会叠加播放）
+                }
                 jailPlayer(app, cur, 3);
+                // [NEW] 入狱后推进回合：等待操作阶段（wait=0）前进面板因状态隐藏 → 必须直接下一位，
+                //   否则状态机悬空卡住（原版入狱发生在卡片/事件结算时点，无此问题）
+                if (st.playerActionState[cur] == 0 && st.playerActionWait[cur] == 0) {
+                    disablePlayerControl(app);
+                    st.playerActionWait[cur] = -125; // 0x83 = 下一位玩家
+                    st.gameStateActive = true;
+                }
                 return true;
             case 'l': // 当前玩家住院 3 天（hospitalizePlayer 0x43EC3F：FLC 524）
+                if (st.eventFlcActive) {
+                    return true;
+                }
                 hospitalizePlayer(app, cur, 3);
+                if (st.playerActionState[cur] == 0 && st.playerActionWait[cur] == 0) {
+                    disablePlayerControl(app);
+                    st.playerActionWait[cur] = -125;
+                    st.gameStateActive = true;
+                }
                 return true;
             case 'm': // 打开股市面板（测试 0x42B58F）
                 if (st.gameLoopActive) {

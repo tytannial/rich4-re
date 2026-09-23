@@ -141,7 +141,6 @@ loadWalkResources(a1)
   出狱后在路面行动（行窃/保护费/抢卡/盗领）—— P5 事件槽 NPC 实现依据
 
 ### 1.4 踩格触发（`onPlayerActionPhase` @0x41C7A6）
-
 ```
 cl = byte_498DF3[16*player] & 0x7F
 if (cl == 1 && 格子类型 == 4) {          // 監獄状态 + 監獄格
@@ -157,6 +156,36 @@ if (cl == 1 && 格子类型 == 4) {          // 監獄状态 + 監獄格
 - 入狱/住院期间：`onPlayerActionPhase` 的 `g_playerCellNo` 递减（`byte_496D0C[24*cellNo-24]`），
   到 0 → `sub_40E14D` 释放 + FLC 525 + `hospitalizePlayer(p,5)`/`jailPlayer(p,5)`（出院/出狱）；
   同格有其他存活玩家且无 cellNo → 传染转移（见 `41b42d-on-player-action-phase.md`）
+
+### 1.5 入狱来源：陷害卡（`sub_4444BF`，卡片 17）
+
+```
+v = 选目标（人类 sub_446AE8(0xE0C0010) 选人界面 / AI sub_41E6F2(0)）
+if (v) {
+    sub_441343(cur, 17);                                  // 移除陷害卡
+    sub_44EF41(cur, 3, 语音 off_48127A[90*charIndex])     // 使用者语音
+    v5 = sub_40D293(v);                                   // 目标解析
+    if (cur 不是人类)
+        sub_40E669(0, curX, curY, targetX, targetY, 100); // ★"被带走"移动演出（速度 100）
+    if (v5 >= 4) jailPlayer(cur, v5, 5);                  // NPC 目标 5 天
+    else {
+        addPlayerDebt(v5, cur, 150*M);
+        免罪卡(21) → sub_444BB2(v5)                        // 抵消
+        嫁禍卡(19) → sub_44476A(v5,0,0) 换目标
+        if (v5 == cur) jailPlayer(cur, cur, 4)            // 反弹自己 4 天
+        else jailPlayer(cur, v5, 5)                       // 目标入狱 5 天
+        sub_44EF41(v5, 1, 目标语音 off_48136A[...])
+        復仇卡检查 → sub_444691 + jailPlayer(cur, cur, 5)
+    }
+    sub_41D546();
+}
+```
+
+- **"被车带走"演出 = `sub_40E669`（移动动画）**：AI 使用陷害卡时从使用者位置移动到目标位置
+  （人类使用的演出在选人界面 `sub_446AE8` 内，P4 待逆向）
+- debug `Ctrl+Shift+J` 直接调 `jailPlayer`，因此**没有该演出**（FLC 538 是"警车到达綠島"）
+- 卡片效果函数表 `g_cardEffectFuncs`（0x475D5C）索引 17 = 0x4444BF；索引 1..30 对照
+  `kCardNames`（表项 18..21 = 0x4420D5 共用空实现？P4 卡片系统时逐个标注）
 
 ## 2. case 10/11/12 得點券（✅ 已实现）
 
