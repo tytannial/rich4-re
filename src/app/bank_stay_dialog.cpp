@@ -207,8 +207,34 @@ struct StayCtx {
     int pressed = 0;       // byte_48C3E1（1..4）
     bool exitAfterSlide = false; // byte_48C3E2
     int32_t totalAssets = 0;     // dword_48C3B0（贷款上限基准）
+    // [PORT] 静态层快照（帧 0 + 帘子/禁令/文字）：滑出回填与週轉返回用。
+    //   原版回填用帧 0 原始像素，重写若直接贴帧 0 会擦掉帧 1 帘子与 drawText 的牌子文字
+    std::vector<uint16_t> staticBg;
     FloatMessage msg;
 };
+
+// 捕获当前主画面为静态层快照（在 drawStayBase 之后调用）
+void captureStatic(StayCtx& ui) {
+    const uint16_t* src = ui.app->surface().pixels();
+    ui.staticBg.assign(src, src + static_cast<size_t>(Surface::kWidth) * Surface::kHeight);
+}
+
+// 用静态层快照恢复矩形（滑出回填；避免把帧 1/牌子文字擦成帧 0 原样）
+void restoreStaticRect(StayCtx& ui, int x, int y, int w, int h) {
+    if (ui.staticBg.empty() || w <= 0 || x < 0 || x + w > Surface::kWidth) {
+        return;
+    }
+    uint16_t* d = ui.app->surface().pixels();
+    for (int row = 0; row < h; ++row) {
+        const int py = y + row;
+        if (py < 0 || py >= Surface::kHeight) {
+            continue;
+        }
+        std::memcpy(d + static_cast<size_t>(py) * Surface::kWidth + x,
+                    ui.staticBg.data() + static_cast<size_t>(py) * Surface::kWidth + x,
+                    sizeof(uint16_t) * static_cast<size_t>(w));
+    }
+}
 
 const Player& curPlayer(const StayCtx& ui) {
     return ui.app->gameState().players[ui.app->gameState().currentPlayer];
@@ -931,6 +957,7 @@ bool stayHandler(const SDL_Event* event, void* user) {
         ui.pressed = 0;
         ui.exitAfterSlide = false;
         drawStayBase(ui);
+        captureStatic(ui); // [PORT] 静态层快照（滑出回填/週轉返回用）
         Player& pl = st.players[st.currentPlayer];
         if (pl.bankFinanceFlags != 0) { // [RE 0x435197]
             char text[64];
@@ -955,9 +982,8 @@ bool stayHandler(const SDL_Event* event, void* user) {
             const int oldX = ui.slideX;
             ui.slideX += ui.slideDir;
             if (ui.slideDir > 0 && ui.slideX > kPanelX) {
-                // 滑出：用帧 0 回填旧位置左边缘条
-                blitElementRegionOpaque(app.surface(), ui.sheet->frame(kFrameBg), oldX, 0, oldX, 0,
-                                        ui.slideDir, 480, false);
+                // 滑出：用静态层快照回填旧位置左边缘条（快照含帘子/牌子文字）
+                restoreStaticRect(ui, oldX, 0, ui.slideDir, 480);
             }
             drawStayPanels(ui);
             if (ui.slideX == kPanelX) {
@@ -1075,6 +1101,7 @@ bool stayHandler(const SDL_Event* event, void* user) {
                 } else {
                     ui.state = 4;
                     drawStayBase(ui); // 覆盖週轉画面
+                    captureStatic(ui);
                     drawStayPanels(ui);
                     ui.msg.setup(*ui.sheet, kFrameMsgBoard, kMsgBoardX, kMsgBoardY, 20, 0,
                                  0x101010, 0);
@@ -1148,22 +1175,27 @@ void bankStayDialog(Application& app, int cellEntId) {
         ui.app = &app;
         ui.sheet = &sheet;
         ui.totalAssets = assets;
-        // [RE 0x436726] 自家银行：cellEntId 6000..8000 且 specPt.owner == currentPlayer+1
+        // [RE 0x436726] 自家银行判定：实参 cellEntId 是 cellEnts 数组下标，
+        //   需先取该格的 objId（+32 special，6000+n）再索引 specPts（原版 sub_436668 实参为 objId）
         ui.own = false;
         int specIdx = -1;
         int specOwner = -1;
-        if (cellEntId > 6000 && cellEntId < 8000) {
-            specIdx = cellEntId - 6000;
-            if (specIdx >= 0 && specIdx < static_cast<int>(st.specPts.size())) {
-                specOwner = st.specPts[specIdx].owner;
-                if (specOwner == p + 1) {
-                    ui.own = true;
+        int specObjId = 0;
+        if (cellEntId >= 0 && cellEntId < static_cast<int>(st.cellEnts.size())) {
+            specObjId = st.cellEnts[cellEntId].special;
+            if (specObjId > 6000 && specObjId < 8000) {
+                specIdx = specObjId - 6000;
+                if (specIdx >= 0 && specIdx < static_cast<int>(st.specPts.size())) {
+                    specOwner = st.specPts[specIdx].owner;
+                    if (specOwner == p + 1) {
+                        ui.own = true;
+                    }
                 }
             }
         }
-        RICH4_LOGI("bank stay: enter own=%d cellEnt=%d specIdx=%d owner=%d cur=%d assets=%d "
-                   "(RE 0x436668)",
-                   ui.own ? 1 : 0, cellEntId, specIdx, specOwner, p, assets);
+        RICH4_LOGI("bank stay: enter own=%d cellEnt=%d objId=%d specIdx=%d owner=%d cur=%d "
+                   "assets=%d (RE 0x436668)",
+                   ui.own ? 1 : 0, cellEntId, specObjId, specIdx, specOwner, p, assets);
         app.audio().pushSceneMusic(4); // [RE 0x43674F] musicPlayScene(4)
         runModal(app, &stayHandler, &ui, 50); // [RE 0x43675D] SetTimer 50ms
         app.audio().resumeSceneMusic(); // [RE 0x436765] musicStackPopRestore

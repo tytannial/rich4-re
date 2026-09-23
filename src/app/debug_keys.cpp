@@ -165,12 +165,23 @@ bool handleDebugKey(Application& app, int code, bool shift) {
                         break;
                     }
                 }
-                if (bankIdx > 0) {
-                    RICH4_LOGI("debug: Ctrl+Shift+U open bank stay UI specPt=%d owner=%d cur=%d",
-                               bankIdx, st.specPts[bankIdx].owner, cur);
-                    bankStayDialog(app, 6000 + bankIdx);
+                int cellId = -1;
+                if (bankIdx > 0) { // specPt → cellEnts 下标（special == 6000+n）
+                    const uint16_t want = static_cast<uint16_t>(6000 + bankIdx);
+                    for (size_t c = 0; c < st.cellEnts.size(); ++c) {
+                        if (st.cellEnts[c].special == want) {
+                            cellId = static_cast<int>(c);
+                            break;
+                        }
+                    }
+                }
+                if (cellId >= 0) {
+                    RICH4_LOGI("debug: Ctrl+Shift+U open bank stay UI specPt=%d cellEnt=%d owner=%d "
+                               "cur=%d",
+                               bankIdx, cellId, st.specPts[bankIdx].owner, cur);
+                    bankStayDialog(app, cellId);
                 } else {
-                    RICH4_LOGW("debug: Ctrl+Shift+U no bank specPt");
+                    RICH4_LOGW("debug: Ctrl+Shift+U no bank cellEnt (specPt %d)", bankIdx);
                 }
                 return true;
             }
