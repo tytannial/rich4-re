@@ -372,7 +372,11 @@ bool handleDebugKey(Application& app, int code, bool shift) {
                                ev.sprite);
                 }
             } else if (id >= 1 && id < 2000) {
-                RICH4_LOGI("debug: cellEnt[%u]", id);
+                if (id < st.cellEnts.size()) {
+                    const CellEnt& ce = st.cellEnts[id];
+                    RICH4_LOGI("debug: cellEnt[%u] type=%u objId=%u sprite=%u occMask=0x%08X", id,
+                               ce.occMask & 0xFF, ce.special, ce.sprite, ce.occMask);
+                }
             } else {
                 RICH4_LOGW("debug: Ctrl+8 no object under cursor (id=%u)", id);
             }

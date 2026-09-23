@@ -26,7 +26,7 @@
 | `Ctrl+5` | **全图住宅用地归当前回合玩家** | 遍历 estates + corps + specPts |
 | `Ctrl+6` | **全图有主住宅用地 level = 1** | 仅 `owner != 0` 的地产（便于快速铺建筑测收租） |
 | `Ctrl+7` | 当前回合玩家 **现金 +100000** | 直接改 `players[cur].cash` |
-| `Ctrl+8` | **打印指向地块详情**（日志） | estate：名字/type/owner/level/flag/dir/priceAdd/priceBase/fees/price/expire；corp/specPt/evtCell/cellEnt 类似 |
+| `Ctrl+8` | **打印指向地块详情**（日志） | estate：名字/type/owner/level/flag/dir/priceAdd/priceBase/fees/price/expire；corp/specPt/evtCell 类似；cellEnt：type/objId/sprite/occMask（事件格定位用） |
 | `Ctrl+9` | 指向地块的 **联动组归当前回合玩家** | 住宅用地 = 同街同名全部；连锁店 = 全部连锁店（对齐原版收租联动组定义）|
 
 ### Ctrl+Shift（难测机制快捷构造）
