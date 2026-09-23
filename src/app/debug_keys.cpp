@@ -161,11 +161,12 @@ bool handleDebugKey(Application& app, int code, bool shift) {
                     return true; // FLC 播放中防重入（键盘重复会叠加播放）
                 }
                 jailPlayer(app, cur, 3);
-                // [NEW] 入狱后推进回合：等待操作阶段（wait=0）前进面板因状态隐藏 → 必须直接下一位，
-                //   否则状态机悬空卡住（原版入狱发生在卡片/事件结算时点，无此问题）
+                // [RE 0x40DEFE] 对齐原版"工具条功能（含卡片）结束"的回合推进：有状态 →
+                //   byte_498EA0 |= 0x80 触发 beginPlayerTurn（状态分支提示后自动跳过回合），
+                //   不恢复玩家控制。等待操作阶段（wait=0）必须走此路径，否则前进面板因状态隐藏而悬空
                 if (st.playerActionState[cur] == 0 && st.playerActionWait[cur] == 0) {
                     disablePlayerControl(app);
-                    st.playerActionWait[cur] = -125; // 0x83 = 下一位玩家
+                    st.playerActionFlags[cur] |= 0x80;
                     st.gameStateActive = true;
                 }
                 return true;
@@ -176,7 +177,7 @@ bool handleDebugKey(Application& app, int code, bool shift) {
                 hospitalizePlayer(app, cur, 3);
                 if (st.playerActionState[cur] == 0 && st.playerActionWait[cur] == 0) {
                     disablePlayerControl(app);
-                    st.playerActionWait[cur] = -125;
+                    st.playerActionFlags[cur] |= 0x80;
                     st.gameStateActive = true;
                 }
                 return true;

@@ -187,6 +187,36 @@ if (v) {
 - 卡片效果函数表 `g_cardEffectFuncs`（0x475D5C）索引 17 = 0x4444BF；索引 1..30 对照
   `kCardNames`（表项 18..21 = 0x4420D5 共用空实现？P4 卡片系统时逐个标注）
 
+### 1.6 卡片/工具条功能结束的回合推进（`sub_40DEFE` 0x40DEFE）
+
+工具条分发器 `sub_417D65` 在功能（帮助/设置/读档/存档/大地图/交易/查詢/**卡片** 等）结束后：
+
+```
+setPauseDraw(0); disablePlayerControl();      // 进入功能前先锁定
+switch (功能) { ... case 8: useCardFlow(); ... }
+if (sub_40DEFE() == 1 && (功能 != 读档 || 结果 != -1)) {
+    enablePlayerControl(); setPauseDraw(1);   // 恢复等待操作
+}
+```
+
+`sub_40DEFE`：
+```
+if (cur < 4 && (alive != 1 || stateFlags || state37 || byte54)) {
+    byte_498EA0[cur] |= 0x80;    // 有状态：标记重入回合（重写 playerActionFlags |= 0x80）
+    return 0;                    // 不恢复控制
+}
+return !byte_498EA2[cur] && !sceneRequest && !quitGame;
+```
+
+- 有状态（入狱/住院/住宿/冬眠/梦游/AI）→ `playerActionFlags |= 0x80` → 下一帧
+  `beginPlayerTurn` → `checkPlayerAction` 状态分支（提示"坐牢中 還剩N天！"）→ `calcPlayerWait`
+  返回 -125 → 下一位玩家
+- 无状态 → `enablePlayerControl` 继续等待操作
+- **useCardFlow（0x441BAA）**：人类 `runModal(sub_4416F0)` 选卡 → `sprintf("使用%s", 卡名)` →
+  `sub_441F73(卡id, 文本)` 显示卡片图 → `g_cardEffectFuncs[卡id]()` 生效；效果返回 0（取消/失败）
+  则循环继续选卡；AI 分支按个性/可用性从 `g_cardState60` 前 8 槽试选（`sub_41E69E` 判定）
+- **P4 卡片系统实现时按 `sub_40DEFE` 接入回合推进**（debug `Ctrl+Shift+J`/`L` 已按此对齐）
+
 ## 2. case 10/11/12 得點券（✅ 已实现）
 
 | case | type | FLC | 文本（BIG5 地址） | 点数 | 语音 |
