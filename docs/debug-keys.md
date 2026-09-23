@@ -54,7 +54,9 @@
 | `Ctrl+Shift+L` | **当前玩家住院 3 天** | `hospitalizePlayer` 0x43EC3F：醫院格/stateFlags BYTE3/`hospitalFlags`/FLC 524 |
 | `Ctrl+Shift+K` | 买入指向 specPt 的股票 100 股 | 测试控股/经营権转移（先 `Ctrl+7` 备现金；持股超过他人 → owner 变更/小地图刷新；日志含 shares/owner/control） |
 | `Ctrl+Shift+M` | 打开**股市面板** | `stockMarketDialog`（0x42B58F）；测行情/持股切换、買/賣、走势图、休市 |
-| `Ctrl+Shift+D` | 过一天 | `advanceDay`（日期/到期回收/每日事件/股票行情） |
+| `Ctrl+Shift+D` | 过一天 | `advanceDay`（日期/到期回收/每日事件/股票行情）；**跨月触发结息、15 号触发分红** |
+| `Ctrl+Shift+N` | **月初结息** | `monthlySettle`（0x439BFA/0x437E61）：panel[25] 结算列表 → 存款 ×1.1 发息（贷款者不发）→ 悲情人物/资产冠军排行演出（#0095/#0108/#0109/#0122 + FLC 全身像）→ 退出后清零 `byte66`/`monthSettleA`/`monthSettleB`（可在任意回合直接测试，不清日期） |
+| `Ctrl+Shift+E` | **15 号分红** | `dividendMeeting`（0x42BA97/0x42B3EB）：panel[76] 按持股比例分配 12 家上市公司 `specPt.fund` → 确认界面（3 秒自动退/点击退）→ 分红入银行 |
 | `Ctrl+Shift+P` | **点券 +1000** | 测试監獄/醫院 NPC 保释·出院（费用 300 点券） |
 | `Ctrl+Shift+C` | 清空玩家状态+神明 | `stateFlags`/`byte54`/`state37`/`cellTableIdx` 归零 |
 
