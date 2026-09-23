@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <vector>
 
 #include "game/app/event_stack.h"
 #include "game/app/game_loop.h"
@@ -60,6 +61,8 @@ struct NumberInputCtx {
     uint8_t pressedKey = 0; // 按下态按键 ID（0=无；绘制帧 keyId 作按下动画）
     int dragOffX = 0;       // 面板拖动抓取偏移
     int dragOffY = 0;
+    std::vector<uint16_t> snapshot; // [PORT] 进入时背景快照（叠加显示，不重绘场景）
+    bool captured = false;
 };
 
 // [RE 0x456512] SPR 索引+调色板绘制（不透明，含索引 0；对齐原版 sub_456512）
@@ -142,7 +145,14 @@ void drawNumber(NumberInputCtx& ctx) {
 void drawAll(NumberInputCtx& ctx) {
     Application& app = *ctx.app;
     Surface& dst = app.surface();
-    renderGameFrame(app);
+    // [PORT] 叠加显示：首次捕获调用者画面，之后每帧恢复（原版子模态保留父画面，
+    //   不再 renderGameFrame 重绘地图，避免股市面板被擦除）
+    if (!ctx.captured) {
+        ctx.snapshot.assign(dst.pixels(), dst.pixels() + dst.width() * dst.height());
+        ctx.captured = true;
+    } else {
+        std::memcpy(dst.pixels(), ctx.snapshot.data(), ctx.snapshot.size() * sizeof(uint16_t));
+    }
     if (ctx.panel.frameCount() > 0) {
         const UiFrameView& bg = ctx.panel.frame(0);
         blitSprRegion(dst, ctx.panel, 0, ctx.panelX, ctx.panelY, 0, 0, bg.width, bg.height);
@@ -240,8 +250,14 @@ bool numberInputHandler(const SDL_Event* event, void* user) {
         }
         return true;
     }
+    if (event->type == SDL_EVENT_MOUSE_BUTTON_UP && event->button.button == SDL_BUTTON_RIGHT) {
+        // [RE 0x453544] 右键取消（postModalExit -1）
+        app.audio().playEffect(kSfxCancel);
+        app.events().requestExit(-1);
+        return true;
+    }
     if (event->type == SDL_EVENT_MOUSE_BUTTON_UP && event->button.button == SDL_BUTTON_LEFT) {
-        ctx.pressedKey = 0; // 松开：清除按下态
+        ctx.pressedKey = 0; // 释放清除按下态
         drawAll(ctx);
         return true;
     }

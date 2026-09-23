@@ -8,6 +8,7 @@
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
 #include "game/app/object_tip.h"
+#include "game/app/stock_market_dialog.h"
 #include "game/app/stock_system.h"
 #include "game/app/turn_system.h"
 #include "game/application.h"
@@ -154,6 +155,11 @@ bool handleDebugKey(Application& app, int code, bool shift) {
             case 'b': // 银行存款 +100000
                 st.players[cur].bank += 100000;
                 RICH4_LOGI("debug: Ctrl+Shift+B player %d bank=%d", cur, st.players[cur].bank);
+                return true;
+            case 'm': // 打开股市面板（测试 0x42B58F）
+                if (st.gameLoopActive) {
+                    stockMarketDialog(app);
+                }
                 return true;
             case 'k': { // 买入指向 specPt 的股票 100 股（测试控股/经营権转移）
                 const uint16_t id = pointedObject(app);
