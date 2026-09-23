@@ -104,6 +104,12 @@ void formatMoney(char* out, int32_t value) {
     out[n] = '\0';
 }
 
+// [RE 0x433C20/0x433D6E] 面板金额 = '$' + 千分位（原版 chText = '$'; sub_452793(&chText+1, v)）
+void formatMoneyDollar(char* out, int32_t value) {
+    out[0] = '$';
+    formatMoney(out + 1, value);
+}
+
 // ===== 日历工具（[RE 0x4520A6]/0x4521F0 简化版，同 game_panel.cpp）=====
 
 int daysInMonth(int year, int month) {
@@ -283,11 +289,11 @@ void drawTopPanel(StayCtx& ui, int x) {
     app.text().setFont(22, 0xFFFFFF, 0x101010, 6, 0);
     app.text().drawText(dst, playerName(pl), x + 82, 28, 0);
     char buf[32];
-    formatMoney(buf, pl.cash);
+    formatMoneyDollar(buf, pl.cash);
     app.text().drawText(dst, buf, x + 180, 100, 1);
-    formatMoney(buf, pl.bank);
+    formatMoneyDollar(buf, pl.bank);
     app.text().drawText(dst, buf, x + 180, 164, 1);
-    formatMoney(buf, pl.loan);
+    formatMoneyDollar(buf, pl.loan);
     app.text().drawText(dst, buf, x + 180, 228, 1);
 }
 
@@ -528,16 +534,17 @@ const Player& advCurPlayer(const AdvCtx& ui) {
 void drawAdvNumbers(AdvCtx& ui) {
     Application& app = *ui.app;
     Surface& dst = app.surface();
-    // 清数字区：帧 2 的 (22,161) 113x117 patch
-    blitElementRegionOpaque(dst, ui.sheet->frame(kFrameOwn), 22, 161, 22, 161, 113, 117, false);
+    // 清数字区：原版从帧 2（已合成面板/文字的週轉画面）取 (22,161) 113×117；
+    // 重写帧 2 是原始经理室 → 必须从帧 20 面板取对应区域 (12,36)，否则会把面板底图擦成背景
+    blitElementRegionOpaque(dst, ui.sheet->frame(kFramePanelLeft), 22, 161, 12, 36, 113, 117, false);
     const Player& pl = advCurPlayer(ui);
     char buf[32];
     app.text().setFont(16, 0xF0F0F0, 0, 2, 0);
-    formatMoney(buf, ui.quota);
+    formatMoneyDollar(buf, ui.quota);
     app.text().drawText(dst, buf, kAdvNumX, kAdvNumY[0], 1);
-    formatMoney(buf, pl.bankAdvance);
+    formatMoneyDollar(buf, pl.bankAdvance);
     app.text().drawText(dst, buf, kAdvNumX, kAdvNumY[1], 1);
-    formatMoney(buf, ui.quota - pl.bankAdvance);
+    formatMoneyDollar(buf, ui.quota - pl.bankAdvance);
     app.text().drawText(dst, buf, kAdvNumX, kAdvNumY[2], 1);
 }
 
@@ -552,10 +559,6 @@ void drawAdvScene(AdvCtx& ui) {
     blitElement(dst, ui.sheet->frame(kFrameBtnWide), kAdvBtnX, kAdvBtnBackY, false);
     blitElement(dst, ui.sheet->frame(kFrameBtnExit), kAdvBtnX, kAdvBtnLeaveY, false);
     const Player& pl = st.players[st.currentPlayer];
-    app.text().setFont(16, 0x202020, 0, 2, 0);
-    app.text().drawText(dst, "客戶存款總額", 78, 147, 2);
-    app.text().drawText(dst, "目前融資金額", 78, 195, 2);
-    app.text().drawText(dst, "尚可融資金額", 78, 243, 2);
     app.text().setFont(20, 0xF0F0F0, 0, 2, 0);
     app.text().drawText(dst, "週轉現金", 68, 325, 2);
     if (pl.bankFinanceFlags != 0) {
@@ -565,6 +568,11 @@ void drawAdvScene(AdvCtx& ui) {
     app.text().setFont(26, 0x101010, 0, 2, 1);
     app.text().drawText(dst, "特別融資", 443, 427, 2);
     drawAdvNumbers(ui);
+    // 标签在数字区清空之后绘制（「目前融資金額/尚可融資金額」行位于清区 (22,161)+113x117 内）
+    app.text().setFont(16, 0x202020, 0, 2, 0);
+    app.text().drawText(dst, "客戶存款總額", 78, 147, 2);
+    app.text().drawText(dst, "目前融資金額", 78, 195, 2);
+    app.text().drawText(dst, "尚可融資金額", 78, 243, 2);
 }
 
 // [RE 0x434492 WM_TIMER] 週轉动画（100ms）
