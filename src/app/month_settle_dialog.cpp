@@ -303,12 +303,13 @@ void drawChampionPortrait(SettleCtx& ui) {
     }
 }
 
-// [RE 0x437E61 状态 17→18] 冠军理由页：黑底 + 立绘 + 帧 2 + 现金/存款/总资产 + 非冠军头像
+// [RE 0x437E61 状态 17→18] 冠军理由页：在上一状态画面（帧 0 + 立绘 + 帧 42 主持人板 + 头像）
+//   之上叠加 立绘 + 帧 2 + 现金/存款/总资产 + 非冠军头像（原版无清屏——0x437E61 中
+//   `(*(...100))` 为 DDraw Lock 而非清屏；帧 0 背景由状态 16→17 保留）
 void drawChampionReason(SettleCtx& ui) {
     Application& app = *ui.app;
     Surface& dst = app.surface();
     const Player& pl = listPlayer(app.gameState(), ui, ui.rich);
-    dst.clear(); // [RE 0x437E61] 原版 DDraw 清屏（黑）
     blitPortrait(ui, ui.rich);
     blitElement(dst, ui.sheet->frame(kFrameInfo2), 440, 405, false);
     app.text().setFont(16, kTextBlack, 0, 2, 1);
