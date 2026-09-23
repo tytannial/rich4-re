@@ -452,9 +452,10 @@ UI 音效与游戏音效槽**是两套**，勿混：
   点击 `finish` 跳过（停语音+恢复）。
 - **音频**：进入 `pushSceneMusic(15 監獄/16 醫院)`、退出 `resumeSceneMusic()`（0x4549CF/454BCC，
   重写 OGG 从头恢复）；语音由 drawText `#NNNN` 前缀自动播（0x45441A→playVoice 单通道）。
-- **重写位置**：底座 `src/app/float_message.cpp`（`FloatMessage`）；首例監獄保释
-  `src/app/jail_dialog.cpp`（0x43D304 人类 UI + AI 分支 + case 4 接入；NPC 格按③占位）；
-  醫院出院待做。
+- **重写位置**：底座 `src/app/float_message.cpp`（`FloatMessage`）；`src/app/jail_dialog.cpp`
+  含 **監獄保释**（0x43D304 人类 UI + AI）与 **醫院办理出院**（0x43E9A4 阶段机 + 护士动画
+  0x43EB28-0x43ECF3：上窗行走 {5,6,5}/{10,11,10}@139/165,158 + 下窗小像 7/8、12/13 驻留复位）；
+  NPC 格按③占位。
 - **坑**：① 浮动消息判定"超时未完语音→继续等"（静音=纯 2s）；② 两面板格坐标/板位置不同勿混用；
   ③ NPC 格（i≥4）头像帧号在底图帧表内，显示可点但释放依赖事件槽 NPC（P5）。
 

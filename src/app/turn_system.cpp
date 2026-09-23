@@ -688,6 +688,11 @@ int landingEvent(Application& app, uint16_t cellEntId) {
         jailBailDialog(app);
         return 0x80;
     }
+    if (cellType == 5) {
+        // [RE 0x41B13C→0x43E9A4] case 5 醫院格：办理出院面板（0x43DA27 阶段机+护士微动画）
+        hospitalVisitDialog(app);
+        return 0x80;
+    }
     if (cellType >= 10 && cellType <= 12) {
         // [RE 0x41B184/0x41B21E/0x41B2A3] case 10/11/12 得點券（type 10/11/12 = 50/30/10 點）：
         //   data.mkf[537] FLC（31x39 @ (204,180)，透明，14 帧 @71ms，音效 Effect.mkf[98]）→

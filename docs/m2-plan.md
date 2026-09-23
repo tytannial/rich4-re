@@ -87,14 +87,18 @@
   - 实现：`jailPlayer`/`hospitalizePlayer`/`insurancePayout`（`turn_system.cpp`）；`updatePlayerStates`
     补保险期递减与 `jailFlags`/`hospitalFlags` 清理；`jailCellEntId`/`hospitalCellEntId`
     （loadMapData 扫描 special 8002/8001）；debug `Ctrl+Shift+J` 入狱 / `Ctrl+Shift+L` 住院
-  - 待做：~~门外保释~~ ✅（见下）；医院办出院 UI（`sub_43DA27` 多阶段状态机 + 护士动画）
-- ✅ **面板底座 + 監獄保释（2026-09-23，`ui-controls.md` §25）**：
+  - 待做：保释/出院均 ✅（见下「面板底座」块）；P5 后补 NPC 格答谢消息+释放（TODO 注释就位）
+- ✅ **面板底座 + 監獄保释 + 醫院办理出院（2026-09-23，`ui-controls.md` §25）**：
   - 底座：`Audio::playVoice/voicePlaying/stopVoice`（Speaking.mkf 单通道，drawText `#NNNN` 0x45441A）
     + `FloatMessage`（0x44EC30/44ECB6/44EE18/44EF3B，最短 2s + 语音未完继续等）
     + `pushSceneMusic/resumeSceneMusic`（0x4549CF/0x454BCC 音乐栈，OGG 不续位）
-  - `jail_dialog.cpp`：人类 UI（panel[63] 帧表/8 格头像/悬停板 100×95/点券板）+ AI 保释
+  - `jail_dialog.cpp` 監獄保释：人类 UI（panel[63] 帧表/8 格头像/悬停板 100×95/点券板）+ AI 保释
     （0x43D3DF 个性候选 + 点券检查 + 释放）；`landingEvent` case 4 接入；
     NPC 格占位 =「點數不足」消息 + `TODO(P5)`；释放返还 `addPlayerDebt` 日志占位
+  - 醫院出院（0x43E9A4/0x43DA27/0x43D88F）：阶段机 1 开场#0127 → 2 选择 → 4 #0129 出院 →
+    released 退出 / 5 #0002 不足 / 6 NPC 答谢（P5）/ 7 #0130 告别；护士行走（帧 {5,6,5}/{10,11,10}
+    @139/165,158 步 3 擦除）+ 下窗小像（帧 7/8、12/13，1/4 概率驻留 1..7 拍）；
+    panel[65] 两列格 147×102/悬停板 98×95/帧 9 退场复位；case 5 接入
 - ⬜ **任务 F：建造菜单（未开始，P2 第一步完成后实施）**——IDA 结论：
   - `sub_423B3B(player, tab)` 5 页签筛选：0=我的地产+公司 / 1=我的地产 / 2=我的公司 /
     **3=普通地块（owner=me && level≠0 && type==0）** / **4=大地块（owner=me && level≠0 && type≠0）**
@@ -271,8 +275,8 @@
 
 1. ~~得點券（case 10/11/12）~~ ✅ 2026-09-23（建立事件格 FLC 阻塞播放模板 `playEventFlc`）
 2. ~~卡片格（case 13）~~ ✅ 2026-09-23（赠卡池抽卡 + 卡包 15 槽 + `showCardGet` 卡片图显示）
-3. ~~監獄/醫院（case 4/5）~~ 状态系统 ✅ 2026-09-23（入狱/住院/回合递减/到期释放/保险理赔）；
-   **保释 UI ❌ 待做**（`sub_43CAAB`/`sub_43DA27`）
+3. ~~監獄/醫院（case 4/5）~~ ✅ 2026-09-23 全链（入狱/住院 + 回合 + 保险 + **保释/出院面板**）；
+   NPC 格占位待 P5
 4. **任务 F 建造菜单**（入口 IDA 定位）
 5. 銀行（case 14）+ 物價指數月度更新
 6. 新聞/命運（case 2/3，先插画+标题骨架）

@@ -12,7 +12,7 @@
 | 2 | 新聞 | 2 | `newsEvent`（36 事件表） | ✅ 结构已明 |
 | 3 | 命運 | 3 | `fateEvent`（37 事件表） | ✅ 结构已明 |
 | 4 | 監獄 | 4 | `jailBailDialog`（门外保释） | ✅ 保释面板（人類 UI+AI）；NPC 格占位待 P5 |
-| 5 | 醫院 | 5 | `hospitalVisitDialog`（门外辦理出院） | 🟡 住院/回合/免收租 ✅；出院 UI ❌ |
+| 5 | 醫院 | 5 | `hospitalVisitDialog`（门外辦理出院） | ✅ 出院面板（阶段机+护士动画）；NPC 格占位待 P5 |
 | 6 | 企鵝挖寶 | 6 | `sub_415215`（小游戏，得分） | 🟡 入口已明 |
 | 7 | 七彩氣球 | 7 | `sub_4154DC`（小游戏，得分） | 🟡 入口已明 |
 | 8 | 喜從天降 | 8 | `sub_4155FC`（小游戏，得分） | 🟡 入口已明 |
@@ -86,10 +86,12 @@ byte_496BAA[player] += days                        // 累计入狱天数（统�
 
 > **实现状态（2026-09-23）**：**監獄保释 ✅**（`jail_dialog.cpp` `jailBailDialog`：人类 UI 还原
 > 0x43CAAB/0x43C8FB + AI 还原 0x43D3DF + 音乐栈 push/resume + FloatMessage 点券不足；
-> `landingEvent` case 4 接入）；**醫院办出院 ❌**（0x43DA27 多阶段状态机 + 护士动画，下一步）。
+> `landingEvent` case 4 接入）；**醫院办理出院 ✅**（`hospitalVisitDialog`：人类 UI 还原 0x43DA27
+> 阶段机（#0127 开场 → 选择 → #0129 出院 → released 退出 / #0130 告别 / #0002 不足）+
+> 护士行走/小像微动画（帧 5/6、10/11 序列 + 小窗 7/8、12/13 驻留）+ AI 0x43EAA5 + case 5 接入）。
 > NPC 格（i≥4）占位策略：**显示可点但一律「點數不足」消息，不进入释放**，
-> `// TODO(P5 事件槽 NPC)` 注释就位（原版：panel[64] 帧 (i-4)@(365,450) + 浮动消息
-> `dword_475BE2[i]+2` + `releaseJailNpc` + 点数 >=700）。
+> `// TODO(P5 事件槽 NPC)` 注释就位（原版：panel[64] 帧 (i-4)@(420,450 医院/365,450 監獄) +
+> 答谢消息 `dword_475BE2` 四文本表（#0123/#0124/#0125/#0126）+ release* 函数 + 点数 >=700）。
 
 case 4 进入 `jailBailDialog`（case 5 为 `hospitalVisitDialog`，结构相同）：
 

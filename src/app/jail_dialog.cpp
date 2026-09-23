@@ -352,7 +352,489 @@ void bailAi(Application& app) {
     RICH4_LOGI("bail AI: player %d bailed by %d, cost %d (RE 0x43D3DF)", target, cur, cost);
 }
 
+// =====================================================================
+// 醫院办理出院（0x43E9A4 hospitalVisitDialog / 0x43DA27 WndProc / 0x43D88F 绘制）
+// =====================================================================
+
+// [RE 0x475C64/0x475C68] 医院 8 格坐标（两列 × 四行）与命中/板尺寸
+constexpr int kHospCellX[8] = {297, 297, 297, 297, 481, 481, 481, 481};
+constexpr int kHospCellY[8] = {1, 121, 241, 361, 1, 121, 241, 361};
+constexpr int kHospHitW = 147;   // 命中宽（0x43CFFE）
+constexpr int kHospHitH = 102;   // 命中高
+constexpr int kHospPanelW = 98;  // 悬停信息板 = panel[65] 帧 3 实际 98×95（原版 allocUiElement
+constexpr int kHospPanelH = 95;  //   动态读帧头，此处按实测帧头硬编码）
+// [RE 0x475CA4] 出院费用（同保释：玩家 30 / NPC 300 点券）
+constexpr int kHospCost[8] = {30, 30, 30, 30, 300, 300, 300, 300};
+
+// [RE 0x43D88F] panel.mkf[65] 帧表（31 帧；帧号 = (资源偏移-12)/12）
+enum HospFrame : int {
+    kHFg = 0,        // +12 底图
+    kHMsg = 1,       // +24 NPC 答谢消息板 @(200,200)
+    kHMsgTop = 2,    // +36 消息板 @(8,8)（开场/确认/告别/不足）
+    kHInfo = 3,      // +48 悬停信息板（格 -(80,0)）
+    kHTitle = 4,     // +60 标题板 @(104,110)；左窗局部源 (35,48)40×22 擦除 / (35,70)40×18
+    kHWalkL1 = 5,    // 左窗行走帧（序列 {5,6,5}）
+    kHWalkL2 = 6,
+    kHIdleLFull = 7, // +96 左窗小像全帧 @(139,158)
+    kHIdleLReset = 8,// +108 左窗复位 @(179,198)（40×18 小图）
+    kHPartR = 9,     // +120 右窗局部源 (74,46)40×25 擦除 / (74,71)40×15 复位；退场板 @(91,112)
+    kHWalkR1 = 10,   // 右窗行走帧（序列 {10,11,10}）
+    kHWalkR2 = 11,
+    kHIdleRFull = 12,// +156 右窗小像全帧 @(165,158)
+    kHIdleRReset = 13,// +168 右窗复位 @(205,198)（40×15 小图）
+    kHAvatarBase = 14, // 玩家头像 = charIndex + 14；NPC 头像 = i + 22（26..29）
+    kHNpcBase = 22,
+    kHPoints = 30,   // +372 点券板 @(8,432)，数字 @(88,452)
+};
+
+// [RE 0x475BE2 表 4 项] NPC 出院答谢消息（P5 前占位不触发）
+constexpr const char* kHospNpcThanks[4] = {
+    "#0124謝謝你！你真是\n我的再生父母!", "#0125我先走了！大恩\n大德來日再報!",
+    "#0123太感激了！我一\n定會報答你的!", "#0126受人點水之恩，\n必當湧泉已報!",
+};
+constexpr const char* kHospOpen = "#0127您好！請問您要替誰\n辦理出院手續？"; // off_475CC4
+constexpr const char* kHospOk = "#0129ＯＫ！您的朋友已經\n可以出院了！";     // off_475CCC
+constexpr const char* kHospBye = "#0130要保重身體喔！";                      // off_475CD0
+constexpr const char* kHospNotEnough = "#0002抱歉！\n你的點數不足！";         // off_475CD4
+
+// 阶段（byte_48C4F2）
+enum HospPhase : int { kHPInit = 0, kHPOpen = 1, kHPSelect = 2, kHPDischarge = 4,
+                       kHPNotEnough = 5, kHNpcClean = 6, kHPBye = 7 };
+
+struct HospCtx {
+    Application* app = nullptr;
+    UiImage* sheet = nullptr;
+    UiImage* npcMark = nullptr; // panel[64]（NPC 出院标记，P5 触发）
+    int hover = -1;             // byte_48C4F0
+    std::vector<uint16_t> hoverBg;
+    int hoverBgX = 0;
+    int hoverBgY = 0;
+    FloatMessage msg;
+    int phase = kHPInit;        // byte_48C4F2
+    int nurseState = 0;         // byte_48C4F3：低4位 0/1 行走会话，高4位步 1..3
+    int nurseRight = 0;         // byte_48C4F4（告别后退场方向=右）
+    int nurseHold = 0;          // byte_48C4F1 小像驻留倒计时
+    int target = -1;            // byte_48C4F5
+    bool released = false;      // byte_48C4F6
+    std::vector<uint16_t> npcBg; // dword_48C4E8 NPC 出院标记背景
+    int npcBgX = 0;
+    int npcBgY = 0;
+    int npcBgW = 0;
+    int npcBgH = 0;
+};
+
+// [RE 0x43D88F] 医院全绘：底图 + 标题板 + 在院头像 + 点券
+void drawPanelHosp(HospCtx& ui) {
+    Application& app = *ui.app;
+    GameState& st = app.gameState();
+    Surface& dst = app.surface();
+    blitElementOpaque(dst, ui.sheet->frame(kHFg), 0, 0);
+    blitElement(dst, ui.sheet->frame(kHTitle), 104, 110, false);
+    for (int i = 0; i < 8; ++i) {
+        if (st.hospitalFlags[i] == 0) {
+            continue;
+        }
+        const int avatar = i >= 4 ? i + kHNpcBase : st.players[i].charIndex + kHAvatarBase;
+        if (avatar < ui.sheet->frameCount()) {
+            blitElement(dst, ui.sheet->frame(avatar), kHospCellX[i], kHospCellY[i], false);
+        }
+    }
+    blitElement(dst, ui.sheet->frame(kHPoints), 8, 432, false);
+    app.text().setFont(20, 0xFFFFFF, 0x101010, 3, 0);
+    char num[16];
+    std::snprintf(num, sizeof(num), "%d", st.players[st.currentPlayer].points);
+    app.text().drawText(dst, num, 88, 452, 6);
+}
+
+void clearHoverHosp(HospCtx& ui) {
+    if (ui.hover == -1) {
+        return;
+    }
+    if (!ui.hoverBg.empty()) {
+        restoreRegion(ui.app->surface(), ui.hoverBg, ui.hoverBgX, ui.hoverBgY, kHospPanelW,
+                      kHospPanelH);
+        ui.hoverBg.clear();
+    }
+    ui.hover = -1;
+}
+
+// [RE 0x43CFED] 悬停信息板：格 -(80,0)，文字 +41/+26/48/70
+void drawInfoPanelHosp(HospCtx& ui, int i) {
+    Application& app = *ui.app;
+    GameState& st = app.gameState();
+    Surface& dst = app.surface();
+    const int px = kHospCellX[i] - 80;
+    const int py = kHospCellY[i];
+    saveRegion(ui.hoverBg, dst, px, py, kHospPanelW, kHospPanelH);
+    ui.hoverBgX = px;
+    ui.hoverBgY = py;
+    blitElement(dst, ui.sheet->frame(kHInfo), px, py, false);
+    app.text().setFont(16, 0x101010, 0, 2, 0);
+    const char* name = i < 4 && st.players[i].name ? st.players[i].name : "";
+    app.text().drawText(dst, name, px + 41, py + 26, 2);
+    app.text().drawText(dst, "保釋點數", px + 41, py + 48, 2); // [RE 0x4651F9]
+    char cost[24];
+    std::snprintf(cost, sizeof(cost), "%d點", kHospCost[i]);
+    app.text().drawText(dst, cost, px + 41, py + 70, 2);
+}
+
+int hitCellHosp(GameState& st, int x, int y) {
+    for (int i = 0; i < 8; ++i) {
+        if (st.hospitalFlags[i] == 0) {
+            continue;
+        }
+        if (x >= kHospCellX[i] && x <= kHospCellX[i] + kHospHitW && y >= kHospCellY[i] &&
+            y <= kHospCellY[i] + kHospHitH) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// [RE 0x43EB28..0x43ECF3] 上窗行走 + 下窗小像（同一 100ms tick 先后执行，矩形不重叠）
+//   行走：F3 低4位=1 会话中；步 = 高4位 0..2 帧 {5,6,5}(左)/{10,11,10}(右) @(139/165,158)；
+//         步 3 起帧 4/9 局部擦除收尾，F3 清零；空闲 1/32 概率开始会话
+//   小像（LABEL_49）：语音播放中或驻留中才动作（NPC 收尾期跳过）；驻留结束复位帧 8/13
+//         @(179/205,198)；否则 1/4 概率 全帧 7/12 @(139/165,158) 或 局部复位（帧 4/9）
+void nurseTick(HospCtx& ui) {
+    Application& app = *ui.app;
+    Surface& dst = app.surface();
+    const int low = ui.nurseState & 0xF;
+    if (low == 0) {
+        if ((std::rand() >> 10) == 0) {
+            ui.nurseState |= 1; // [RE 0x43EB4A] 1/32 开始行走会话
+        }
+    } else if (low == 1) {
+        const int step = (ui.nurseState >> 4) & 0xF;
+        const bool right = ui.nurseRight != 0;
+        if (step >= 3) { // 收尾：底图局部擦除（0x43EB8F/EC57）
+            if (right) {
+                blitElementRegionOpaque(dst, ui.sheet->frame(kHPartR), 165, 158, 74, 46, 40, 25,
+                                        false);
+            } else {
+                blitElementRegionOpaque(dst, ui.sheet->frame(kHTitle), 139, 158, 35, 48, 40, 22,
+                                        false);
+            }
+            ui.nurseState = 0;
+        } else {
+            static const uint8_t kSeqL[3] = {5, 6, 5};     // byte_475CD8[0..2]
+            static const uint8_t kSeqR[3] = {10, 11, 10};  // byte_475CDB[0..2]
+            blitElement(dst, ui.sheet->frame(right ? kSeqR[step] : kSeqL[step]),
+                        right ? 165 : 139, 158, false);
+            ui.nurseState += 16;
+        }
+    }
+    // LABEL_49：(!voicePlaying() && !F1) || F2==6 → 跳过小像
+    const bool voice = app.audio().voicePlaying();
+    if ((!voice && ui.nurseHold == 0) || ui.phase == kHNpcClean) {
+        return;
+    }
+    const bool right = ui.nurseRight != 0;
+    if (ui.nurseHold != 0) {
+        if (--ui.nurseHold == 0) {
+            blitElementOpaque(dst, ui.sheet->frame(right ? kHIdleRReset : kHIdleLReset),
+                              right ? 205 : 179, 198); // 驻留结束复位
+        }
+        return;
+    }
+    if ((std::rand() >> 11) >= 4) {
+        return; // [RE 0x43EC2F] 1/4 概率换姿势
+    }
+    if ((std::rand() & 1) != 0) {
+        blitElementOpaque(dst, ui.sheet->frame(right ? kHIdleRFull : kHIdleLFull),
+                          right ? 165 : 139, 158);
+    } else if (right) {
+        blitElementRegionOpaque(dst, ui.sheet->frame(kHPartR), 165, 158, 74, 71, 40, 15, false);
+    } else {
+        blitElementRegionOpaque(dst, ui.sheet->frame(kHTitle), 139, 158, 35, 70, 40, 18, false);
+    }
+    ui.nurseHold = std::rand() & 7;
+    if (ui.nurseHold == 0) {
+        ui.nurseHold = 1;
+    }
+}
+
+// [RE 0x43EE14 case4→医院版 0x43F5B0 区] 消息播完执行出院
+void doDischarge(HospCtx& ui) {
+    Application& app = *ui.app;
+    GameState& st = app.gameState();
+    Surface& dst = app.surface();
+    const int i = ui.target;
+    blitElementRegionOpaque(dst, ui.sheet->frame(kHFg), kHospCellX[i], kHospCellY[i],
+                            kHospCellX[i], kHospCellY[i], 147, 102, false);
+    if (i < 4) {
+        Player& pr = st.players[i];
+        const uint32_t sf = pr.stateFlags;
+        int days = static_cast<int>((sf >> 24) & 0x7F);
+        if ((sf & 0x7F000000u) == 0) {
+            days = 1;
+        }
+        const int pay = 100 * days * st.moneyMul;
+        RICH4_LOGI("hospital visit: patient %d released by %d, pays back %d "
+                   "(addPlayerDebt matrix TODO, RE 0x43F0xx/0x40DF69)",
+                   i, st.currentPlayer, pay);
+        pr.stateFlags = (sf & 0x00FFFFFFu) | 0x80000000u; // BYTE3 = 0x80
+        st.hospitalFlags[i] = 0;
+        ui.released = true;
+    } else {
+        // [RE 0x43F014] NPC 出院：panel[64] 帧 (i-4) @ (420,450) + 答谢消息 + releaseHospitalNpc
+        //   当前 NPC 格为占位（点券不足），此分支仅 P5 事件槽启用后触发
+        ui.phase = kHNpcClean;
+        const UiFrameView& nf = ui.npcMark->frame(i - 4 < ui.npcMark->frameCount() ? i - 4 : 0);
+        ui.npcBgX = 420 - nf.offsetX;
+        ui.npcBgY = 450 - nf.offsetY;
+        ui.npcBgW = nf.width;
+        ui.npcBgH = nf.height;
+        saveRegion(ui.npcBg, dst, ui.npcBgX, ui.npcBgY, ui.npcBgW, ui.npcBgH);
+        blitElement(dst, nf, 420, 450, false);
+        ui.msg.setup(*ui.sheet, kHMsg, 200, 200, 0, -6, 0x101010, 0);
+        ui.msg.show(app, kHospNpcThanks[i - 4]);
+        st.hospitalFlags[i] = 0; // TODO(P5): releaseHospitalNpc 事件槽表记录
+        RICH4_LOGI("hospital visit: NPC %d released (P5 事件槽未建模)", i);
+    }
+    st.players[st.currentPlayer].points =
+        static_cast<uint16_t>(st.players[st.currentPlayer].points - kHospCost[i]);
+}
+
+bool hospHandler(const SDL_Event* event, void* user) {
+    HospCtx& ui = *static_cast<HospCtx*>(user);
+    Application& app = *ui.app;
+    GameState& st = app.gameState();
+    if (!event) {
+        // [RE 0x43D2ED] WM_USER+1（+0x405）：复位 + 消息板 frame2@(8,8) + 开场白
+        ui.hover = -1;
+        ui.nurseState = 0;
+        ui.nurseHold = 0;
+        ui.nurseRight = 0;
+        ui.released = false;
+        ui.target = -1;
+        drawPanelHosp(ui);
+        ui.phase = kHPOpen;
+        ui.msg.setup(*ui.sheet, kHMsgTop, 8, 8, 0, 0, 0x101010, 0);
+        ui.msg.show(app, kHospOpen);
+        return true;
+    }
+    switch (event->type) {
+    case SDL_EVENT_MOUSE_MOTION: {
+        if (ui.msg.active()) {
+            return true; // [RE 0x43D0B4] 消息中禁悬停（sub_44EF3B）
+        }
+        int x = 0;
+        int y = 0;
+        app.mouseLogicalPos(x, y);
+        const int hit = hitCellHosp(st, x, y);
+        if (hit == ui.hover) {
+            return true;
+        }
+        clearHoverHosp(ui);
+        if (hit >= 0) {
+            ui.hover = hit;
+            drawInfoPanelHosp(ui, hit);
+        }
+        return true;
+    }
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+    case SDL_EVENT_MOUSE_BUTTON_UP: {
+        if (event->type == SDL_EVENT_MOUSE_BUTTON_UP &&
+            event->button.button == SDL_BUTTON_RIGHT && ui.phase == kHPSelect) {
+            // [RE 0x43EA84] 右键告别：清格区标题复位 → 阶段7 告别消息 → 播完退出
+            clearHoverHosp(ui);
+            Surface& dst = app.surface();
+            blitElementRegionOpaque(dst, ui.sheet->frame(kHFg), 104, 110, 104, 110, 134, 357,
+                                    false);
+            blitElement(dst, ui.sheet->frame(kHPartR), 91, 112, false); // [RE 0x43EB36 退场板]
+            ui.phase = kHPBye;
+            ui.nurseRight = 1; // 退场方向右（0x43ED0D byte_48C4F4=1）
+            ui.msg.show(app, kHospBye);
+            return true;
+        }
+        if (ui.phase != kHPSelect) {
+            if (ui.msg.active()) {
+                ui.msg.finish(app); // [RE 0x43D295 LABEL_90] 非选择阶段点击 = 跳过消息
+            }
+            return true;
+        }
+        if (event->type != SDL_EVENT_MOUSE_BUTTON_UP) {
+            return true; // 选择只响应抬起（监狱版同）
+        }
+        if (event->button.button != SDL_BUTTON_LEFT) {
+            return true;
+        }
+        int x = 0;
+        int y = 0;
+        app.mouseLogicalPos(x, y);
+        const int hit = hitCellHosp(st, x, y);
+        if (hit < 0) {
+            return true;
+        }
+        clearHoverHosp(ui);
+        if (hit >= 4) {
+            // TODO(P5 事件槽 NPC): 同監獄版占位——原版 NPC 出院 = 确认消息 → 阶段6 标记+答谢
+            ui.phase = kHPNotEnough;
+            ui.msg.show(app, kHospNotEnough);
+            return true;
+        }
+        if (st.players[st.currentPlayer].points < kHospCost[hit]) {
+            ui.phase = kHPNotEnough; // [RE 0x43D0DA 医院版 0x43F0xx]
+            ui.msg.show(app, kHospNotEnough);
+            return true;
+        }
+        if (confirmDialog(app, nullptr, 320, 240)) {
+            ui.target = hit;
+            ui.phase = kHPDischarge;
+            ui.msg.show(app, kHospOk); // [RE 0x43F0DE] 消息播完 → doDischarge
+        }
+        return true;
+    }
+    case kModalTimerEvent: {
+        if (ui.phase == kHPInit) {
+            return true;
+        }
+        if (ui.msg.active()) {
+            if (!ui.msg.advance(app)) {
+                return true;
+            }
+            switch (ui.phase) {
+            case kHPOpen:
+            case kHPNotEnough:
+                ui.phase = kHPSelect;
+                break;
+            case kHPDischarge:
+                ui.phase = kHPSelect; // 0x43EFB0：先回选择再执行
+                doDischarge(ui);
+                break;
+            case kHNpcClean: // NPC 答谢播完：恢复标记区 + 板复位
+                ui.phase = kHPSelect;
+                restoreRegion(app.surface(), ui.npcBg, ui.npcBgX, ui.npcBgY, ui.npcBgW,
+                              ui.npcBgH);
+                ui.npcBg.clear();
+                ui.msg.setup(*ui.sheet, kHMsgTop, 8, 8, 0, 0, 0x101010, 0);
+                break;
+            case kHPBye: // [RE 0x43D268] 告别播完 → 退出
+                app.events().requestExit(0);
+                return true;
+            default:
+                break;
+            }
+            if (ui.released && ui.phase == kHPSelect) {
+                // [RE 0x43EFCC] 已出院 → 下一 tick 退出
+                app.events().requestExit(0);
+                return true;
+            }
+        }
+        nurseTick(ui);
+        return true;
+    }
+    default:
+        return true;
+    }
+}
+
+// [RE 0x43EAA5] AI 自动办理出院（同監獄版 bailAi：候选按个性、玩家 points>费用、NPC >=700）
+void visitAi(Application& app) {
+    GameState& st = app.gameState();
+    if ((std::rand() & 1) == 0) {
+        return;
+    }
+    const int cur = st.currentPlayer;
+    const uint8_t personality = st.players[cur].aiPersonality;
+    int cand[8];
+    int n = 0;
+    if (personality == 2) {
+        for (int k = 4; k < 8; ++k) {
+            if (st.hospitalFlags[k]) {
+                cand[n++] = k;
+            }
+        }
+    } else {
+        for (int j = 0; j < 4; ++j) {
+            if (st.hospitalFlags[j]) {
+                cand[n++] = j;
+            }
+        }
+        if (personality == 1 && (std::rand() % 3) == 0) {
+            for (int k = 4; k < 8; ++k) {
+                if (st.hospitalFlags[k]) {
+                    cand[n++] = k;
+                }
+            }
+        }
+    }
+    if (n == 0) {
+        return;
+    }
+    const int target = cand[std::rand() % n];
+    const int cost = kHospCost[target];
+    const int pts = st.players[cur].points;
+    const bool ok = target < 4 ? pts > cost : pts >= 700;
+    if (!ok) {
+        return;
+    }
+    const char* name =
+        target < 4 && st.players[target].name ? st.players[target].name : "NPC";
+    char text[64];
+    std::snprintf(text, sizeof(text), "保釋%s", name); // [RE 0x465207 医院版同文本]
+    showMessage(app, text, 1500);
+    st.players[cur].points = static_cast<uint16_t>(pts - cost);
+    if (target >= 4) {
+        RICH4_LOGI("hospital visit AI: NPC %d released (P5 事件槽未建模)", target);
+        st.hospitalFlags[target] = 0; // TODO(P5): releaseHospitalNpc
+        return;
+    }
+    st.players[target].stateFlags =
+        (st.players[target].stateFlags & 0x00FFFFFFu) | 0x80000000u; // BYTE3 = 0x80
+    st.hospitalFlags[target] = 0;
+    RICH4_LOGI("hospital visit AI: player %d discharged by %d, cost %d (RE 0x43EAA5)", target, cur,
+               cost);
+}
+
 } // namespace
+
+// [RE 0x43E9A4] 醫院格落地（landingEvent case 5）：办理出院
+void hospitalVisitDialog(Application& app) {
+    GameState& st = app.gameState();
+    bool any = false;
+    for (int i = 0; i < 8; ++i) {
+        if (st.hospitalFlags[i] != 0) {
+            any = true;
+            break;
+        }
+    }
+    if (!any) {
+        return; // [RE 0x43E9C4]
+    }
+    const int cur = st.currentPlayer;
+    if (cur < 0 || cur >= 9) {
+        return;
+    }
+    if (st.players[cur].alive != 1) {
+        visitAi(app);
+        return;
+    }
+    auto blob = st.panel.read(65); // [RE 0x43E9F3] panel.mkf[65]（dword_48C4D4）
+    auto blobNpc = st.panel.read(64); // [RE 0x43EA0D] panel.mkf[64]（dword_48C4D0）
+    if (!blob) {
+        RICH4_LOGW("hospitalVisit: panel.mkf[65] unavailable (RE 0x43E9F3)");
+        return;
+    }
+    UiImage sheet;
+    if (!sheet.load(std::move(*blob))) {
+        RICH4_LOGW("hospitalVisit: panel.mkf[65] load failed");
+        return;
+    }
+    UiImage npcMark;
+    if (blobNpc) {
+        npcMark.load(std::move(*blobNpc));
+    }
+    app.audio().pushSceneMusic(16); // [RE 0x43EA6F] musicPlayScene(16)
+    HospCtx ui;
+    ui.app = &app;
+    ui.sheet = &sheet;
+    ui.npcMark = &npcMark;
+    runModal(app, &hospHandler, &ui, 100);
+    app.audio().resumeSceneMusic(); // [RE 0x454BCC]
+    RICH4_LOGI("hospitalVisit done (RE 0x43E9A4)");
+}
 
 // [RE 0x43D304] 監獄格落地（landingEvent case 4）：保释
 void jailBailDialog(Application& app) {
