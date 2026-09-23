@@ -32,6 +32,8 @@ constexpr int kBailPanelW = 100; // 悬停信息板（allocUiElement(100,95) 0x4
 constexpr int kBailPanelH = 95;
 // [RE 0x475C44] 保释费用（点券：玩家 0-3 = 30，事件槽 NPC 4-7 = 300）
 constexpr int kBailCost[8] = {30, 30, 30, 30, 300, 300, 300, 300};
+// [RE 0x47ED5A] 事件槽 NPC 名表（索引 4..7；0..3 为占位 0x11111111 不用）
+const char* const kNpcNames[8] = {"", "", "", "", "小偷", "強盜", "流氓", "間諜"};
 
 // [RE 0x43C8FB] panel.mkf[63] 帧表（资源+12+12*帧）
 enum BailFrame : int {
@@ -109,7 +111,10 @@ void drawPanel(BailCtx& ui) {
             const int avatar =
                 i >= 4 ? i + 13 : st.players[i].charIndex + kFrameAvatarBase;
             if (avatar < ui.sheet->frameCount()) {
-                blitElement(dst, ui.sheet->frame(avatar), x, y, false);
+                // [RE 0x43C8FB] sub_456418(帧, dword_475C04/08)：落点 = 格坐标 - 帧锚点 offset
+                //   （头像帧 5..20 offset 非 0，不补偿会偏左上）
+                const UiFrameView& f = ui.sheet->frame(avatar);
+                blitElement(dst, f, x - f.offsetX, y - f.offsetY, false);
             }
             blitElement(dst, ui.sheet->frame(kFrameIncarc), x, y, false);
         } else {
@@ -146,8 +151,9 @@ void drawInfoPanel(BailCtx& ui, int i) {
     ui.hoverBgY = py;
     blitElement(dst, ui.sheet->frame(kFrameInfo), px, py, false);
     app.text().setFont(16, 0x101010, 0, 2, 0); // [RE 0x43CD84] 16 号黑粗
-    // 名字：玩家 g_players[26*i]；NPC dword_47ED5A[i]（P5 事件槽名表）
-    const char* name = i < 4 && st.players[i].name ? st.players[i].name : "";
+    // 名字：玩家 g_players[26*i]；NPC dword_47ED5A[i]（小偷/強盜）
+    const char* name =
+        i < 4 ? (st.players[i].name ? st.players[i].name : "") : kNpcNames[i];
     app.text().drawText(dst, name, px + 57, py + 26, 2);
     app.text().drawText(dst, "保釋點數", px + 57, py + 48, 2); // [RE 0x465140]
     char cost[24];
@@ -287,6 +293,13 @@ bool bailHandler(const SDL_Event* event, void* user) {
         }
         return true;
     }
+    case SDL_EVENT_KEY_DOWN: {
+        // [PORT] ESC 退出（原版 WndProc 无 WM_KEYDOWN；对齐重写其他模态的统一操作）
+        if (event->key.key == SDLK_ESCAPE) {
+            app.events().requestExit(0);
+        }
+        return true;
+    }
     default:
         return true; // 模态：吞其余事件
     }
@@ -296,6 +309,7 @@ bool bailHandler(const SDL_Event* event, void* user) {
 void bailAi(Application& app) {
     GameState& st = app.gameState();
     if ((std::rand() & 1) == 0) {
+        RICH4_LOGI("bail AI: rand=0 本回合不保释 (RE 0x43D3DF)");
         return;
     }
     const int cur = st.currentPlayer;
@@ -334,8 +348,8 @@ void bailAi(Application& app) {
     if (!ok) {
         return;
     }
-    const char* name =
-        target < 4 && st.players[target].name ? st.players[target].name : "NPC"; // dword_47ED5A P5
+    const char* name = target < 4 ? (st.players[target].name ? st.players[target].name : "")
+                                  : kNpcNames[target]; // dword_47ED5A 小偷/強盜
     char text[64];
     std::snprintf(text, sizeof(text), "保釋%s", name); // [RE 0x465169]
     showMessage(app, text, 1500);
@@ -367,21 +381,25 @@ constexpr int kHospPanelH = 95;  //   动态读帧头，此处按实测帧头硬
 constexpr int kHospCost[8] = {30, 30, 30, 30, 300, 300, 300, 300};
 
 // [RE 0x43D88F] panel.mkf[65] 帧表（31 帧；帧号 = (资源偏移-12)/12）
+//   帧内容（PNG 实测）：4 = 左护士全身（局部源 (35,48) 眼 40×22 / (35,70) 嘴 40×18）；
+//   5/6 = 左眼 睁/闭；7/8 = 左嘴 张/闭（帧 8 为驻留复位）；9 = 右护士全身（退场 @(91,112)，
+//   局部源 (74,46) 眼 40×25 / (74,71) 嘴 40×15）；10/11 = 右眼；12/13 = 右嘴。
+//   所有帧头 x/y = 0（SMP 无锚点偏移，原版 blit 落点 = 实参）
 enum HospFrame : int {
     kHFg = 0,        // +12 底图
     kHMsg = 1,       // +24 NPC 答谢消息板 @(200,200)
     kHMsgTop = 2,    // +36 消息板 @(8,8)（开场/确认/告别/不足）
     kHInfo = 3,      // +48 悬停信息板（格 -(80,0)）
-    kHTitle = 4,     // +60 标题板 @(104,110)；左窗局部源 (35,48)40×22 擦除 / (35,70)40×18
-    kHWalkL1 = 5,    // 左窗行走帧（序列 {5,6,5}）
-    kHWalkL2 = 6,
-    kHIdleLFull = 7, // +96 左窗小像全帧 @(139,158)
-    kHIdleLReset = 8,// +108 左窗复位 @(179,198)（40×18 小图）
-    kHPartR = 9,     // +120 右窗局部源 (74,46)40×25 擦除 / (74,71)40×15 复位；退场板 @(91,112)
-    kHWalkR1 = 10,   // 右窗行走帧（序列 {10,11,10}）
-    kHWalkR2 = 11,
-    kHIdleRFull = 12,// +156 右窗小像全帧 @(165,158)
-    kHIdleRReset = 13,// +168 右窗复位 @(205,198)（40×15 小图）
+    kHTitle = 4,     // +60 左护士全身 @(104,110)（原命名"标题板"误；局部源见上）
+    kHWalkL1 = 5,    // 左眼 睁 @(139,158)（原命名"行走"误，实为眨眼帧）
+    kHWalkL2 = 6,    // 左眼 闭
+    kHIdleLFull = 7, // +96 左嘴 张 @(139,180)
+    kHIdleLReset = 8,// +108 左嘴 闭（复位）@(139,180)
+    kHPartR = 9,     // +120 右护士全身（退场 @(91,112)；局部源见上）
+    kHWalkR1 = 10,   // 右眼 睁 @(165,158)
+    kHWalkR2 = 11,   // 右眼 闭
+    kHIdleRFull = 12,// +156 右嘴 张 @(165,183)
+    kHIdleRReset = 13,// +168 右嘴 闭（复位）@(165,183)
     kHAvatarBase = 14, // 玩家头像 = charIndex + 14；NPC 头像 = i + 22（26..29）
     kHNpcBase = 22,
     kHPoints = 30,   // +372 点券板 @(8,432)，数字 @(88,452)
@@ -436,7 +454,10 @@ void drawPanelHosp(HospCtx& ui) {
         }
         const int avatar = i >= 4 ? i + kHNpcBase : st.players[i].charIndex + kHAvatarBase;
         if (avatar < ui.sheet->frameCount()) {
-            blitElement(dst, ui.sheet->frame(avatar), kHospCellX[i], kHospCellY[i], false);
+            // [RE 0x43D88F] sub_456418(帧, dword_475C64/68)：落点 = 格坐标 - 帧锚点 offset
+            //   （头像帧 14..29 offset 非 0，不补偿会偏左上）
+            const UiFrameView& f = ui.sheet->frame(avatar);
+            blitElement(dst, f, kHospCellX[i] - f.offsetX, kHospCellY[i] - f.offsetY, false);
         }
     }
     blitElement(dst, ui.sheet->frame(kHPoints), 8, 432, false);
@@ -470,7 +491,8 @@ void drawInfoPanelHosp(HospCtx& ui, int i) {
     ui.hoverBgY = py;
     blitElement(dst, ui.sheet->frame(kHInfo), px, py, false);
     app.text().setFont(16, 0x101010, 0, 2, 0);
-    const char* name = i < 4 && st.players[i].name ? st.players[i].name : "";
+    const char* name =
+        i < 4 ? (st.players[i].name ? st.players[i].name : "") : kNpcNames[i];
     app.text().drawText(dst, name, px + 41, py + 26, 2);
     app.text().drawText(dst, "保釋點數", px + 41, py + 48, 2); // [RE 0x4651F9]
     char cost[24];
@@ -519,8 +541,9 @@ void nurseTick(HospCtx& ui) {
         } else {
             static const uint8_t kSeqL[3] = {5, 6, 5};     // byte_475CD8[0..2]
             static const uint8_t kSeqR[3] = {10, 11, 10};  // byte_475CDB[0..2]
-            blitElement(dst, ui.sheet->frame(right ? kSeqR[step] : kSeqL[step]),
-                        right ? 165 : 139, 158, false);
+            // 原版为 blitElementFullscreen（不透明整矩形，帧含背景无透明像素）
+            blitElementOpaque(dst, ui.sheet->frame(right ? kSeqR[step] : kSeqL[step]),
+                              right ? 165 : 139, 158);
             ui.nurseState += 16;
         }
     }
@@ -532,8 +555,12 @@ void nurseTick(HospCtx& ui) {
     const bool right = ui.nurseRight != 0;
     if (ui.nurseHold != 0) {
         if (--ui.nurseHold == 0) {
+            // [RE 0x43E198/0x43E2D5] 驻留结束复位帧（帧 8 左 / 帧 13 右，静止嘴部）。
+            // 差异: 原版实参用 Rect.right/bottom = (179,198)/(205,198)（疑原版笔误——该点
+            //   像素误差 300，正确嘴部区域为 (139,180)/(165,183)，误差 19），重写按美术
+            //   意图修正为左上角坐标
             blitElementOpaque(dst, ui.sheet->frame(right ? kHIdleRReset : kHIdleLReset),
-                              right ? 205 : 179, 198); // 驻留结束复位
+                              right ? 165 : 139, right ? 183 : 180);
         }
         return;
     }
@@ -541,12 +568,13 @@ void nurseTick(HospCtx& ui) {
         return; // [RE 0x43EC2F] 1/4 概率换姿势
     }
     if ((std::rand() & 1) != 0) {
+        // [RE 0x43E132/0x43E26E] 小像区域：左 (139,180)、右 (165,183)（行走帧区域下方，勿用 158）
         blitElementOpaque(dst, ui.sheet->frame(right ? kHIdleRFull : kHIdleLFull),
-                          right ? 165 : 139, 158);
+                          right ? 165 : 139, right ? 183 : 180);
     } else if (right) {
-        blitElementRegionOpaque(dst, ui.sheet->frame(kHPartR), 165, 158, 74, 71, 40, 15, false);
+        blitElementRegionOpaque(dst, ui.sheet->frame(kHPartR), 165, 183, 74, 71, 40, 15, false);
     } else {
-        blitElementRegionOpaque(dst, ui.sheet->frame(kHTitle), 139, 158, 35, 70, 40, 18, false);
+        blitElementRegionOpaque(dst, ui.sheet->frame(kHTitle), 139, 180, 35, 70, 40, 18, false);
     }
     ui.nurseHold = std::rand() & 7;
     if (ui.nurseHold == 0) {
@@ -690,10 +718,11 @@ bool hospHandler(const SDL_Event* event, void* user) {
         if (ui.phase == kHPInit) {
             return true;
         }
-        if (ui.msg.active()) {
-            if (!ui.msg.advance(app)) {
-                return true;
-            }
+        // [RE 0x43DB7C] 阶段转换触发 = floatMsgAdvance(0) 返回 1。自然播完或点击
+        //   floatMsgAdvance(1) 跳过后（消息不再 active）**都必须**执行转换，
+        //   否则点击跳过开场白会卡在 kHPOpen（点格/右键全部被 phase != 2 拦截）
+        const bool msgDone = ui.msg.active() ? ui.msg.advance(app) : true;
+        if (msgDone) {
             switch (ui.phase) {
             case kHPOpen:
             case kHPNotEnough:
@@ -725,6 +754,13 @@ bool hospHandler(const SDL_Event* event, void* user) {
         nurseTick(ui);
         return true;
     }
+    case SDL_EVENT_KEY_DOWN: {
+        // [PORT] ESC 退出（原版 WndProc 无 WM_KEYDOWN；对齐重写其他模态的统一操作）
+        if (event->key.key == SDLK_ESCAPE) {
+            app.events().requestExit(0);
+        }
+        return true;
+    }
     default:
         return true;
     }
@@ -734,6 +770,7 @@ bool hospHandler(const SDL_Event* event, void* user) {
 void visitAi(Application& app) {
     GameState& st = app.gameState();
     if ((std::rand() & 1) == 0) {
+        RICH4_LOGI("hospital visit AI: rand=0 本回合不办理出院 (RE 0x43EAA5)");
         return;
     }
     const int cur = st.currentPlayer;
@@ -770,8 +807,8 @@ void visitAi(Application& app) {
     if (!ok) {
         return;
     }
-    const char* name =
-        target < 4 && st.players[target].name ? st.players[target].name : "NPC";
+    const char* name = target < 4 ? (st.players[target].name ? st.players[target].name : "")
+                                  : kNpcNames[target]; // dword_47ED5A 流氓/間諜
     char text[64];
     std::snprintf(text, sizeof(text), "保釋%s", name); // [RE 0x465207 医院版同文本]
     showMessage(app, text, 1500);
@@ -801,16 +838,19 @@ void hospitalVisitDialog(Application& app) {
         }
     }
     if (!any) {
-        return; // [RE 0x43E9C4]
+        RICH4_LOGI("hospitalVisit: 无住院者，静默返回 (RE 0x43E9C4)"); // [RE 0x43E9C4]
+        return;
     }
     const int cur = st.currentPlayer;
     if (cur < 0 || cur >= 9) {
         return;
     }
     if (st.players[cur].alive != 1) {
+        RICH4_LOGI("hospitalVisit: AI 玩家 %d 自动办理出院 (RE 0x43EAA5)", cur);
         visitAi(app);
         return;
     }
+    RICH4_LOGI("hospitalVisit: 人类玩家 %d 打开出院面板 (RE 0x43E9A4)", cur);
     auto blob = st.panel.read(65); // [RE 0x43E9F3] panel.mkf[65]（dword_48C4D4）
     auto blobNpc = st.panel.read(64); // [RE 0x43EA0D] panel.mkf[64]（dword_48C4D0）
     if (!blob) {
@@ -847,16 +887,19 @@ void jailBailDialog(Application& app) {
         }
     }
     if (!any) {
-        return; // [RE 0x43D324] 无在押者
+        RICH4_LOGI("jailBail: 无在押者，静默返回 (RE 0x43D324)"); // [RE 0x43D324]
+        return;
     }
     const int cur = st.currentPlayer;
     if (cur < 0 || cur >= 9) {
         return;
     }
     if (st.players[cur].alive != 1) {
+        RICH4_LOGI("jailBail: AI 玩家 %d 自动保释 (RE 0x43D3DF)", cur);
         bailAi(app);
         return;
     }
+    RICH4_LOGI("jailBail: 人类玩家 %d 打开保释面板 (RE 0x43D304)", cur);
     auto blob = st.panel.read(63); // [RE 0x43D353] panel.mkf[63]（dword_48C4B4）
     if (!blob) {
         RICH4_LOGW("jailBail: panel.mkf[63] unavailable (RE 0x43D353)");

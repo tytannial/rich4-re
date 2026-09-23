@@ -25,7 +25,7 @@
 大地图填色 ✅、买地面板背景 ✅；**仅剩建造菜单 ❌**（任务 F，`sub_423B3B/4225A3/423CF3`
 已调研，**入口已确认 = 工具条 case 6（`sub_424492`→`sub_423CF3`）**）；**P2 事件格推进中**
 （得點券 case 10/11/12 ✅、卡片格 case 13 ✅、監獄/醫院 case 4/5 ✅ 含保释·出院面板+护士动画
-（NPC 格占位待 P5）；事件格 FLC 阻塞播放模板 `playEventFlc` + `drawEventFlcFrame` +
++ **开局默认在押 NPC**（小偷·強盜/流氓·間諜，0x40734F；NPC 格释放待 P5）；事件格 FLC 阻塞播放模板 `playEventFlc` + `drawEventFlcFrame` +
 `showCardGet` + `jailPlayer`/`hospitalizePlayer`/`insurancePayout`；面板底座
 `FloatMessage`/语音 `playVoice`/音乐栈见 `ui-controls.md` §25）。
 **M2 股市 ✅**：`stock_system.cpp`（stockTick/认购/控股/买卖交易量）+ `spec_pt_dialog.cpp`
@@ -144,6 +144,8 @@ python tools/re_map.py
 - `docs/reverse/functions/stock-system.md` — **股市系统**（行情 stockTick/控股/认购/行情界面/交易市场/数字输入框）
 - `docs/reverse/functions/42b58f-stock-panel.md` — **股市面板**（0x42B58F 行情/持股/买卖/走勢圖/休市 精确实现）
 - `docs/reverse/ui-controls.md` — **游戏内 UI 控件指南**（浮雕按钮/变暗表/文本对齐/数字框/模态框架/…；**发现新控件必须更新此文件**）
+- `docs/reverse/frame-anchor.md` — **帧锚点 offset 与落点对齐**（原版落点=实参−offset、
+  像素对齐校验流程 `tools/frame_align.py`、非零 offset 资源清单；元素错位类问题先查此文件）
 
 ## 工作经验（踩坑与约定）
 
@@ -155,6 +157,11 @@ python tools/re_map.py
 - **帧头公式**：精灵/元素帧头 = `资源基址 + 12 + 12*帧号`
   （如 `+84`=帧6、`+72`=帧5、`+24`=帧1）；结构数组内偏移如
   `&dword_48231A + 8*控件 + 8`。误读会画错帧或错位。
+- **帧锚点 offset**：SMP/SPR 帧头 `x/y` 是**锚点偏移**，原版 blit 落点 = 实参 − offset；
+  重写 `blitElement*`/`blitSpriteFrame*` 以参数为左上角（**不应用 offset**）→ offset 非 0
+  的帧直接绘制会偏（面板头像常见偏 10~30px）。用
+  `python tools/frame_align.py align` 做像素差扫描校准，**勿肉眼判断**；原版实参偶有笔误
+  （医院复位帧 8/13 传了 Rect.right/bottom）。方法/清单见 `docs/reverse/frame-anchor.md`。
 - **时序精确到调用点**：同一功能在不同阶段表现不同（例：掷骰——扔骰动画无音效 →
   骰子 FLC 第30帧与结束各播一次落地槽 → 转移动才播载具槽）；必须看反编译中
   调用发生的**具体位置**，不能想当然。

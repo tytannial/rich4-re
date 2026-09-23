@@ -685,11 +685,21 @@ int landingEvent(Application& app, uint16_t cellEntId) {
     }
     if (cellType == 4) {
         // [RE 0x41B132→0x43D304] case 4 監獄格：保释面板（人类头像选择 / AI 按个性自动保释）
+        RICH4_LOGI("landingEvent: case 4 監獄格 cellEnt=%u cur=%d(alive=%u) jailFlags=%u%u%u%u%u%u%u%u "
+                   "(RE 0x41982D)",
+                   cellEntId, p, st.players[p].alive, st.jailFlags[0], st.jailFlags[1],
+                   st.jailFlags[2], st.jailFlags[3], st.jailFlags[4], st.jailFlags[5],
+                   st.jailFlags[6], st.jailFlags[7]);
         jailBailDialog(app);
         return 0x80;
     }
     if (cellType == 5) {
         // [RE 0x41B13C→0x43E9A4] case 5 醫院格：办理出院面板（0x43DA27 阶段机+护士微动画）
+        RICH4_LOGI("landingEvent: case 5 醫院格 cellEnt=%u cur=%d(alive=%u) hospitalFlags=%u%u%u%u%u%u%u%u "
+                   "(RE 0x41982D)",
+                   cellEntId, p, st.players[p].alive, st.hospitalFlags[0], st.hospitalFlags[1],
+                   st.hospitalFlags[2], st.hospitalFlags[3], st.hospitalFlags[4],
+                   st.hospitalFlags[5], st.hospitalFlags[6], st.hospitalFlags[7]);
         hospitalVisitDialog(app);
         return 0x80;
     }

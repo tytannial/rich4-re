@@ -262,6 +262,17 @@ bool newGameInit(Application& app, bool mode1) {
     std::memcpy(state.miscTable80, kMiscTable80, sizeof(state.miscTable80));
     std::memset(state.misc8B, 0, sizeof(state.misc8B));
 
+    // [RE 0x40732D/0x40733E] memset(g_jailFlags, 0, 8) / memset(g_hospitalFlags, 0, 8)
+    std::memset(state.jailFlags, 0, sizeof(state.jailFlags));
+    std::memset(state.hospitalFlags, 0, sizeof(state.hospitalFlags));
+    // [RE 0x40734F..0x407363] 开局默认在押事件槽 NPC（4..7）：
+    //   byte_496B34/B35 = g_jailFlags[4]/[5] = 1（小偷/強盜，監獄）
+    //   byte_496B66/B67 = g_hospitalFlags[6]/[7] = 1（流氓/間諜，醫院）
+    state.jailFlags[4] = 1;
+    state.jailFlags[5] = 1;
+    state.hospitalFlags[6] = 1;
+    state.hospitalFlags[7] = 1;
+
     // 配置回写
     state.cfgTravel = state.newGameConfig.travelMode;
     state.cfgLandPerm = state.newGameConfig.landPermIndex;

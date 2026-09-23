@@ -81,6 +81,7 @@ docs/reverse/
 ├── README.md            本规范
 ├── address-map.md       地址 ↔ 重写符号映射表（tools/re_map.py 生成）
 ├── globals.md           全局变量/数据表档案（按需生成/维护）
+├── frame-anchor.md      帧锚点 offset 与落点对齐（横切主题；像素对齐工具用法）
 └── functions/
     ├── 401b9c-winmain.md
     ├── 4015d6-game-init.md
@@ -106,6 +107,10 @@ python tools/re_map.py
 
 # 查看覆盖率报告
 python tools/re_map.py --report
+
+# 帧锚点 offset 查询 / 像素对齐（元素错位类问题；方法见 frame-anchor.md）
+python tools/frame_align.py offsets resources/game/Panel.mkf --index 65
+python tools/frame_align.py align --base <大图帧.png> --base-at 104,110 --cand <待校准帧.png>
 ```
 
 ## 进度统计

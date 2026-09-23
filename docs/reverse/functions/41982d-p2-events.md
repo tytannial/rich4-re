@@ -30,8 +30,8 @@
 > **实现状态（2026-09-23）**：入狱/住院（`jailPlayer` 0x43D593 / `hospitalizePlayer` 0x43EC3F：移格/
 > 标志/FLC 538·524/保险理赔/累计）✅；回合递减与到期释放（`updatePlayerStates` 0x41C84F +
 > `endPlayerState` 0x40D6BE）✅；保险期（**+62 = 保险期**，非卡片数）递减与理赔（`insurancePayout`
-> 0x44BA63）✅；**门口保释/办出院（case 4/5 停留用 `jailBailDialog`/`hospitalVisitDialog`）与 AI 保释
-> ❌ 待做**（人类界面 `sub_43CAAB`/`sub_43DA27` + panel.mkf[63/64/65] 尚未逆向）。
+> 0x44BA63）✅；**门口保释/办出院 case 4/5 ✅**（`jail_dialog.cpp`，见 §1.2；NPC 格释放流程待 P5）；
+> **开局默认在押 NPC ✅**（`newGameInit` 0x40734F..0x407363，见 §1.2 前置）。
 > debug 测试：`Ctrl+Shift+J` 入狱 / `Ctrl+Shift+L` 住院（3 天）。
 >
 > **关键字段**：`Player.insuranceDays`（+62 `g_playerCardCnt` 0x496BA6，**保险期**剩余天数；原重写
@@ -83,6 +83,21 @@ byte_496BAA[player] += days                        // 累计入狱天数（统�
 > 帮助 `[HELP 37]` 称"入院每天一千元"，实测代码为 **2000×物价指数/天**（帮助文本与实现不一致）。
 
 ### 1.2 门外保释/辦理出院（`jailBailDialog` / `hospitalVisitDialog`）
+
+> **前置：开局默认在押 NPC（0x40734F..0x407363）** —— `newGameInit` 末尾在
+> `memset(g_jailFlags,0,8)` / `memset(g_hospitalFlags,0,8)`（0x40732D/0x40733E）之后：
+>
+> ```
+> byte_496B34 = 1   // g_jailFlags[4]      = 小偷（監獄）
+> byte_496B35 = 1   // g_jailFlags[5]      = 強盜（監獄）
+> byte_496B66 = 1   // g_hospitalFlags[6]  = 流氓（醫院）
+> byte_496B67 = 1   // g_hospitalFlags[7]  = 間諜（醫院）
+> ```
+>
+> 即：**不需要任何玩家被捕，踩監獄/醫院格就应有在押者显示**。NPC 名表 `dword_47ED5A[4..7]`
+> = 小偷/強盜/流氓/間諜（索引 0..3 为占位 `0x11111111` 不用；玩家名走 `g_players`）。
+> 重写补于 `newGame.cpp`（`jailFlags[4/5]=1`、`hospitalFlags[6/7]=1`；同时修掉重开局残留）。
+> 读档 `loadGameFromSlot`（0x402dfc/0x402e0e）与玩家淘汰 `sub_40CD87` 也会写这两组标志。
 
 > **实现状态（2026-09-23）**：**監獄保释 ✅**（`jail_dialog.cpp` `jailBailDialog`：人类 UI 还原
 > 0x43CAAB/0x43C8FB + AI 还原 0x43D3DF + 音乐栈 push/resume + FloatMessage 点券不足；
@@ -416,8 +431,9 @@ case 14:
 
 1. ~~**case 10/11/12 得點券**~~ ✅ 已完成（2026-09-23；建立事件格 FLC 阻塞播放模板 `playEventFlc`）
 2. ~~**case 13 卡片格**~~ ✅ 已完成（2026-09-23；赠卡池抽卡/卡包 15 槽/舍弃最低价 + `showCardGet` 显示）
-3. **case 4/5 監獄/醫院**（状态系统 ✅：入狱/住院/回合递减/到期释放/保险理赔；**保释界面 ❌ 待做**：
-   `sub_43CAAB`/`sub_43DA27` UI + panel.mkf[63/64/65]；与 P3 `onPlayerActionPhase` cellNo 联动）
+3. ~~**case 4/5 監獄/醫院**~~ ✅ 已完成（2026-09-23；状态系统 + **保释/出院面板** `sub_43CAAB`/`sub_43DA27`
+   UI + panel.mkf[63/64/65] + **开局默认在押 NPC 0x40734F**；NPC 格释放与 P3 `onPlayerActionPhase`
+   cellNo 联动待 P5）
 4. **case 2/3 新聞/命運**（事件表 + 36/37 个效果函数——可先实现"空效果+插画+标题"骨架）
 5. **case 6/7/8 小游戏**（需输入/计时/得分逻辑）
 6. **case 9/14/15/16 樂透/銀行/百貨/魔法屋**（各自独立子系统，建议按需推进）
@@ -427,7 +443,8 @@ case 14:
 | 项 | 原版地址 | 说明 |
 |----|---------|------|
 | 卡片表/卡包/赠卡池 | 0x47FDEA / 0x499120 / 0x499198 | ✅ 已建模（`kCardNames`/`kCardPrices`/`cardState60`/`propStock`）；`g_playerCards`（0x49915B）与 `g_cardPool` 分工待 P4 |
-| `g_jailFlags` / `g_hospitalFlags` | 0x496B30 / 0x496B60 | 監獄/醫院在押标志（8 字节）—— 未建模 |
+| `g_jailFlags` / `g_hospitalFlags` | 0x496B30 / 0x496B60 | 監獄/醫院在押标志（8 字节）—— ✅ 已建模（`GameState.jailFlags/hospitalFlags`；开局 0x40734F 默认 NPC 4/5、6/7） |
+| NPC 名表 | `dword_47ED5A` | 索引 4..7 = 小偷/強盜/流氓/間諜 —— ✅ 重写 `kNpcNames`（jail_dialog.cpp） |
 | `byte_498DF3` | 0x498DF3 | 玩家到达门外状态（16B/玩家）—— 未建模 |
 | 事件槽 NPC 犯人表 | 0x498E28 起 16B×4 | 保释人/目标格/坐标/状态 —— 未建模 |
 | `stateFlags` BYTE2/BYTE3 | 0x496B9A | 監獄/醫院剩余天数（重写 `Player.stateFlags` 已有 u32） |
@@ -442,7 +459,7 @@ case 14:
 - [ ] `newsEventCheck` / `fateEventCheck`（新闻/命运触发判定）
 - [ ] `funcs_44B7BD[36]` / `funcs_44DC44[37]` 事件效果逐个标注
 - [ ] `sub_412014`（挖宝小游戏）+ 气球/接钱 runModal 回调
-- [ ] `sub_43CAAB` / `sub_43DA27`（保释/辦理出院界面控件）
+- [x] `sub_43CAAB` / `sub_43DA27`（保释/辦理出院界面控件）—— 已实现（`jail_dialog.cpp`，2026-09-23）
 - [ ] `sub_436668` / `sub_436B0A`（银行停留/贷款）
 - [ ] `sub_42D272` / `sub_42D237`（百货商店 UI + 商品表）
 - [ ] `sub_431CAA` / `sub_431842`（魔法屋施法）
