@@ -20,6 +20,7 @@
 #include "game/app/event_stack.h"
 #include "game/app/facility_dialog.h"
 #include "game/app/game_loop.h"
+#include "game/app/item_lines.h"
 #include "game/app/jail_dialog.h"
 #include "game/app/map_objects.h"
 #include "game/app/map_render.h"
@@ -195,10 +196,13 @@ void onPlayerActionPhase(Application& app) {
     // [RE 0x41B66A..0x41B79B] 挂身道具（炸彈/路障 cellNo）每步寿命递减
     if (pl.cellNo != 0) {
         uint8_t& life = st.cellTable[static_cast<size_t>(24 * (pl.cellNo - 1)) + 4];
+        RICH4_LOGI("carried bomb: p%d cellNo=%u life=%u stopped=%d (RE 0x41B697)", p, pl.cellNo,
+                   life, stopped ? 1 : 0);
         if (life != 0) {
             --life;
             if (life == 0) {
                 // 爆炸：删物件、拆该格地产一级、车毁受伤、爆炸插图、停止、住院5
+                RICH4_LOGI("carried bomb EXPLODE: p%d obj %u (RE 0x41B6CD)", p, pl.cellNo);
                 app.audio().stopEffectSlot(3);
                 const int boom = pl.cellNo;
                 pl.cellNo = 0;
@@ -315,7 +319,8 @@ void onPlayerActionPhase(Application& app) {
             st.cellTable[static_cast<size_t>(24 * (objId - 1)) + 4] = 38;
             ce.occMask &= ~0x00FF0000u;  // 本格占用让位给挂身物件
             app.audio().playEffectSlot(3);  // [RE g_effectSlot3] 滴答循环
-            // [TODO P4] 哭台词 off_480D9A
+            renderGameFrame(app);           // [RE 0x41BC2B] refreshGameUi(0,0,1)：立即显示挂身
+            playItemLine(app, p, 4);        // [RE 0x44EF41 off_480D9A] 炸弹台词（列3）
             RICH4_LOGI("bomb attached: p%d obj %d life=38 (RE 0x41BC2B)", p, objId);
             break;
         default:
