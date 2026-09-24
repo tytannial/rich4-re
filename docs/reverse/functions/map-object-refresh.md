@@ -6,7 +6,7 @@
 |----|-----|
 | 地址 | `0x40E033` createMapObject / `0x40E14D` deleteMapObject / `0x40E32C` attachEnd（附身结束飘走）/ `0x40E669` moveObjectSprite（A→B 移动动画）/ `0x40EA62` canAttach / `0x40EAD7` attachObject（踩中效果主体）/ `0x40AA6C` randomCellEnt / `0x41B42D` onPlayerActionPhase（路过/停留触发）/ `0x41C84F` updatePlayerStates（回合寿命递减）/ `0x41CF67` advanceDay（月度换位）/ `0x40FAFD` bounceObject（弹飞）/ `0x40CD07` damagePlayer（载具损毁+受伤）/ `0x40AB4A` demolishEstate（地产降级/没收）/ `0x445ADA` drawGiftCard |
 | 重写符号 | `src/app/map_objects.cpp`（attach/attachEnd/slotMachine/effects/relocate）+ `economy.cpp`（deleteMapObject）+ `turn_system.cpp`（分派/寿命）+ `map_render.cpp`（8方向帧/跟随/浮空数字/弹飞） |
-| 状态 | **已实现（2026-09-24）**：神明全链路（附身/寿命7·13/轮替/老虎机/抽丢卡/没收/跟随渲染）+ 惡犬/禮物/寶箱 + 路障/地雷/炸彈**触发链**；[TODO P4] 道具放置入口与拆除卡（0x446BAA/C88/D69/0x446AFB）、角色台词语音；[TODO P5] 事件槽 NPC 分支 |
+| 状态 | **已实现（2026-09-24）**：神明全链路（附身/寿命7·13/轮替/老虎机/抽丢卡/没收/跟随渲染）+ 惡犬/禮物/寶箱 + 路障/地雷/炸彈**触发链**；**神明持续效果 ✅（2026-09-25，§13：landAfterMove 天使/惡魔/土地公 + 福神追加 godBlessUpgrade + 死神代付 resolveFeePayer + 欠款矩阵 addPlayerDebt）**；[TODO P4] 道具放置入口与拆除卡（0x446BAA/C88/D69/0x446AFB）、角色台词语音；[TODO P5] 事件槽 NPC 分支 |
 
 ## 1. cellTable 槽位与字段（`g_cellTable` 0x496D08，46 项 × 24B）
 
@@ -214,3 +214,57 @@ slot<12 → 配对轮替重建（§2.1）
 步行踩惡犬 → 咬伤插图 → 住院 3 天 → 对向槽生成**土地公**；有车踩 → 无事；
 踩礼物 → 随机得 1 卡；踩宝箱 → +500 点券；每月 1 号礼物/宝箱换位；
 地雷（Debug 放置）→ 爆炸拆建筑+住院 3；炸彈挂身 38 → 头顶数字递减（炸弹偏移）→ 爆炸住院 5；存档重载一致。
+
+## 13. 神明持续效果：landAfterMove + 福神追加 + 死神代付（2026-09-25）
+
+### 13.1 `sub_40F381` landAfterMove（落地公共末尾，重写 `turn_system.cpp landAfterMove`）
+
+**调用时机**（精确实测）：`landingEvent` 公共末尾 `loc_41B077`（0x41B077）——**estate/corp/specPt
+各结算路径（含买地失败/拒绝/守卫等所有 `jmp loc_41B074` 汇聚点）在事件处理完毕后统一执行一次**；
+事件格 case（4/5/10..14 等）直接 `jmp loc_41B111` **不经过**。另一补充调用点 =
+`sub_418EBD+0x9C`（回合尾、`alive & 0x30` 临时载具分支，重写载具计时未建模 [TODO]）。
+
+前置守卫：`stateFlags.BYTE0(住宿)==0` 且 `alive != 0`。按附身字段（slot+1）分派，仅 3 个神明有动作：
+
+| idx | 神明 | 效果（objId=cellEnt+32） |
+|-----|------|--------------------------|
+| 9 | 天使 | `sub_40B110` **免费建设/加盖**；corp 无设施先 showMessage("天使")+2048 抑制重复；成功→消息("天使" 0x466678)+音效槽18 [dword_4823DA]；bit7 封顶→FLC 523（`sub_40B0CD`：523 @ (0,40) 音效90，前置 sub_40829D(-1,0) 全屏重绘不迁移） |
+| 10 | 惡魔 | estate.level/corp.sub 非 0 → 有主记债 `addPlayerDebt(owner−1, 我, 30×M)`（**原版不排除自己**，自欠被 addPlayerDebt 跳过）→ 消息(0x4634D7 "小惡魔顯靈\n\n拆毀一層房屋！") → `demolishEstate(objId,0)` → **FLC 526 @ (建筑屏幕坐标−55,−55) 音效 95**（sub_40B066 取 obj 屏幕坐标） |
+| 12 | 土地公 | 占为本有：owner==自己→无动作；他人→记债 `M×(estate+28/corp+34)×(level+2.0)/5.0`（flt_46350C=2.0/flt_463510=5.0）；**原无主且 cfgLandPerm → 记到期日**（addPackedDate，购地同款）；`owner=我+1` + rebuildMiniMap + 消息(0x4634F2 "土地公顯靈\n\n強佔土地！")；大笑台词 sub_44EF41 [TODO P4] |
+
+其余附身值（含死神 15/窮衰神等）在 landAfterMove **无持续动作**。
+
+### 13.2 `sub_40B110` angelUpgrade（天使/福神共用的免费建设执行）
+
+- estate：`type==0 && level<5` **或** `type==1(连锁店) && level==0` → `++level`（==5 附 bit7=0x80）
+- corp：`sub!=0 && sub<kFacilityMaxLevel[type]` → `++sub`（旧值 4 → bit7）；
+  `sub==0` → **直接建设施（免费！）**：AI（alive&6）`rand%4+1` 随机；人类**弹 selectFacilityDialog(0)**
+  （原版不检查取消，返回值直接用；重写取消回落 0=公園）
+- 返回 bit0=有建设 / bit7=封顶（调用方播 523 动画）
+
+### 13.3 `sub_40F8BE` godBlessUpgrade（福神盖房加倍，[HELP 43/48]）
+
+**普通付费升级/建设施成功后**追加一次免费 `sub_40B110`（即"升一级变两级"）。调用点 =
+landingEvent 三条成功路径：estate `++level` 未满 5（0x419A48，跳过 estateChainSpeech 后）、
+corp 建设施成功（0x41A2AE，建设施也算）、corp 升级未满 5（0x41A36B）。
+满级(==5)路径不追加（走台词+523 分支）。消息 = `kObjectNames[idx]`（"小福神/大福神"）；
+bit7 → 台词 off_480886[角色] [TODO P4] + FLC 523；未封顶 → 随机祝福台词
+off_48084A[角色×27 + rand&1] [TODO P4]。
+**注**：帮助"买地免费"代码中不存在（checkCarriedGod 0x40FA61 仅守卫 7/8/15）——帮助文本存疑。
+
+### 13.4 死神代付 `sub_40FBB8` findDeathGodCarrier（[HELP 49/51]，pricing-formulas §6 步骤 6 落地）
+
+收费金额定案（神明调整之后）→ 转账前，三处同构（住宅過路費 0x419ECC / 商業收費 0x41A6A4 /
+行業設施收費 0x41AF99）：找**付款人外、存活、附身 idx∈{14,15}** 的首位玩家
+（初版表 slot13=寶箱→14、slot14=死神→15——**原版条件即包含寶箱携带者**，照抄）；
+命中 → showMessage("死神顯靈\n\n由%s賠償%s"(0x4639CC), 1500) → **付款人替换为代付者**。
+重写 `resolveFeePayer`（三处收费管线 transferMoney 前）。原版此前还有嫁禍卡(19)/免費卡(20)
+判定（sub_4413AD/sub_44476A/sub_444A60）→ P4。
+
+### 13.5 欠款矩阵 `addPlayerDebt`（0x40DF69）
+
+`playerDebt[creditor][debtor] += amount`（clamp ≥0；creditor==debtor 或负数无旧债跳过；
+a3>0 且 creditor 同盟==debtor+1 → 解除同盟 sub_40CC1A：清双方 ally/+61 allyActive）。
+**不直接扣现金**；消费方 = 破产 `sub_40CD87`（0x40CF63）与最大债主查询 `sub_40D2D3`
+（返回 a1 欠最多者）——**破产清算接入 [TODO]**；不入存档（快照 sub_44808A 无本表）。
+恶魔/土地公/过路费记账（sub_448A7E 30×M、住宿 20×M×days）现均可用本函数。

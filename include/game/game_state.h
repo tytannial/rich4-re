@@ -79,7 +79,8 @@ struct Player {
     // [RE 0x496BA4] byte_496BA4 银行融资状态：bit0-6 特别融资期数（+1 显示）、bit7 标志
     // 依据: 0x4351CE（(b&0x7F)+1 期数消息 0x464AD5）；0x4341E7 週轉/0x4368CE AI 贷款守卫
     uint8_t bankFinanceFlags = 0;  // +60
-    uint8_t pad61 = 0;             // +61
+    // [RE 0x496BA5] byte_496BA5 同盟生效标记（clearAllyPair 0x40CC1A 解除时清双方）
+    uint8_t allyActive = 0;        // +61
     // [RE 0x496BA6] g_playerCardCnt（**保险期**剩余天数；原误名 cardCount）
     // 依据: 0x41AC6E 保險收费 += 轮盘天数；0x44BA63 非 0 时保险理赔；0x41CAE3 到期清 0
     uint8_t insuranceDays = 0;  // +62
@@ -433,6 +434,11 @@ struct GameState {
     //   删除对应类型 +1；[TODO P4] 消耗点未定位——放置函数 0x446BAA/446C88/446D69 仅扣
     //   玩家道具库存 byte_49915D/E/F，未递减本组）
     uint8_t trapStock[3] = {};
+    // [RE 0x496BB4] g_playerDebts 欠款矩阵：playerDebt[creditor][debtor]（addPlayerDebt 0x40DF69
+    //   累加 clamp≥0、记账解除同盟；原版行长 26 仅前 8 列使用；清偿点 = 破产 sub_40CD87 /
+    //   最大债主查询 sub_40D2D3，结算接入 [TODO]）行距 26 照原版；不入存档（原版
+    //   回合快照 sub_44808A 与 SAVE 流均无本表）
+    int32_t playerDebt[8][26] = {};
     // [RE 0x496B30 / 0x496B60] 監獄/醫院在押标志（8 字节；索引 0..3 玩家 / 4..7 事件槽 NPC）
     uint8_t jailFlags[8] = {};
     uint8_t hospitalFlags[8] = {};

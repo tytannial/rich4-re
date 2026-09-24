@@ -180,6 +180,35 @@ void transferMoney(Application& app, int from, int to, int32_t amount, int flags
                paid, flags);
 }
 
+// [RE 0x40DF69] addPlayerDebt：欠款矩阵累加 debt[creditor][debtor] += amount（clamp ≥0）
+// 依据: 0x40DF69 反编译；creditor==debtor 跳过；amount<0 且原债为 0 跳过；
+//   amount>0 且 creditor 的同盟 == debtor+1 → clearAllyPair(creditor) 解除同盟
+//   （清双方 ally 与 allyActive/+61）；**不直接扣现金**（清偿点=破产 sub_40CD87 [TODO]）
+void addPlayerDebt(GameState& st, int creditor, int debtor, int32_t amount) {
+    if (creditor == debtor || creditor < 0 || creditor > 7 || debtor < 0 || debtor > 7) {
+        return;
+    }
+    if (amount < 0 && st.playerDebt[creditor][debtor] == 0) {
+        return;
+    }
+    int32_t v = st.playerDebt[creditor][debtor] + amount;
+    if (v < 0) {
+        v = 0;
+    }
+    st.playerDebt[creditor][debtor] = v;
+    // [RE 0x40DFCC] 记债命中同盟 → 解除（sub_40CC1A：清双方 +65/+61）
+    if (amount > 0 && creditor < 9 && debtor < 9 &&
+        st.players[creditor].ally == static_cast<uint8_t>(debtor + 1)) {
+        st.players[creditor].ally = 0;
+        st.players[creditor].allyActive = 0;
+        st.players[debtor].ally = 0;
+        st.players[debtor].allyActive = 0;
+        RICH4_LOGI("addPlayerDebt: ally %d/%d dissolved by debt (RE 0x40CC1A)", creditor, debtor);
+    }
+    RICH4_LOGI("addPlayerDebt: %d owes %d += %d (total %d, RE 0x40DF69)", debtor, creditor, amount,
+               v);
+}
+
 // [RE 0x40E14D] releaseCellTableSlot = deleteMapObject
 // 依据: 0x40E14D 反编译；详见 map-object-refresh.md §2.1/§6。流程：
 //   type<16 → 拥有者属性回退（cellTableIdx 清 + luckA/B/C −= kLuck*[type]）

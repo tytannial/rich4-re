@@ -19,6 +19,10 @@ int bitScanPlayer(uint32_t mask);
 // >100 = 特殊点（索引 to-101）
 void transferMoney(Application& app, int from, int to, int32_t amount, int flags);
 
+// [RE 0x40DF69] addPlayerDebt（定义见 src/app/economy.cpp）
+// 欠款矩阵累加 debt[creditor][debtor] += amount（clamp≥0；命中同盟则解除；不扣现金）
+void addPlayerDebt(GameState& st, int creditor, int debtor, int32_t amount);
+
 // [RE 0x40E14D] releaseCellTableSlot（定义见 src/app/economy.cpp）
 // slot 为 1-based cellTable 槽：占用者属性回退 → 清槽 → 前 12 槽重新随机放置
 void releaseCellTableSlot(Application& app, int slot);

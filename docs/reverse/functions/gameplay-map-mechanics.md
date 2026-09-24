@@ -261,9 +261,14 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
 - [x] **連鎖店创建**（改建卡 `cardRebuildEffect` 0x44309B：`level!=0` 时 `type^=1`，变连锁店 `level>1`→1；
       卡片 7、效果表 `g_cardEffectFuncs` 0x475D5C）；调试 `Ctrl+4` 支持；完整卡片流程（选卡/消耗）→ P4
 - [x] 收租诊断日志（`estateRouteRent` 打印匹配明细 + `matched/sum/total`，定位联动问题）+ `Ctrl+9` 一键联动组
-- 差异（待 P4）：同盟分账（`g_playerAlly` 双方按比例拆分，高亮含同盟地块）、死神/恶魔代付
-  （`findDeathGodCarrier` 0x40FBB8）、免費卡/嫁禍卡（`sub_4413AD`/`sub_444A60`/`sub_44476A`）、
-  浮动数字（`sub_44F354`）
+- [x] **神明持续效果（2026-09-25）**：`landAfterMove`(0x40F381) 落地公共末尾——天使(9)免费加盖/建设
+      （`angelUpgrade` 0x40B110，封顶 FLC 523）、惡魔(10)拆一层（记债 30×M + demolishAtObjId +
+      FLC 526@建筑坐标−55）、土地公(12)強佔（他人记债 M×price×(level+2)/5，无主免费+cfgLandPerm 日期）；
+      福神(3/4)付费升级/建设施后 `godBlessUpgrade`(0x40F8BE) 免费追加一级；死神代付
+      `resolveFeePayer`(0x419ECC/0x41A6A4/0x41AF99，含原版寶箱 idx14 照抄) + 欠款矩阵
+      `addPlayerDebt`(0x40DF69)。详见 map-object-refresh.md §13
+- 差异（待 P4）：同盟分账（`g_playerAlly` 双方按比例拆分，高亮含同盟地块）、
+  免費卡/嫁禍卡（`sub_4413AD`/`sub_444A60`/`sub_44476A`）、浮动数字（`sub_44F354`）
 - [x] **全部收费公式逆向归档** → `pricing-formulas.md`（物價指數/輪盤/本次步數/載具倍率、住宅用地/商業用地/行業設施點
   三类对象的购买/建设/升级/收费/到期公式、费用名表与映射表、MAPDAT 实测数值）
 - [ ] 验收：升级成功/失败、踩他人住宅用地扣款（现金/银行变化 + 提示文本）、同路段联合租金、連鎖店收費、神明调整

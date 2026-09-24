@@ -221,6 +221,8 @@ owner 自己停留：index4 → 轮盘(3) 免费投保；index11 → 施工抽�
 4. 免費卡（卡片 20，`[HELP 60]`："租金/罚金/缴税超 2000 元（×物价指数）时抵用一次"）：`(rent ≥ 2000×M || rent > cash+bank) && sub_4413AD(cur,20) && sub_444A60(...)` → rent=0。
 5. 嫁禍卡（卡片 19，`[HELP 80]`："转嫁…或让人代付罚金"；旧文档称"分期/变卖"）：同条件 → `sub_44476A(cur,1,rent)` 换付款人。
 6. 死神/惡魔代付：`findDeathGodCarrier` 0x40FBB8（携带槽 14/15 的玩家代付，"死神顯靈\n\n由%s賠償%s" 0x4639CC）。
+   **✅ 2026-09-25 已实现** = `resolveFeePayer`（三收费管线 transferMoney 前；idx14=寶箱 系原版条件照抄，
+   见 map-object-refresh.md §13.4）。
 7. 转账 `sub_41D2C6(flags=0)`：付款方现金优先不足扣银行，仍不足 → `sub_40CD87` 破产淘汰；收款方**入银行存款**。
 
 ## 7. 土地/设施到期（`sub_40AC7B`，0x40AC7B）
