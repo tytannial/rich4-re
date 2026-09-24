@@ -77,6 +77,17 @@ void renderItemBag(ItemBagState& s) {
             }
         }
     }
+    // [RE 0x447DEE..0x447E24] 载具中（機車/汽車）→ 右下角「下車」按钮：
+    //   panel[11] 帧 15（机车）/16（汽车）@ 资源内 (325,117)；g_itemVisibleMap[14] = 14
+    //   （固定网格位 14 = 行 2 列 4，与图标位置对齐；点击返回 id 14 → 0x447C00 下车）
+    const uint8_t travel = st.players[s.cur].travel;
+    if (travel == 1 || travel == 2) {
+        const int frame = (travel == 1) ? 15 : 16;
+        if (s.sheet->frameCount() > static_cast<size_t>(frame)) {
+            blitElement(dst, s.sheet->frame(frame), kPanelX + 325, kPanelY + 117, false);
+        }
+        s.visibleMap[14] = 14;
+    }
     // [RE 0x445D59] 按住格 highlightRect 下沉浮雕（1px/kChannelHalf；原版无白框）
     if (s.pressedSlot >= 0 && s.pressedSlot < 15) {
         const int l = kHiL0 + kHitW * (s.pressedSlot % 5);
@@ -162,7 +173,7 @@ void itemBagDialog(Application& app) {
     if (auto blob = st.panel.read(11)) {  // [RE 0x447DCB] mkfRead(panel, 11)
         sheet.load(std::move(*blob));
     }
-    if (sheet.frameCount() < kItemFrame + kItemTypes + 1) {
+    if (sheet.frameCount() < 17) {  // 帧 0..16（15/16 = 机车/汽车下車按鈕）
         RICH4_LOGW("itemBagDialog: panel.mkf[11] unavailable/short (RE 0x447D97)");
         return;
     }

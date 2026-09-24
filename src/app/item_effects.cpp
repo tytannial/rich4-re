@@ -332,6 +332,28 @@ int launchMissile(Application& app, int itemId, int mode, int radius, int dump, 
     return v;
 }
 
+// [RE 0x447C00] 下車（道具栏右下角按钮，id 14）：载具回包（机车→slot4 / 汽车→slot5）+
+//   恢复步行（travel=0/dice=1）+ 重载行走资源 + 重绘；道具栏按钮绘制见 item_bag_dialog.cpp
+int useItemGetOff(Application& app) {
+    GameState& st = app.gameState();
+    const int p = st.currentPlayer;
+    if (p < 0 || p >= 4) {
+        return 0;
+    }
+    Player& pl = st.players[p];
+    if (pl.travel == 1) {
+        ++st.itemStock[15 * p + 4];  // [RE 0x447C1C] 机车回包
+    } else if (pl.travel == 2) {
+        ++st.itemStock[15 * p + 5];  // [RE 0x447C2A] 汽车回包
+    }
+    pl.travel = 0;
+    pl.diceCount = 1;
+    loadWalkResources(st, p);   // [RE 0x40B93B]
+    renderGameFrame(app);       // [RE 0x41D476] refreshGameUi(0,0,1)
+    RICH4_LOGI("itemGetOff: p%d back to walk (RE 0x447C00)", p);
+    return 1;
+}
+
 // [RE 0x447387] 時光機（id10）：全状态回滚到本回合开始快照（0x448544）
 //   成功 → 音乐重置（g_musicTimer 处理，重写简化跳过）+ 扣道具 + 地图/小地图重建 + 全屏重绘
 int useItemTimeMachine(Application& app) {
@@ -715,6 +737,7 @@ int itemEffect(Application& app, int id) {
         case 11: return useItemTeleport(app);
         case 12: return useItemBulldozer(app);
         case 13: return launchMissile(app, 13, 0x400C0, -1, 1, 530, 83);  // 核子飛彈（全图归公）
+        case 14: return useItemGetOff(app);  // 下車按鈕（道具栏，0x447C00）
         default:
             RICH4_LOGI("item effect id=%d (%s) not implemented (P4, RE 0x475DD4 + 4*id)", id,
                        (id >= 1 && id <= 13) ? kItemBagNames[id] : "?");
