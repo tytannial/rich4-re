@@ -6,6 +6,7 @@
 #include "game/app/game_loop.h"
 #include "game/app/item_lines.h"
 #include "game/app/map_tables.h"
+#include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/log.h"
 #include "game/render/blit.h"
@@ -123,11 +124,40 @@ void playItemLine(Application& app, int player, int itemId) {
     runModal(app, &itemLineHandler, &ctx, 16);
 }
 
+// [RE 0x446E4A] 機車（id5）：travel=1 / 骰子数 2；已是机车 → 0；原汽车 → 归还一辆汽车
+// 依据: 0x446E4A 反编译；消耗 = itemStock[15p+4]--（不还礼物池，池归还见 confiscateItems）
+int useItemFoot(Application& app) {
+    GameState& st = app.gameState();
+    const int p = st.currentPlayer;
+    if (p < 0 || p >= 4) {
+        return 0;
+    }
+    Player& pl = st.players[p];
+    if (pl.travel == 1) {
+        return 0;  // 已是机车
+    }
+    if (pl.travel == 2) {
+        ++st.itemStock[15 * p + 5];  // [RE 0x446E7F] 汽车归还（slot5 = id6）
+    }
+    pl.travel = 1;
+    pl.diceCount = 2;
+    loadWalkResources(st, p);   // [RE 0x40B93B]
+    renderGameFrame(app);       // [RE 0x41D476] refreshGameUi(0,0,1)
+    playItemLine(app, p, 5);    // [RE 0x44EF41] off_480D6A
+    --st.itemStock[15 * p + 4]; // [RE 0x446EF9] 消耗机车
+    RICH4_LOGI("itemFoot: p%d travel=1 dice=2 (RE 0x446E4A)", p);
+    return 1;
+}
+
 // [RE 0x475DD4] g_itemEffectFuncs[id] 分派（id = 道具 1..13）
-int itemEffect(Application&, int id) {
-    RICH4_LOGI("item effect id=%d (%s) not implemented (P4, RE 0x475DD4 + 4*id)", id,
-               (id >= 1 && id <= 13) ? kItemBagNames[id] : "?");
-    return 0;  // 等价「不可用 → 重选」，不消耗
+int itemEffect(Application& app, int id) {
+    switch (id) {
+        case 5: return useItemFoot(app);
+        default:
+            RICH4_LOGI("item effect id=%d (%s) not implemented (P4, RE 0x475DD4 + 4*id)", id,
+                       (id >= 1 && id <= 13) ? kItemBagNames[id] : "?");
+            return 0;  // 等价「不可用 → 重选」，不消耗
+    }
 }
 
 } // namespace rich4
