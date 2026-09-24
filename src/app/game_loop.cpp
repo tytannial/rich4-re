@@ -149,8 +149,11 @@ bool miniMapHitRegion(const GameState& state, int x, int y, int& mx, int& my) {
     return true;
 }
 
-// [RE 0x417D65] sub_417D65 工具条按钮分发
+// [RE 0x417D65] sub_417D65 工具条按钮分发（入口 disablePlayerControl + 收尾 sub_40DEFE）
 void handleTopBarButton(Application& app, int index) {
+    GameState& state = app.gameState();
+    // [RE 0x417D65] 入口: setPauseDraw(0); disablePlayerControl();
+    disablePlayerControl(app);
     switch (index) {
         case 0:
             // [RE 0x417D65] case 0: helpDialog(0x14, 60)
@@ -194,6 +197,23 @@ void handleTopBarButton(Application& app, int index) {
             // case 6=建造菜单(任务F)、case 9=交易市场 依赖游戏内逻辑，待实现
             RICH4_LOGI("top bar button %d not implemented (RE 0x417D65)", index);
             break;
+    }
+    // [RE 0x40DEFE] sub_40DEFE 收尾：当前玩家有状态（住院/入狱/托管/托管等）→
+    //   playerActionFlags |= 0x80 触发 beginPlayerTurn 自动跳过回合（道具把自己炸住院
+    //   后不再卡在等待操作）；否则无可行动作时恢复控制（[RE 0x4196F1] enablePlayerControl）
+    const int cur = state.currentPlayer;
+    bool canResume = true;
+    if (cur >= 0 && cur < 4 &&
+        (state.players[cur].alive != 1 || state.players[cur].stateFlags != 0 ||
+         state.players[cur].state37 != 0 || state.players[cur].byte54 != 0)) {
+        state.playerActionFlags[cur] |= 0x80;
+        canResume = false;
+        RICH4_LOGI("topBar finish: player %d has state -> skip turn (RE 0x40DEFE)", cur);
+    } else {
+        canResume = state.playerActionState[cur] == 0 && state.sceneRequest == 0;
+    }
+    if (canResume) {
+        state.gamePlayerControl = true;
     }
 }
 

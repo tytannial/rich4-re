@@ -174,6 +174,25 @@ void getObjectPosition(const GameState& st, int objId, int& outX, int& outY) {
         return;
     }
     if ((objId & 0x8000) != 0) {
+        if ((objId & 0xF000) == 0xF000) {
+            // 重写拾取编码：0xF000|玩家号（map_render mapHitRegions）
+            const int pi = objId & 0x0F;
+            if (pi < 9) {
+                outX = st.players[pi].spriteX;
+                outY = st.players[pi].spriteY;
+            }
+            return;
+        }
+        if ((objId & 0xFF00) == 0xA100) {
+            // 重写拾取编码：0xA100|(槽+1)（cellTable 物件）
+            const int slot = (objId & 0xFF) - 1;
+            if (slot >= 0 && slot < 46) {
+                const size_t off = static_cast<size_t>(24 * slot);
+                const int ent = st.cellTable[off + 2] | (st.cellTable[off + 3] << 8);
+                cellPos(ent);
+            }
+            return;
+        }
         if ((objId & 0xF) != 0) {
             int pi = 0;
             while (((objId >> pi) & 1) == 0) {

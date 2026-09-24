@@ -12,6 +12,7 @@
 #include "game/app/map_objects.h"
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
+#include "game/app/message_dialog.h"
 #include "game/app/target_select_dialog.h"
 #include "game/app/turn_system.h"
 #include "game/application.h"
@@ -391,6 +392,8 @@ int useItemTimeMachine(Application& app) {
 //   （住宅 0x2090002 / 商业 0x2090004 / 空格 0x2090001）→ 搬迁；物件目标换算成 owner 玩家
 // 依据: 0x447428 反编译；AI 分支 = 0x8000|(1<<cur)；玩家传送后 dir=最优出口朝向、
 //   prevCellEnt=另一出口、state=1 触发落地结算
+// 差异: 房屋/设施搬迁的目的地按 [HELP 94]「须移至空道路/空地」限制为**无主空地**
+//   （原版未强制：直接覆盖目标地块内容；重写拒绝并提示重选，避免误毁他人产业）
 int useItemTeleport(Application& app) {
     GameState& st = app.gameState();
     const int p = st.currentPlayer;
@@ -419,8 +422,21 @@ int useItemTeleport(Application& app) {
     }
     bool done = false;
     if (v40 > 2000 && v40 < 4000) {
-        // ---- 住宅用地搬迁 ----
-        const int dest = selectTargetDialog(app, 0x2090002);  // [RE 0x446AE8]
+        // ---- 住宅用地搬迁（目的地须无主空地 [HELP 94]）----
+        int dest = 0;
+        for (int guard = 0; guard < 64; ++guard) {
+            dest = selectTargetDialog(app, 0x2090002);  // [RE 0x446AE8]
+            if (dest == 0) {
+                return 0;
+            }
+            const int d = dest - 2000;
+            if (d > 0 && d < static_cast<int>(st.estates.size()) &&
+                st.estates[d].owner == 0 && st.estates[d].level == 0) {
+                break;
+            }
+            showMessage(app, "只能移到無主空地！", 1000);
+            dest = 0;
+        }
         if (dest == 0) {
             return 0;
         }
@@ -444,8 +460,21 @@ int useItemTeleport(Application& app) {
             RICH4_LOGI("teleport estate %d -> %d (RE 0x447428)", si, di);
         }
     } else if (v40 > 4000 && v40 < 6000) {
-        // ---- 商業用地搬迁 ----
-        const int dest = selectTargetDialog(app, 0x2090004);
+        // ---- 商業用地搬迁（目的地须无主空地 [HELP 94]）----
+        int dest = 0;
+        for (int guard = 0; guard < 64; ++guard) {
+            dest = selectTargetDialog(app, 0x2090004);
+            if (dest == 0) {
+                return 0;
+            }
+            const int d = dest - 4000;
+            if (d > 0 && d < static_cast<int>(st.corps.size()) && st.corps[d].owner == 0 &&
+                st.corps[d].sub == 0) {
+                break;
+            }
+            showMessage(app, "只能移到無主空地！", 1000);
+            dest = 0;
+        }
         if (dest == 0) {
             return 0;
         }
@@ -750,7 +779,9 @@ int itemEffect(Application& app, int id) {
         case 10: return useItemTimeMachine(app);
         case 11: return useItemTeleport(app);
         case 12: return useItemBulldozer(app);
-        case 13: return launchMissile(app, 13, 0x400C0, -1, 1, 530, 83);  // 核子飛彈（全图归公）
+        // 核子飛彈：原版 expireAssets(-1) 的 -1 = sub_40A45C 采集**当前视野 440×440**
+        //   （非全地图）→ 世界坐标 ±220（帮助"9×9"为约数）；归公 dump=1
+        case 13: return launchMissile(app, 13, 0x400C0, 220, 1, 530, 83);
         case 14: return useItemGetOff(app);  // 下車按鈕（道具栏，0x447C00）
         default:
             RICH4_LOGI("item effect id=%d (%s) not implemented (P4, RE 0x475DD4 + 4*id)", id,

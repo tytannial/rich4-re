@@ -50,6 +50,22 @@ struct TargetSelCtx {
     int curCursor = -1; // dword_48C580
 };
 
+// 拾取 id 规范化：重写 mapHitRegions 编码 → 原版目标编码（下游 getObjectPosition/
+//   传送机/飞弹均按原版语义解析）
+//   - 玩家 0xF000|j（map_render）→ 0x8000 | (1<<j)（原版玩家位掩码）
+//   - 物件 0xA100|(槽+1)（map_render）→ 0x8000 | ((槽+1)<<8)（原版 BYTE1=槽+1）
+int normalizeHitId(uint16_t v) {
+    if ((v & 0xF000) == 0xF000) {
+        const int j = v & 0x0F;
+        return (j >= 0 && j < 9) ? (0x8000 | (1 << j)) : 0;
+    }
+    if ((v & 0xFF00) == 0xA100) {
+        const int slot = v & 0xFF;
+        return (slot >= 1 && slot <= 46) ? (0x8000 | (slot << 8)) : 0;
+    }
+    return v;
+}
+
 void drawTargetSel(TargetSelCtx& c) {
     renderGameFrame(*c.app);
 }
@@ -74,8 +90,8 @@ bool targetSelHandler(const SDL_Event* event, void* user) {
             const int my = static_cast<int>(event->motion.y);
             const uint16_t v = pickMapObject(st, mx, my);  // [RE 0x40A9D7]
             if (targetAllowed(st, v, c.flags)) {
-                // [RE 0x445E4D LABEL_140] 命中：记选中 + 光标换类型（idx=1, 延时 10）
-                c.selected = v;
+                // [RE 0x445E4D LABEL_140] 命中：记选中（规范化为原版编码）+ 光标换类型
+                c.selected = normalizeHitId(v);
                 setCursor(c, c.cursorType, 1, 10);
             } else {
                 c.selected = 0;
