@@ -840,6 +840,26 @@ int32_t applyGodRentModifier(Application& app, int payer, int32_t rent, const ch
     return v;
 }
 
+// 神明消息格式串（以 exe 原始字节 cp950 解码为准；IDA 串视图对 0x4634C0/0x463514
+// 截断显示成 "%s"，完整文本见 AGENTS 踩坑）
+constexpr char kFmtGodBuild[] = "%s顯靈\n\n加蓋一層房屋！";   // [RE 0x4634C0] aS_7
+constexpr char kFmtGodInvest[] = "%s顯靈\n\n投資失敗！";     // [RE 0x463514] aS_14
+constexpr char kNameAngel[] = "天使";                        // [RE off_47ED9A] 0x466678
+
+// [RE 0x40FA61] checkCarriedGod：附身 idx 7 小衰神/8 大衰神/15 死神 阻止买地/升级/建设施
+// → showMessage(sprintf kFmtGodInvest, 1500)。依据: 0x40FA61 反编译；调用点 = landingEvent
+//   五处付费守卫（0x41A013 购地 / 0x4199AE 升级 / 0x41A261 建设施 / 0x41A86B corp 购地 /
+//   设施升级），原版统一进本函数
+bool checkCarriedGod(Application& app, const GameState& st, uint8_t carried) {
+    if (carried != 7 && carried != 8 && carried != 15) {
+        return false;
+    }
+    char text[96];
+    std::snprintf(text, sizeof(text), kFmtGodInvest, kObjectNames[carried]);
+    showMessage(app, text, 1500);
+    return true;
+}
+
 // [RE 0x40B110] angelUpgrade：神明对落地格的**免费**建设/加盖（天使与福神共用）。返回位标志：
 // 依据: 0x40B110 反编译；estate：type==0 且 level<5、或 type==1(连锁店) 且 level==0 → ++level
 //   （达 5 附带 0x80）；corp：有设施且 sub<kFacilityMaxLevel[type] → ++sub（旧值 4 附带 0x80）；
@@ -908,11 +928,13 @@ void godBlessUpgrade(Application& app, int p, uint16_t cellEntId) {
         return;
     }
     const uint16_t objId = st.cellEnts[cellEntId].special;
+    char text[128];
     int flags = 0;
     if (objId > 4000 && objId < 6000) {
         const int ci = objId - 4000;
         if (ci > 0 && ci < static_cast<int>(st.corps.size()) && st.corps[ci].sub == 0) {
-            showMessage(app, kObjectNames[idx], 1500);
+            std::snprintf(text, sizeof(text), kFmtGodBuild, kObjectNames[idx]);  // [RE 0x4634C0]
+            showMessage(app, text, 1500);
             flags = 2048;
         }
     }
@@ -921,7 +943,8 @@ void godBlessUpgrade(Application& app, int p, uint16_t cellEntId) {
         return;
     }
     if ((flags & 0x800) == 0) {
-        showMessage(app, kObjectNames[idx], 1500);
+        std::snprintf(text, sizeof(text), kFmtGodBuild, kObjectNames[idx]);  // [RE 0x4634C0]
+        showMessage(app, text, 1500);
     }
     app.audio().playEffectSlot(18);  // [RE 0x40F9E1] dword_4823DA 升级音效
     if ((flags & 0x80) != 0) {
@@ -992,6 +1015,7 @@ void landAfterMove(Application& app, int p, uint16_t cellEntId) {
         return;
     }
     const uint16_t objId = st.cellEnts[cellEntId].special;
+    char text[128];
     switch (pl.cellTableIdx) {
         case 9: {  // 天使：所到之地免费加盖/建设
             int flags = 0;
@@ -999,14 +1023,16 @@ void landAfterMove(Application& app, int p, uint16_t cellEntId) {
                 const int ci = objId - 4000;
                 if (ci > 0 && ci < static_cast<int>(st.corps.size()) &&
                     st.corps[ci].sub == 0) {
-                    showMessage(app, "天使", 1500);
+                    std::snprintf(text, sizeof(text), kFmtGodBuild, kNameAngel);
+                    showMessage(app, text, 1500);  // "天使顯靈\n\n加蓋一層房屋！" [RE 0x40F46D]
                     flags |= 2048;
                 }
             }
             flags |= angelUpgrade(app, objId);
             if ((flags & 1) != 0) {
                 if ((flags & 0x800) == 0) {
-                    showMessage(app, "天使", 1500);  // [RE 0x40F4C7]
+                    std::snprintf(text, sizeof(text), kFmtGodBuild, kNameAngel);
+                    showMessage(app, text, 1500);  // [RE 0x40F4C7]
                 }
                 app.audio().playEffectSlot(18);      // [RE 0x40F4F8] dword_4823DA
                 if ((flags & 0x80) != 0) {
@@ -1274,10 +1300,9 @@ int landingEvent(Application& app, uint16_t cellEntId) {
             if (!buy) {
                 goto landingTail;
             }
-            // [RE 0x40FA61] 携带神明（槽 7/8/15）阻止 → showMessage(神明名, 1500)
+            // [RE 0x40FA61] 携带衰神/死神阻止 → "%s顯靈\n\n投資失敗！"
             const uint8_t carried = pl.cellTableIdx;
-            if (carried == 7 || carried == 8 || carried == 15) {
-                showMessage(app, kObjectNames[carried], 1500);
+            if (checkCarriedGod(app, st, carried)) {
                 RICH4_LOGI("buy land blocked by carried god %u (RE 0x40FA61)", carried);
                 goto landingTail;
             }
@@ -1333,10 +1358,9 @@ int landingEvent(Application& app, uint16_t cellEntId) {
             if (!upgrade) {
                 goto landingTail;
             }
+            // [RE 0x4199AE] checkCarriedGod 阻止 → "%s顯靈\n\n投資失敗！"
             const uint8_t carried = pl.cellTableIdx;
-            if (carried == 7 || carried == 8 || carried == 15) {
-                // [RE 0x4199AE] checkCarriedGod 阻止 → showMessage(神明名, 1500)
-                showMessage(app, kObjectNames[carried], 1500);
+            if (checkCarriedGod(app, st, carried)) {
                 RICH4_LOGI("upgrade blocked by carried god %u (RE 0x40FA61)", carried);
                 goto landingTail;
             }
@@ -1430,8 +1454,7 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                 goto landingTail;
             }
             const uint8_t carried = pl.cellTableIdx;
-            if (carried == 7 || carried == 8 || carried == 15) {
-                showMessage(app, kObjectNames[carried], 1500);
+            if (checkCarriedGod(app, st, carried)) {  // "%s顯靈\n\n投資失敗！" [RE 0x40FA61]
                 goto landingTail;
             }
             cp.owner = static_cast<uint8_t>(p + 1);
@@ -1473,8 +1496,7 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                     goto landingTail;
                 }
                 const uint8_t carried = pl.cellTableIdx;
-                if (carried == 7 || carried == 8 || carried == 15) {
-                    showMessage(app, kObjectNames[carried], 1500);
+                if (checkCarriedGod(app, st, carried)) {  // "%s顯靈\n\n投資失敗！" [RE 0x40FA61]
                     goto landingTail;
                 }
                 cp.type = facility;
@@ -1519,8 +1541,7 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                     goto landingTail;
                 }
                 const uint8_t carried = pl.cellTableIdx;
-                if (carried == 7 || carried == 8 || carried == 15) {
-                    showMessage(app, kObjectNames[carried], 1500);
+                if (checkCarriedGod(app, st, carried)) {  // "%s顯靈\n\n投資失敗！" [RE 0x40FA61]
                     goto landingTail;
                 }
                 pl.cash -= cost;

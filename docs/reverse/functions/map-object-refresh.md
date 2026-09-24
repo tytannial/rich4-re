@@ -228,7 +228,7 @@ slot<12 → 配对轮替重建（§2.1）
 
 | idx | 神明 | 效果（objId=cellEnt+32） |
 |-----|------|--------------------------|
-| 9 | 天使 | `sub_40B110` **免费建设/加盖**；corp 无设施先 showMessage("天使")+2048 抑制重复；成功→消息("天使" 0x466678)+音效槽18 [dword_4823DA]；bit7 封顶→FLC 523（`sub_40B0CD`：523 @ (0,40) 音效90，前置 sub_40829D(-1,0) 全屏重绘不迁移） |
+| 9 | 天使 | `sub_40B110` **免费建设/加盖**；corp 无设施先 showMessage("天使")+2048 抑制重复；成功→消息 sprintf(aS_7 0x4634C0) **"天使顯靈\n\n加蓋一層房屋！"** +音效槽18 [dword_4823DA]；bit7 封顶→FLC 523（`sub_40B0CD`：523 @ (0,40) 音效90，前置 sub_40829D(-1,0) 全屏重绘不迁移） |
 | 10 | 惡魔 | estate.level/corp.sub 非 0 → 有主记债 `addPlayerDebt(owner−1, 我, 30×M)`（**原版不排除自己**，自欠被 addPlayerDebt 跳过）→ 消息(0x4634D7 "小惡魔顯靈\n\n拆毀一層房屋！") → `demolishEstate(objId,0)` → **FLC 526 @ (建筑屏幕坐标−55,−55) 音效 95**（sub_40B066 取 obj 屏幕坐标） |
 | 12 | 土地公 | 占为本有：owner==自己→无动作；他人→记债 `M×(estate+28/corp+34)×(level+2.0)/5.0`（flt_46350C=2.0/flt_463510=5.0）；**原无主且 cfgLandPerm → 记到期日**（addPackedDate，购地同款）；`owner=我+1` + rebuildMiniMap + 消息(0x4634F2 "土地公顯靈\n\n強佔土地！")；大笑台词 sub_44EF41 [TODO P4] |
 
@@ -247,10 +247,11 @@ slot<12 → 配对轮替重建（§2.1）
 **普通付费升级/建设施成功后**追加一次免费 `sub_40B110`（即"升一级变两级"）。调用点 =
 landingEvent 三条成功路径：estate `++level` 未满 5（0x419A48，跳过 estateChainSpeech 后）、
 corp 建设施成功（0x41A2AE，建设施也算）、corp 升级未满 5（0x41A36B）。
-满级(==5)路径不追加（走台词+523 分支）。消息 = `kObjectNames[idx]`（"小福神/大福神"）；
+满级(==5)路径不追加（走台词+523 分支）。消息 = sprintf(aS_7 0x4634C0, kObjectNames[idx]) **"小/大福神顯靈\n\n加蓋一層房屋！"**；
 bit7 → 台词 off_480886[角色] [TODO P4] + FLC 523；未封顶 → 随机祝福台词
 off_48084A[角色×27 + rand&1] [TODO P4]。
-**注**：帮助"买地免费"代码中不存在（checkCarriedGod 0x40FA61 仅守卫 7/8/15）——帮助文本存疑。
+**注**：帮助"买地免费"代码中不存在（checkCarriedGod 0x40FA61 仅守卫 7/8/15，阻止时消息 aS_14 0x463514 =
+  **"%s顯靈\n\n投資失敗！"**）——帮助文本存疑。
 
 ### 13.4 死神代付 `sub_40FBB8` findDeathGodCarrier（[HELP 49/51]，pricing-formulas §6 步骤 6 落地）
 
@@ -268,3 +269,20 @@ a3>0 且 creditor 同盟==debtor+1 → 解除同盟 sub_40CC1A：清双方 ally/
 **不直接扣现金**；消费方 = 破产 `sub_40CD87`（0x40CF63）与最大债主查询 `sub_40D2D3`
 （返回 a1 欠最多者）——**破产清算接入 [TODO]**；不入存档（快照 sub_44808A 无本表）。
 恶魔/土地公/过路费记账（sub_448A7E 30×M、住宿 20×M×days）现均可用本函数。
+
+### 13.6 踩坑：IDA 字符串视图对 BIG5 格式串截断（2026-09-25）
+
+`0x4634C0` 在 IDA 反编译里显示为 `aS_7 = "%s"`，**实际字节**（cp950 解码）为
+`"%s顯靈\n\n加蓋一層房屋！"`；`0x463514` 同理（显示 `"%s"`，实为 `"%s顯靈\n\n投資失敗！"`）。
+BIG5 双字节字符第二字节可落在 `\x5C`(反斜杠) 等干扰 IDA 字符串解析的位置。
+**规则：移植 sprintf 消息文本时，对 IDA 显示的短格式串（尤其裸 `"%s"`）必须用
+`python: b[va-0x401A00:..].decode("cp950")` 读原始字节复核**，否则会丢失"顯靈
+
+…"后半段。
+
+### 13.7 checkCarriedGod（0x40FA61）重写接入点
+
+五处付费守卫（estate 购地 0x41A013 / estate 升级 0x4199AE / corp 购地 0x41A86B /
+建设施 0x41A261 / 设施升级）原版统一调 0x40FA61：附身 idx 7/8/15（小衰神/大衰神/死神）→
+showMessage(sprintf aS_14 = "%s顯靈\n\n投資失敗！", 1500) → 返回阻止。重写同名 helper
+`checkCarriedGod(app, st, carried)`（turn_system.cpp）。

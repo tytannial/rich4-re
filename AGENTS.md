@@ -49,7 +49,9 @@ damagePlayer/demolish/givePlayerItem）；`economy.cpp` deleteMapObject **配对
 天使 `angelUpgrade` 0x40B110 免费加盖/建设施·封顶 FLC523、惡魔拆一层+记债 30×M+FLC526、土地公強佔
 +赔偿 M×price×(level+2)/5）；福神付费升级后 `godBlessUpgrade` 0x40F8BE 免费追加一级；
 死神代付 `resolveFeePayer`（0x40FBB8，三收费管线，含原版寶箱 idx14 照抄）+ 欠款矩阵
-`addPlayerDebt` 0x40DF69（不入存档，破产清算接入 TODO）；详见 `map-object-refresh.md` §13。
+`addPlayerDebt` 0x40DF69（不入存档，破产清算接入 TODO）；**消息文本 BIG5 截断踩坑修正**
+（0x4634C0/0x463514 IDA 显示 "%s" 实为 "%s顯靈\n\n加蓋一層房屋！/投資失敗！"）+
+`checkCarriedGod` 守卫 helper（五处付费流标 [HELP 41/45/51]）；详见 `map-object-refresh.md` §13。
 [TODO P4] 道具放置入口（0x446BAA/C88/D69/拆除卡 0x446AFB 已留桩）+ 角色台词语音；[TODO P5] NPC 分支。
 请神/送神符效果函数 ✅（0x444E1A/0x444C45，`useInviteGodCard`/`useBanishGodCard`，
 调试 `Ctrl+Shift+I/H` 直调）；cellTable 拾取 id 改 0xA100|槽+1 修段重叠。
@@ -207,6 +209,9 @@ python tools/re_map.py
   比反编译 switch 更直接，能精确定位每个 case 的代码地址与合并的 default。
 - **指针表解码**：`off_XXXX`/`funcs_XXXX` 是指针数组，用 Python 读 exe 解码
   （VA→文件偏移 = `VA - 0x401A00`，BIG5 用 cp950；`get_string` 遇 BIG5 常失败）。
+- **IDA 串视图会截断 BIG5 格式串**：反编译显示 `"%s"` 的地址实际字节可能是
+  `"%s顯靈\n\n加蓋一層房屋！"`（0x4634C0/0x463514 踩坑：BIG5 双字节含 `\x5C` 等干扰解析）。
+  移植任何 sprintf 消息文本前，用 Python 读原始字节 cp950 复核完整串。
 - **图块交叉验证索引**：类型/名称索引用 `data.mkf[type+395]` 图块内容验证
   （407=土地公、408=禮物、410=死神、411=路障 → 确认 `kObjectNames[类型值]` 为 0-based，
   而非"类型-1"）。
