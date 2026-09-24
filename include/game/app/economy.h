@@ -27,6 +27,11 @@ void addPlayerDebt(GameState& st, int creditor, int debtor, int32_t amount);
 // slot 为 1-based cellTable 槽：占用者属性回退 → 清槽 → 前 12 槽重新随机放置
 void releaseCellTableSlot(Application& app, int slot);
 
+// [RE 0x40AC7B] expireAssets：范围资产清算（定义见 src/app/economy.cpp）
+//   radius=-1 全图、否则以 (cx,cy) 世界坐标 ±radius；flags 2=住宅/4=商業/0x20=玩家与物件；
+//   dump≠0 归公（30×M×level 记账）、dump=0 降级（30×M 记账）；payer=-1 不记账
+void expireAssets(Application& app, int cx, int cy, int radius, int flags, int dump, int payer);
+
 // [RE 0x40CD87] eliminatePlayer（定义见 src/app/economy.cpp）
 // 玩家破产/淘汰：标记占用位、释放携带物件、清空住宅用地/商業用地/行業設施點、全灭时 sceneRequest
 void eliminatePlayer(Application& app, int p);

@@ -1,5 +1,10 @@
 #include "game/app/economy.h"
 
+#include <cstdlib>
+#include <vector>
+
+#include "game/app/map_objects.h"
+#include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
@@ -268,6 +273,120 @@ void releaseCellTableSlot(Application& app, int slot) {
     }
     RICH4_LOGI("deleteMapObject: slot %d type %u ent %u occ %u (RE 0x40E14D)", slot, type, entId,
                occ);
+}
+
+// [RE 0x40AC7B] expireAssets：范围资产清算（飞弹 expireAssets(100,38,0,cur) /
+//   核弹 expireAssets(-1,38,1,cur)）
+// 依据: 0x40AC7B 反编译；范围采集 = sub_40A45C 读 pickBuffer（每物件 1 像素）——重写按
+//   世界坐标 (±radius，-1=全图) 遍历 cellEnt 等价收集（玩家掩码 0x8000|mask、物件槽
+//   BYTE1、estate/corp/specPt 段 id）；
+//   flags&2 住宅 / flags&4 商業：dump≠0 归公（owner 欠 30×M×level，owner/level/type 清零）；
+//   dump=0 降级（owner 欠 30×M，level/sub--，连锁 type 归零）；
+//   flags&0x20（id&0x8000）：低 4 位玩家 damagePlayer / bit4-7 事件槽 hospitalize /
+//   BYTE1&0x7F 物件 deleteMapObject（重写 releaseCellTableSlot）
+void expireAssets(Application& app, int cx, int cy, int radius, int flags, int dump, int payer) {
+    GameState& st = app.gameState();
+    std::vector<uint16_t> ids;
+    const int n = static_cast<int>(st.cellEnts.size());
+    for (int i = 1; i < n; ++i) {
+        const CellEnt& ce = st.cellEnts[i];
+        if (radius != -1 &&
+            (std::abs(ce.x - cx) >= radius || std::abs(ce.y - cy) >= radius)) {
+            continue;
+        }
+        const uint8_t pmask = static_cast<uint8_t>((ce.occMask >> 8) & 0xFF);
+        if (pmask != 0) {
+            ids.push_back(static_cast<uint16_t>(0x8000 | pmask));
+        }
+        const uint8_t slotHi = static_cast<uint8_t>((ce.occMask >> 16) & 0xFF);
+        if ((flags & 0x20) != 0 && slotHi != 0) {
+            ids.push_back(static_cast<uint16_t>(0x8000 | (slotHi << 8)));
+        }
+        if (ce.special >= 2000) {
+            ids.push_back(ce.special);
+        }
+    }
+    for (const uint16_t v13 : ids) {
+        if ((flags & 2) != 0 && v13 > 2000 && v13 < 4000) {
+            const int ei = v13 - 2000;
+            if (ei > 0 && ei < static_cast<int>(st.estates.size())) {
+                Estate& es = st.estates[ei];
+                if (dump != 0) {
+                    if (payer != -1 && es.owner != 0) {
+                        addPlayerDebt(st, es.owner - 1, payer,
+                                      st.moneyMul * 30 * es.level);
+                    }
+                    es.owner = 0;
+                    es.level = 0;
+                    es.type = 0;
+                    es.expireDate = 0;
+                    buildMiniMapMarks(app);  // [RE 0x40AD80] rebuildMiniMap(0)
+                } else {
+                    if (payer != -1 && es.owner != 0) {
+                        addPlayerDebt(st, es.owner - 1, payer, 30 * st.moneyMul);
+                    }
+                    if (es.level != 0) {
+                        --es.level;
+                    }
+                    if (es.type != 0) {
+                        es.level = 0;
+                        es.type = 0;
+                    }
+                }
+            }
+        }
+        if ((flags & 4) != 0 && v13 > 4000 && v13 < 6000) {
+            const int ci = v13 - 4000;
+            if (ci > 0 && ci < static_cast<int>(st.corps.size())) {
+                Corp& cp = st.corps[ci];
+                if (dump != 0) {
+                    if (payer != -1 && cp.owner != 0) {
+                        addPlayerDebt(st, cp.owner - 1, payer,
+                                      st.moneyMul * 30 * cp.sub);
+                    }
+                    cp.owner = 0;
+                    cp.sub = 0;
+                    cp.type = 0;
+                    cp.expireDate = 0;
+                    buildMiniMapMarks(app);
+                } else {
+                    if (payer != -1 && cp.owner != 0) {
+                        addPlayerDebt(st, cp.owner - 1, payer, 30 * st.moneyMul);
+                    }
+                    if (cp.sub != 0) {
+                        --cp.sub;
+                    }
+                    if (cp.sub == 0) {
+                        cp.type = 0;
+                    }
+                }
+            }
+        }
+        if ((flags & 0x20) != 0 && (v13 & 0x8000) != 0) {
+            const uint8_t lo = static_cast<uint8_t>(v13 & 0xF);
+            if (lo != 0) {
+                for (int j = 0; j < 4; ++j) {
+                    if ((lo & (1 << j)) != 0) {
+                        damagePlayer(app, j);  // [RE 0x40AEA2]
+                    }
+                }
+            }
+            const uint8_t hi = static_cast<uint8_t>((v13 >> 4) & 0xF);
+            if (hi != 0) {
+                for (int k = 4; k < 8; ++k) {
+                    if ((hi & (1 << (k - 4))) != 0) {
+                        hospitalizePlayer(app, k, 0);  // [RE 0x40AED6] 事件槽
+                    }
+                }
+            }
+            const uint8_t slot = static_cast<uint8_t>((v13 >> 8) & 0x7F);
+            if (slot != 0) {
+                releaseCellTableSlot(app, slot);  // [RE 0x40AEFC] deleteMapObject
+            }
+        }
+    }
+    RICH4_LOGI("expireAssets: range(%d,%d,r%d) flags %d dump %d payer %d -> %zu ids (RE 0x40AC7B)",
+               cx, cy, radius, flags, dump, payer, ids.size());
 }
 
 // [RE 0x40CD87] eliminatePlayer

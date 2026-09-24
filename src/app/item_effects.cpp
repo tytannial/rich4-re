@@ -2,6 +2,7 @@
 
 #include <SDL3/SDL.h>
 
+#include "game/app/economy.h"
 #include "game/app/event_stack.h"
 #include "game/app/game_loop.h"
 #include "game/app/item_lines.h"
@@ -245,6 +246,52 @@ int useItemRobotWorker(Application& app) {
     return v;
 }
 
+// [RE 0x446FBC / 0x447ACE] 飞弹/核弹公共：选目标（0x300C0/0x400C0 含滚动）→ 扣道具 →
+//   取目标坐标 → 视口对准目标 → expireAssets（100/38/0 降级 或 -1/38/1 归公）→
+//   FLC（528 音效81 / 530 音效83，switchFrame=9）→ 范围内受伤玩家（alive&0x40）
+//   向发射者记账 90×M + 住院 3 → 面板复位
+int launchMissile(Application& app, int itemId, int mode, int radius, int dump, int flcRes,
+                  int soundId) {
+    GameState& st = app.gameState();
+    const int p = st.currentPlayer;
+    if (p < 0 || p >= 4) {
+        return 0;
+    }
+    playItemLine(app, p, itemId);  // [RE 0x44EF41]
+    int v = 0;
+    if (st.players[p].alive == 1) {
+        v = selectTargetDialog(app, mode);  // [RE 0x446AE8]
+    } else {
+        v = 0;  // [RE 0x420EEE] AI 预选（P5）
+    }
+    if (v == 0) {
+        return 0;
+    }
+    takePlayerItem(st, p, itemId);  // [RE 0x445AA2] takePlayerCard(cur, id)
+    int x = 0;
+    int y = 0;
+    getObjectPosition(st, v, x, y);  // [RE 0x40AF12]
+    // [RE 0x41D476] refreshGameUi(x, y, 0)：视口中心对准目标（expireAssets 以视野中心取范围）
+    st.manualView = true;
+    st.viewSmoothX = x;
+    st.viewSmoothY = y;
+    st.viewScrolling = false;
+    renderGameFrame(app);
+    expireAssets(app, x, y, radius, 38, dump, p);  // [RE 0x40AC7B]
+    playEventFlc(app, flcRes, 0, 40, soundId, false, 9);  // [RE 0x45144F flags BYTE2=9]
+    for (int i = 0; i < st.playerCount && i < 9; ++i) {
+        if ((st.players[i].alive & 0x40) != 0) {  // 范围内受伤（damagePlayer 置位）
+            addPlayerDebt(st, i, p, 90 * st.moneyMul);  // [RE 0x4470D4]
+            hospitalizePlayer(app, i, 3);               // [RE 0x4470DF]
+        }
+    }
+    st.manualView = false;  // [RE 0x41D546]
+    renderGameFrame(app);
+    RICH4_LOGI("missile item %d: p%d target %d (%d,%d) (RE 0x446FBC/0x447ACE)", itemId, p, v, x,
+               y);
+    return v;
+}
+
 // ===== [RE 0x446774] 遥控骰子选择模态（panel.mkf[72]：帧0 面板 + 帧 1..6 骰子高亮）=====
 namespace {
 
@@ -403,6 +450,7 @@ int itemEffect(Application& app, int id) {
         case 4: return placeMapItem(app, 4, 18, 0x20001, 2);   // 定時炸彈（g_effectSlot2=槽2）
         case 5: return useItemFoot(app);
         case 6: return useItemCar(app);
+        case 7: return launchMissile(app, 7, 0x300C0, 100, 0, 528, 81);  // 飛彈（降级+受伤）
         case 8: return useItemRemoteDice(app);
         case 9: return useItemRobotWorker(app);
         case 12: return useItemBulldozer(app);
