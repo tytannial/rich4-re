@@ -268,14 +268,17 @@ bool slotHandler(const SDL_Event* event, void* user) {
     if (sc.phase <= 7) {
         app.audio().playEffect(kSlotMachineSound);  // [RE 0x475D3C] 滚动循环音（同槽替换）
     }
-    // 滚动：+1/帧（0..19 循环）；拉杆前每 10 帧全体重随机跳 [RE 0x43F2D5]；
-    // phase≥4 时已定格轮（r > 当前停轮号）不再动
-    const int stopReel = sc.phase >= 4 ? 3 - (sc.phase - 4) : -1;
+    // 滚动：+1/帧（0..19 循环）；拉杆前每 10 帧全体重随机跳 [RE 0x43F2BF v1<3]；
+    // phase≥4 已定格轮（r > 当前停轮号）不再动；
+    // **phase≥8（金额显示）全部轮停转** [RE 0x43F5DD case8/9 不再调 sub_43EF3E，
+    //   滚轮冻结在定格值上，金额框叠加显示——若继续滚会出现"数字滚动+结果与画面不符"]
+    const int stopReel =
+        (sc.phase >= 4 && sc.phase < 8) ? 3 - (sc.phase - 4) : (sc.phase >= 8 ? lowest - 1 : -1);
     for (int r = lowest; r <= 3; ++r) {
         if (stopReel >= 0 && r > stopReel) {
             continue;
         }
-        if (sc.phase <= 3 && sc.frame % 10 == 0) {
+        if (sc.phase <= 2 && sc.frame % 10 == 0) {
             sc.byte_[r] = (std::rand() % 10) * 2 + 1;
         }
         sc.byte_[r] = (sc.byte_[r] + 1) % 20;
@@ -302,9 +305,10 @@ bool slotHandler(const SDL_Event* event, void* user) {
         case 4:
         case 5:
         case 6:
-        case 7: {  // 自右向左逐轮定格（每轮 8 帧 [RE 0x43F56F 计数 8]）
+        case 7: {  // 自右向左逐轮定格——原版 sub_43EF3E 按"偶数帧计数 8"停轮
+                   // （定格轮每帧 +1，byte 为偶时计数，≈16 帧/轮 [RE 0x43EF85]）
             const int sr = 3 - (sc.phase - 4);
-            if (sr >= lowest && sc.frame >= 8) {
+            if (sr >= lowest && sc.frame >= 16) {
                 sc.phase = (sr == lowest) ? 8 : sc.phase + 1;
                 sc.frame = 0;
                 if (sc.phase == 8) {
