@@ -1808,21 +1808,29 @@ landingTail:  // loc_41B077（estate/corp/specPt 各路径含失败/拒绝汇聚
 
 // [RE 0x419572] rollDice
 // 依据: 0x419572 反编译; v2 = byte_496B7A[当前玩家]（骰子个数）,
-//       v14[i] = rand()%6+1，返回 sum(v14)
+//       v14[i] = rand()%6+1，返回 sum(v14)；
+//       a2 = sub_447285()（读 byte_475DD8 后清零）：非 0 → 单骰强制点数（遥控骰子）
 // 差异: 骰子精灵绘制与 sub_45285E(500) 延时见 B4
 int rollDice(Application& app) {
     GameState& st = app.gameState();
     const int p = st.currentPlayer;
-    const int n = std::max(1, static_cast<int>(st.players[p].diceCount));
+    const int forced = st.forcedDice;  // [RE 0x447285] 一次性读取
+    st.forcedDice = 0;
     int sum = 0;
-    for (int i = 0; i < n; ++i) {
-        const int v = std::rand() % 6 + 1;
-        st.diceValues[i] = v;
-        sum += v;
+    if (forced != 0) {
+        st.diceValues[0] = forced;
+        sum = forced;
+    } else {
+        const int n = std::max(1, static_cast<int>(st.players[p].diceCount));
+        for (int i = 0; i < n; ++i) {
+            const int v = std::rand() % 6 + 1;
+            st.diceValues[i] = v;
+            sum += v;
+        }
     }
     st.showDice = true;
     st.diceValue = sum; // [RE 0x48BAFC] g_diceValue = 本次行走总步数（供步数计费公式）
-    RICH4_LOGI("roll dice: %d (RE 0x419572)", sum);
+    RICH4_LOGI("roll dice: %d%s (RE 0x419572)", sum, forced ? " [remote]" : "");
     return sum;
 }
 
@@ -2791,7 +2799,10 @@ void updateGameState(Application& app) {
                 if (!st.diceAnimOpened) {
                     st.diceAnimOpened = true;
                     st.diceLandPlayed = false;
-                    const int n = std::max(1, std::min(3, static_cast<int>(st.players[p].diceCount)));
+                    // [RE 0x419572] 遥控骰子强制点数时按单骰选择 FLC（a2 非 0 → v2=1）
+                    const int n = st.forcedDice != 0
+                                      ? 1
+                                      : std::max(1, std::min(3, static_cast<int>(st.players[p].diceCount)));
                     auto blob = st.panel.read(static_cast<size_t>(n + 3));
                     st.diceAnimActive = blob && st.diceAnim.open(std::move(*blob));
                     if (st.diceAnimActive) {

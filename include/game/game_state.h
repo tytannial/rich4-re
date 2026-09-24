@@ -559,6 +559,9 @@ struct GameState {
     // [RE 0x419572] 骰子点数（最多 3 个）与显示标志
     int diceValues[3] = {0, 0, 0};
     bool showDice = false;
+    // [RE 0x475DD8] byte_475DD8 遥控骰子强制点数（一次性：rollDice a2 = sub_447285() 读后清零；
+    //   非 0 时骰子数强制为 1、点数 = 该值；case2 骰子 FLC 也按单骰选择）
+    uint8_t forcedDice = 0;
 
     // 事件槽（玩家 4..8 使用；16 字节步进）
     // [RE 0x498DF2] byte_498DF2 槽占用（sub_418EBD 轮换检查）

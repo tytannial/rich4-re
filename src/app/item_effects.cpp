@@ -5,6 +5,7 @@
 #include "game/app/event_stack.h"
 #include "game/app/game_loop.h"
 #include "game/app/item_lines.h"
+#include "game/app/map_objects.h"
 #include "game/app/map_tables.h"
 #include "game/app/turn_system.h"
 #include "game/application.h"
@@ -13,6 +14,7 @@
 #include "game/render/surface.h"
 #include "game/render/text.h"
 #include "game/render/ui_image.h"
+#include "game/resource/mkf.h"
 
 namespace rich4 {
 namespace {
@@ -174,6 +176,125 @@ int useItemCar(Application& app) {
     return 1;
 }
 
+// ===== [RE 0x446774] 遥控骰子选择模态（panel.mkf[72]：帧0 面板 + 帧 1..6 骰子高亮）=====
+namespace {
+
+struct DicePickCtx {
+    Application* app = nullptr;
+    const UiImage* sheet = nullptr;
+    int hover = 0;  // 1..6，0 = 无
+};
+
+void drawDicePick(DicePickCtx& c) {
+    Application& app = *c.app;
+    Surface& dst = app.surface();
+    renderGameFrame(app);
+    const UiImage& s = *c.sheet;
+    if (s.frameCount() > 0) {
+        blitElement(dst, s.frame(0), 92, 300, false);  // [RE 0x447183] blitElementFullscreen
+    }
+    if (c.hover >= 1 && c.hover <= 6 &&
+        s.frameCount() > static_cast<size_t>(c.hover)) {
+        // [RE 0x4469xx] 悬停：blitElementFullscreen(帧 hover) @(104+40*(hover-1), 314)
+        blitElement(dst, s.frame(c.hover), 104 + 40 * (c.hover - 1), 314, false);
+    }
+}
+
+int diceHit(int x, int y) {
+    if (y < 314 || y >= 343) {
+        return 0;
+    }
+    for (int i = 0; i < 6; ++i) {
+        const int l = 104 + 40 * i;
+        if (x >= l && x < l + 30) {
+            return i + 1;
+        }
+    }
+    return 0;
+}
+
+bool dicePickHandler(const SDL_Event* event, void* user) {
+    auto& c = *static_cast<DicePickCtx*>(user);
+    if (!event) {
+        drawDicePick(c);
+        return true;
+    }
+    switch (event->type) {
+        case SDL_EVENT_MOUSE_MOTION: {
+            const int h = diceHit(static_cast<int>(event->motion.x),
+                                  static_cast<int>(event->motion.y));
+            if (h != c.hover) {
+                c.hover = h;
+                drawDicePick(c);
+            }
+            return true;
+        }
+        case SDL_EVENT_MOUSE_BUTTON_UP: {
+            if (event->button.button == SDL_BUTTON_LEFT) {
+                if (c.hover != 0) {  // [RE 0x446bxx] LBUTTONUP: dword_48C598 非 0 → postModalExit(i+1)
+                    c.app->audio().playEffect(1);  // [RE g_uiSoundClick]
+                    c.app->events().requestExit(c.hover);
+                }
+            } else if (event->button.button == SDL_BUTTON_RIGHT ||
+                       event->button.button == SDL_BUTTON_MIDDLE) {
+                c.app->audio().playEffect(4);  // [RE g_uiSoundCancel]
+                c.app->events().requestExit(0);
+            }
+            return true;
+        }
+        case SDL_EVENT_KEY_DOWN: {
+            if (event->key.key == SDLK_ESCAPE) {
+                c.app->events().requestExit(0);
+            }
+            return true;
+        }
+        default:
+            return true;
+    }
+}
+
+// [RE 0x4470F8 面板段] 六骰选择：返回 1..6，0 = 取消
+int remoteDiceDialog(Application& app) {
+    GameState& st = app.gameState();
+    UiImage sheet;
+    if (auto blob = st.panel.read(72)) {  // [RE 0x447113] sub_450441(panel, 72)
+        sheet.load(std::move(*blob));
+    }
+    if (sheet.frameCount() < 7) {
+        RICH4_LOGW("remoteDiceDialog: panel.mkf[72] unavailable (RE 0x446774)");
+        return 0;
+    }
+    DicePickCtx c;
+    c.app = &app;
+    c.sheet = &sheet;
+    return runModal(app, &dicePickHandler, &c, 16);
+}
+
+}  // namespace
+
+// [RE 0x4470F8] 遙控骰子（id8）：modal 选点 → 直接进入移动（sub_40DD1F）+ 消耗 + byte_475DD8 强制点数
+int useItemRemoteDice(Application& app) {
+    GameState& st = app.gameState();
+    const int p = st.currentPlayer;
+    if (p < 0 || p >= 4) {
+        return 0;
+    }
+    int dice = 0;
+    if (st.players[p].alive == 1) {
+        playItemLine(app, p, 8);   // [RE 0x44EF41] off_480D76（面板 blit 之前）
+        dice = remoteDiceDialog(app);
+    } else {
+        dice = 0;  // [RE 0x420EEE] dword_48BE64[0]（AI 预选目标；P5 接入）
+    }
+    if (dice != 0) {
+        startPlayerMove(app);          // [RE 0x40DD1F]（先于 takePlayerCard）
+        takePlayerItem(st, p, 8);      // [RE 0x445AA2]（id≤8 归还礼物池）
+        st.forcedDice = static_cast<uint8_t>(dice);  // [RE 0x475DD8]
+        RICH4_LOGI("remote dice: p%d value=%d (RE 0x4470F8)", p, dice);
+    }
+    return dice;
+}
+
 // [RE 0x4479D2] 工程車（id12）：travel=31（低2位=3 临时载具计时）/ 骰子数 1；
 //   已是工程车 → 0；原机车/汽车归还库存；到期（sub_41C84F 每回合 -4）恢复原载具或步行
 // 依据: 0x4479D2 反编译；原载具/骰子暂存 kind(+100)/byte_496BCD(+101)（重写独立字段）
@@ -210,6 +331,7 @@ int itemEffect(Application& app, int id) {
     switch (id) {
         case 5: return useItemFoot(app);
         case 6: return useItemCar(app);
+        case 8: return useItemRemoteDice(app);
         case 12: return useItemBulldozer(app);
         default:
             RICH4_LOGI("item effect id=%d (%s) not implemented (P4, RE 0x475DD4 + 4*id)", id,
