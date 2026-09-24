@@ -638,31 +638,35 @@ void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, boo
     while (st.eventFlc.nextFrame()) {
         ++frameNo;
         if (preserve && rw > 0 && rh > 0) {
-            // 回卷基准（切换前=开始前画面；切换后=切换帧全量重绘结果）+ 叠加当前动画帧
-            for (int r = 0; r < rh; ++r) {
-                std::memcpy(dst.pixels() + static_cast<size_t>(ry0 + r) * Surface::kWidth + rx0,
-                            &bg[static_cast<size_t>(r) * rw],
-                            static_cast<size_t>(rw) * sizeof(uint16_t));
-            }
-            overlayEventFlcFrame(app);
             if (!switched && frameNo >= switchFrame) {
                 // [RE 0x450F04] 切换帧 = sub_40829D(-1,0)：**以动画开始前的视口**全量重绘
                 //   （视口原地不动，仅绘制列表重建——角色经 0x4086A1 守卫此刻从画面消失、
-                //   拆除建筑显示降级）；借 manualView+viewSmooth 临时锁定实现。当前帧由
-                //   renderGameFrame 的 eventFlcActive 叠加重画；重绘后更新回卷基准。
+                //   拆除建筑显示降级）；借 manualView+viewSmooth 临时锁定实现。
+                //   重绘时**暂停动画叠加**得到纯净新场景 → 以其更新回卷基准（此后动画
+                //   透明区透出的即新场景，不再残留切换前旧画面/上一帧像素=影子）→
+                //   再回卷+叠加当前帧呈现（对应原版"重绘→回写当前帧"）。
                 const bool mv = st.manualView;
                 const int osx = st.viewSmoothX;
                 const int osy = st.viewSmoothY;
                 st.manualView = true;
                 st.viewSmoothX = lockViewX;
                 st.viewSmoothY = lockViewY;
+                st.eventFlcActive = false;
                 renderGameFrame(app);
+                st.eventFlcActive = true;
                 st.manualView = mv;
                 st.viewSmoothX = osx;
                 st.viewSmoothY = osy;
                 snapBg();
                 switched = true;
             }
+            // 回卷基准（切换前=开始前画面；切换后=切换帧纯净场景）+ 叠加当前动画帧
+            for (int r = 0; r < rh; ++r) {
+                std::memcpy(dst.pixels() + static_cast<size_t>(ry0 + r) * Surface::kWidth + rx0,
+                            &bg[static_cast<size_t>(r) * rw],
+                            static_cast<size_t>(rw) * sizeof(uint16_t));
+            }
+            overlayEventFlcFrame(app);
         } else {
             renderGameFrame(app);
         }
