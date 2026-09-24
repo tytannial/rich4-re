@@ -111,7 +111,12 @@ struct Player {
     int32_t monthSettleA = 0;   // +92 dword_496BC4
     int32_t monthSettleB = 0;   // +96 dword_496BC8
     uint8_t kind = 0;           // +100 g_playerKind 0x496BCC（1=人类 2=AI）
-    uint8_t pad101[3] = {};     // +101..+103
+    // [RE 0x496BCC/0x496BCD 工程车复用] 原版工程车（0x4479D2）把「原载具」写回 kind(+100)、
+    //   「原骰子数」写 byte_496BCD(+101)，到期由 sub_41C84F 恢复；重写用独立字段
+    //   保持 kind 的 AI 判定语义（行为等价）
+    uint8_t vehicleRestore = 0;  // 工程车暂存原载具 travel
+    uint8_t diceRestore = 1;     // 工程车暂存原骰子数
+    uint8_t pad103 = 0;          // +103
 };
 
 // MAPDAT 五表（docs/formats/mapdat.md）；原版各表 index 0 保留

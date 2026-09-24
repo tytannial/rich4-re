@@ -174,11 +174,43 @@ int useItemCar(Application& app) {
     return 1;
 }
 
+// [RE 0x4479D2] 工程車（id12）：travel=31（低2位=3 临时载具计时）/ 骰子数 1；
+//   已是工程车 → 0；原机车/汽车归还库存；到期（sub_41C84F 每回合 -4）恢复原载具或步行
+// 依据: 0x4479D2 反编译；原载具/骰子暂存 kind(+100)/byte_496BCD(+101)（重写独立字段）
+int useItemBulldozer(Application& app) {
+    GameState& st = app.gameState();
+    const int p = st.currentPlayer;
+    if (p < 0 || p >= 4) {
+        return 0;
+    }
+    Player& pl = st.players[p];
+    if ((pl.travel & 3) == 3) {
+        return 0;  // 已是工程车（travel=31 → &3==3）
+    }
+    if (pl.travel == 1) {
+        ++st.itemStock[15 * p + 4];  // [RE 0x4479F8] 机车归还
+    }
+    if (pl.travel == 2) {
+        ++st.itemStock[15 * p + 5];  // [RE 0x447A24] 汽车归还
+    }
+    pl.vehicleRestore = pl.travel;   // [RE 0x447A49] 原版写 kind(+100)
+    pl.diceRestore = pl.diceCount;   // [RE 0x447A55] byte_496BCD
+    pl.travel = 31;
+    pl.diceCount = 1;
+    loadWalkResources(st, p);   // [RE 0x40B93B]
+    renderGameFrame(app);       // [RE 0x41D476] refreshGameUi(0,0,1)
+    playItemLine(app, p, 12);   // [RE 0x44EF41] off_480D86
+    --st.itemStock[15 * p + 11]; // [RE 0x447AB1] 消耗工程车（slot11 = id12）
+    RICH4_LOGI("itemBulldozer: p%d travel=31 dice=1 (RE 0x4479D2)", p);
+    return 1;
+}
+
 // [RE 0x475DD4] g_itemEffectFuncs[id] 分派（id = 道具 1..13）
 int itemEffect(Application& app, int id) {
     switch (id) {
         case 5: return useItemFoot(app);
         case 6: return useItemCar(app);
+        case 12: return useItemBulldozer(app);
         default:
             RICH4_LOGI("item effect id=%d (%s) not implemented (P4, RE 0x475DD4 + 4*id)", id,
                        (id >= 1 && id <= 13) ? kItemBagNames[id] : "?");

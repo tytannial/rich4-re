@@ -2453,6 +2453,35 @@ void updatePlayerStates(Application& app, int p) {
             }
         }
     }
+    // [RE 0x41CCA3..0x41CD8C] 临时载具计时（工程车 travel=31）：每回合 -4（4n+3 编码）；
+    //   进入 0..3 区间后按暂存原载具（vehicleRestore +101）恢复——库存仍有该载具道具则
+    //   扣回继续骑（骰子数 diceRestore），否则步行；都会 loadWalkResources 重载行走资源
+    if ((pl.travel & 3) == 3) {
+        const uint8_t oldType = static_cast<uint8_t>(pl.travel & 3);
+        pl.travel = static_cast<uint8_t>(pl.travel - 4);
+        if ((pl.travel & 0xFC) == 0) {
+            const uint8_t orig = static_cast<uint8_t>(pl.vehicleRestore & oldType);
+            bool restored = false;
+            if (orig == 1 && st.itemStock[15 * p + 4] != 0) {
+                --st.itemStock[15 * p + 4];
+                pl.travel = 1;
+                pl.diceCount = pl.diceRestore;
+                restored = true;
+            } else if (orig == 2 && st.itemStock[15 * p + 5] != 0) {
+                --st.itemStock[15 * p + 5];
+                pl.travel = 2;
+                pl.diceCount = pl.diceRestore;
+                restored = true;
+            }
+            if (!restored) {
+                pl.travel = 0;      // [RE 0x41CD71] 步行
+                pl.diceCount = 1;
+            }
+            loadWalkResources(st, p);  // [RE 0x41CD83]
+            RICH4_LOGI("temp vehicle expired: p%d travel=%u dice=%u (RE 0x41C84F)", p, pl.travel,
+                       pl.diceCount);
+        }
+    }
     RICH4_LOGI("player states: p=%d flags=%08X byte54=%u state37=%u ins=%u bankRefuse=%u bankFin=%u "
                "god=%u (RE 0x41C84F)",
                p, pl.stateFlags, pl.byte54, pl.state37, pl.insuranceDays, pl.bankRefuseDays,
@@ -2810,47 +2839,34 @@ void updateGameState(Application& app) {
             break;
         }
         case 3: {
-            // [RE 0x40DA4B] 移动结束特殊移动（**由 sub_448A7E 有条件触发**）：
-            //   触发条件（0x448A7E）：`(travel & 0x83) == 3`（临时载具计时中）且无 state37/
-            //   stateFlags.BYTE0 且落在他人有建筑的住宅用地/商業用地
-            //   → 保存原朝向（g_playerRestoreDir +27）→ 面向目标格（sub_454FB4）→
-            //   FLC 526 画在建筑屏幕坐标（sub_40B066 取绘制列表坐标，x-55/y-55）→
-            //   结束后恢复朝向 → 转状态 0；同时记账 30*g_moneyMul（欠款矩阵，仅日志）
-            // travel(+17) 编码：低2位=载具类型（0=步行/1=機車/2=汽車）、bit2-7=载具剩余回合；
-            //   4n+3 = 临时载具计时中（sub_41C84F 每回合 -4，归零恢复默认载具）
-            // 注意: 普通步行/機車/汽車（travel=0/1/2）**不满足条件 → 不面向/不停留**，
-            //   直接转状态 0（等价原版 sub_448A7E 不设 state=3）
-            // 差异: FLC 526 视觉未接入（载具计时系统未实现，触发路径暂不可达）；
-            //   面向停留用 stepDwell=30 近似 FLC 时长
-            const bool routeChargeAnim = ((st.players[p].travel & 0x83) == 3);
-            if (st.stepDwell > 0) {
-                --st.stepDwell;
-                if (st.stepDwell == 0) {
-                    // 面向结束：恢复原朝向（原版 byte_496B78 = g_playerRestoreDir）
-                    st.players[p].dir = st.players[p].byte27;
-                    st.playerActionWait[p] = 5; // 转入状态 0 倒计时后 calcPlayerWait（landingEvent）
-                    st.playerActionState[p] = 0;
-                }
-                break;
-            }
-            bool faced = false;
-            if (routeChargeAnim && p < 9 && st.players[p].cellEntId > 0 &&
-                st.players[p].cellEntId < st.cellEnts.size()) {
-                const CellEnt& ce = st.cellEnts[st.players[p].cellEntId];
-                const uint16_t objId = ce.special;
-                const int32_t due = 30 * st.moneyMul;
+            // [RE 0x40DA4B ← 0x448A7E] 移动结束特殊移动（**临时载具计时中** travel&0x83==3）
+            //   落在他人有建筑（estate.level!=0 / corp.sub!=0）的住宅/商業用地：
+            //   ① 记账 30*M（房主欠工程车主，欠款矩阵）② 保存朝向 → 面向建筑 ③ demolishEstate
+            //   (cur, objId, 2) 拆一级（原版在 FLC 第 3 帧 0x40DC19）④ FLC 526 @建筑屏幕坐标
+            //   (x-55, y-55) + 槽 22 敲打音 ⑤ 恢复朝向 → 状态 0（landingEvent 照常收过路费）
+            // 注意: 普通步行/機車/汽車（travel=0/1/2）不满足条件 → 直接转状态 0
+            Player& pl = st.players[p];
+            bool hit = false;
+            uint16_t objId = 0;
+            int32_t dx = 0;
+            int32_t dy = 0;
+            int32_t wx = 0;
+            int32_t wy = 0;
+            if (((pl.travel & 0x83) == 3) && pl.state37 == 0 && (pl.stateFlags & 0xFF) == 0 &&
+                p < 4 && pl.cellEntId > 0 && pl.cellEntId < st.cellEnts.size()) {
+                const CellEnt& ce = st.cellEnts[pl.cellEntId];
+                objId = ce.special;
                 if (objId > 2000 && objId < 4000) {
                     const int i = objId - 2000;
                     if (i > 0 && i < static_cast<int>(st.estates.size())) {
                         const Estate& es = st.estates[i];
-                        // [RE 0x448A7E] 仅他人有建筑（owner≠自己 且 level≠0）才面向
                         if (es.owner != 0 && es.owner - 1 != p && es.level != 0) {
-                            RICH4_LOGI("landing due: player %d owes %d (estate %d, RE 0x40DA4B)",
-                                       p, due, i);
-                            st.players[p].byte27 = st.players[p].dir; // 保存原朝向
-                            st.players[p].dir = static_cast<uint8_t>(
-                                facingFromDelta(es.x - ce.x, es.y - ce.y)); // 面向住宅用地
-                            faced = true;
+                            addPlayerDebt(st, es.owner - 1, p, 30 * st.moneyMul);  // [RE 0x40DB35]
+                            dx = es.x - ce.x;
+                            dy = es.y - ce.y;
+                            wx = es.x;
+                            wy = es.y;
+                            hit = true;
                         }
                     }
                 } else if (objId > 4000 && objId < 6000) {
@@ -2858,19 +2874,30 @@ void updateGameState(Application& app) {
                     if (i > 0 && i < static_cast<int>(st.corps.size())) {
                         const Corp& cp = st.corps[i];
                         if (cp.owner != 0 && cp.owner - 1 != p && cp.sub != 0) {
-                            RICH4_LOGI("landing due: player %d owes %d (corp %d, RE 0x40DA4B)", p,
-                                       due, i);
-                            st.players[p].byte27 = st.players[p].dir; // 保存原朝向
-                            st.players[p].dir = static_cast<uint8_t>(
-                                facingFromDelta(cp.x - ce.x, cp.y - ce.y)); // 面向商業用地
-                            faced = true;
+                            addPlayerDebt(st, cp.owner - 1, p, 30 * st.moneyMul);
+                            dx = cp.x - ce.x;
+                            dy = cp.y - ce.y;
+                            wx = cp.x;
+                            wy = cp.y;
+                            hit = true;
                         }
                     }
                 }
             }
-            if (faced) {
-                st.stepDwell = 30; // 面向停留（近似原版 FLC 526 时长，约 0.5s @16ms tick）
-                break;
+            if (hit) {
+                pl.byte27 = pl.dir;                                         // [RE 0x40DB45]
+                pl.dir = static_cast<uint8_t>(facingFromDelta(dx, dy));     // [RE 0x454FB4]
+                demolishAtObjId(app, objId, 2);                             // [RE 0x40DC19]
+                int sx = 0;
+                int sy = 0;
+                if (!projectMapPoint(st, wx, wy, sx, sy)) {
+                    sx = wx;
+                    sy = wy;
+                }
+                app.audio().playEffectSlot(22);                             // [RE 0x40DC32 敲打音]
+                playEventFlc(app, 526, sx - 55, sy - 55, -1, false, 3);     // [RE 0x450CED flags 0xFF0001]
+                pl.dir = pl.byte27;                                         // [RE 0x40DCA8]
+                RICH4_LOGI("bulldozer demolish: p%d obj %u (RE 0x40DA4B)", p, objId);
             }
             st.playerActionWait[p] = 5;
             st.playerActionState[p] = 0;
