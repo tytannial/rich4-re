@@ -2632,6 +2632,14 @@ void updateGameState(Application& app) {
             break;
         }
         case 1: {
+            // [RE 0x40D932] 原版顺序 = 先处理上一步到达格 onPlayerActionPhase（byte_48BB00
+            //   标志），**之后**再判 g_stepsRemaining==0 收尾——最后一步（stopped=true 的
+            //   落地格：神明附身/惡犬/禮物/寶箱/地雷/炸彈均在停留判定内）不能漏。
+            //   曾因先行 break 导致所有停留类场景触发失效（2026-09-25 修正）。
+            if (st.stepActionPending) {
+                st.stepActionPending = false;
+                onPlayerActionPhase(app);
+            }
             if (st.remainingSteps == 0) {
                 // [RE 0x40D7C4 case1] 移动结束：停止载具/移动音效（原版 sub_4542E9）
                 if (st.moveSoundIndex > 0) {
@@ -2642,10 +2650,6 @@ void updateGameState(Application& app) {
                 st.playerMoveFrame[p] = 0;
                 st.showDice = false; // 移动结束隐藏骰子
                 break;
-            }
-            if (st.stepActionPending) {
-                st.stepActionPending = false;
-                onPlayerActionPhase(app);
             }
             if (st.remainingSteps && moveOneStep(app)) {
                 st.stepActionPending = true;
