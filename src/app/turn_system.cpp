@@ -245,6 +245,8 @@ void onPlayerActionPhase(Application& app) {
             if (item != 0) {
                 app.audio().playEffectSlot(6);  // [RE dword_48237A] 礼物音效
                 releaseCellTableSlot(app, 13);  // 删除（月度重定位）
+                renderGameFrame(app);           // [RE 0x41B946] refreshGameUi(0,0,1)：删除先重绘
+                app.renderFrame();              //   → 消息显示在物件已消失的新画面上
                 std::snprintf(text, sizeof(text), "得到%s！", kItemNames[item - 1]);
                 showMessage(app, text, 1500);
                 // [TODO P4] 道具语音 sub_44F230
@@ -257,6 +259,8 @@ void onPlayerActionPhase(Application& app) {
             }
             app.audio().playEffectSlot(7);      // [RE dword_482382] 宝箱音效
             releaseCellTableSlot(app, 14);
+            renderGameFrame(app);  // [RE 0x41BB41] refreshGameUi(0,0,1)：宝箱先消失再弹效果
+            app.renderFrame();
             showMessage(app, "得到５００點券", 1500);  // [RE 0x463AD3]
             pl.points = static_cast<uint16_t>(pl.points + 500);
             // [TODO P4] 大笑台词 sub_44EF41(p,0,off_48084A[char])

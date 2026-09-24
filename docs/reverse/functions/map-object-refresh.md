@@ -279,6 +279,22 @@ a3>0 且 creditor 同盟==debtor+1 → 解除同盟 sub_40CC1A：清双方 ally/
 （神明 attachObject/惡犬/禮物/寶箱/地雷/炸彈挂身）在落地格**整帧被跳过**（路障类路过
 触发在中途步仍正常，易误判为"机制未实现"）。修复 = `turn_system.cpp` case1 顺序对调。
 
+### 13.5c 物件消失动画的两处时序（2026-09-24 实机修正）
+
+1. **删除 → 先刷新再弹消息**：原版礼物（0x41B938）/寶箱（0x41BB33）在
+   `deleteMapObject` 与 `showMessage` 之间有 `refreshGameUi(0,0,1)`（全图重绘）——
+   即时模式重写 `showMessage` 是往**当前 surface** 上画提示并阻塞 1500ms（原版 DDraw
+   表面保留同款语义），不显式重绘就会出现"物件还留在画面上、消息先弹、消息结束后物件
+   才消失"。修复 = case13/14 release 后 `renderGameFrame+renderFrame` 再 showMessage。
+   恶犬/地雷走 playEventFlc（内部逐帧 renderGameFrame）天然正确；路障/炸弹无消息，
+   下一帧主循环重绘等价。
+2. **送神先消失再飞天**：原版 attachEnd（0x40E32C）动画前 `cellTable.ent = 0` +
+   `sub_40829D(-1,0)` 全量重绘让挂身精灵**先从场景消失**，24 帧飘走为 DirectDraw 直接
+   blit（不进绘制列表）。重写渲染"跟随玩家"分支原条件仅 `owner!=0`（跟 spriteX 画，
+   不看 ent）→ 动画期间神明仍贴玩家。修复 = 跟随分支补 `cellEntId != 0` 门槛
+   （map_render.cpp；fly≠0 弹飞分支在其后，飞行动画 ent 已清走弹飞分支不受影响，
+   请神/送神卡飞行动画已核对）。
+
 ### 13.6 踩坑：IDA 字符串视图对 BIG5 格式串截断（2026-09-25）
 
 `0x4634C0` 在 IDA 反编译里显示为 `aS_7 = "%s"`，**实际字节**（cp950 解码）为

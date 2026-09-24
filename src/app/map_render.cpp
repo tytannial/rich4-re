@@ -328,7 +328,10 @@ void renderMap(Application& app, int centerX, int centerY) {
         //   2000/4000/6000/8000 已按十进制段分配，直译 (slot+1)<<8 会与 estate/corp/specPt
         //   段重叠 → 用 0xA100|（槽+1）独立段（object_tip 同规则解码）
         const uint16_t objDrawId = static_cast<uint16_t>(0xA100 | (slot + 1));
-        if (owner != 0 && owner - 1 < 9) {
+        // ent(+2)==0 → 不绘制：原版按 ent 格位常规绘制（attachEnd 0x40E3BA 先清 ent 重绘 =
+        // 神明从场景消失，随后飘走动画单独 blit）；重写跟随分支须同样以 ent 为门槛，
+        // 否则送神动画期间挂身精灵仍跟随玩家（2026-09-24 修正）
+        if (owner != 0 && cellEntId != 0 && owner - 1 < 9) {
             const Player& o = state.players[owner - 1];
             if (o.stateFlags != 0) {
                 continue;  // [RE 0x408FBD] 挂起态（住院/出国/…）不绘制

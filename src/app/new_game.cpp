@@ -223,9 +223,12 @@ bool newGameInit(Application& app, bool mode1) {
             continue;
         }
         // [RE 0x407281..0x4072C0] givePlayerCard(k, 1/2/3/4/8/9)（实为**给道具**，见 0x445A4D：
-        //   g_playerItems[15k+item]++，item<=8 受道具池 g_cardPool(0x497320-1) 限制；上限 9/种）
+        //   g_playerCards[15k+item]++（基址 0x49915B ≡ 重写 itemStock 基址 0x49915C 的
+        //   slot=item-1，与 givePlayerItem 约定一致），item<=8 受道具池
+        //   g_cardPool(0x49731F=0x497320-1) 限制，即 misc8A[item-1]；上限 9/种。
+        //   开局 6 件 = id1機器娃娃/2路障/3地雷/4定時炸彈/8遙控骰子/9機器工人）
         for (int item : {1, 2, 3, 4, 8, 9}) {
-            if (state.itemStock[15 * k + item] >= 9) {
+            if (state.itemStock[15 * k + item - 1] >= 9) {
                 continue;
             }
             if (item <= 8) {
@@ -234,7 +237,7 @@ bool newGameInit(Application& app, bool mode1) {
                 }
                 --state.misc8A[item - 1];
             }
-            ++state.itemStock[15 * k + item];
+            ++state.itemStock[15 * k + item - 1];
         }
         // memcpy(&g_players[26*k], &g_charData + 104*charId, 104)
         const int charId = state.newGameConfig.charId[k];
@@ -253,7 +256,15 @@ bool newGameInit(Application& app, bool mode1) {
             state.players[k].cash = cash;
             state.players[k].bank = state.startMoneyVal - cash;
         }
-        state.players[k].travel = static_cast<uint8_t>(state.newGameConfig.travelMode);
+        // [RE 0x407219..0x407241] travel=配置值；≠0 时礼物池对应载具道具扣 1
+        //   （--byte_497323[travel] ≡ misc8A[travel+3]：1機車→slot4、2汽車→slot5、
+        //   3→slot6）；骰子个数 = travel+1（步行1/機車2/汽車3）
+        const int travel = state.newGameConfig.travelMode;
+        state.players[k].travel = static_cast<uint8_t>(travel);
+        if (travel != 0) {
+            --state.misc8A[3 + travel];
+        }
+        state.players[k].diceCount = static_cast<uint8_t>(travel + 1);
         // [RE 0x406DE7] 玩家存活标志（g_charData +21 = 0，进入游戏时置 1）
         state.players[k].alive = 1;
     }
