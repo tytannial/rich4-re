@@ -195,6 +195,42 @@ struct EvtCell {
     uint16_t sprite = 0;        // +26 图块索引
 };
 
+// [RE 0x44808A 保存 / 0x448544 恢复] 時光機回合快照（原版 g_playerMapBlocks 2502 dword/玩家 +
+//   g_playerMapDatCopies 地图数据副本）。保存点 = startPlayerMove 掷骰前（人类玩家）；
+//   恢复 = 时光机全状态回滚。差异: 原版 news/fate 顺序表与位置未建模（P2 后期），跳过
+struct TurnSnapshot {
+    bool valid = false;
+    uint32_t gameDate = 0;               // dword_497160
+    Player players[4];                   // 原版 g_players 416B（4×104）
+    uint32_t miscTable80[10][2] = {};    // g_miscTable80 80B
+    uint8_t cellTable[46 * 24] = {};     // g_cellTable 1104B
+    uint8_t cardState60[60] = {};
+    uint8_t itemStock[60] = {};
+    uint8_t propStock[30] = {};          // 原版 30B
+    uint8_t misc8A[8] = {};              // g_giftPool
+    uint8_t misc8B[8] = {};
+    int32_t moneyMul = 1;
+    int32_t dayCount = 0;
+    int32_t turnCounter = 0;
+    int32_t stockDivPeriod = 1;          // dword_499084
+    int32_t stockMarketClosed = 0;       // dword_4990DC
+    int32_t stockTotalValue = 0;         // dword_49907C
+    int32_t marketIndex = 0;             // dword_499078
+    int32_t stockPublicFund = 0;         // dword_499080
+    float stockGlobalDrift = 0.0f;       // dword_4990EC
+    float stocks[12][9] = {};
+    int32_t stockHistory[12][144] = {};
+    int32_t playerShares[4][12] = {};
+    uint8_t jailFlags[8] = {};
+    uint8_t hospitalFlags[8] = {};
+    // [PORT] 原版 mapDat 副本（cellEnts/estates/corps/specPts/evtCells 运行时数据 + 占用位）
+    std::vector<CellEnt> cellEnts;
+    std::vector<Estate> estates;
+    std::vector<Corp> corps;
+    std::vector<SpecPt> specPts;
+    std::vector<EvtCell> evtCells;
+};
+
 // 全局游戏状态，对应原版 DGROUP 段的全局句柄区（0x48A0xx / 0x4990xx）。
 struct GameState {
     // [RE 0x48A0E4] dword_48A0E4
@@ -290,6 +326,9 @@ struct GameState {
 
     // [RE 0x496B68] g_players（原版 9 槽，仅 g_playerCount 有效）
     Player players[9];
+
+    // [RE 0x48CB80] 時光機回合快照（每玩家一份；0x44808A 保存 / 0x448544 恢复）
+    TurnSnapshot snapshots[4];
 
     // [RE 0x498E80/0x498E84/0x498E88/0x498E7C/0x498E78] MAPDAT 五表（index 0 保留）
     std::vector<CellEnt> cellEnts;

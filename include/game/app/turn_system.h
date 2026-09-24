@@ -71,6 +71,12 @@ bool moveOneStep(Application& app);
 // [RE 0x41982D] landingEvent（落地事件；M2 实现，M1 返回 0x80）
 int landingEvent(Application& app, uint16_t cellEntId);
 
+// [RE 0x44808A] saveTurnSnapshot：回合开始快照（時光機回滚；人类玩家掷骰前）
+void saveTurnSnapshot(GameState& st, int p);
+
+// [RE 0x448544] restoreTurnSnapshot：時光機全状态回滚（定义见 turn_system.cpp）
+bool restoreTurnSnapshot(Application& app, int p);
+
 // [RE 0x40B110] angelUpgrade：免费加盖一级（住宅 estate / 商業 corp；无设施则建设施）；
 //   返回 bit0=成功、bit7=封顶（到达最高等级）；機器工人（id9）直接复用（定义见 turn_system.cpp）
 int angelUpgrade(Application& app, uint16_t objId);

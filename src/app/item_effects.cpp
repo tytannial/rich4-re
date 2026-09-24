@@ -324,6 +324,25 @@ int launchMissile(Application& app, int itemId, int mode, int radius, int dump, 
     return v;
 }
 
+// [RE 0x447387] 時光機（id10）：全状态回滚到本回合开始快照（0x448544）
+//   成功 → 音乐重置（g_musicTimer 处理，重写简化跳过）+ 扣道具 + 地图/小地图重建 + 全屏重绘
+int useItemTimeMachine(Application& app) {
+    GameState& st = app.gameState();
+    const int p = st.currentPlayer;
+    if (p < 0 || p >= 4) {
+        return 0;
+    }
+    playItemLine(app, p, 10);  // [RE 0x44EF41] off_480D7E（列9）
+    const bool ok = restoreTurnSnapshot(app, p);  // [RE 0x448544]
+    if (ok) {
+        // [RE 0x4473BD..0x4473F6] 音乐 g_musicTimer 处理（停/重播 track0）——重写简化跳过
+        takePlayerItem(st, p, 10);  // [RE 0x445AA2]
+        renderGameFrame(app);       // [RE 0x41906A(1)] 全屏重绘
+        RICH4_LOGI("time machine: p%d rolled back (RE 0x447387)", p);
+    }
+    return ok ? 1 : 0;
+}
+
 // [RE 0x447428] 傳送機（id11）：选目标（人物/神明/房屋/物品 0x1200036）→ 按类型选目的地
 //   （住宅 0x2090002 / 商业 0x2090004 / 空格 0x2090001）→ 搬迁；物件目标换算成 owner 玩家
 // 依据: 0x447428 反编译；AI 分支 = 0x8000|(1<<cur)；玩家传送后 dir=最优出口朝向、
@@ -682,6 +701,7 @@ int itemEffect(Application& app, int id) {
         case 7: return launchMissile(app, 7, 0x300C0, 100, 0, 528, 81);  // 飛彈（降级+受伤）
         case 8: return useItemRemoteDice(app);
         case 9: return useItemRobotWorker(app);
+        case 10: return useItemTimeMachine(app);
         case 11: return useItemTeleport(app);
         case 12: return useItemBulldozer(app);
         case 13: return launchMissile(app, 13, 0x400C0, -1, 1, 530, 83);  // 核子飛彈（全图归公）

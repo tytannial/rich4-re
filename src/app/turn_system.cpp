@@ -2132,6 +2132,101 @@ void disablePlayerControl(Application& app) {
     app.gameState().gamePlayerControl = false;
 }
 
+// [RE 0x44808A] saveTurnSnapshot：回合开始快照（時光機回滚用）
+// 依据: 0x44808A 反编译; 仅 currentPlayer<4 且 alive&1 保存；原版写 g_playerMapBlocks
+//   （2502 dword/玩家）+ mapDat 副本
+void saveTurnSnapshot(GameState& st, int p) {
+    if (p < 0 || p >= 4 || (st.players[p].alive & 1) == 0) {
+        return;
+    }
+    TurnSnapshot& s = st.snapshots[p];
+    s.valid = true;
+    s.gameDate = st.gameDate;
+    for (int k = 0; k < 4; ++k) {
+        s.players[k] = st.players[k];
+    }
+    std::memcpy(s.miscTable80, st.miscTable80, sizeof(s.miscTable80));
+    std::memcpy(s.cellTable, st.cellTable.data(), st.cellTable.size());
+    std::memcpy(s.cardState60, st.cardState60, sizeof(s.cardState60));
+    std::memcpy(s.itemStock, st.itemStock, sizeof(s.itemStock));
+    std::memcpy(s.propStock, st.propStock, sizeof(s.propStock));
+    std::memcpy(s.misc8A, st.misc8A, sizeof(s.misc8A));
+    std::memcpy(s.misc8B, st.misc8B, sizeof(s.misc8B));
+    s.moneyMul = st.moneyMul;
+    s.dayCount = st.dayCount;
+    s.turnCounter = st.turnCounter;
+    s.stockDivPeriod = st.stockDivPeriod;
+    s.stockMarketClosed = st.stockMarketClosed;
+    s.stockTotalValue = st.stockTotalValue;
+    s.marketIndex = st.marketIndex;
+    s.stockPublicFund = st.stockPublicFund;
+    s.stockGlobalDrift = st.stockGlobalDrift;
+    std::memcpy(s.stocks, st.stocks, sizeof(s.stocks));
+    std::memcpy(s.stockHistory, st.stockHistory, sizeof(s.stockHistory));
+    std::memcpy(s.playerShares, st.playerShares, sizeof(s.playerShares));
+    std::memcpy(s.jailFlags, st.jailFlags, sizeof(s.jailFlags));
+    std::memcpy(s.hospitalFlags, st.hospitalFlags, sizeof(s.hospitalFlags));
+    s.cellEnts = st.cellEnts;
+    s.estates = st.estates;
+    s.corps = st.corps;
+    s.specPts = st.specPts;
+    s.evtCells = st.evtCells;
+    RICH4_LOGI("saveTurnSnapshot: p%d date=%u (RE 0x44808A)", p, st.gameDate);
+}
+
+// [RE 0x448544] restoreTurnSnapshot：時光機全状态回滚（sub_448544）
+// 依据: 0x448544 反编译; 恢复全部快照字段 + 全员 loadWalkResources + sub_40C03B/rebuildMiniMap
+bool restoreTurnSnapshot(Application& app, int p) {
+    GameState& st = app.gameState();
+    if (p < 0 || p >= 4) {
+        return false;
+    }
+    const TurnSnapshot& s = st.snapshots[p];
+    if (!s.valid) {
+        return false;
+    }
+    st.gameDate = s.gameDate;
+    for (int k = 0; k < 4; ++k) {
+        st.players[k] = s.players[k];
+    }
+    std::memcpy(st.miscTable80, s.miscTable80, sizeof(st.miscTable80));
+    std::memcpy(st.cellTable.data(), s.cellTable, sizeof(s.cellTable));
+    std::memcpy(st.cardState60, s.cardState60, sizeof(st.cardState60));
+    std::memcpy(st.itemStock, s.itemStock, sizeof(st.itemStock));
+    std::memcpy(st.propStock, s.propStock, sizeof(st.propStock));
+    std::memcpy(st.misc8A, s.misc8A, sizeof(st.misc8A));
+    std::memcpy(st.misc8B, s.misc8B, sizeof(st.misc8B));
+    st.moneyMul = s.moneyMul;
+    st.dayCount = s.dayCount;
+    st.turnCounter = s.turnCounter;
+    st.stockDivPeriod = s.stockDivPeriod;
+    st.stockMarketClosed = s.stockMarketClosed;
+    st.stockTotalValue = s.stockTotalValue;
+    st.marketIndex = s.marketIndex;
+    st.stockPublicFund = s.stockPublicFund;
+    st.stockGlobalDrift = s.stockGlobalDrift;
+    std::memcpy(st.stocks, s.stocks, sizeof(st.stocks));
+    std::memcpy(st.stockHistory, s.stockHistory, sizeof(st.stockHistory));
+    std::memcpy(st.playerShares, s.playerShares, sizeof(st.playerShares));
+    std::memcpy(st.jailFlags, s.jailFlags, sizeof(st.jailFlags));
+    std::memcpy(st.hospitalFlags, s.hospitalFlags, sizeof(st.hospitalFlags));
+    st.cellEnts = s.cellEnts;
+    st.estates = s.estates;
+    st.corps = s.corps;
+    st.specPts = s.specPts;
+    st.evtCells = s.evtCells;
+    // [RE 0x448A53] 全员行走资源重载（j < playerCount 或 j >= 4 时）
+    for (int j = 0; j < st.playerCount || j < 4; ++j) {
+        if (j < 9) {
+            loadWalkResources(st, j);
+        }
+    }
+    buildMiniMapMarks(app);  // [RE 0x40A4E1] sub_40C03B/rebuildMiniMap 等价
+    RICH4_LOGI("restoreTurnSnapshot: p%d -> date=%u day=%d (RE 0x448544)", p, st.gameDate,
+               st.dayCount);
+    return true;
+}
+
 // [RE 0x40DD1F] startPlayerMove
 // 依据: 0x40DD1F 反编译; 人类(<4): alive&0x30 → dword_48BAF8=1,state=1；
 //       byte_496BA0 → state=0,wait=2；byte_496BA1 → dword_48BAF8=1,state=1；
@@ -2144,14 +2239,17 @@ void startPlayerMove(Application& app) {
         if ((st.players[p].alive & 0x30) != 0) {
             st.remainingSteps = 1;
             st.playerActionState[p] = 1;
-        } else if (st.players[p].skipMove) {
-            st.playerActionState[p] = 0;
-            st.playerActionWait[p] = 2;
-        } else if (st.players[p].fixedStep) {
-            st.remainingSteps = 1;
-            st.playerActionState[p] = 1;
         } else {
-            st.playerActionState[p] = 2;
+            saveTurnSnapshot(st, p);  // [RE 0x44808A] 掷骰前回合快照（時光機回滚基准）
+            if (st.players[p].skipMove) {
+                st.playerActionState[p] = 0;
+                st.playerActionWait[p] = 2;
+            } else if (st.players[p].fixedStep) {
+                st.remainingSteps = 1;
+                st.playerActionState[p] = 1;
+            } else {
+                st.playerActionState[p] = 2;
+            }
         }
         if (st.playerActionState[p] == 1) {
             st.moveSoundIndex = st.playerMoveGroup[p] ? 15 : (st.players[p].travel & 3) + 11;
