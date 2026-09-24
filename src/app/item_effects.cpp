@@ -324,6 +324,202 @@ int launchMissile(Application& app, int itemId, int mode, int radius, int dump, 
     return v;
 }
 
+// [RE 0x447428] 傳送機（id11）：选目标（人物/神明/房屋/物品 0x1200036）→ 按类型选目的地
+//   （住宅 0x2090002 / 商业 0x2090004 / 空格 0x2090001）→ 搬迁；物件目标换算成 owner 玩家
+// 依据: 0x447428 反编译；AI 分支 = 0x8000|(1<<cur)；玩家传送后 dir=最优出口朝向、
+//   prevCellEnt=另一出口、state=1 触发落地结算
+int useItemTeleport(Application& app) {
+    GameState& st = app.gameState();
+    const int p = st.currentPlayer;
+    if (p < 0 || p >= 4) {
+        return 0;
+    }
+    playItemLine(app, p, 11);  // [RE 0x44EF41] off_480D82（列10）
+    int v40 = 0;
+    if (st.players[p].alive == 1) {
+        v40 = selectTargetDialog(app, 0x1200036);  // [RE 0x446AE8] flags 2|4|0x10|0x20
+    } else {
+        v40 = 0x8000 | (1 << p);  // [RE 0x420EEE] AI：自己
+    }
+    if (v40 == 0) {
+        return 0;
+    }
+    // 物件槽目标（0x8000|BYTE1=槽）→ 换算成 owner 玩家
+    if ((v40 & 0x8000) != 0 && (v40 & 0x3F00) != 0) {
+        const int slot = (v40 & 0x3F00) >> 8;
+        if (slot >= 1 && slot <= 46) {
+            const uint8_t owner = st.cellTable[24 * (slot - 1) + 5];  // g_cellOwner = cellTable+5
+            if (owner != 0) {
+                v40 = 0x8000 | (1 << (owner - 1));
+            }
+        }
+    }
+    bool done = false;
+    if (v40 > 2000 && v40 < 4000) {
+        // ---- 住宅用地搬迁 ----
+        const int dest = selectTargetDialog(app, 0x2090002);  // [RE 0x446AE8]
+        if (dest == 0) {
+            return 0;
+        }
+        const int si = v40 - 2000;
+        const int di = dest - 2000;
+        if (si > 0 && si < static_cast<int>(st.estates.size()) && di > 0 &&
+            di < static_cast<int>(st.estates.size())) {
+            Estate& src = st.estates[si];
+            Estate& dst = st.estates[di];
+            dst.owner = src.owner;
+            src.owner = 0;
+            dst.level = src.level;
+            src.level = 0;
+            dst.type = src.type;
+            src.type = 0;
+            dst.expireDate = src.expireDate;
+            src.expireDate = 0;
+            src.price = 0;  // [RE +44] 本次租金清零
+            buildMiniMapMarks(app);  // [RE 0x40AD80]
+            done = true;
+            RICH4_LOGI("teleport estate %d -> %d (RE 0x447428)", si, di);
+        }
+    } else if (v40 > 4000 && v40 < 6000) {
+        // ---- 商業用地搬迁 ----
+        const int dest = selectTargetDialog(app, 0x2090004);
+        if (dest == 0) {
+            return 0;
+        }
+        const int si = v40 - 4000;
+        const int di = dest - 4000;
+        if (si > 0 && si < static_cast<int>(st.corps.size()) && di > 0 &&
+            di < static_cast<int>(st.corps.size())) {
+            Corp& src = st.corps[si];
+            Corp& dst = st.corps[di];
+            dst.owner = src.owner;
+            src.owner = 0;
+            dst.sub = src.sub;
+            src.sub = 0;
+            dst.type = src.type;
+            src.type = 0;
+            dst.expireDate = src.expireDate;
+            src.expireDate = 0;
+            src.lastFee = 0;
+            buildMiniMapMarks(app);
+            done = true;
+            RICH4_LOGI("teleport corp %d -> %d (RE 0x447428)", si, di);
+        }
+    } else if ((v40 & 0x8000) != 0 && (v40 & 0xFF) != 0) {
+        // ---- 玩家传送（含 AI 自己）----
+        const int pi = bitScanPlayer(static_cast<uint32_t>(v40) & 0xFF);  // [RE 0x40D293]
+        if (pi < 0 || pi >= 4) {
+            return 0;  // 事件槽 4..7（P5）
+        }
+        int dest = 0;
+        if (st.players[p].alive == 1) {
+            dest = selectTargetDialog(app, 0x2090001);
+        } else {
+            dest = 0;  // [RE 0x420EEE] AI 预选（P5）
+        }
+        if (dest == 0 || dest >= static_cast<int>(st.cellEnts.size())) {
+            return 0;
+        }
+        // [RE 0x4474D1 段] 目的地可用出口（非 bit30-33 占用）：选与当前朝向最接近者
+        uint16_t exits[4] = {};
+        int ne = 0;
+        uint32_t bit = 0x40000000u;
+        for (int k = 0; k < 4; ++k) {
+            const uint16_t exitId = st.cellEnts[dest].exits[k];
+            if (exitId != 0 && (st.cellEnts[dest].occMask & bit) == 0) {
+                exits[ne++] = exitId;
+            }
+            bit >>= 1;
+        }
+        const int curDir = st.players[pi].dir;
+        int bestIdx = -1;
+        int bestDelta = 8;
+        int bestDir = 0;
+        for (int j = 0; j < ne; ++j) {
+            const int d = facingBetween(st, dest, exits[j]);  // sub_407A8C
+            int delta = std::abs(curDir - d);
+            if (delta > 4) {
+                const int lo = (curDir < d ? curDir : d) + 8;
+                const int hi = (curDir <= d ? d : curDir);
+                delta = lo - hi;
+            }
+            if (delta < bestDelta) {
+                bestDelta = delta;
+                bestIdx = j;
+                bestDir = d;
+            }
+        }
+        uint16_t prevExit = 0;
+        if (ne <= 1) {
+            prevExit = (bestIdx >= 0) ? exits[bestIdx] : 0;
+        } else {
+            for (int j = 0; j < ne; ++j) {
+                if (j != bestIdx) {
+                    prevExit = exits[j];
+                    break;
+                }
+            }
+        }
+        Player& pl = st.players[pi];
+        const uint32_t mask = 256u << pi;
+        if (pl.cellEntId > 0 && pl.cellEntId < st.cellEnts.size()) {
+            st.cellEnts[pl.cellEntId].occMask &= ~mask;
+        }
+        pl.cellEntId = static_cast<uint16_t>(dest);
+        pl.prevCellEnt = prevExit;
+        pl.dir = static_cast<uint8_t>(bestDir);
+        pl.spriteX = st.cellEnts[dest].x;
+        pl.spriteY = st.cellEnts[dest].y;
+        updatePlayerCarriedObjects(st, pi);  // [RE 0x40FC00]
+        if (pl.alive != 0) {
+            st.cellEnts[dest].occMask |= mask;
+        }
+        loadWalkResources(st, pi);  // [RE 0x40B93B]
+        if (pi == p) {
+            // [RE 0x44759D] 自己传送：state=1（steps=0 → 立即落地结算）
+            st.remainingSteps = 0;
+            st.playerActionState[pi] = 1;
+            st.gameStateActive = true;
+        }
+        done = true;
+        RICH4_LOGI("teleport player %d -> cell %d dir %d prev %u (RE 0x447428)", pi, dest,
+                   bestDir, prevExit);
+    } else if ((v40 & 0x8000) != 0 && (v40 & 0x3F00) != 0) {
+        // ---- 挂身物件/神明传送 ----
+        const int dest = selectTargetDialog(app, 0x2090001);
+        if (dest == 0 || dest >= static_cast<int>(st.cellEnts.size())) {
+            return 0;
+        }
+        const int slot = (v40 & 0x3F00) >> 8;
+        if (slot >= 1 && slot <= 46) {
+            const size_t off = static_cast<size_t>(24 * (slot - 1));
+            const uint16_t oldCell = st.cellTable[off + 2] | (st.cellTable[off + 3] << 8);
+            if (oldCell > 0 && oldCell < st.cellEnts.size()) {
+                st.cellEnts[oldCell].occMask &= ~(static_cast<uint32_t>(slot) << 16);
+            }
+            st.cellTable[off + 2] = static_cast<uint8_t>(dest & 0xFF);
+            st.cellTable[off + 3] = static_cast<uint8_t>((dest >> 8) & 0xFF);
+            st.cellEnts[dest].occMask |= static_cast<uint32_t>(slot) << 16;
+            uint16_t exitId = 0;
+            for (int k = 0; k < 4; ++k) {
+                if (st.cellEnts[dest].exits[k] != 0) {
+                    exitId = st.cellEnts[dest].exits[k];
+                    break;
+                }
+            }
+            st.cellTable[off + 1] = static_cast<uint8_t>(facingBetween(st, exitId, dest));
+            done = true;
+            RICH4_LOGI("teleport object slot %d -> cell %d (RE 0x447428)", slot, dest);
+        }
+    }
+    if (done) {
+        renderGameFrame(app);         // [RE 0x41D476] refreshGameUi(0,0,1)
+        takePlayerItem(st, p, 11);    // [RE 0x445AA2]
+        return 1;
+    }
+    return 0;
+}
+
 // ===== [RE 0x446774] 遥控骰子选择模态（panel.mkf[72]：帧0 面板 + 帧 1..6 骰子高亮）=====
 namespace {
 
@@ -486,6 +682,7 @@ int itemEffect(Application& app, int id) {
         case 7: return launchMissile(app, 7, 0x300C0, 100, 0, 528, 81);  // 飛彈（降级+受伤）
         case 8: return useItemRemoteDice(app);
         case 9: return useItemRobotWorker(app);
+        case 11: return useItemTeleport(app);
         case 12: return useItemBulldozer(app);
         case 13: return launchMissile(app, 13, 0x400C0, -1, 1, 530, 83);  // 核子飛彈（全图归公）
         default:
