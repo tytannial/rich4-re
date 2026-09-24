@@ -45,6 +45,22 @@ bool targetAllowed(const GameState& st, uint16_t v, uint16_t flags) {
     return false;
 }
 
+// [USER 魔改] 无主空地判定（傳送機人物/神明/物品目的地；[HELP 94]「空道路/空地」）
+//   依据: 住宅 Estate owner==0&&level==0 / 商業 Corp owner==0&&sub==0（与 teleportSourceValid 对称）
+bool isEmptyLandObject(const GameState& st, uint16_t v) {
+    if (v > 2000 && v < 4000) {
+        const int i = v - 2000;
+        return i > 0 && i < static_cast<int>(st.estates.size()) && st.estates[i].owner == 0 &&
+               st.estates[i].level == 0;
+    }
+    if (v > 4000 && v < 6000) {
+        const int i = v - 4000;
+        return i > 0 && i < static_cast<int>(st.corps.size()) && st.corps[i].owner == 0 &&
+               st.corps[i].sub == 0;
+    }
+    return false;
+}
+
 // [RE 0x4751B0/0x4751B4] 滚动方向向量表（16.16 定点，8 方向：上/左上/左/左下/下/右下/右/右上）
 constexpr int32_t kScrollVecX[8] = {0, -46341, -65536, -46341, 0, 46341, 65536, 46341};
 constexpr int32_t kScrollVecY[8] = {-65536, -46341, 0, 46341, 65536, 46341, 0, -46341};
@@ -70,6 +86,8 @@ struct TargetSelCtx {
     bool savedManualView = false;
     int savedViewX = 0;
     int savedViewY = 0;
+    // [USER 魔改] 允许无主空地（傳送機人物/神明/物品目的地）
+    bool allowEmptyLand = false;
 };
 
 // 拾取 id 规范化：重写 mapHitRegions 编码 → 原版目标编码（下游 getObjectPosition/
@@ -157,7 +175,11 @@ bool targetSelHandler(const SDL_Event* event, void* user) {
                 c.edgeDir = 0;  // [RE KillTimer] 鼠标回视口内 → 停止滚动
             }
             const uint16_t v = pickMapObject(st, mx, my);  // [RE 0x40A9D7]
-            if (targetAllowed(st, v, c.flags)) {
+            bool allowed = targetAllowed(st, v, c.flags);
+            if (!allowed && c.allowEmptyLand && v < 6000) {
+                allowed = isEmptyLandObject(st, v);  // [USER] 无主空地（傳送機目的地）
+            }
+            if (allowed) {
                 // [RE 0x445E4D LABEL_140] 命中：记选中（规范化为原版编码）+ 光标换类型
                 c.selected = normalizeHitId(v);
                 setCursor(c, c.cursorType, 1, 10);
@@ -208,10 +230,11 @@ bool targetSelHandler(const SDL_Event* event, void* user) {
 //   LBUTTONUP 确认（仅未处于延迟输入状态）；RBUTTON/MBUTTON 取消；光标默认 5、确认 41；
 //   0x80 地图滚动模式（飞弹/核弹）：鼠标出视口 → 方向箭头光标 + SetTimer(50ms) 逐帧滚动，
 //   回视口内 KillTimer 并立即判定；滚动中不可确认（提示音）
-int selectTargetDialog(Application& app, int mode) {
+int selectTargetDialog(Application& app, int mode, bool allowEmptyLand) {
     GameState& st = app.gameState();
     TargetSelCtx c;
     c.app = &app;
+    c.allowEmptyLand = allowEmptyLand;
     c.flags = static_cast<uint16_t>(mode & 0xFFFF);
     if ((c.flags & 0x40) != 0) {
         // [RE 0x445E4D] 0x40 → 全可选 + 滚动模式（0x80 | 0x37）

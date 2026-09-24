@@ -200,10 +200,19 @@ void renderMap(Application& app, int centerX, int centerY) {
         const int sx = baseX + isoAt(idx + 2) - px;
         const int sy = baseY + isoAt(idx) - py;
         if ((ce.occMask & 0xFFFF00u) == 0 && state.flagTiles.frameCount() > 4) {
+            // [RE 0x409246] 格 → 逻辑对象归一化：cellEnt+32 指向地块/设施（2000..7999，住宅
+            //   2000+i/商业 4000+i/设施 6000+i，商业/设施每项可占多格）时拾取 id = 对象 id。
+            //   原版由 drawList 大菱形（g_pickMask 帧 2/3，143x103）以地块锚点覆盖整块地实现
+            //   同一语义；重写用帧 4（51x51）+ 表项锚点盖不满 → 格 id 暴露会使 flags=1 的
+            //   路障/地雷/炸弹可放在地产格上、传送机目的地选中后误报（2026-09-26 修）。
+            //   医院/监狱（8001/8002）保持格 id = 原版行为（无 drawList 覆盖，可传/可走）。
+            uint16_t pickId = static_cast<uint16_t>(i);
+            if (ce.special >= 2000 && ce.special <= 7999) {
+                pickId = ce.special;
+            }
             const UiFrameView& pf = state.flagTiles.frame(4);
             state.mapHitRegions.push_back({sx - pf.offsetX, sy - pf.offsetY, pf.width, pf.height,
-                                           static_cast<uint16_t>(i), &state.flagTiles, 4, sx,
-                                           sy});
+                                           pickId, &state.flagTiles, 4, sx, sy});
         }
         if (ce.sprite == 0) {
             continue;

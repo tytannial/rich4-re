@@ -388,15 +388,20 @@ int useItemTimeMachine(Application& app) {
     return ok ? 1 : 0;
 }
 
-// [HELP 94] 傳送機目的地校验：人物/神明/物品必须移至**空道路**（无玩家/物件占用，
-//   且无房屋/设施/特殊点/事件格——房屋不占 occMask 物件位，拾取仍返回格 id，须显式排除）
+// [HELP 94] 傳送機目的地校验：人物/神明/物品必须移至**空道路**（无玩家/物件占用）。
+//  [RE 0x409B18] 原版拾取语义：格 id 仅在 occMask bit8-23==0 时登记；地产/设施点被
+//  大菱形拾取覆盖（拾取 id 2000+/4000+/6000+ → flags=1 拒绝）；医院(8001)/监狱(8002)/
+//  事件格(8000+i) 无 drawList 拾取覆盖 → 返回格 id → 原版可传（落地触发对应事件）。
+//  [USER] 保留魔改边界：格 id 路径仅放行 occMask 干净的格；地产/设施点（special
+//  2000..7999）拒绝。**无主空地**不走此函数（selectTargetDialog allowEmptyLand +
+//  resolveTeleportDest 解析为格）。
 bool isVacantRoad(const GameState& st, int cellId) {
     if (cellId <= 0 || cellId >= static_cast<int>(st.cellEnts.size())) {
         return false;
     }
     const CellEnt& ce = st.cellEnts[cellId];
-    if (ce.special >= 2000) {
-        return false;  // 房屋/设施/特殊点/事件格（非空道路）
+    if (ce.special >= 2000 && ce.special <= 7999) {
+        return false;  // 地产/设施点（2000..7999，非空道路）；8000+ = 医院/监狱/事件格放行
     }
     if ((ce.occMask & 0x00FFFF00u) != 0) {
         return false;  // bit8-23：玩家/事件槽/物件占用
@@ -404,9 +409,49 @@ bool isVacantRoad(const GameState& st, int cellId) {
     return true;
 }
 
-// [USER 第3轮] 传送源校验：完全空的无主地（estate owner==0&&level==0 / corp owner==0&&sub==0）
-//   不可作为源——原版允许选中但搬迁无内容（白白消耗道具）；重写拒绝并提示重选。
-//   无主但有加盖（level/sub>0，如天使/机器工人加盖）可搬运
+// [USER 魔改] 傳送機目的地解析（[HELP 94]「須移至空道路/空地」）：
+//   <2000 = 格 id（空道路/医院 8001/监狱 8002/事件格，走 isVacantRoad）；
+//   2000..6000 = 无主空地对象 id（住宅 owner==0&&level==0 / 商业 owner==0&&sub==0，
+//   selectTargetDialog allowEmptyLand 选入）→ 解析为 special == id 且占用干净的格；
+//   有主/有建筑地块拒绝（原版大菱形拾取覆盖 → 同样不可选）。
+//   返回格 id；0 = 拒绝。
+int resolveTeleportDest(const GameState& st, int sel) {
+    if (sel > 0 && sel < 2000) {
+        return isVacantRoad(st, sel) ? sel : 0;
+    }
+    if (sel <= 2000 || sel >= 6000) {
+        return 0;
+    }
+    if (sel < 4000) {
+        const int i = sel - 2000;
+        if (i <= 0 || i >= static_cast<int>(st.estates.size())) {
+            return 0;
+        }
+        if (st.estates[i].owner != 0 || st.estates[i].level != 0) {
+            return 0;
+        }
+    } else {
+        const int i = sel - 4000;
+        if (i <= 0 || i >= static_cast<int>(st.corps.size())) {
+            return 0;
+        }
+        if (st.corps[i].owner != 0 || st.corps[i].sub != 0) {
+            return 0;
+        }
+    }
+    for (size_t c = 1; c < st.cellEnts.size(); ++c) {
+        if (st.cellEnts[c].special == static_cast<uint16_t>(sel) &&
+            (st.cellEnts[c].occMask & 0x00FFFF00u) == 0) {
+            return static_cast<int>(c);
+        }
+    }
+    return 0;
+}
+
+// [USER] 保留魔改（第3轮）：传送源校验——完全空的无主地（estate owner==0&&level==0 /
+//   corp owner==0&&sub==0）不可作为源。原版允许选中，实为"清空目标地块"的拆迁用法
+//   （源全 0 覆盖目标）；重写拒绝并提示重选，白白消耗道具的保护。无主但有加盖
+//   （level/sub>0，如天使/机器工人加盖）可搬运
 bool teleportSourceValid(const GameState& st, int v40) {
     if (v40 > 2000 && v40 < 4000) {
         const int i = v40 - 2000;
@@ -428,9 +473,14 @@ bool teleportSourceValid(const GameState& st, int v40) {
 // [RE 0x447428] 傳送機（id11）：选目标（人物/神明/房屋/物品 0x1200036）→ 按类型选目的地
 //   （住宅 0x2090002 / 商业 0x2090004 / 空格 0x2090001）→ 搬迁；物件目标换算成 owner 玩家
 // 依据: 0x447428 反编译；AI 分支 = 0x8000|(1<<cur)；玩家传送后 dir=最优出口朝向、
-//   prevCellEnt=另一出口、state=1 触发落地结算
-// 差异: 房屋/设施搬迁的目的地按 [HELP 94]「须移至空道路/空地」限制为**无主空地**
-//   （原版未强制：直接覆盖目标地块内容；重写拒绝并提示重选，避免误毁他人产业）
+//   prevCellEnt=另一出口、state=1 触发落地结算；**传送自己前保存时光机快照**
+//   （0x4477C3 sub_44808A，位置更新前）；神明/物品旧格清 occMask bit16-23（0x44793B）
+//   ；目的地拾取语义 = occMask bit8-23 干净（医院/监狱/事件格原版可传，落地触发事件）
+// 差异（保留魔改，用户确认）: ① 源 = 完全空的无主地拒绝（teleportSourceValid）；
+//   ② 房屋/设施目的地限**无主空地**；人物/神明/物品限**空道路或无主空地**（[HELP 94]
+//    "空道路/空地"；原版大菱形覆盖空地 → 不可选，[USER] 2026-09-26 放开空地：
+//    selectTargetDialog(allowEmptyLand) + resolveTeleportDest；有主/有建筑地块拒绝）
+// 差异（待补）: AI 目的地 sub_420EEE（P5）；事件槽玩家 4..7（P5）
 int useItemTeleport(Application& app) {
     GameState& st = app.gameState();
     const int p = st.currentPlayer;
@@ -550,25 +600,22 @@ int useItemTeleport(Application& app) {
         if (pi < 0 || pi >= 4) {
             return 0;  // 事件槽 4..7（P5）
         }
-        // [HELP 94] 人物必须移至空道路
+        // [HELP 94] 人物必须移至空道路/空地（[USER] 空地 = 无主地块；allowEmptyLand +
+        //   resolveTeleportDest 把 2000+/4000+ 对象 id 解析为该地块所在格）
         int dest = 0;
         if (st.players[p].alive == 1) {
             for (int guard = 0; guard < 64; ++guard) {
-                dest = selectTargetDialog(app, 0x2090001);
-                if (dest == 0) {
+                const int sel = selectTargetDialog(app, 0x2090001, true);
+                if (sel == 0) {
                     break;
                 }
-                if (dest < 2000 && isVacantRoad(st, dest)) {
+                dest = resolveTeleportDest(st, sel);
+                if (dest != 0) {
                     break;
                 }
-                // 诊断：[USER 第3轮] 目标空路被误拒排查
-                if (dest > 0 && dest < static_cast<int>(st.cellEnts.size())) {
-                    RICH4_LOGI("teleport(player) dest rejected: %d special=%u occMask=0x%08X "
-                               "(RE 0x447428)",
-                               dest, st.cellEnts[dest].special, st.cellEnts[dest].occMask);
-                }
-                showMessage(app, "只能移到空的道路！", 1000);
-                dest = 0;
+                // 诊断：[USER 第3轮] 目标被误拒排查
+                RICH4_LOGI("teleport(player) dest rejected: sel=%d (RE 0x447428)", sel);
+                showMessage(app, "只能移到空的道路或空地！", 1000);
             }
         } else {
             dest = 0;  // [RE 0x420EEE] AI 预选（P5）
@@ -618,6 +665,11 @@ int useItemTeleport(Application& app) {
         }
         Player& pl = st.players[pi];
         const uint32_t mask = 256u << pi;
+        // [RE 0x4477C3] 传送自己：位置/占用更新**前**保存时光机快照（sub_44808A；原版顺序
+        //   = sub_44808A → g_stepsRemaining=0 → state=1 → 再改 cellEntId/占位）
+        if (pi == p) {
+            saveTurnSnapshot(st, p);
+        }
         if (pl.cellEntId > 0 && pl.cellEntId < st.cellEnts.size()) {
             st.cellEnts[pl.cellEntId].occMask &= ~mask;
         }
@@ -641,25 +693,21 @@ int useItemTeleport(Application& app) {
         RICH4_LOGI("teleport player %d -> cell %d dir %d prev %u (RE 0x447428)", pi, dest,
                    bestDir, prevExit);
     } else if ((v40 & 0x8000) != 0 && (v40 & 0x3F00) != 0) {
-        // ---- 神明/物品传送（[HELP 94] 必须移至空道路）----
+        // ---- 神明/物品传送（[HELP 94] 必须移至空道路/空地，同玩家分支）----
         int dest = 0;
         if (st.players[p].alive == 1) {
             for (int guard = 0; guard < 64; ++guard) {
-                dest = selectTargetDialog(app, 0x2090001);
-                if (dest == 0) {
+                const int sel = selectTargetDialog(app, 0x2090001, true);
+                if (sel == 0) {
                     break;
                 }
-                if (dest < 2000 && isVacantRoad(st, dest)) {
+                dest = resolveTeleportDest(st, sel);
+                if (dest != 0) {
                     break;
                 }
-                // 诊断：[USER 第3轮] 目标空路被误拒排查
-                if (dest > 0 && dest < static_cast<int>(st.cellEnts.size())) {
-                    RICH4_LOGI("teleport(object) dest rejected: %d special=%u occMask=0x%08X "
-                               "(RE 0x447428)",
-                               dest, st.cellEnts[dest].special, st.cellEnts[dest].occMask);
-                }
-                showMessage(app, "只能移到空的道路！", 1000);
-                dest = 0;
+                // 诊断：[USER 第3轮] 目标被误拒排查
+                RICH4_LOGI("teleport(object) dest rejected: sel=%d (RE 0x447428)", sel);
+                showMessage(app, "只能移到空的道路或空地！", 1000);
             }
         } else {
             dest = 0;  // [RE 0x420EEE] AI 预选（P5）
@@ -672,7 +720,9 @@ int useItemTeleport(Application& app) {
             const size_t off = static_cast<size_t>(24 * (slot - 1));
             const uint16_t oldCell = st.cellTable[off + 2] | (st.cellTable[off + 3] << 8);
             if (oldCell > 0 && oldCell < st.cellEnts.size()) {
-                st.cellEnts[oldCell].occMask &= ~(static_cast<uint32_t>(slot) << 16);
+                // [RE 0x44793B] 原版 `*(BYTE*)(cellEnt+38) = 0`：清 occMask bit16-23 全部
+                //   槽位（与 deleteMapObject 0x40E243 同语义；原先只清单槽）
+                st.cellEnts[oldCell].occMask &= ~0x00FF0000u;
             }
             st.cellTable[off + 2] = static_cast<uint8_t>(dest & 0xFF);
             st.cellTable[off + 3] = static_cast<uint8_t>((dest >> 8) & 0xFF);

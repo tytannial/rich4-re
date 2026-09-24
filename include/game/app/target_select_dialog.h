@@ -10,6 +10,9 @@ class Application;
 //     0x80=地图滚动模式；0x40 特殊 → flags 强制 0xB7|0x80）
 //   bit16-23 = 光标类型（cursorSelect(type,1,10) 命中时）；bit24-31 = 光标 idx-1
 // 返回选中 objId（callEntity 编码：<2000 普通格、2000+ idx、0xF000|玩家、0xA100|物件槽）或 0 取消
-int selectTargetDialog(Application& app, int mode);
+// allowEmptyLand [USER 魔改]：额外接受**无主空地**（住宅 owner==0&&level==0 / 商业
+//   owner==0&&sub==0；原版大菱形拾取覆盖 → flags=1 不选）。傳送機人物/神明/物品目的地用
+//   （[HELP 94]「须移至空道路/空地」；调用方负责把 2000+/4000+ 对象 id 解析为格）
+int selectTargetDialog(Application& app, int mode, bool allowEmptyLand = false);
 
 } // namespace rich4
