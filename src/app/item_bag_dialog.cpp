@@ -5,6 +5,7 @@
 #include <cstdio>
 
 #include "game/app/event_stack.h"
+#include "game/app/item_effects.h"   // [RE 0x475DD4] g_itemEffectFuncs 分派
 #include "game/app/map_tables.h"
 #include "game/app/new_game_tables.h"
 #include "game/application.h"
@@ -144,14 +145,6 @@ bool itemModalHandler(const SDL_Event* event, void* user) {
         default:
             return true;
     }
-}
-
-// 道具效果表（g_itemEffectFuncs @ 0x475DD4，dword@(base + 4*id)）——本阶段全部未实现，
-// 返回 0（等价原版「不可用 → 重选」，不消耗）。逐道具接入见阶段 3（P4 道具系统）
-int itemEffect(Application&, int id) {
-    RICH4_LOGI("item effect id=%d (%s) not implemented (P4, RE 0x475DD4 + 4*id)", id,
-               kItemBagNames[id]);
-    return 0;
 }
 
 }  // namespace

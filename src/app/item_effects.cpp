@@ -1,0 +1,133 @@
+#include "game/app/item_effects.h"
+
+#include <SDL3/SDL.h>
+
+#include "game/app/event_stack.h"
+#include "game/app/game_loop.h"
+#include "game/app/item_lines.h"
+#include "game/app/map_tables.h"
+#include "game/application.h"
+#include "game/core/log.h"
+#include "game/render/blit.h"
+#include "game/render/surface.h"
+#include "game/render/text.h"
+#include "game/render/ui_image.h"
+
+namespace rich4 {
+namespace {
+
+// ===== [RE 0x44EF41] 角色气泡台词 =====
+struct ItemLineCtx {
+    Application* app = nullptr;
+    const char* line = nullptr;
+    int player = 0;
+    uint64_t startMs = 0;
+};
+
+void drawItemLine(ItemLineCtx& ctx) {
+    Application& app = *ctx.app;
+    GameState& st = app.gameState();
+    Surface& dst = app.surface();
+    renderGameFrame(app);
+    const UiImage& tip = st.estateTiles;  // [RE 0x48BAD8] g_tipFrame = data.mkf[517]
+    if (tip.frameCount() > 5) {
+        blitElement(dst, tip.frame(5), 220, 130, false);  // [RE 0x456418]
+    }
+    // 说话头像 = pieceSprites[p] 帧 expr+1（expr=0 → 帧 1）[RE 0x44EF41]
+    if (ctx.player >= 0 && ctx.player < 9 && st.pieceSprites[ctx.player].frameCount() > 1) {
+        blitElement(dst, st.pieceSprites[ctx.player].frame(1), 170, 130, false);
+    }
+    const char* t = ctx.line;
+    if (t[0] == '#') {
+        t += 5;  // 跳过 #NNNN 语音前缀（语音进入时已播）
+    }
+    if (t[0] == '@') {
+        // '#NNNN@MM' → 显示表情帧 MM-1（dword_48BAD4 = data.mkf[519]）[RE 0x44EF41]
+        const int mm = (t[1] - '0') * 10 + (t[2] - '0');
+        const UiImage& face = st.mapTiles519;  // [RE 0x48BAD4] data.mkf[519]
+        if (mm >= 1 && face.frameCount() >= mm) {
+            blitElement(dst, face.frame(mm - 1), 240, 130, false);
+        }
+        return;
+    }
+    app.text().setFont(16, 0xF0F0F0, 0x101010, kTextStyleShadow | kTextStyleBold, 1);
+    app.text().drawText(dst, t, 200, 130, 5);  // [RE 0x44FABC]
+}
+
+bool itemLineHandler(const SDL_Event* event, void* user) {
+    auto& ctx = *static_cast<ItemLineCtx*>(user);
+    if (!event) {
+        ctx.startMs = SDL_GetTicks();
+        drawItemLine(ctx);
+        return true;
+    }
+    if (event->type == kModalTimerEvent) {
+        if (SDL_GetTicks() - ctx.startMs >= 1000) {  // [RE 0x44EF41] sub_4544F6(1000)
+            ctx.app->events().requestExit(0);
+        } else {
+            drawItemLine(ctx);
+        }
+        return true;
+    }
+    return true;  // 纯延时，期间不响应输入
+}
+
+}  // namespace
+
+// [RE 0x44EF41] sub_44EF41：角色气泡台词（道具/卡片效果入口调用）
+// 依据: 0x44EF41 反编译；tip 框 data.mkf[517] 帧 5 @(220,130) + 头像 pieceSprites[p] 帧 1
+//   @(170,130) + 文本 @(200,130) 或 '@MM' 表情 data.mkf[519] 帧 MM-1 @(240,130)；
+//   时长 1000ms；同文本指针去重（dword_4762C8）；状态中（stateFlags BYTE1/state37/byte54）不显示
+void playItemLine(Application& app, int player, int itemId) {
+    GameState& st = app.gameState();
+    if (player < 0 || player >= 4 || itemId < 1 || itemId > 13) {
+        return;
+    }
+    const Player& pl = st.players[player];
+    if (((pl.stateFlags >> 8) & 0xFF) != 0 || pl.state37 != 0 || pl.byte54 != 0) {
+        return;
+    }
+    const int ci = pl.charIndex;
+    if (ci < 0 || ci >= 12) {
+        return;
+    }
+    const char* line = kItemLines[ci][itemId - 1];
+    if (line == nullptr || line[0] == '\0') {
+        return;
+    }
+    static const char* s_last = nullptr;  // [RE 0x4762C8] 去重
+    if (line == s_last) {
+        return;
+    }
+    s_last = line;
+    // [RE 0x45441A drawTextSpeak] '#NNNN' 语音编号 → Speaking.mkf
+    if (line[0] == '#') {
+        int vid = 0;
+        bool ok = true;
+        for (int i = 1; i <= 4; ++i) {
+            if (line[i] < '0' || line[i] > '9') {
+                ok = false;
+                break;
+            }
+            vid = vid * 10 + (line[i] - '0');
+        }
+        if (ok) {
+            app.audio().playVoice(vid);
+        }
+    }
+    ItemLineCtx ctx;
+    ctx.app = &app;
+    ctx.line = line;
+    ctx.player = player;
+    RICH4_LOGI("playItemLine: p%d item%d %s (RE 0x44EF41)", player, itemId, line);
+    runModal(app, &itemLineHandler, &ctx, 16);
+}
+
+// [RE 0x475DD4] g_itemEffectFuncs[id] 分派（id = 道具 1..13）
+int itemEffect(Application&, int id) {
+    RICH4_LOGI("item effect id=%d (%s) not implemented (P4, RE 0x475DD4 + 4*id)", id,
+               (id >= 1 && id <= 13) ? kItemBagNames[id] : "?");
+    return 0;  // 等价「不可用 → 重选」，不消耗
+}
+
+} // namespace rich4
