@@ -219,13 +219,16 @@ void slotDraw(SlotCtx& sc) {
     renderGameFrame(app);
     const int lowest = sc.vis ? 1 : 0;
     if (sc.ui.frameCount() > 23) {
-        blitElement(dst, sc.ui.frame(sc.vis), 220, 320, false);
+        // [RE 0x440706/0x43EF3E] 机身与数字轮 = blitElementFullscreen（0x4563F5 →
+        //   blitElementOpaque 不透明整矩形）；把手/提示框 = sub_456418（色键透明）。
+        //   数字轮 0 像素不透明——用色键会在机身上露出地图背景（花屏根因）
+        blitElementOpaque(dst, sc.ui.frame(sc.vis), 220, 320);
         for (int r = 3; r >= lowest; --r) {
-            blitElement(dst, sc.ui.frame(sc.byte_[r] + 4), kSlotReelX[4 * sc.vis + r], 320,
-                        false);
+            blitElementOpaque(dst, sc.ui.frame(sc.byte_[r] + 4), kSlotReelX[4 * sc.vis + r],
+                               320);
         }
-        // [RE 0x43F3F7/0x43F511] 把手：case2 画压下帧(3)，case3 前 4 帧原版不重绘该区域
-        //   （压下持续 ~5 帧），第 4 帧换回抬起帧(2)
+        // [RE 0x43F3F7/0x43F511] 把手：case2 画压下帧 3，case3 前 4 帧原版不重绘该区域
+        //   （压下持续 ~5 帧），第 4 帧换回抬起帧 2；色键 blit（sub_456418）
         const bool pulled = sc.phase == 2 || (sc.phase == 3 && sc.frame < 4);
         blitElement(dst, sc.ui.frame(pulled ? 3 : 2), kSlotPreviewX[sc.vis], 240, false);
     }
@@ -369,17 +372,23 @@ int slotMachineDialog(Application& app, int a1) {
 // ===== 附身（0x40EAD7 / 0x40E32C）=====
 
 // [RE 0x40E2A2] showGodNarration：屏幕下方 28px 白字旁白，2400ms
+// 依据: 0x40E2A2 反编译; **不重绘场景**——直接在当前后缓冲（神明插图 FLC 末帧冻结画面，
+//   见 playEventFlc freeze=true）上 drawText(220,460,样式 7) 阻塞 2400ms
+//   （原版 DDraw 表面保留，直到下一次全量重绘）
+// 迁移: 结束清 eventFlcActive 解冻（下一次 renderGameFrame 恢复场景）
 void showGodNarration(Application& app, const char* text) {
+    GameState& st = app.gameState();
     Surface& dst = app.surface();
     app.text().setFont(28, 0xFFFFFF, 0x101010, kTextStyleShadow, 0);
-    renderGameFrame(app);
     app.text().drawText(dst, text, 220, 460, 7);
     app.renderFrame();
     const uint64_t end = SDL_GetTicks() + 2400;
     while (static_cast<int64_t>(SDL_GetTicks() - end) < 0) {
         app.audio().update();
+        app.pumpEvents();
         SDL_Delay(20);
     }
+    st.eventFlcActive = false;
 }
 
 // [RE 0x40E32C] attachEnd：附身结束（24 帧上升飘走 → 删除 → 配对轮替）
@@ -475,7 +484,7 @@ void attachObject(Application& app, int p, int cellEntId, int objId) {
     switch (type) {
         case 1: {  // 小財神：向所有对手收取（老虎机 4 位）
             if (voiceOn) {
-                playEventFlc(app, godFlcRes(1), 0, 40, godFlcSound(1));
+                playEventFlc(app, godFlcRes(1), 0, 40, godFlcSound(1), /*freeze=*/true);
                 showGodNarration(app, kGodNarr[1]);
             }
             const int v = slotMachineDialog(app, 0);
@@ -490,7 +499,7 @@ void attachObject(Application& app, int p, int cellEntId, int objId) {
         }
         case 2: {  // 大財神：入账（老虎机 3 位）
             if (voiceOn) {
-                playEventFlc(app, godFlcRes(2), 0, 40, godFlcSound(2));
+                playEventFlc(app, godFlcRes(2), 0, 40, godFlcSound(2), /*freeze=*/true);
                 showGodNarration(app, kGodNarr[2]);
             }
             const int v = slotMachineDialog(app, 1);
@@ -501,7 +510,7 @@ void attachObject(Application& app, int p, int cellEntId, int objId) {
         }
         case 3: {  // 小福神：抽 1 卡
             if (voiceOn) {
-                playEventFlc(app, godFlcRes(3), 0, 40, godFlcSound(3));
+                playEventFlc(app, godFlcRes(3), 0, 40, godFlcSound(3), /*freeze=*/true);
                 showGodNarration(app, kGodNarr[3]);
             }
             const int card = drawFreeCard(st, p);
@@ -515,7 +524,7 @@ void attachObject(Application& app, int p, int cellEntId, int objId) {
         }
         case 4: {  // 大福神：抽 2 卡
             if (voiceOn) {
-                playEventFlc(app, godFlcRes(4), 0, 40, godFlcSound(4));
+                playEventFlc(app, godFlcRes(4), 0, 40, godFlcSound(4), /*freeze=*/true);
                 showGodNarration(app, kGodNarr[4]);
             }
             const int c1 = drawFreeCard(st, p);
@@ -528,7 +537,7 @@ void attachObject(Application& app, int p, int cellEntId, int objId) {
         case 5: {  // 小窮神：付给每个对手（老虎机 3 位）
             // [TODO P4] 哭台词 sub_44EF41(p,2,off_4808A2[char])
             if (voiceOn) {
-                playEventFlc(app, godFlcRes(5), 0, 40, godFlcSound(5));
+                playEventFlc(app, godFlcRes(5), 0, 40, godFlcSound(5), /*freeze=*/true);
                 showGodNarration(app, kGodNarr[5]);
             }
             const int v = slotMachineDialog(app, 4);
@@ -542,7 +551,7 @@ void attachObject(Application& app, int p, int cellEntId, int objId) {
         case 6: {  // 大窮神：付给银行
             // [TODO P4] 哭台词
             if (voiceOn) {
-                playEventFlc(app, godFlcRes(6), 0, 40, godFlcSound(6));
+                playEventFlc(app, godFlcRes(6), 0, 40, godFlcSound(6), /*freeze=*/true);
                 showGodNarration(app, kGodNarr[6]);
             }
             const int v = slotMachineDialog(app, 5);
@@ -552,7 +561,7 @@ void attachObject(Application& app, int p, int cellEntId, int objId) {
         case 7: {  // 小衰神：随机丢 1 卡
             // [TODO P4] 哭台词
             if (voiceOn) {
-                playEventFlc(app, godFlcRes(7), 0, 40, godFlcSound(7));
+                playEventFlc(app, godFlcRes(7), 0, 40, godFlcSound(7), /*freeze=*/true);
                 showGodNarration(app, kGodNarr[7]);
             }
             const int card = discardRandomCard(app, p);
@@ -565,7 +574,7 @@ void attachObject(Application& app, int p, int cellEntId, int objId) {
         case 8: {  // 大衰神：丢一半卡
             // [TODO P4] 哭台词
             if (voiceOn) {
-                playEventFlc(app, godFlcRes(8), 0, 40, godFlcSound(8));
+                playEventFlc(app, godFlcRes(8), 0, 40, godFlcSound(8), /*freeze=*/true);
                 showGodNarration(app, kGodNarr[8]);
             }
             if (discardHalfCards(app, p) != 0) {
@@ -575,26 +584,26 @@ void attachObject(Application& app, int p, int cellEntId, int objId) {
         }
         case 9:  // 天使：仅插图/旁白 + 三属性
             if (voiceOn) {
-                playEventFlc(app, godFlcRes(9), 0, 40, godFlcSound(9));
+                playEventFlc(app, godFlcRes(9), 0, 40, godFlcSound(9), /*freeze=*/true);
                 showGodNarration(app, kGodNarr[9]);
             }
             break;
         case 10:  // 惡魔
             if (voiceOn) {
-                playEventFlc(app, godFlcRes(10), 0, 40, godFlcSound(10));
+                playEventFlc(app, godFlcRes(10), 0, 40, godFlcSound(10), /*freeze=*/true);
                 showGodNarration(app, kGodNarr[10]);
             }
             break;
         case 12:  // 土地公
             if (voiceOn) {
-                playEventFlc(app, godFlcRes(12), 0, 40, godFlcSound(12));
+                playEventFlc(app, godFlcRes(12), 0, 40, godFlcSound(12), /*freeze=*/true);
                 showGodNarration(app, kGodNarr[12]);
             }
             break;
         case 15:  // 死神：没收全部道具+卡片（寿命 13 已在上方）
             // [TODO P4] 哭台词
             if (voiceOn) {
-                playEventFlc(app, godFlcRes(15), 0, 40, godFlcSound(15));
+                playEventFlc(app, godFlcRes(15), 0, 40, godFlcSound(15), /*freeze=*/true);
                 showGodNarration(app, kGodNarr[15]);
             }
             confiscateItems(app, p);
@@ -919,7 +928,14 @@ bool useInviteGodCard(Application& app) {
         static_cast<uint16_t>(st.cellTable[off + 2] | (st.cellTable[off + 3] << 8));
     cardBagRemove(st, p, 23);  // [RE 0x444E52 0x441343(cur,23)]
     // [TODO P4] 请神台词 sub_44EF41(p, 0, off_481292[27? stride 90 * charIndex])
-    // [RE 0x444EA8] 动画前临时摘除神明 cellEnt（防飞行途中原地仍绘制），结束后还原
+    // 时序（用户核对后的修正）：原版 0x444E1A 为"新神飞行 → attach（内部才送走旧神）"，
+    //   飞行期间旧神仍挂身、其后的 attachEnd 飘走期间新神贴图已还原大地图；
+    //   重写改为 **先送走旧神（attachEnd 飘走 + 轮替）→ 新神再飞身靠近 → 附身**。
+    //   attachObject 内部对 cellTableIdx==0 幂等（不再重复 attachEnd）
+    if (st.players[p].cellTableIdx != 0) {
+        attachEnd(app, p);
+    }
+    // [RE 0x444EA8] 动画前临时摘除神明 cellEnt（防飞行途中原地残影），结束后还原
     st.cellTable[off + 2] = 0;
     st.cellTable[off + 3] = 0;
     const CellEnt& ce = st.cellEnts[ent];

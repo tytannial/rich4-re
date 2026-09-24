@@ -72,8 +72,8 @@ bool moveOneStep(Application& app);
 int landingEvent(Application& app, uint16_t cellEntId);
 
 // [RE 0x45144F] playEventFlc：阻塞播放 data.mkf[mkfIndex] FLC（定义见 turn_system.cpp；
-//   事件格/神明插图共用；soundId<0 无声）
-void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId);
+//   事件格/神明插图共用；soundId<0 无声；freeze=true 播完冻结末帧至下次全量重绘）
+void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, bool freeze = false);
 
 // [RE 0x40B93B] loadWalkResources（行走资源加载，定义见 turn_system.cpp；
 //   状态结束/载具损毁/住院等复用）

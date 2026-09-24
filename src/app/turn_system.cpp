@@ -579,7 +579,9 @@ void playHighlightBlink(Application& app) {
 //       首帧解码后 sub_45434F 播放 Effect.mkf[soundId]（-1 不播）；播完释放资源。
 // 迁移: 逐帧 renderGameFrame（经 eventFlc 叠加）+ renderFrame + pumpEvents + 分段延时，
 //       音频续喂同 playHighlightBlink
-void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId) {
+// freeze=true: 播完**冻结末帧**持续显示（原版 backbuffer 保留，直到下一次全量重绘/
+//       showGodNarration 释放）——神明插图 + 旁白叠加需要
+void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, bool freeze) {
     GameState& st = app.gameState();
     auto blob = st.data.read(mkfIndex);
     if (!blob || !st.eventFlc.open(std::move(*blob))) {
@@ -605,8 +607,11 @@ void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId) {
             SDL_Delay(5);
         }
     }
-    st.eventFlcActive = false;
-    RICH4_LOGI("eventFlc: data.mkf[%d] played @(%d,%d) (RE 0x45144F)", mkfIndex, x, y);
+    if (!freeze) {
+        st.eventFlcActive = false;
+    }
+    RICH4_LOGI("eventFlc: data.mkf[%d] played @(%d,%d)%s (RE 0x45144F)", mkfIndex, x, y,
+               freeze ? " frozen" : "");
 }
 
 // ===== 卡片卡包（P2 卡片格 case 13；0x4412E4/0x441262/0x44128F/0x441343/0x441E12）=====
