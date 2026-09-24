@@ -267,13 +267,21 @@ int useItemRobotWorker(Application& app) {
     int x = 0;
     int y = 0;
     getObjectPosition(st, v, x, y);  // [RE 0x40AF12]
-    renderGameFrame(app);            // [RE 0x41D476] refreshGameUi(x, y, 0)
+    // [RE 0x41D476] refreshGameUi(x, y, 0)：**视口中心对准目标地块**——施工动画/加盖结果
+    //   在目标处显示；商业用地无设施时 angelUpgrade 内部弹出设施选择面板也在对准后的视口上，
+    //   选完面板关闭才开始 FLC 553 施工
+    st.manualView = true;
+    st.viewSmoothX = x;
+    st.viewSmoothY = y;
+    st.viewScrolling = false;
+    renderGameFrame(app);
     const int flags = angelUpgrade(app, v);          // [RE 0x40B110]
     playEventFlc(app, 553, 0, 40, 91, false, 44);    // [RE 0x45144F flags 0x2C0001 音效 91]
     if ((flags & 0x80) != 0) {
         playEventFlc(app, 523, 0, 40, 90, false, 0); // [RE 0x40B0CD] playGodBuildFlc 施工动画
     }
-    renderGameFrame(app);  // [RE 0x41D546]
+    st.manualView = false;  // [RE 0x41D546] 视口复位（跟随当前玩家）
+    renderGameFrame(app);
     RICH4_LOGI("robot worker: p%d target %d flags %d (RE 0x447295)", p, v, flags);
     return v;
 }
@@ -553,13 +561,15 @@ void drawDicePick(DicePickCtx& c) {
     Surface& dst = app.surface();
     renderGameFrame(app);
     const UiImage& s = *c.sheet;
+    // [RE 0x447183] blitElementFullscreen = **不透明** blit（0x4563F5；面板底图含 0 像素时
+    //   透明 blit 会露出地图 = 花屏）
     if (s.frameCount() > 0) {
-        blitElement(dst, s.frame(0), 92, 300, false);  // [RE 0x447183] blitElementFullscreen
+        blitElementOpaque(dst, s.frame(0), 92, 300);
     }
     if (c.hover >= 1 && c.hover <= 6 &&
         s.frameCount() > static_cast<size_t>(c.hover)) {
         // [RE 0x4469xx] 悬停：blitElementFullscreen(帧 hover) @(104+40*(hover-1), 314)
-        blitElement(dst, s.frame(c.hover), 104 + 40 * (c.hover - 1), 314, false);
+        blitElementOpaque(dst, s.frame(c.hover), 104 + 40 * (c.hover - 1), 314);
     }
 }
 
