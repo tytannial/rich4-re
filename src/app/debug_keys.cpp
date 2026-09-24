@@ -290,6 +290,15 @@ bool handleDebugKey(Application& app, int code, bool shift) {
                 }
                 return true;
             }
+            case 'f': { // [NEW] 发放全部 13 种道具（每种 2 个；id1..8 受礼物池库存限制）
+                for (int id = 1; id <= 13; ++id) {
+                    givePlayerItem(st, cur, id);
+                    givePlayerItem(st, cur, id);
+                }
+                RICH4_LOGI("debug: Ctrl+Shift+F player %d granted 13 item types x2 "
+                           "(open 工具条 case7 道具栏使用)", cur);
+                return true;
+            }
             case 'i': { // [NEW] 使用请神符（0x444E1A：视野最近神明飞行附身；先塞卡走完整路径）
                 giveCardToBag(st, cur, 23);
                 const bool ok = useInviteGodCard(app);
@@ -321,6 +330,19 @@ bool handleDebugKey(Application& app, int code, bool shift) {
                 RICH4_LOGI("  giftPool %u,%u,%u,%u,.. trapStock %u,%u,%u", st.misc8A[0],
                            st.misc8A[1], st.misc8A[2], st.misc8A[3], st.trapStock[0],
                            st.trapStock[1], st.trapStock[2]);
+                // 道具库存（每玩家 15 槽；slot i = 道具 id i+1）
+                for (int i = 0; i < st.playerCount && i < 4; ++i) {
+                    RICH4_LOGI("  itemStock p%d = 娃娃%u 路障%u 地雷%u 炸彈%u 機車%u 汽車%u 飛彈%u "
+                               "骰子%u 工人%u 時光機%u 傳送機%u 工程車%u 核彈%u | travel=%u dice=%u",
+                               i, st.itemStock[15 * i + 0], st.itemStock[15 * i + 1],
+                               st.itemStock[15 * i + 2], st.itemStock[15 * i + 3],
+                               st.itemStock[15 * i + 4], st.itemStock[15 * i + 5],
+                               st.itemStock[15 * i + 6], st.itemStock[15 * i + 7],
+                               st.itemStock[15 * i + 8], st.itemStock[15 * i + 9],
+                               st.itemStock[15 * i + 10], st.itemStock[15 * i + 11],
+                               st.itemStock[15 * i + 12], st.players[i].travel,
+                               st.players[i].diceCount);
+                }
                 RICH4_LOGI("debug: Ctrl+Shift+Y cellTable dump done");
                 return true;
             }
