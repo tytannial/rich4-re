@@ -368,7 +368,7 @@ int slotMachineDialog(Application& app, int a1) {
     sc.humanCtl = cp >= 0 && cp < 4 && st.players[cp].alive == 1 && st.players[cp].state37 == 0;
     RICH4_LOGI("slotMachine: a1=%d vis=%d human=%d (RE 0x440706)", a1, sc.vis,
                sc.humanCtl ? 1 : 0);
-    const int result = runModal(app, slotHandler, &sc, 24);
+    const int result = runModal(app, slotHandler, &sc, 30);  // [RE 0x43F791] 30ms/帧（v5<0x1E）
     RICH4_LOGI("slotMachine result=%d (RE 0x43F23E)", result);
     return result;
 }
