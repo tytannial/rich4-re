@@ -587,11 +587,12 @@ void playHighlightBlink(Application& app) {
 //       showGodNarration 释放）——神明插图 + 旁白叠加需要
 // switchFrame（原版 flcOpen flags BYTE2 = dword_48C85C 场景切换帧，[RE 0x450CED]）：
 //   >0 进入"保帧"模式——动画背景保持**开始前**的场景表面（每帧回卷区域背景再叠加当前帧，
-//   = 原版透明 blit 于保留表面），解到第 switchFrame 帧执行一次 renderGameFrame 全量重绘
-//   **切换场景**（传送/拆除等状态此刻生效 → 角色经棋子守卫 0x4086A1 从画面消失、建筑
-//   显示降级），其后帧基于新场景。原版实证：524=帧30（抬进医院）538=帧18（警车到中间）
-//   525/532/526=帧3、552=帧1；0=不切换（插图期无状态变化的动画，逐帧重绘与原版表面静止
-//   等价）。2026-09-24 两轮实机修正（先补保帧背景静止，再补切换帧+棋子守卫）
+//   = 原版透明 blit 于保留表面），解到第 switchFrame 帧执行一次**视口锁定**的全量重绘
+//   （原版 sub_40829D(-1,0) 用上次视口 dword_48B2AC，不随传送后的玩家位置重居中）：
+//   视口原地不动、仅重建绘制列表——角色经棋子守卫 0x4086A1 此刻从画面消失、建筑显示
+//   降级；动画**播完返回主循环后**视口才切到医院/监狱。原版实证：524=帧30（抬进医院）、
+//   538=帧18（警车到中间）、525/532/526=帧3、552=帧1；0=不切换（插图期无状态变化的
+//   动画，逐帧重绘与原版表面静止等价）。2026-09-24 三轮实机修正（跳视口→保帧→锁视口）
 void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, bool freeze,
                   int switchFrame) {
     GameState& st = app.gameState();
@@ -604,24 +605,30 @@ void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, boo
     st.eventFlcY = y;
     st.eventFlcActive = true;
     const bool preserve = switchFrame > 0;
+    // 动画开始前的视口中心（= 原版 dword_48B2AC"上次绘制视口"，传送不改它）
+    const int lockViewX = st.viewX;
+    const int lockViewY = st.viewY;
     std::vector<uint16_t> bg;  // 回卷区域（保帧模式）：FLC 覆盖矩形与屏幕交集
     int rx0 = 0;
     int ry0 = 0;
     int rw = 0;
     int rh = 0;
     Surface& dst = app.surface();
+    auto snapBg = [&]() {
+        bg.resize(static_cast<size_t>(rw) * rh);
+        for (int r = 0; r < rh; ++r) {
+            std::memcpy(&bg[static_cast<size_t>(r) * rw],
+                        dst.pixels() + static_cast<size_t>(ry0 + r) * Surface::kWidth + rx0,
+                        static_cast<size_t>(rw) * sizeof(uint16_t));
+        }
+    };
     if (preserve) {
         rx0 = std::max(0, x);
         ry0 = std::max(0, y);
         rw = std::max(0, std::min(Surface::kWidth, x + st.eventFlc.width()) - rx0);
         rh = std::max(0, std::min(Surface::kHeight, y + st.eventFlc.height()) - ry0);
         if (rw > 0 && rh > 0) {
-            bg.resize(static_cast<size_t>(rw) * rh);
-            for (int r = 0; r < rh; ++r) {
-                std::memcpy(&bg[static_cast<size_t>(r) * rw],
-                            dst.pixels() + static_cast<size_t>(ry0 + r) * Surface::kWidth + rx0,
-                            static_cast<size_t>(rw) * sizeof(uint16_t));
-            }
+            snapBg();
         }
     }
     const int interval = std::max(1, st.eventFlc.speedMs());
@@ -630,19 +637,30 @@ void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, boo
     bool switched = false;
     while (st.eventFlc.nextFrame()) {
         ++frameNo;
-        if (preserve && !switched && rw > 0 && rh > 0) {
-            // 切换帧前：回卷开始前快照 + 叠加当前动画帧（原版表面保留语义）
+        if (preserve && rw > 0 && rh > 0) {
+            // 回卷基准（切换前=开始前画面；切换后=切换帧全量重绘结果）+ 叠加当前动画帧
             for (int r = 0; r < rh; ++r) {
                 std::memcpy(dst.pixels() + static_cast<size_t>(ry0 + r) * Surface::kWidth + rx0,
                             &bg[static_cast<size_t>(r) * rw],
                             static_cast<size_t>(rw) * sizeof(uint16_t));
             }
             overlayEventFlcFrame(app);
-            if (frameNo >= switchFrame) {
-                // [RE 0x450F04] 切换帧：sub_40829D(-1,0) 全量重绘（新场景此刻可见——角色经
-                //   0x4086A1 守卫隐藏/拆除后建筑），当前帧由 renderGameFrame 的
-                //   eventFlcActive 叠加重画；后续帧基于新场景
+            if (!switched && frameNo >= switchFrame) {
+                // [RE 0x450F04] 切换帧 = sub_40829D(-1,0)：**以动画开始前的视口**全量重绘
+                //   （视口原地不动，仅绘制列表重建——角色经 0x4086A1 守卫此刻从画面消失、
+                //   拆除建筑显示降级）；借 manualView+viewSmooth 临时锁定实现。当前帧由
+                //   renderGameFrame 的 eventFlcActive 叠加重画；重绘后更新回卷基准。
+                const bool mv = st.manualView;
+                const int osx = st.viewSmoothX;
+                const int osy = st.viewSmoothY;
+                st.manualView = true;
+                st.viewSmoothX = lockViewX;
+                st.viewSmoothY = lockViewY;
                 renderGameFrame(app);
+                st.manualView = mv;
+                st.viewSmoothX = osx;
+                st.viewSmoothY = osy;
+                snapBg();
                 switched = true;
             }
         } else {

@@ -206,7 +206,7 @@ python tools/re_map.py
 - **阻塞 FLC 动画期间游戏必须冻结**：原版 `sub_45144F` 的 PeekMessage 只取消息**不派发**
   窗口过程；重写 `playEventFlc` 循环 `pumpEvents` 会重入 gameEventHandler（状态机在动画
   下偷跑）且 `renderGameFrame` 把视口按**传送后**的玩家重居中（住院 524/入狱 538 一开演
-  画面就跳到医院/监狱的根因）。修复三件套：timer 分支 `eventFlcActive` 守卫直接返回；`playEventFlc(switchFrame)` = 原版 flcOpen flags BYTE2 **场景切换帧**（保帧播放至第 N 帧全量重绘切换：524=30 / 538=18 / 525/532/526=3 / 552=1）；**棋子守卫对齐 0x4086A1**（`stateFlags!=0 && !(alive&0x20)` 隐藏，原重写只查 BYTE0 住宿 → 住院/入狱角色不消失）。
+  画面就跳到医院/监狱的根因）。修复三件套：timer 分支 `eventFlcActive` 守卫直接返回；`playEventFlc(switchFrame)` = 原版 flcOpen flags BYTE2 **场景切换帧**（保帧播放至第 N 帧做一次**视口锁定**的全量重绘：524=30 / 538=18 / 525/532/526=3 / 552=1——`sub_40829D(-1,0)` 用上次视口 dword_48B2AC，**不随传送后玩家位置重居中**：视口原地不动、仅重建绘制列表擦除角色，动画播完返回主循环后视口才切到医院/监狱；重写以临时 manualView+viewSmooth 锁视口实现）；**棋子守卫对齐 0x4086A1**（`stateFlags!=0 && !(alive&0x20)` 隐藏，原重写只查 BYTE0 住宿 → 住院/入狱角色不消失）。
 - **帮助文档是第一手机制依据**：`help.mkf` 99 条（8 分类，分类/标题表 `[RE 0x4761B4]`/`0x4761B8`）
   已提取为 `docs/help-checklist.md`；研究/实现时用 `[HELP idx]` 标注引用。
   但**帮助文本可能错**（idx 58 冬眠卡误用红卡文本）或与实现不符
