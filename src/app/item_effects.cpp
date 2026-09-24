@@ -6,7 +6,9 @@
 #include "game/app/game_loop.h"
 #include "game/app/item_lines.h"
 #include "game/app/map_objects.h"
+#include "game/app/map_render.h"
 #include "game/app/map_tables.h"
+#include "game/app/target_select_dialog.h"
 #include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/log.h"
@@ -176,6 +178,39 @@ int useItemCar(Application& app) {
     return 1;
 }
 
+// ===== 放置类公共（路障 0x446BAA / 地雷 0x446C88 / 定時炸彈 0x446D69）=====
+// 流程: 台词 → selectTargetDialog(mode) → createMapObject(type, cellEnt) →
+//       flyObjectSprite(玩家→目标格, 100) → 音效 → refreshGameUi → itemStock-1
+// 返回目标格 id（0 = 取消，不消耗）
+int placeMapItem(Application& app, int itemId, int objType, int mode, int sfxSlot) {
+    GameState& st = app.gameState();
+    const int p = st.currentPlayer;
+    if (p < 0 || p >= 4) {
+        return 0;
+    }
+    playItemLine(app, p, itemId);  // [RE 0x44EF41]
+    int v = 0;
+    if (st.players[p].alive == 1) {
+        v = selectTargetDialog(app, mode);  // [RE 0x446AE8]
+    } else {
+        v = 0;  // [RE 0x420EEE] AI 预选目标（dword_48BE64[0]；P5）
+    }
+    if (v == 0) {
+        return 0;
+    }
+    const Player& pl = st.players[p];
+    const int obj = createMapObject(st, objType, v, 0, 0);  // [RE 0x40E033]
+    if (obj != 0 && v < static_cast<int>(st.cellEnts.size())) {
+        // [RE 0x40E669] 从玩家精灵位置飞向目标格世界坐标，100 帧
+        flyObjectSprite(app, obj, pl.spriteX, pl.spriteY, st.cellEnts[v].x, st.cellEnts[v].y, 100);
+    }
+    app.audio().playEffectSlot(sfxSlot);  // [RE 0x4542CE]
+    renderGameFrame(app);                 // [RE 0x41D546]
+    --st.itemStock[15 * p + itemId - 1];
+    RICH4_LOGI("place item %d: p%d obj %d cell %d (RE 0x446BAA/C88/D69)", itemId, p, obj, v);
+    return v;
+}
+
 // ===== [RE 0x446774] 遥控骰子选择模态（panel.mkf[72]：帧0 面板 + 帧 1..6 骰子高亮）=====
 namespace {
 
@@ -329,6 +364,7 @@ int useItemBulldozer(Application& app) {
 // [RE 0x475DD4] g_itemEffectFuncs[id] 分派（id = 道具 1..13）
 int itemEffect(Application& app, int id) {
     switch (id) {
+        case 2: return placeMapItem(app, 2, 16, 0x1, 4);  // 路障（dword_48236A=槽4）
         case 5: return useItemFoot(app);
         case 6: return useItemCar(app);
         case 8: return useItemRemoteDice(app);
