@@ -149,10 +149,36 @@ int useItemFoot(Application& app) {
     return 1;
 }
 
+// [RE 0x446F05] 汽車（id6）：travel=2 / 骰子数 3；已是汽车 → 0；原机车 → 归还一辆机车
+// 依据: 0x446F05 反编译（尾部共享 0x446EFF 返回 1）
+int useItemCar(Application& app) {
+    GameState& st = app.gameState();
+    const int p = st.currentPlayer;
+    if (p < 0 || p >= 4) {
+        return 0;
+    }
+    Player& pl = st.players[p];
+    if (pl.travel == 2) {
+        return 0;  // 已是汽车
+    }
+    if (pl.travel == 1) {
+        ++st.itemStock[15 * p + 4];  // [RE 0x446F37] 机车归还（slot4 = id5）
+    }
+    pl.travel = 2;
+    pl.diceCount = 3;
+    loadWalkResources(st, p);   // [RE 0x40B93B]
+    renderGameFrame(app);       // [RE 0x41D476] refreshGameUi(0,0,1)
+    playItemLine(app, p, 6);    // [RE 0x44EF41] off_480D6E
+    --st.itemStock[15 * p + 5]; // [RE 0x446FB1] 消耗汽车
+    RICH4_LOGI("itemCar: p%d travel=2 dice=3 (RE 0x446F05)", p);
+    return 1;
+}
+
 // [RE 0x475DD4] g_itemEffectFuncs[id] 分派（id = 道具 1..13）
 int itemEffect(Application& app, int id) {
     switch (id) {
         case 5: return useItemFoot(app);
+        case 6: return useItemCar(app);
         default:
             RICH4_LOGI("item effect id=%d (%s) not implemented (P4, RE 0x475DD4 + 4*id)", id,
                        (id >= 1 && id <= 13) ? kItemBagNames[id] : "?");
