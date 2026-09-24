@@ -30,6 +30,7 @@
 #include "game/app/roulette_dialog.h"
 #include "game/app/spec_pt_dialog.h"
 #include "game/app/stock_system.h"
+#include "game/app/target_select_dialog.h"
 #include "game/core/encoding.h"
 #include "game/core/log.h"
 #include "game/render/blit.h"
@@ -1050,6 +1051,12 @@ void godBlessUpgrade(Application& app, int p, uint16_t cellEntId) {
         return;
     }
     const uint16_t objId = st.cellEnts[cellEntId].special;
+    RICH4_LOGI("godBlessUpgrade: p%d god=%u cell=%u objId=%u (RE 0x40F8BE)", p, idx, cellEntId,
+               objId);
+    // [RE 0x40F8EE] 进入先重绘：显示买地/升级后的**即时状态**（买地=空地+购买人棋子标记、
+    //   付费升级=升级 1 级后的建筑）。随后 angelUpgrade 只改内存，消息叠加在此画面上；
+    //   消息后 [RE 0x40F9EF] 再重绘，加盖后的建筑此时才出场（原版表面保留时序）
+    renderGameFrame(app);
     char text[128];
     int flags = 0;
     if (objId > 4000 && objId < 6000) {
@@ -1061,6 +1068,7 @@ void godBlessUpgrade(Application& app, int p, uint16_t cellEntId) {
         }
     }
     flags |= angelUpgrade(app, objId);
+    RICH4_LOGI("godBlessUpgrade: objId %u -> flags %d (RE 0x40F8BE)", objId, flags);
     if ((flags & 1) == 0) {
         return;
     }
@@ -1069,6 +1077,7 @@ void godBlessUpgrade(Application& app, int p, uint16_t cellEntId) {
         showMessage(app, text, 1500);
     }
     app.audio().playEffectSlot(18);  // [RE 0x40F9E1] dword_4823DA 升级音效
+    renderGameFrame(app);            // [RE 0x40F9EF] 消息后重绘：加盖后的建筑出场
     if ((flags & 0x80) != 0) {
         // [RE 0x40FA13] 封顶台词 off_480886[charIdx*27]：sub_44EF41 [TODO P4]
         playEventFlc(app, 523, 0, 40, 90);
@@ -1140,6 +1149,10 @@ void landAfterMove(Application& app, int p, uint16_t cellEntId) {
     char text[128];
     switch (pl.cellTableIdx) {
         case 9: {  // 天使：所到之地免费加盖/建设
+            // [RE 0x40F427] 进入先重绘（视口对准玩家；落地后状态 = 棋子停在格上/旧建筑）。
+            //   随后 angelUpgrade 只改内存，消息叠加在此画面上；音效后 [RE 0x40F506]
+            //   再重绘（refreshGameUi(0,0,1)），加盖后的建筑此时才出场（与 godBlessUpgrade 同）
+            renderGameFrame(app);
             int flags = 0;
             if (objId > 4000 && objId < 6000) {
                 const int ci = objId - 4000;
@@ -1157,6 +1170,7 @@ void landAfterMove(Application& app, int p, uint16_t cellEntId) {
                     showMessage(app, text, 1500);  // [RE 0x40F4C7]
                 }
                 app.audio().playEffectSlot(18);      // [RE 0x40F4F8] dword_4823DA
+                renderGameFrame(app);                // [RE 0x40F506] refreshGameUi(0,0,1)
                 if ((flags & 0x80) != 0) {
                     playEventFlc(app, 523, 0, 40, 90);  // [RE 0x40F517 → 0x40B0CD]
                 }
@@ -1273,6 +1287,42 @@ void landAfterMove(Application& app, int p, uint16_t cellEntId) {
         default:
             break;
     }
+}
+
+// [RE 0x41AA3C/0x41ACD8] 房地產公司（specPt index11）选地施工公共段：视口对准目标地块
+//   → angelUpgrade（times 次；第 1 次封顶则不再追加）→ FLC 553 施工（switchFrame=44
+//   全量重绘时显示结果）→ 封顶播 FLC 523。返回第 1 次 flags（bit7=封顶）。
+//   拥有者停留：times=2（0x41AAE8 + 0x41AAFC 两次）；他人收费：times=1（0x41AD7E）后按地价收费
+int realtyPickUpgrade(Application& app, int sel, int times) {
+    GameState& st = app.gameState();
+    int tx = 0;
+    int ty = 0;
+    getObjectPosition(st, sel, tx, ty);  // [RE 0x40AF12]
+    st.manualView = true;                // [RE refreshGameUi(x,y,0)] 视口对准
+    st.viewSmoothX = tx;
+    st.viewSmoothY = ty;
+    st.viewScrolling = false;
+    renderGameFrame(app);
+    // 施工前场景快照（angelUpgrade 可能弹设施选择面板残留；FLC553 保帧基准 = 旧建筑）
+    Surface& dst = app.surface();
+    std::vector<uint16_t> preUpgrade(
+        dst.pixels(), dst.pixels() + static_cast<size_t>(Surface::kWidth) * Surface::kHeight);
+    int flags = angelUpgrade(app, sel);  // [RE 0x40B110]
+    if ((flags & 0x80) == 0) {
+        for (int i = 1; i < times; ++i) {
+            angelUpgrade(app, sel);
+        }
+    }
+    std::memcpy(dst.pixels(), preUpgrade.data(), preUpgrade.size() * sizeof(uint16_t));
+    app.renderFrame();
+    playEventFlc(app, 553, 0, 40, 91, false, 44);  // [RE 0x45144F flags 0x2C0001 音效 91]
+    if ((flags & 0x80) != 0) {
+        // [RE playGodBuildFlc] 封顶 FLC 523（拥有者路径另有台词 0x41AB2F [TODO P4]）
+        playEventFlc(app, 523, 0, 40, 90, false, 0);
+    }
+    st.manualView = false;  // [RE sub_41D546] 视口复位
+    renderGameFrame(app);
+    return flags;
 }
 
 // [RE 0x41982D] landingEvent
@@ -1445,6 +1495,9 @@ int landingEvent(Application& app, uint16_t cellEntId) {
             pl.cash -= price;
             // [RE 0x41A13E] sub_44F627(estate.name, 0)：同路段住宅用地 ≥3 时角色感想
             //   （sub_44EF41 角色语音/表情，P4 待实现）
+            // [RE 0x41A154 → 0x419A48] 购地成功也进**福神免费追加**：附身小/大福神 →
+            //   estate 免费加盖一层（level 0→1）——原先只在付费升级/建设施路径调用（修）
+            godBlessUpgrade(app, p, cellEntId);
             RICH4_LOGI("buy land: estate %d price %d owner %d (RE 0x41982D/0x41A013)", idx, price,
                        p + 1);
         } else if (es.owner == static_cast<uint8_t>(p + 1)) {
@@ -1591,6 +1644,9 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                 cp.expireDate = static_cast<uint32_t>(d);
             }
             pl.cash -= price;
+            // [RE 0x41A993 → 0x419A48] 购地成功也进**福神免费追加**：附身小/大福神 → corp
+            //   无设施时直接建设施（人类弹设施选择面板）/ 已有设施时升级（修）
+            godBlessUpgrade(app, p, cellEntId);
             RICH4_LOGI("buy corp: corp %d price %d owner %d (RE 0x41A86B)", idx, price, p + 1);
         } else if (cp.owner == static_cast<uint8_t>(p + 1)) {
             // ---- 自己的商業用地 ----
@@ -1817,9 +1873,33 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                     const int mult = 1 << (travel - 1);
                     fee = sp.feeBase * mult * st.diceValue * st.moneyMul;
                 } else if (spIdx == 11) {
-                    // 房地產公司：抽一块地按其地價 × M（简化：无地分支 1000×M，选地 UI M3）
-                    fee = 1000 * st.moneyMul;
-                    RICH4_LOGI("specPt realty: simplified 1000*M (RE 0x41ADD5, pick-place UI TODO)");
+                    // 房地產公司（0x41ACD8..0x41AE18）：选一块地（mode 0x2090086）→ 免费加盖
+                    //   1 层 + FLC553 → rent = 选中地块地价（estate+28 priceAdd / corp+34
+                    //   buildPrice）× M；取消/无目标 → 1000×M
+                    int sel = 0;
+                    if (st.players[p].alive == 1) {
+                        sel = selectTargetDialog(app, 0x2090086);  // [RE 0x446AE8]
+                    } else {
+                        sel = 0;  // [RE 0x40B455] AI 预选（P5）
+                    }
+                    if (sel != 0) {
+                        realtyPickUpgrade(app, sel, 1);  // [RE 0x41AD7E] 加盖 1 层 + FLC553
+                        if (sel > 2000 && sel < 4000) {
+                            const int ei = sel - 2000;
+                            fee = (ei > 0 && ei < static_cast<int>(st.estates.size()))
+                                      ? st.estates[ei].priceAdd * st.moneyMul
+                                      : 0;
+                        } else if (sel > 4000 && sel < 6000) {
+                            const int ci = sel - 4000;
+                            fee = (ci > 0 && ci < static_cast<int>(st.corps.size()))
+                                      ? st.corps[ci].buildPrice * st.moneyMul
+                                      : 0;
+                        }
+                        RICH4_LOGI("specPt realty fee: obj %d -> %d (RE 0x41ADD5)", sel, fee);
+                    } else {
+                        fee = 1000 * st.moneyMul;  // [RE 0x41ADFF] 无目标
+                        RICH4_LOGI("specPt realty fee: no target 1000*M (RE 0x41ADFF)");
+                    }
                 } else if (spIdx == 12) {
                     // 帮派/游乐：+34 × 本次步數 × M（文本用 "幫主%s"，[RE 0x463A6A]）
                     fee = sp.feeBase * st.diceValue * st.moneyMul;
@@ -1839,6 +1919,36 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                         RICH4_LOGI("specPt fee: player %d -> fund %d amount %d (specPt %d idx %u, "
                                    "RE 0x41A168)",
                                    p, objId - 5900, fee, si, spIdx);
+                    }
+                }
+            } else if (sp.owner == static_cast<uint8_t>(p + 1)) {
+                // ---- 自己的 specPt：拥有者停留效果（0x41A9C0 段）----
+                //   costType 4 保險公司：轮盘(3) → 保险天数 += v（&0x7F 上限 127，0x41A9FE）
+                //   costType 11 房地產：选一块地免费加盖（0x41AA3C）——angelUpgrade 两次
+                //     （第 1 次即封顶则跳过第 2 次）+ FLC553 施工；封顶 → 台词 + FLC523
+                //   其余类型无动作；取消选择 = 直接进认购/落尾
+                const uint8_t ownIdx = sp.costType;
+                if (ownIdx == 4) {
+                    const int v = roulettePrompt(app, 3, spName.c_str());  // [RE 0x41AA01]
+                    Player& pl = st.players[p];
+                    pl.insuranceDays = static_cast<uint8_t>((pl.insuranceDays + v) & 0x7F);
+                    RICH4_LOGI("specPt insurance: p%d +%d -> %d days (RE 0x41A9FE)", p, v,
+                               pl.insuranceDays);
+                } else if (ownIdx == 11) {
+                    int sel = 0;
+                    if (st.players[p].alive == 1) {
+                        char text[128];
+                        std::snprintf(text, sizeof(text), "%s\n\n", spName.c_str());  // [RE aS_0]
+                        showMessage(app, text, 1500);
+                        sel = selectTargetDialog(app, 0x2090086);  // [RE 0x446AE8] 住宅/商业+滚动
+                    } else {
+                        sel = 0;  // [RE 0x40B455] AI 预选（P5）
+                    }
+                    if (sel != 0) {
+                        // [RE 0x41AAE8 + 0x41AAFC] 免费加盖两次（第 1 次封顶则一次）
+                        const int flags = realtyPickUpgrade(app, sel, 2);
+                        RICH4_LOGI("specPt realty: p%d upgrade obj %d flags %d (RE 0x41AA3C)", p,
+                                   sel, flags);
                     }
                 }
             }

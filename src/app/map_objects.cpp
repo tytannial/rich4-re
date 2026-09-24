@@ -373,10 +373,13 @@ bool slotHandler(const SDL_Event* event, void* user) {
     // phase≥4 已定格轮（r > 当前停轮号）不再动；
     // **phase≥8（金额显示）全部轮停转** [RE 0x43F5DD case8/9 不再调 sub_43EF3E，
     //   滚轮冻结在定格值上，金额框叠加显示——若继续滚会出现"数字滚动+结果与画面不符"]
-    const int stopReel =
-        (sc.phase >= 4 && sc.phase < 8) ? 3 - (sc.phase - 4) : (sc.phase >= 8 ? lowest - 1 : -1);
+    // [RE 0x43F5DD case8/9] phase≥8（金额已显示）**全部轮冻结**：原版 case8/9 不再调
+    //   sub_43EF3E。修：原先用 stopReel = lowest-1 表达"全停"，4 轮机（vis==0，lowest=0）
+    //   算出 -1 使 `stopReel >= 0` 失效 → 数字继续滚而结果已显示（2026-09-26 实机修）
+    const bool allStopped = sc.phase >= 8;
+    const int stopReel = (sc.phase >= 4 && sc.phase < 8) ? 3 - (sc.phase - 4) : -1;
     for (int r = lowest; r <= 3; ++r) {
-        if (stopReel >= 0 && r > stopReel) {
+        if (allStopped || (stopReel >= 0 && r > stopReel)) {
             continue;
         }
         if (sc.phase <= 2 && sc.frame % 10 == 0) {
@@ -576,6 +579,8 @@ void attachObject(Application& app, int p, int cellEntId, int objId) {
     uint8_t* e = &st.cellTable[off];
     const uint8_t type = e[0];
     Player& pl = st.players[p];
+    RICH4_LOGI("attachObject: p%d cell=%d objId=%d type=%u (RE 0x40EAD7)", p, cellEntId, objId,
+               type);
     if (pl.cellTableIdx != 0) {
         attachEnd(app, p);  // 旧神飘走（→轮替）
     }

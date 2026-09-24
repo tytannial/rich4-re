@@ -228,7 +228,7 @@ slot<12 → 配对轮替重建（§2.1）
 
 | idx | 神明 | 效果（objId=cellEnt+32） |
 |-----|------|--------------------------|
-| 9 | 天使 | `sub_40B110` **免费建设/加盖**；corp 无设施先 showMessage("天使")+2048 抑制重复；成功→消息 sprintf(aS_7 0x4634C0) **"天使顯靈\n\n加蓋一層房屋！"** +音效槽18 [dword_4823DA]；bit7 封顶→FLC 523（`sub_40B0CD`：523 @ (0,40) 音效90，前置 sub_40829D(-1,0) 全屏重绘不迁移） |
+| 9 | 天使 | `sub_40B110` **免费建设/加盖**；corp 无设施先 showMessage("天使")+2048 抑制重复；成功→消息 sprintf(aS_7 0x4634C0) **"天使顯靈\n\n加蓋一層房屋！"** +音效槽18 [dword_4823DA]；bit7 封顶→FLC 523（`sub_40B0CD`：523 @ (0,40) 音效90，前置 sub_40829D(-1,0) 全屏重绘不迁移）。**显示时序**：进入 `refreshGameUi(玩家坐标,0)`（0x40F427 视口对准）→ angelUpgrade 改内存 → 消息叠加 → 音效后 `refreshGameUi(0,0,1)`（0x40F506）加盖建筑出场（2026-09-26 重写补两次重绘） |
 | 10 | 惡魔 | estate.level/corp.sub 非 0 → 有主记债 `addPlayerDebt(owner−1, 我, 30×M)`（**原版不排除自己**，自欠被 addPlayerDebt 跳过）→ 消息(0x4634D7 "小惡魔顯靈\n\n拆毀一層房屋！") → `demolishEstate(objId,0)` → **FLC 526 @ (建筑屏幕坐标−55,−55) 音效 95**（sub_40B066 取 obj 屏幕坐标） |
 | 12 | 土地公 | 占为本有：owner==自己→无动作；他人→记债 `M×(estate+28/corp+34)×(level+2.0)/5.0`（flt_46350C=2.0/flt_463510=5.0）；**原无主且 cfgLandPerm → 记到期日**（addPackedDate，购地同款）；`owner=我+1` + rebuildMiniMap + 消息(0x4634F2 "土地公顯靈\n\n強佔土地！")；大笑台词 sub_44EF41 [TODO P4] |
 
@@ -244,14 +244,22 @@ slot<12 → 配对轮替重建（§2.1）
 
 ### 13.3 `sub_40F8BE` godBlessUpgrade（福神盖房加倍，[HELP 43/48]）
 
-**普通付费升级/建设施成功后**追加一次免费 `sub_40B110`（即"升一级变两级"）。调用点 =
-landingEvent 三条成功路径：estate `++level` 未满 5（0x419A48，跳过 estateChainSpeech 后）、
-corp 建设施成功（0x41A2AE，建设施也算）、corp 升级未满 5（0x41A36B）。
+**普通付费升级/建设施/买地成功后**追加一次免费 `sub_40B110`（即"升一级变两级"）。
+调用点 = landingEvent **五条**成功路径（全部 `jmp loc_419A48`）：estate `++level` 未满 5
+（0x419A39→0x419A48，跳过 estateChainSpeech 后）、corp 建设施成功（0x41A2AE）、corp 升级
+未满 5（0x41A36B）、**estate 买地成功（0x41A154，扣现金+estateChainSpeech 后）**、
+**corp 买地成功（0x41A993，扣现金后）**——买地即免费加盖一层（estate 0→1）/ 无设施
+corp 直接建设施（**2026-09-26 实机补：原先只实现三条付费路径，买地两处漏掉**）。
 满级(==5)路径不追加（走台词+523 分支）。消息 = sprintf(aS_7 0x4634C0, kObjectNames[idx]) **"小/大福神顯靈\n\n加蓋一層房屋！"**；
 bit7 → 台词 off_480886[角色] [TODO P4] + FLC 523；未封顶 → 随机祝福台词
 off_48084A[角色×27 + rand&1] [TODO P4]。
-**注**：帮助"买地免费"代码中不存在（checkCarriedGod 0x40FA61 仅守卫 7/8/15，阻止时消息 aS_14 0x463514 =
-  **"%s顯靈\n\n投資失敗！"**）——帮助文本存疑。
+**注**：帮助"买地免费"= 买地**附赠免费加盖**（价格照扣 0x41A132/0x41A984），非价格归零；
+代码中无福神价格减免（checkCarriedGod 0x40FA61 仅守卫 7/8/15，阻止时消息 aS_14 0x463514 =
+  **"%s顯靈\n\n投資失敗！"**）。
+**显示时序**（2026-09-26 实机修）：进入 `refreshGameUi(0,0,1)`（0x40F8EE）先重绘**即时状态**
+（买地=空地+购买人棋子标记且 level 仍 0 / 付费升级=升级 1 级后建筑）→ angelUpgrade 改内存
+→ 消息叠加在此画面上（showMessage 不重绘场景）→ 消息后 `refreshGameUi(0,0,1)`（0x40F9EF）
+重绘 → **加盖建筑此时才出场**。天使 `landAfterMove` 同构（0x40F427 进入/0x40F506 音效后）。
 
 ### 13.4 死神代付 `sub_40FBB8` findDeathGodCarrier（[HELP 49/51]，pricing-formulas §6 步骤 6 落地）
 
