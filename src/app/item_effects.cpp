@@ -276,6 +276,10 @@ int useItemRobotWorker(Application& app) {
     st.viewScrolling = false;
     renderGameFrame(app);
     const int flags = angelUpgrade(app, v);          // [RE 0x40B110]
+    // 商业用地无设施时 angelUpgrade 内弹出设施选择面板；面板关闭后 surface 仍残留面板画面
+    //   （FLC 553 为保帧模式，会快照当前 surface 作背景）→ 先重绘干净场景，避免动画叠着面板
+    renderGameFrame(app);
+    app.renderFrame();
     playEventFlc(app, 553, 0, 40, 91, false, 44);    // [RE 0x45144F flags 0x2C0001 音效 91]
     if ((flags & 0x80) != 0) {
         playEventFlc(app, 523, 0, 40, 90, false, 0); // [RE 0x40B0CD] playGodBuildFlc 施工动画

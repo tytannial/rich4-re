@@ -1867,6 +1867,7 @@ int rollDice(Application& app) {
     if (forced != 0) {
         st.diceValues[0] = forced;
         sum = forced;
+        st.diceShowCount = 1;  // [RE 0x419572 v2=1] 遥控单骰：只显示 1 个点数精灵
     } else {
         const int n = std::max(1, static_cast<int>(st.players[p].diceCount));
         for (int i = 0; i < n; ++i) {
@@ -1874,6 +1875,7 @@ int rollDice(Application& app) {
             st.diceValues[i] = v;
             sum += v;
         }
+        st.diceShowCount = static_cast<uint8_t>(n);
     }
     st.showDice = true;
     st.diceValue = sum; // [RE 0x48BAFC] g_diceValue = 本次行走总步数（供步数计费公式）
@@ -1943,8 +1945,12 @@ bool moveOneStep(Application& app) {
                 nextId = pl.cellEntId;
             }
             // 更新来向/当前格/占用掩码
+            // [RE 0x40C05C] 占位掩码：玩家 = 256<<p；事件槽 4..7 = 4096<<(p-4)；
+            //   **槽 8（機器娃娃）不占位**（v65==4 时原版跳过 &= / |=）——否则 bit16 与
+            //   物件槽 1 的占用位冲突，娃娃每格都被误判为"有物件"而弹飞/删除 slot 1
             pl.prevCellEnt = pl.cellEntId;
-            const uint32_t mask = 256u << p;
+            const uint32_t mask =
+                (p < 4) ? (256u << p) : (p < 8 ? (4096u << (p - 4)) : 0u);
             st.cellEnts[pl.cellEntId].occMask &= ~mask;
             st.cellEnts[nextId].occMask |= mask;
             pl.cellEntId = nextId;

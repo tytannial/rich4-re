@@ -351,7 +351,9 @@ void renderMap(Application& app, int centerX, int centerY) {
                 continue;
             }
             const int dirv = (o.dir + 8 - state.mapRotation) & 7;
-            const bool bombCarry = type == 18 && o.cellTableIdx != 0;
+            // [RE 0x4098BD] 挂身炸弹（type18）头顶画寿命数字——判定 = 该玩家的挂身道具槽
+            //   就是本物件（cellNo +64，非附身神明 cellTableIdx +63）
+            const bool bombCarry = type == 18 && o.cellNo == static_cast<uint8_t>(slot + 1);
             const int32_t* oofs = bombCarry ? &kPieceOffset18[dirv][0] : &kPieceOffset[dirv][0];
             SpriteDraw sd;
             sd.spr = &img;
@@ -556,7 +558,9 @@ void renderMap(Application& app, int centerX, int centerY) {
     {
         const int p = state.currentPlayer;
         if (p >= 0 && p < 9) {
-            const int n = std::max(1, std::min(3, static_cast<int>(state.players[p].diceCount)));
+            // [RE 0x419572 v2] 显示个数 = rollDice 本次的点数个数（遥控单骰 = 1）
+            const int n =
+                std::max(1, std::min(3, static_cast<int>(state.diceShowCount)));
             const int v6 = (state.players[p].dir + 8 - state.mapRotation) & 7;
             const int dx = 136 + kDicePosX[v6];
             const int dy = 48 + kDicePosY[v6];
