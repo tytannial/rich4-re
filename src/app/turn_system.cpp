@@ -185,7 +185,7 @@ void onPlayerActionPhase(Application& app) {
                     demolishAtObjId(app, cellObj, 0);
                 }
                 damagePlayer(app, p);
-                playEventFlc(app, 525, 0, 40, 82);  // [RE 爆炸插图+音效82]
+                playEventFlc(app, 525, 0, 40, 82, false, 3);  // [RE 爆炸插图+音效82，帧3切换]
                 st.remainingSteps = 0;
                 hospitalizePlayer(app, p, 5);
                 return;
@@ -229,11 +229,11 @@ void onPlayerActionPhase(Application& app) {
             releaseCellTableSlot(app, 11);  // 删恶犬 → 轮替土地公
             if (pl.travel == 0) {
                 damagePlayer(app, p);
-                playEventFlc(app, 532, 0, 40, 93);  // [RE 咬伤插图+音效93]
+                playEventFlc(app, 532, 0, 40, 93, false, 3);  // [RE 咬伤插图+音效93，帧3切换]
                 st.remainingSteps = 0;
                 hospitalizePlayer(app, p, 3);       // 咬伤住院 3 天 [HELP 51]
             } else {
-                playEventFlc(app, 552, 0, 40, 85);  // [RE 有车碾过，无事]
+                playEventFlc(app, 552, 0, 40, 85, false, 1);  // [RE 有车碾过无事，帧1切换]
             }
             break;
         }
@@ -277,7 +277,7 @@ void onPlayerActionPhase(Application& app) {
             }
             releaseCellTableSlot(app, objId);
             damagePlayer(app, p);
-            playEventFlc(app, 525, 0, 40, 82);
+            playEventFlc(app, 525, 0, 40, 82, false, 3);  // [RE 地雷 flags 0x30001 帧3]
             // [TODO P4] 哭台词 off_480D96
             st.remainingSteps = 0;
             hospitalizePlayer(app, p, 3);
@@ -585,13 +585,15 @@ void playHighlightBlink(Application& app) {
 //       音频续喂同 playHighlightBlink
 // freeze=true: 播完**冻结末帧**持续显示（原版 backbuffer 保留，直到下一次全量重绘/
 //       showGodNarration 释放）——神明插图 + 旁白叠加需要
-// preserveScene=true: **不重绘地图**（原版 0x45144F 内部 saveBackground(word_46CAEC) +
-//       逐帧 Lock 表面 blit 语义）——住院 524/入狱 538 等"传送后过渡动画"：动画背景
-//       保持传送前的场景画面（角色仍显示在原格），每帧先回卷保存的区域背景再叠加
-//       当前帧（透明色键防残影）。2026-09-24 实机修正（原逐帧 renderGameFrame 导致
-//       动画一开始画面就切到医院/监狱）
+// switchFrame（原版 flcOpen flags BYTE2 = dword_48C85C 场景切换帧，[RE 0x450CED]）：
+//   >0 进入"保帧"模式——动画背景保持**开始前**的场景表面（每帧回卷区域背景再叠加当前帧，
+//   = 原版透明 blit 于保留表面），解到第 switchFrame 帧执行一次 renderGameFrame 全量重绘
+//   **切换场景**（传送/拆除等状态此刻生效 → 角色经棋子守卫 0x4086A1 从画面消失、建筑
+//   显示降级），其后帧基于新场景。原版实证：524=帧30（抬进医院）538=帧18（警车到中间）
+//   525/532/526=帧3、552=帧1；0=不切换（插图期无状态变化的动画，逐帧重绘与原版表面静止
+//   等价）。2026-09-24 两轮实机修正（先补保帧背景静止，再补切换帧+棋子守卫）
 void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, bool freeze,
-                  bool preserveScene) {
+                  int switchFrame) {
     GameState& st = app.gameState();
     auto blob = st.data.read(mkfIndex);
     if (!blob || !st.eventFlc.open(std::move(*blob))) {
@@ -601,13 +603,14 @@ void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, boo
     st.eventFlcX = x;
     st.eventFlcY = y;
     st.eventFlcActive = true;
-    std::vector<uint16_t> bg;  // 回卷区域（preserveScene）：FLC 覆盖矩形与屏幕交集
+    const bool preserve = switchFrame > 0;
+    std::vector<uint16_t> bg;  // 回卷区域（保帧模式）：FLC 覆盖矩形与屏幕交集
     int rx0 = 0;
     int ry0 = 0;
     int rw = 0;
     int rh = 0;
     Surface& dst = app.surface();
-    if (preserveScene) {
+    if (preserve) {
         rx0 = std::max(0, x);
         ry0 = std::max(0, y);
         rw = std::max(0, std::min(Surface::kWidth, x + st.eventFlc.width()) - rx0);
@@ -623,14 +626,25 @@ void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, boo
     }
     const int interval = std::max(1, st.eventFlc.speedMs());
     bool soundPlayed = false;
+    int frameNo = 0;       // 1 基（对应原版解码后 dword_48C874）
+    bool switched = false;
     while (st.eventFlc.nextFrame()) {
-        if (preserveScene && rw > 0 && rh > 0) {
+        ++frameNo;
+        if (preserve && !switched && rw > 0 && rh > 0) {
+            // 切换帧前：回卷开始前快照 + 叠加当前动画帧（原版表面保留语义）
             for (int r = 0; r < rh; ++r) {
                 std::memcpy(dst.pixels() + static_cast<size_t>(ry0 + r) * Surface::kWidth + rx0,
                             &bg[static_cast<size_t>(r) * rw],
                             static_cast<size_t>(rw) * sizeof(uint16_t));
             }
             overlayEventFlcFrame(app);
+            if (frameNo >= switchFrame) {
+                // [RE 0x450F04] 切换帧：sub_40829D(-1,0) 全量重绘（新场景此刻可见——角色经
+                //   0x4086A1 守卫隐藏/拆除后建筑），当前帧由 renderGameFrame 的
+                //   eventFlcActive 叠加重画；后续帧基于新场景
+                renderGameFrame(app);
+                switched = true;
+            }
         } else {
             renderGameFrame(app);
         }
@@ -650,7 +664,7 @@ void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, boo
         st.eventFlcActive = false;
     }
     RICH4_LOGI("eventFlc: data.mkf[%d] played @(%d,%d)%s%s (RE 0x45144F)", mkfIndex, x, y,
-               freeze ? " frozen" : "", preserveScene ? " preserved" : "");
+               freeze ? " frozen" : "", switchFrame > 0 ? " switch" : "");
 }
 
 // ===== 卡片卡包（P2 卡片格 case 13；0x4412E4/0x441262/0x44128F/0x441343/0x441E12）=====
@@ -1120,7 +1134,7 @@ void landAfterMove(Application& app, int p, uint16_t cellEntId) {
             int sx = 0;
             int sy = 0;
             if (projectMapPoint(st, objX, objY, sx, sy)) {
-                playEventFlc(app, 526, sx - 55, sy - 55, 95);       // [RE 0x40F675]
+                playEventFlc(app, 526, sx - 55, sy - 55, 95, false, 3);  // [RE 0x40F675 帧3=拆后场景]
             }
             break;
         }
@@ -2203,9 +2217,9 @@ void jailPlayer(Application& app, int player, int days) {
     updatePlayerCarriedObjects(st, player);  // [RE 0x43D668] 挂身物件随玩家换位
     st.jailFlags[player] = 1;       // [RE 0x43D674]
     if (st.settings[1] != 0) {      // [RE 0x43D67B] byte_497159 动画过程开关
-        // preserveScene：原版传送后**不重绘地图**（表面保留=角色仍在原位），538 押解动画
-        // 叠在旧场景上，播完主循环才切到监狱场景（2026-09-24 实机修正）
-        playEventFlc(app, 538, 0, 40, 94, /*freeze=*/false, /*preserveScene=*/true);
+        // [RE 0x450F04] 帧 18（flags 0x120001）切换：押解警车到画面中间时全量重绘 →
+        //   角色经棋子守卫（BYTE2 入狱≠0）消失 → 后续帧基于监狱场景
+        playEventFlc(app, 538, 0, 40, 94, /*freeze=*/false, /*switchFrame=*/18);
     }
     insurancePayout(app, player, 2000 * days * st.moneyMul); // [RE 0x43D749]
     pl.byte66 = static_cast<uint8_t>(pl.byte66 + days);      // [RE 0x43D755] byte_496BAA 累计
@@ -2248,10 +2262,10 @@ void hospitalizePlayer(Application& app, int player, int days) {
     updatePlayerCarriedObjects(st, player);  // [RE 0x43ED14] 挂身物件随玩家换位
     st.hospitalFlags[player] = 1;   // [RE 0x43ED20]
     if (st.settings[1] != 0) {      // [RE 0x43ED2E]
-        // 原版流程：refreshGameUi(旧位置) → 传送 → 440x74 band 524 画在**旧位置地图**上
-        //   → 末尾 refreshGameUi(医院)。传送后地图并未立即重绘。preserveScene 还原此语义：
-        //   band 期间表面保持传送前画面（角色显示在原格/救护车情景带），播完主循环才切到医院
-        playEventFlc(app, 524, 0, 210, 92, /*freeze=*/false, /*preserveScene=*/true);
+        // 原版流程：refreshGameUi(旧位置) → 传送 → 440x74 band 524 画在**旧位置地图**上 →
+        //   [RE 0x450F04] 帧 30（flags 0x1E0001）切换：全量重绘 → 角色经 0x4086A1 守卫
+        //   （BYTE3 住院≠0）消失（抬进医院）→ 后续帧基于医院场景
+        playEventFlc(app, 524, 0, 210, 92, /*freeze=*/false, /*switchFrame=*/30);
     }
     insurancePayout(app, player, 2000 * days * st.moneyMul); // [RE 0x43EDF8]
     pl.byte66 = static_cast<uint8_t>(pl.byte66 + days);      // [RE 0x43EE04]

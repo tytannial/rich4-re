@@ -303,9 +303,19 @@ a3>0 且 creditor 同盟==debtor+1 → 解除同盟 sub_40CC1A：清双方 ally/
    重写曾每 timer tick 调 `playEffect`（追加新声部）→ 多声部叠加成轰鸣。修复：Audio 加
    `playEffectLooping(id)`（Voice.looping，update 回卷不清除）+ `stopEffect(id)`（按 Effect.mkf
    索引移除声部）；`slotMachineDialog` 进入播一次循环、case8 停、退出兜底停。Effect 51=dword_475D3C[0]。
-2. **住院 524 / 入狱 538 两段式体验**：524 是 440×74 横条叙事带（救护车+抬人，62 帧），原版
-   `hospitalizePlayer` 顺序 = `refreshGameUi(旧位置)`→传送医院→**地图表面不重绘**（DDraw 保留
-   = 角色仍显示在旧格）→ 524 条带 blit 在旧场景上→末尾 `refreshGameUi(医院)` 才切换。
+2. **住院 524 / 入狱 538 过渡动画（完整版，2026-09-24 第二轮修正）**：524=440×74 横条叙事带
+   （救护车+抬人，62 帧）、538=440×440 押解带（35 帧）。原版三件套：
+   ① `hospitalizePlayer/jailPlayer`：refreshGameUi(旧位置) → 传送 → 动画期间**地图表面不重绘**
+     （DDraw 保留=角色显示在旧格）；
+   ② `flcOpen` flags **BYTE2 = 场景切换帧**（dword_48C85C，[RE 0x450CED/0x450F04]）：
+     `flcDecodeFrame` 解到第 N 帧 → 保存 FLC 区域 → `sub_40829D(-1,0)` **全量重绘** → 回写
+     当前帧 → 后续帧基于新场景。524=0x1E0001→帧30（抬进医院）、538=0x120001→帧18（警车到
+     中间）、525/526/532=帧3、552=帧1、神明插图/523/536/537=0（不切换）；
+   ③ 重绘后角色消失靠**棋子守卫** [RE 0x4086A1]：`spriteX && (!stateFlags || alive&0x20)` 才
+     绘制（住院 BYTE3/入狱 BYTE2/住宿/出國全隐藏；0x20=走进旅館步行中例外，走出启动前
+     stateFlags 已清）。重写曾只查 BYTE0 → 住院/入狱角色不消失。
+   重写实现：`playEventFlc(switchFrame=N)`（保帧快照+第 N 帧 renderGameFrame 切换）+
+   `map_render` 守卫收紧 + gameEventHandler timer `eventFlcActive` 冻结守卫。
    `jailPlayer`（538 押解带 @ (0,40)）完全对称。重写 `playEventFlc` 曾每帧 `renderGameFrame`
    （按已传送坐标重居中）→ 动画一开始就跳到医院/监狱。修复：`playEventFlc` 加 `preserveScene`
    参数（不重绘、每帧回卷带区域背景 + `overlayEventFlcFrame` 透明叠加，对应原版 saveBackground）；

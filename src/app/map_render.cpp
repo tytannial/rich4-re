@@ -258,9 +258,11 @@ void renderMap(Application& app, int centerX, int centerY) {
         if (p.spriteX == 0 && p.spriteY == 0) {
             continue;
         }
-        // [RE 0x40829D] 状态效果中（住宿/出國/監獄/醫院/冬眠）不绘制棋子（"消失"）；
-        //   走出旅館半程清 stateFlags 后恢复显示
-        if ((p.stateFlags & 0xFFu) != 0) {
+        // [RE 0x4086A1] 状态效果中（住宿/出國/監獄/醫院/消失）不绘制棋子（"消失"），
+        //   例外 = alive&0x20（走进旅館步行中）；走出旅館启动前 stateFlags 已清（0x40D6BE 链路），
+        //   到达清 0x20。住院 524/入狱 538 切换帧重绘后角色由此守卫隐藏（2026-09-24 补全：
+        //   原仅查 BYTE0 导致住院/入狱角色仍绘制）
+        if (p.stateFlags != 0 && (p.alive & 0x20) == 0) {
             continue;
         }
         const int slot = 2 * state.playerActionState[j] + state.playerMoveGroup[j];

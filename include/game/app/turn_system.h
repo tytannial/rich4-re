@@ -73,10 +73,11 @@ int landingEvent(Application& app, uint16_t cellEntId);
 
 // [RE 0x45144F] playEventFlc：阻塞播放 data.mkf[mkfIndex] FLC（定义见 turn_system.cpp；
 //   事件格/神明插图共用；soundId<0 无声；freeze=true 播完冻结末帧至下次全量重绘；
-//   preserveScene=true 不重绘地图场景、每帧回卷区域背景后叠加（原版 saveBackground 语义，
-//   住院 524/入狱 538 过渡动画用——动画背景保持传送前的角色位置画面）
+//   switchFrame = 原版 flcOpen flags BYTE2 场景切换帧 [RE 0x450CED]：>0 保帧播放
+//   （背景=开始前画面）至该帧全量重绘切换场景（住院 524=30 / 入狱 538=18 / 爆炸拆除=3 /
+//   碾过=1），0=逐帧重绘（动画期无状态变化的插图类）
 void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId,
-                  bool freeze = false, bool preserveScene = false);
+                  bool freeze = false, int switchFrame = 0);
 
 // [RE 0x40B93B] loadWalkResources（行走资源加载，定义见 turn_system.cpp；
 //   状态结束/载具损毁/住院等复用）
