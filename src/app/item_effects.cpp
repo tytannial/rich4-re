@@ -404,6 +404,27 @@ bool isVacantRoad(const GameState& st, int cellId) {
     return true;
 }
 
+// [USER 第3轮] 传送源校验：完全空的无主地（estate owner==0&&level==0 / corp owner==0&&sub==0）
+//   不可作为源——原版允许选中但搬迁无内容（白白消耗道具）；重写拒绝并提示重选。
+//   无主但有加盖（level/sub>0，如天使/机器工人加盖）可搬运
+bool teleportSourceValid(const GameState& st, int v40) {
+    if (v40 > 2000 && v40 < 4000) {
+        const int i = v40 - 2000;
+        if (i > 0 && i < static_cast<int>(st.estates.size())) {
+            return st.estates[i].owner != 0 || st.estates[i].level != 0;
+        }
+        return false;
+    }
+    if (v40 > 4000 && v40 < 6000) {
+        const int i = v40 - 4000;
+        if (i > 0 && i < static_cast<int>(st.corps.size())) {
+            return st.corps[i].owner != 0 || st.corps[i].sub != 0;
+        }
+        return false;
+    }
+    return true;  // 玩家/神明/物品
+}
+
 // [RE 0x447428] 傳送機（id11）：选目标（人物/神明/房屋/物品 0x1200036）→ 按类型选目的地
 //   （住宅 0x2090002 / 商业 0x2090004 / 空格 0x2090001）→ 搬迁；物件目标换算成 owner 玩家
 // 依据: 0x447428 反编译；AI 分支 = 0x8000|(1<<cur)；玩家传送后 dir=最优出口朝向、
@@ -419,7 +440,17 @@ int useItemTeleport(Application& app) {
     playItemLine(app, p, 11);  // [RE 0x44EF41] off_480D82（列10）
     int v40 = 0;
     if (st.players[p].alive == 1) {
-        v40 = selectTargetDialog(app, 0x1200036);  // [RE 0x446AE8] flags 2|4|0x10|0x20
+        for (int guard = 0; guard < 64; ++guard) {
+            v40 = selectTargetDialog(app, 0x1200036);  // [RE 0x446AE8] flags 2|4|0x10|0x20
+            if (v40 == 0) {
+                break;
+            }
+            if (teleportSourceValid(st, v40)) {
+                break;
+            }
+            showMessage(app, "這塊地沒有東西可移動！", 1000);
+            v40 = 0;
+        }
     } else {
         v40 = 0x8000 | (1 << p);  // [RE 0x420EEE] AI：自己
     }
@@ -530,6 +561,12 @@ int useItemTeleport(Application& app) {
                 if (dest < 2000 && isVacantRoad(st, dest)) {
                     break;
                 }
+                // 诊断：[USER 第3轮] 目标空路被误拒排查
+                if (dest > 0 && dest < static_cast<int>(st.cellEnts.size())) {
+                    RICH4_LOGI("teleport(player) dest rejected: %d special=%u occMask=0x%08X "
+                               "(RE 0x447428)",
+                               dest, st.cellEnts[dest].special, st.cellEnts[dest].occMask);
+                }
                 showMessage(app, "只能移到空的道路！", 1000);
                 dest = 0;
             }
@@ -614,6 +651,12 @@ int useItemTeleport(Application& app) {
                 }
                 if (dest < 2000 && isVacantRoad(st, dest)) {
                     break;
+                }
+                // 诊断：[USER 第3轮] 目标空路被误拒排查
+                if (dest > 0 && dest < static_cast<int>(st.cellEnts.size())) {
+                    RICH4_LOGI("teleport(object) dest rejected: %d special=%u occMask=0x%08X "
+                               "(RE 0x447428)",
+                               dest, st.cellEnts[dest].special, st.cellEnts[dest].occMask);
                 }
                 showMessage(app, "只能移到空的道路！", 1000);
                 dest = 0;

@@ -2,6 +2,9 @@
 
 #include <SDL3/SDL.h>
 
+#include <algorithm>
+#include <cstdint>
+
 #include "game/app/event_stack.h"
 #include "game/app/game_loop.h"
 #include "game/app/object_tip.h"
@@ -42,12 +45,31 @@ bool targetAllowed(const GameState& st, uint16_t v, uint16_t flags) {
     return false;
 }
 
+// [RE 0x4751B0/0x4751B4] 滚动方向向量表（16.16 定点，8 方向：上/左上/左/左下/下/右下/右/右上）
+constexpr int32_t kScrollVecX[8] = {0, -46341, -65536, -46341, 0, 46341, 65536, 46341};
+constexpr int32_t kScrollVecY[8] = {-65536, -46341, 0, 46341, 65536, 46341, 0, -46341};
+// [RE off_475E0D] 边缘方向光标（dword_48C568: 1上 2左 3下 4右）
+constexpr int kEdgeCursor[5] = {5, 34, 40, 38, 36};
+// [RE 0x48C56C/0x48C564] 滚动速度（初 8，每 tick +4，上限 64）与 50ms 节流
+constexpr int kScrollSpeedInit = 8;
+constexpr int kScrollSpeedMax = 64;
+constexpr uint64_t kScrollIntervalMs = 50;
+
 struct TargetSelCtx {
     Application* app = nullptr;
     uint16_t flags = 0;
     int cursorType = 0;
     int selected = 0;   // dword_48C584
     int curCursor = -1; // dword_48C580
+    // [RE 0x445E4D flags&0x80] 地图滚动模式（飞弹/核弹选屏外目标）
+    bool scrollMode = false;
+    int edgeDir = 0;      // 0=视口内 1上 2左 3下 4右（dword_48C568）
+    int scrollSpeed = kScrollSpeedInit;
+    uint64_t lastScrollMs = 0;
+    // 进入前视口状态（退出恢复）
+    bool savedManualView = false;
+    int savedViewX = 0;
+    int savedViewY = 0;
 };
 
 // 拾取 id 规范化：重写 mapHitRegions 编码 → 原版目标编码（下游 getObjectPosition/
@@ -84,10 +106,56 @@ bool targetSelHandler(const SDL_Event* event, void* user) {
         drawTargetSel(c);
         return true;
     }
+    // [RE 0x445E4D WM_TIMER 0x113] 滚动：50ms 节流，speed +4（上限 64），
+    //   v7 = (mapRotation + 2*edgeDir - 2) & 7，视口中心按 16.16 向量位移，clamp [220,2084]
+    if (event->type == kModalTimerEvent) {
+        if (c.scrollMode && c.edgeDir != 0) {
+            const uint64_t now = SDL_GetTicks();
+            if (now - c.lastScrollMs >= kScrollIntervalMs) {
+                c.lastScrollMs = now;
+                c.scrollSpeed = std::min(kScrollSpeedMax, c.scrollSpeed + 4);
+                const int v7 = (st.mapRotation + 2 * c.edgeDir - 2) & 7;
+                int vx = st.viewSmoothX + ((kScrollVecX[v7] * c.scrollSpeed) >> 16);
+                int vy = st.viewSmoothY + ((kScrollVecY[v7] * c.scrollSpeed) >> 16);
+                vx = std::clamp(vx, 220, 2084);
+                vy = std::clamp(vy, 220, 2084);
+                st.manualView = true;
+                st.viewSmoothX = vx;
+                st.viewSmoothY = vy;
+                st.viewScrolling = false;
+                renderGameFrame(*c.app);
+            }
+        }
+        return true;
+    }
     switch (event->type) {
         case SDL_EVENT_MOUSE_MOTION: {
             const int mx = static_cast<int>(event->motion.x);
             const int my = static_cast<int>(event->motion.y);
+            if (c.scrollMode) {
+                // [RE 0x445E4D 0x80 分支] 边缘判定（窗口坐标）：x==0 左 / x>=440 右 /
+                //   y<=40 上 / y==479 下；回到视口内 → 停滚并立即判定
+                int dir = 0;
+                if (mx <= 0) {
+                    dir = 2;
+                } else if (mx >= 440) {
+                    dir = 4;
+                } else if (my <= 40) {
+                    dir = 1;
+                } else if (my >= 479) {
+                    dir = 3;
+                }
+                if (dir != 0) {
+                    if (c.edgeDir != dir) {
+                        c.edgeDir = dir;
+                        c.scrollSpeed = kScrollSpeedInit;
+                        c.lastScrollMs = SDL_GetTicks() - kScrollIntervalMs;  // 立即滚一次
+                    }
+                    setCursor(c, kEdgeCursor[dir], 1, 0);  // 方向箭头光标
+                    return true;
+                }
+                c.edgeDir = 0;  // [RE KillTimer] 鼠标回视口内 → 停止滚动
+            }
             const uint16_t v = pickMapObject(st, mx, my);  // [RE 0x40A9D7]
             if (targetAllowed(st, v, c.flags)) {
                 // [RE 0x445E4D LABEL_140] 命中：记选中（规范化为原版编码）+ 光标换类型
@@ -101,6 +169,11 @@ bool targetSelHandler(const SDL_Event* event, void* user) {
         }
         case SDL_EVENT_MOUSE_BUTTON_UP: {
             if (event->button.button == SDL_BUTTON_LEFT) {
+                if (c.scrollMode && c.edgeDir != 0) {
+                    // [RE 0x445E4D] 滚动计时器激活中不可确认（提示音）
+                    c.app->audio().playEffect(3);  // [RE g_uiSoundMusicTip]
+                    return true;
+                }
                 if (c.selected != 0) {
                     c.app->audio().playEffect(2);  // [RE g_uiSoundConfirm]
                     c.app->cursor().select(41, 1, 0);
@@ -132,9 +205,11 @@ bool targetSelHandler(const SDL_Event* event, void* user) {
 
 // [RE 0x445E4D] selectTargetDialog（mode 见头文件）
 // 依据: 0x445E4D 反编译；WM_USER+1 解析 mode → flags/光标类型；WM_MOUSEMOVE 拾取 + 光标切换；
-//   LBUTTONUP 确认（仅未处于延迟输入状态）；RBUTTON/MBUTTON 取消；光标默认 5、确认 41
-// 差异: 0x80 地图滚动模式（飞弹/核弹用；鼠标出视口方向滚动 + 方向箭头光标 34/40/38/36）暂未接入
+//   LBUTTONUP 确认（仅未处于延迟输入状态）；RBUTTON/MBUTTON 取消；光标默认 5、确认 41；
+//   0x80 地图滚动模式（飞弹/核弹）：鼠标出视口 → 方向箭头光标 + SetTimer(50ms) 逐帧滚动，
+//   回视口内 KillTimer 并立即判定；滚动中不可确认（提示音）
 int selectTargetDialog(Application& app, int mode) {
+    GameState& st = app.gameState();
     TargetSelCtx c;
     c.app = &app;
     c.flags = static_cast<uint16_t>(mode & 0xFFFF);
@@ -143,8 +218,25 @@ int selectTargetDialog(Application& app, int mode) {
         c.flags = static_cast<uint16_t>(0x80 | 0x37);
     }
     c.cursorType = (mode >> 16) & 0xFF;
+    c.scrollMode = (c.flags & 0x80) != 0;
+    // 保存进入前视口状态（退出恢复；滚动/非滚动统一）
+    c.savedManualView = st.manualView;
+    c.savedViewX = st.viewSmoothX;
+    c.savedViewY = st.viewSmoothY;
+    if (c.scrollMode) {
+        // [RE 0x445E4D] 滚动模式初始滚动中心 = 当前玩家位置（dword_48C570/574 = 玩家坐标）
+        const Player& pl = st.players[st.currentPlayer];
+        st.manualView = true;
+        st.viewSmoothX = pl.spriteX;
+        st.viewSmoothY = pl.spriteY;
+        st.viewScrolling = false;
+    }
     app.cursor().select(5, 1, 0);
     const int r = runModal(app, &targetSelHandler, &c, 16);
+    st.manualView = c.savedManualView;
+    st.viewSmoothX = c.savedViewX;
+    st.viewSmoothY = c.savedViewY;
+    st.viewScrolling = false;
     app.cursor().select(41, 1, 0);
     return r;
 }
