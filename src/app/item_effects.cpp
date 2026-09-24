@@ -211,6 +211,40 @@ int placeMapItem(Application& app, int itemId, int objType, int mode, int sfxSlo
     return v;
 }
 
+// [RE 0x447295] 機器工人（id9）：选目标（住宅/商業 0x2090006 光标9）→ 扣道具 →
+//   angelUpgrade 免费加盖 → FLC 553（switchFrame=44 视口锁定重绘时建筑已加盖）；
+//   封顶（bit7）再播 FLC 523 施工（playGodBuildFlc）→ refreshGameUi
+int useItemRobotWorker(Application& app) {
+    GameState& st = app.gameState();
+    const int p = st.currentPlayer;
+    if (p < 0 || p >= 4) {
+        return 0;
+    }
+    playItemLine(app, p, 9);  // [RE 0x44EF41] off_480D7A
+    int v = 0;
+    if (st.players[p].alive == 1) {
+        v = selectTargetDialog(app, 0x2090006);  // [RE 0x446AE8] flags=2|4、光标类型 9
+    } else {
+        v = 0;  // [RE 0x420EEE] AI 预选（P5）
+    }
+    if (v == 0) {
+        return 0;
+    }
+    takePlayerItem(st, p, 9);  // [RE 0x445AA2] takePlayerCard(cur, 9)
+    int x = 0;
+    int y = 0;
+    getObjectPosition(st, v, x, y);  // [RE 0x40AF12]
+    renderGameFrame(app);            // [RE 0x41D476] refreshGameUi(x, y, 0)
+    const int flags = angelUpgrade(app, v);          // [RE 0x40B110]
+    playEventFlc(app, 553, 0, 40, 91, false, 44);    // [RE 0x45144F flags 0x2C0001 音效 91]
+    if ((flags & 0x80) != 0) {
+        playEventFlc(app, 523, 0, 40, 90, false, 0); // [RE 0x40B0CD] playGodBuildFlc 施工动画
+    }
+    renderGameFrame(app);  // [RE 0x41D546]
+    RICH4_LOGI("robot worker: p%d target %d flags %d (RE 0x447295)", p, v, flags);
+    return v;
+}
+
 // ===== [RE 0x446774] 遥控骰子选择模态（panel.mkf[72]：帧0 面板 + 帧 1..6 骰子高亮）=====
 namespace {
 
@@ -370,6 +404,7 @@ int itemEffect(Application& app, int id) {
         case 5: return useItemFoot(app);
         case 6: return useItemCar(app);
         case 8: return useItemRemoteDice(app);
+        case 9: return useItemRobotWorker(app);
         case 12: return useItemBulldozer(app);
         default:
             RICH4_LOGI("item effect id=%d (%s) not implemented (P4, RE 0x475DD4 + 4*id)", id,

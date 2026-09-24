@@ -71,6 +71,10 @@ bool moveOneStep(Application& app);
 // [RE 0x41982D] landingEvent（落地事件；M2 实现，M1 返回 0x80）
 int landingEvent(Application& app, uint16_t cellEntId);
 
+// [RE 0x40B110] angelUpgrade：免费加盖一级（住宅 estate / 商業 corp；无设施则建设施）；
+//   返回 bit0=成功、bit7=封顶（到达最高等级）；機器工人（id9）直接复用（定义见 turn_system.cpp）
+int angelUpgrade(Application& app, uint16_t objId);
+
 // [RE 0x45144F] playEventFlc：阻塞播放 data.mkf[mkfIndex] FLC（定义见 turn_system.cpp；
 //   事件格/神明插图共用；soundId<0 无声；freeze=true 播完冻结末帧至下次全量重绘；
 //   switchFrame = 原版 flcOpen flags BYTE2 场景切换帧 [RE 0x450CED]：>0 保帧播放

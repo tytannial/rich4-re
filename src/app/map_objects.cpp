@@ -121,6 +121,89 @@ bool canAttachObject(const GameState& st, int objId) {
     return (t <= 12 && t != 11) || t == 15;
 }
 
+// [RE 0x40AF12] getObjectPosition：objId → 世界像素坐标（飞弹/核弹/机器工人/传送机用）
+// 依据: 0x40AF12 反编译; <2000 cellEnt；(2000,4000) estate；(4000,6000) corp；
+//   (6000,8000) specPt；(8000,10000) evtCell；&0x8000：低4位=玩家位掩码（spriteX/Y）、
+//   bit4-7=事件槽（miscTable80[槽][0/1]）、BYTE1&0x7F=挂身物件（cellTable 槽 +2/3 的 cellEnt 坐标）
+void getObjectPosition(const GameState& st, int objId, int& outX, int& outY) {
+    outX = 0;
+    outY = 0;
+    if (objId <= 0) {
+        return;
+    }
+    auto cellPos = [&](int ci) {
+        if (ci > 0 && ci < static_cast<int>(st.cellEnts.size())) {
+            outX = st.cellEnts[ci].x;
+            outY = st.cellEnts[ci].y;
+        }
+    };
+    if (objId < 2000) {
+        cellPos(objId);
+        return;
+    }
+    if (objId > 2000 && objId < 4000) {
+        const int i = objId - 2000;
+        if (i > 0 && i < static_cast<int>(st.estates.size())) {
+            outX = st.estates[i].x;
+            outY = st.estates[i].y;
+        }
+        return;
+    }
+    if (objId > 4000 && objId < 6000) {
+        const int i = objId - 4000;
+        if (i > 0 && i < static_cast<int>(st.corps.size())) {
+            outX = st.corps[i].x;
+            outY = st.corps[i].y;
+        }
+        return;
+    }
+    if (objId > 6000 && objId < 8000) {
+        const int i = objId - 6000;
+        if (i > 0 && i < static_cast<int>(st.specPts.size())) {
+            outX = st.specPts[i].x;
+            outY = st.specPts[i].y;
+        }
+        return;
+    }
+    if (objId > 8000 && objId < 10000) {
+        const int i = objId - 8000;
+        if (i > 0 && i < static_cast<int>(st.evtCells.size())) {
+            outX = st.evtCells[i].x;
+            outY = st.evtCells[i].y;
+        }
+        return;
+    }
+    if ((objId & 0x8000) != 0) {
+        if ((objId & 0xF) != 0) {
+            int pi = 0;
+            while (((objId >> pi) & 1) == 0) {
+                ++pi;
+            }
+            if (pi < 9) {
+                outX = st.players[pi].spriteX;
+                outY = st.players[pi].spriteY;
+            }
+        } else if ((objId & 0xF0) != 0) {
+            int si = 4;
+            while (((objId >> si) & 1) == 0) {
+                ++si;
+            }
+            if (si < 10) {
+                outX = static_cast<int>(st.miscTable80[si][0] & 0xFFFF);
+                outY = static_cast<int>(st.miscTable80[si][1] & 0xFFFF);
+            }
+        } else if ((objId & 0x7F00) != 0) {
+            const int idx = (objId >> 8) & 0x7F;
+            const int slot = idx - 1;
+            if (slot >= 0 && slot < 46) {
+                const size_t off = static_cast<size_t>(24 * slot);
+                const int ent = st.cellTable[off + 2] | (st.cellTable[off + 3] << 8);
+                cellPos(ent);
+            }
+        }
+    }
+}
+
 // [RE 0x40FC00] updatePlayerCarriedObjects：附身/挂身物件 cellEnt 同步为玩家格
 void updatePlayerCarriedObjects(GameState& st, int p) {
     Player& pl = st.players[p];

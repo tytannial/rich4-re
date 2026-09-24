@@ -65,6 +65,10 @@ void flyObjectSprite(Application& app, int objId, int fromX, int fromY, int toX,
 // [RE 0x40FC00] 附身/挂身物件 cellEnt 同步为玩家当前格（moveOneStep/入狱/住院后调用）
 void updatePlayerCarriedObjects(GameState& st, int p);
 
+// [RE 0x40AF12] getObjectPosition：objId → 世界像素坐标（<2000 cellEnt / estate / corp /
+//   specPt / evtCell / 0x8000|玩家位掩码 / 事件槽 / 挂身物件 cellTable 槽）
+void getObjectPosition(const GameState& st, int objId, int& outX, int& outY);
+
 // [RE 0x40CC56] relocatePlayer：清本格占用 → randomCellEnt(参照本格) 随机换位 +
 //   朝向重算 + 占新格（乞丐施捨后打发；淘汰/传送类复用）
 void relocatePlayer(GameState& st, int p);
