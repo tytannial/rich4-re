@@ -199,61 +199,51 @@ namespace {
 struct SlotCtx {
     Application* app = nullptr;
     UiImage ui;
-    int a1 = 0;
-    int reels = 4;         // a1==0 → 4 轮，否则 3 轮
-    int byte_[4] = {0, 0, 0, 0};  // [RE byte_48C504] 每轮帧值（0..19，奇数=定格）
-    int x[4] = {0, 0, 0, 0};
-    int phase = 1;         // 1 等待/转 2 预览1 3 预览2 4..7 停轮 8 金额 9 尾帧
+    int a1 = 0;                   // 0/1 小/大財神、4/5 小/大窮神
+    int vis = 0;                  // [RE v1] !(a1&1)：1=3轮(三位数)、0=4轮(四位数)
+    int byte_[4] = {0, 0, 0, 0};  // [RE byte_48C504] 各轮帧字节 0..19 循环（数字 = >>1）
+    int phase = 1;  // 1 待拉 2 把手压下 3 抬起续滚 4.. 停轮(3→最低) 8 金额 9 结束
     int frame = 0;
     bool humanCtl = false;
     int result = 0;
-    int soundPlayed = 0;
 };
 
-// [RE 0x43F23E] 绘制：背景帧 v1=!(a1&1) @(220,320)；各轮 +frame(4+byte) @轮x,320
+// [RE 0x440706/0x43F127] 绘制：机身 frame(vis) @(220,320)；数字轮 frame(4+byte)
+//   @(kSlotReelX[4*vis+轮],320)；把手 frame2 抬起 / phase2 单帧换 frame3 压下
+//   @(kSlotPreviewX[vis],240)；提示框（data.mkf[517] 帧5）@(220,140)：
+//   phase<8 标题文本，phase≥8 替换为金额 "%d"
 void slotDraw(SlotCtx& sc) {
     Application& app = *sc.app;
     Surface& dst = app.surface();
     GameState& st = app.gameState();
     renderGameFrame(app);
-    const int bg = !(sc.a1 & 1);
-    if (sc.ui.frameCount() > 1) {
-        blitElement(dst, sc.ui.frame(bg), 220, 320, false);
-    }
-    const int first = (sc.a1 == 0) ? 0 : 1;
-    for (int i = first; i < 4; ++i) {
-        int f = sc.byte_[i] + 4;
-        if (f >= sc.ui.frameCount()) {
-            f = sc.ui.frameCount() - 1;
+    const int lowest = sc.vis ? 1 : 0;
+    if (sc.ui.frameCount() > 23) {
+        blitElement(dst, sc.ui.frame(sc.vis), 220, 320, false);
+        for (int r = 3; r >= lowest; --r) {
+            blitElement(dst, sc.ui.frame(sc.byte_[r] + 4), kSlotReelX[4 * sc.vis + r], 320,
+                        false);
         }
-        if (f >= 0 && sc.ui.frameCount() > 0) {
-            blitElement(dst, sc.ui.frame(f), sc.x[i], 320, false);
-        }
+        // [RE 0x43F3F7/0x43F511] 把手：case2 画压下帧(3)，case3 前 4 帧原版不重绘该区域
+        //   （压下持续 ~5 帧），第 4 帧换回抬起帧(2)
+        const bool pulled = sc.phase == 2 || (sc.phase == 3 && sc.frame < 4);
+        blitElement(dst, sc.ui.frame(pulled ? 3 : 2), kSlotPreviewX[sc.vis], 240, false);
     }
-    // 预览框（phase2 画 +36=帧3、phase3 画 +48=帧4 于第一停轮位）
-    if (sc.phase == 2 && sc.ui.frameCount() > 3) {
-        blitElement(dst, sc.ui.frame(3), kSlotPreviewX[bg], 240, false);
-    } else if (sc.phase == 3 && sc.ui.frameCount() > 4) {
-        blitElement(dst, sc.ui.frame(4), kSlotPreviewX[bg], 240, false);
-    }
-    // 标题（data.mkf[517] 帧5 提示框 + 16 号字）
     const UiImage& tip = st.estateTiles;
     if (tip.frameCount() > 5) {
         blitElement(dst, tip.frame(5), 220, 140, false);
     }
-    const char* godName = kObjectNames[kSlotGodType[sc.a1]];
-    char text[192];
-    std::snprintf(text, sizeof(text), kSlotTitle[sc.a1], godName);
     app.text().setFont(16, 0xF0F0F0, 0x101010, kTextStyleShadow | kTextStyleBold, 1);
-    app.text().drawText(dst, text, 220, 140, 4);
-    if (sc.phase == 8) {
+    if (sc.phase < 8) {
+        char title[192];
+        std::snprintf(title, sizeof(title), kSlotTitle[sc.a1], kObjectNames[kSlotGodType[sc.a1]]);
+        app.text().drawText(dst, title, 220, 140, 4);
+    } else {
         char amount[16];
         std::snprintf(amount, sizeof(amount), "%d", sc.result);
         app.text().drawText(dst, amount, 220, 140, 4);
     }
 }
-
-// [RE 0x43EF3E] 每帧推进已内联到 slotHandler 各阶段（原版全局计数 dword_475D5C 节奏等价）
 
 bool slotHandler(const SDL_Event* event, void* user) {
     SlotCtx& sc = *static_cast<SlotCtx*>(user);
@@ -264,129 +254,113 @@ bool slotHandler(const SDL_Event* event, void* user) {
     }
     if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN && event->button.button == SDL_BUTTON_LEFT &&
         sc.humanCtl && sc.phase == 1) {
-        sc.phase = 2;
+        sc.phase = 2;  // [RE 0x43F767] 人类点击拉杆
         sc.frame = 0;
         return true;
     }
     if (event->type != kModalTimerEvent) {
         return true;  // 模态吞事件
     }
+    const int lowest = sc.vis ? 1 : 0;
     if (sc.phase <= 7) {
-        app.audio().playEffect(kSlotMachineSound);  // [RE 0x475D3C] 滚动循环音
+        app.audio().playEffect(kSlotMachineSound);  // [RE 0x475D3C] 滚动循环音（同槽替换）
     }
-    const int first = (sc.a1 == 0) ? 0 : 1;
+    // 滚动：+1/帧（0..19 循环）；拉杆前每 10 帧全体重随机跳 [RE 0x43F2D5]；
+    // phase≥4 时已定格轮（r > 当前停轮号）不再动
+    const int stopReel = sc.phase >= 4 ? 3 - (sc.phase - 4) : -1;
+    for (int r = lowest; r <= 3; ++r) {
+        if (stopReel >= 0 && r > stopReel) {
+            continue;
+        }
+        if (sc.phase <= 3 && sc.frame % 10 == 0) {
+            sc.byte_[r] = (std::rand() % 10) * 2 + 1;
+        }
+        sc.byte_[r] = (sc.byte_[r] + 1) % 20;
+    }
+    ++sc.frame;
     switch (sc.phase) {
-        case 1:  // 等待：人类无限转（点击进 2），AI/托管 40 帧自动
-            for (int i = first; i < 4; ++i) {
-                if ((sc.frame % 10) == 0 && (i + sc.frame) % 3 == 0) {
-                    sc.byte_[i] = std::rand() % 10 * 2 + 1;
-                }
-                sc.byte_[i] = (sc.byte_[i] + 1) % 20;
-            }
-            ++sc.frame;
+        case 1:  // 等待拉杆（AI/托管/夢遊 40 帧自动 [RE 0x43F325]）
             if (!sc.humanCtl && sc.frame >= 40) {
                 sc.phase = 2;
                 sc.frame = 0;
             }
             break;
-        case 2:  // 预览数字 1（帧3）+ 点击音
+        case 2:  // 把手压下（绘制单帧 frame3）+ UI 点击音 [RE 0x43F442]
             app.audio().playEffect(1);
             sc.phase = 3;
             sc.frame = 0;
             break;
-        case 3:  // 预览数字 2（帧4）后 4 帧 → 停轮阶段
-            if (++sc.frame >= 4) {
+        case 3:  // 把手抬起，滚 4 帧后进停轮 [RE case3 v15==4]
+            if (sc.frame >= 4) {
                 sc.phase = 4;
                 sc.frame = 0;
             }
             break;
-        case 4:  // 停轮 1..4（每轮 8 帧；a1=0 含轮0）
-        {
-            const int stopReel = first;
-            bool done = false;
-            for (int i = first; i < 4; ++i) {
-                if (i != stopReel) {
-                    sc.byte_[i] = (sc.byte_[i] + 1) % 20;
-                }
-            }
-            if (++sc.frame >= 8) {
-                sc.byte_[stopReel] = (sc.byte_[stopReel] | 1);
-                done = true;
-            }
-            if (done) {
-                sc.phase = stopReel >= 3 ? 8 : 4 + (stopReel + 1 - first);
-                sc.frame = 0;
-            }
-            break;
-        }
+        case 4:
         case 5:
         case 6:
-        case 7:  // 停后续轮（阶段号 = 已停轮数；每轮 8 帧）
-        {
-            const int stopReel = sc.a1 == 0 ? sc.phase - 3 : sc.phase - 2;
-            for (int i = stopReel; i < 4; ++i) {
-                sc.byte_[i] = (sc.byte_[i] + 1) % 20;
-            }
-            if (++sc.frame >= 8) {
-                sc.byte_[stopReel] = (sc.byte_[stopReel] | 1);
-                sc.phase = (stopReel >= 3) ? 8 : sc.phase + 1;
+        case 7: {  // 自右向左逐轮定格（每轮 8 帧 [RE 0x43F56F 计数 8]）
+            const int sr = 3 - (sc.phase - 4);
+            if (sr >= lowest && sc.frame >= 8) {
+                sc.phase = (sr == lowest) ? 8 : sc.phase + 1;
                 sc.frame = 0;
+                if (sc.phase == 8) {
+                    // [RE 0x43F65B] 千位仅 4 轮版（vis==0）
+                    sc.result = (sc.vis == 0 ? (sc.byte_[0] >> 1) * 1000 : 0) +
+                                (sc.byte_[1] >> 1) * 100 + (sc.byte_[2] >> 1) * 10 +
+                                (sc.byte_[3] >> 1);
+                }
             }
             break;
         }
-        case 8:  // 定格金额显示
-            if (sc.result == 0) {
-                sc.result = (sc.a1 == 0 ? (sc.byte_[0] >> 1) * 1000 : 0) +
-                            (sc.byte_[1] >> 1) * 100 + (sc.byte_[2] >> 1) * 10 +
-                            (sc.byte_[3] >> 1);
-            }
-            if (++sc.frame >= 40) {
+        case 8:  // 金额停留 40 帧 [RE case9 v15==40]
+            if (sc.frame >= 40) {
                 sc.phase = 9;
             }
             break;
         default:
-            app.events().requestExit(sc.result);
-            return true;
+            break;
     }
     slotDraw(sc);
     if (sc.phase >= 9) {
         app.events().requestExit(sc.result);
     }
     return true;
-
 }
 
 } // namespace
 
-// [RE 0x440706] slotMachineDialog：財神/窮神数字老虎机（panel.mkf[67]）
-// 依据: 0x440706/0x43F23E 反编译; a1=0 4 轮 0..9999、1 3 轮 0..999（4/5 同 3 轮）；
-//   人类点击提前定格（alive==1 且无夢遊），AI 40 帧自动；结果 = 数字帧值/2 加权
-// 差异: 原版滚轮 sub_43EF3E 用全局计数 dword_475D5C 控制逐轮定格时机（8 帧/轮
-//   + 预览 2 帧），重写按同等节奏实现；原版标题指针 *(&off_47ED7A+a1) 字节错位
-//   （a1=1/5 为笔误），重写直接取对应神明名
+// [RE 0x440706] slotMachineDialog：財神/窮神老虎机（panel.mkf[67] 24 帧：
+//   0/1 = 4轮/3轮机身、2/3 = 把手抬起/压下、4..23 = 数字条 10 数字×2 帧）
+// 依据: 0x440706/0x43F23E; **v1 = !(a1&1) 贯穿 slotMachineValue**（位数/轮x/机身/预览x）：
+//   a1 偶（0 小財神 / 4 小窮神）→ v1=1 → 3 轮 **0..999**；
+//   a1 奇（1 大財神 / 5 大窮神）→ v1=0 → 4 轮 **0..9999**（千位仅 v1=0）——
+//   与 [HELP 42/44/46/49]「大=四位数、小=三位数」吻合
+// 交互: 人类左键拉杆（alive==1 且非夢遊）；AI/托管 40 帧自动；
+//   拉杆 → 停轮自右向左每轮 8 帧；金额停留 40 帧
+// 差异: 原版把手"压下"随 case2→3 帧切换（重写以 phase2 整帧呈现，24ms 等价观感）；
+//   原版定格时机用全局计数 dword_475D5C，重写按同等 8 帧节奏
 int slotMachineDialog(Application& app, int a1) {
     GameState& st = app.gameState();
     SlotCtx sc;
     sc.app = &app;
     sc.a1 = a1;
-    sc.reels = (a1 == 0) ? 4 : 3;
-    const int first = (a1 == 0) ? 0 : 1;
-    for (int i = first; i < 4; ++i) {
-        sc.byte_[i] = (std::rand() % 10) * 2 + 1;
-        sc.x[i] = kSlotReelX[4 * (a1 != 0) + i];
+    sc.vis = !(a1 & 1);
+    const int lowest = sc.vis ? 1 : 0;
+    for (int r = lowest; r <= 3; ++r) {
+        sc.byte_[r] = (std::rand() % 10) * 2 + 1;
     }
     if (auto blob = st.panel.read(67)) {
         sc.ui.load(std::move(*blob));
     }
     if (sc.ui.frameCount() < 24) {
-        RICH4_LOGW("slotMachineDialog: panel.mkf[67] unavailable (frames=%d)",
-                   sc.ui.frameCount());
-        // 回退：直接随机（0..9999 / 0..999），保证效果数值可用
-        return (a1 == 0) ? std::rand() % 10000 : std::rand() % 1000;
+        RICH4_LOGW("slotMachineDialog: panel.mkf[67] unavailable (frames=%d)", sc.ui.frameCount());
+        return sc.vis ? std::rand() % 1000 : std::rand() % 10000;
     }
     const int cp = st.currentPlayer;
     sc.humanCtl = cp >= 0 && cp < 4 && st.players[cp].alive == 1 && st.players[cp].state37 == 0;
-    RICH4_LOGI("slotMachine: a1=%d human=%d (RE 0x440706)", a1, sc.humanCtl ? 1 : 0);
+    RICH4_LOGI("slotMachine: a1=%d vis=%d human=%d (RE 0x440706)", a1, sc.vis,
+               sc.humanCtl ? 1 : 0);
     const int result = runModal(app, slotHandler, &sc, 24);
     RICH4_LOGI("slotMachine result=%d (RE 0x43F23E)", result);
     return result;
@@ -823,9 +797,10 @@ void addMoney(Application& app, int player, int32_t amount, bool cash) {
     pl.monthSettleB += amount;  // [RE 0x44D418 dword_496BC8]
 }
 
-// [RE 0x40E669] flyObjectSprite：物件精灵 A→B 直线插值动画（24ms/帧 + 结束停留）
-// 依据: 0x40E669 反编译; 帧数 = 距离×0.125+1；objId=0 用通用精灵（dword_49697C）；
-//   朝向 = (物件dir + 8 - 视角) & 7（objId=0 → 帧 0）
+// [RE 0x40E669] flyObjectSprite：物件精灵 A→B 直线插值动画（世界坐标，阻塞 24ms/帧）
+// 依据: 0x40E669 反编译; 端点投影 = sub_409A23（视口外返回 (0,0) 原语义）；两端同点不退化播放；
+//   帧数 = 屏幕距离×0.125+1（flt_46324C），自起点向终点逐帧推进；朝向帧 =
+//   (物件dir + 8 - 视角) & 7；objId=0 原版用通用精灵（dword_49697C，未建模）
 void flyObjectSprite(Application& app, int objId, int fromX, int fromY, int toX, int toY,
                      int holdMs) {
     GameState& st = app.gameState();
@@ -847,18 +822,28 @@ void flyObjectSprite(Application& app, int objId, int fromX, int fromY, int toX,
     int y0 = 0;
     int x1 = 0;
     int y1 = 0;
-    if (!projectMapPoint(st, fromX, fromY, x0, y0) || !projectMapPoint(st, toX, toY, x1, y1)) {
-        return;
+    if (!projectMapPoint(st, fromX, fromY, x0, y0)) {
+        x0 = 0;
+        y0 = 0;  // [RE 0x409A9D] 视口外 → (0,0)（原版语义）
+    }
+    if (!projectMapPoint(st, toX, toY, x1, y1)) {
+        x1 = 0;
+        y1 = 0;
+    }
+    if (x0 == x1 && y0 == y1) {
+        return;  // [RE 0x40E71E] 起终点相同 → 不动画
     }
     const double dist = std::sqrt(static_cast<double>((x1 - x0) * (x1 - x0) +
                                                       (y1 - y0) * (y1 - y0)));
     const int frames = static_cast<int>(dist * kFlyFrameScale) + 1;
-    const double stepX = static_cast<double>(x0 - x1) / frames;
-    const double stepY = static_cast<double>(y0 - y1) / frames;
-    double px = x1;
-    double py = y1;
+    const double stepX = static_cast<double>(x1 - x0) / frames;  // 起点 → 终点
+    const double stepY = static_cast<double>(y1 - y0) / frames;
+    double px = x0;
+    double py = y0;
     setClipRect(0, 40, 440, 480);
     for (int i = 0; i < frames; ++i) {
+        px += stepX;
+        py += stepY;
         const uint64_t end = SDL_GetTicks() + 24;
         renderGameFrame(app);
         blitSpriteFrameClipped(dst, *img, dir, static_cast<int>(px), static_cast<int>(py), true);
@@ -868,14 +853,13 @@ void flyObjectSprite(Application& app, int objId, int fromX, int fromY, int toX,
             app.audio().update();
             SDL_Delay(2);
         }
-        px += stepX;
-        py += stepY;
     }
     setClipRect(0, 0, 640, 480);
     (void)holdMs;
-    RICH4_LOGI("flyObject: obj %d (%d,%d)->(%d,%d) %d frames (RE 0x40E669)", objId, fromX, fromY,
-               toX, toY, frames);
+    RICH4_LOGI("flyObject: obj %d (%d,%d)->(%d,%d) %d frames (RE 0x40E669)", objId, x0, y0,
+               x1, y1, frames);
 }
+
 
 // ===== 请神符 / 送神符（P4 卡片系统挂点，UI 入口后续接入）=====
 
@@ -935,9 +919,14 @@ bool useInviteGodCard(Application& app) {
         static_cast<uint16_t>(st.cellTable[off + 2] | (st.cellTable[off + 3] << 8));
     cardBagRemove(st, p, 23);  // [RE 0x444E52 0x441343(cur,23)]
     // [TODO P4] 请神台词 sub_44EF41(p, 0, off_481292[27? stride 90 * charIndex])
+    // [RE 0x444EA8] 动画前临时摘除神明 cellEnt（防飞行途中原地仍绘制），结束后还原
+    st.cellTable[off + 2] = 0;
+    st.cellTable[off + 3] = 0;
     const CellEnt& ce = st.cellEnts[ent];
     Player& pl = st.players[p];
     flyObjectSprite(app, objId, ce.x, ce.y, pl.spriteX, pl.spriteY, 0);
+    st.cellTable[off + 2] = static_cast<uint8_t>(ent & 0xFF);
+    st.cellTable[off + 3] = static_cast<uint8_t>(ent >> 8);
     attachObject(app, p, ent, objId);
     RICH4_LOGI("useInviteGodCard: god obj %d (type %u) invited to p%d (RE 0x444E1A)", objId,
                st.cellTable[off], p);
