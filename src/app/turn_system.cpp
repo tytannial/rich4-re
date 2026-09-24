@@ -133,8 +133,12 @@ void onPlayerActionPhase(Application& app) {
         if (slotHi == 0) {
             return;
         }
-        bounceObject(st, slotHi, st.workerFromCell, st.workerPrevCell);  // [RE 0x40FAFD]
-        releaseCellTableSlot(app, slotHi);                              // [RE 0x40E14D]
+        // [RE 0x41B4FF] 弹飞基准 = 娃娃当前格/上一格（word_498E6C/6E 即槽 8 的
+        //   cellEntId/prevCellEnt，随移动逐步更新）——不是玩家起始格
+        const uint16_t fromCell = w.cellEntId;
+        const uint16_t toCell = (w.prevCellEnt != 0) ? w.prevCellEnt : w.cellEntId;
+        bounceObject(st, slotHi, fromCell, toCell);  // [RE 0x40FAFD]
+        releaseCellTableSlot(app, slotHi);           // [RE 0x40E14D]
         renderGameFrame(app);
         app.renderFrame();
         RICH4_LOGI("worker kick: slot %u at cell %u (RE 0x41B42D)", slotHi, w.cellEntId);
@@ -356,13 +360,29 @@ void releaseWalkResources(GameState& st, int p, int group) {
 //   state37 → 组5: slot0=v1+16, slot2=v1+17, slot4=v1+2
 //   cellEnt+39 最高位（有路）→ 组1: slot1=v1+13, slot3=v1+14, slot5=v1+15
 //   travel → slot0=3*travel+v1, slot2=+1, slot4=+2, slot6=+3（travel==3）
-// 差异: 槽 4..7（事件槽 NPC）分支待补；槽 8 = 機器娃娃虚拟角色（正常流程）
+// 差异: 槽 4..7（事件槽 NPC）分支待补
 void loadWalkResources(GameState& st, int p) {
     if (p < 0 || p >= 9) {
         return;
     }
-    if (p >= 4 && p != 8) {
+    if (p >= 4 && p < 8) {
         return;  // 事件槽 4..7（P5）
+    }
+    if (p >= 8) {
+        // [RE 0x40B93B 槽8] 機器娃娃专用行走资源：data.mkf[521]（站立/走路 slot0）+
+        //   data.mkf[522]（移动 slot2）——不是玩家角色资源
+        if ((st.playerActionFlags[p] & 0x0F) != 1) {
+            releaseWalkResources(st, p, 0);
+            st.playerActionFlags[p] =
+                static_cast<uint8_t>((st.playerActionFlags[p] & 0xF0) | 1);
+            loadWalkRes(st, p, 0, 521);
+            loadWalkRes(st, p, 2, 522);
+        }
+        if (st.playerMoveGroup[p] == 1) {
+            st.playerMoveFrame[p] = 0;
+        }
+        st.playerMoveGroup[p] = 0;
+        return;
     }
     Player& pl = st.players[p];
     const int v1 = 21 * pl.charIndex + 128;
