@@ -407,7 +407,7 @@ void renderMap(Application& app, int centerX, int centerY) {
         // 原版拾取形状 = g_pickMask 帧 2/3（143x103 菱形，覆盖约 3x3 格）；
         //   实机体感范围过大易误盖道路格 → 改用帧 4（51x51，约一个地块）
         const int pickFrame = 4;
-        if (es.owner == 0) {
+        if (es.owner == 0 && es.level == 0) {
             // [RE 0x409B18] 无主空地仍可拾取（点击显示 空地/等级/费用）
             int sx = 0;
             int sy = 0;
@@ -428,8 +428,9 @@ void renderMap(Application& app, int centerX, int centerY) {
             addItem(&state.pieceTiles, ci, es.x, es.y, -1, static_cast<uint16_t>(2000 + i),
                     &state.flagTiles, pickFrame);
         } else {
-            // [RE 0x40829D] 有建筑：type==0 → dword_48AE48[level]；type!=0 → dword_48AE60
-            //   （estateFlag），调色板替换 owner 色。
+        // [RE 0x40829D] 有建筑：type==0 → dword_48AE48[level]；type!=0 → dword_48AE60
+        //   （estateFlag），调色板替换 owner 色（**不检查 owner**：无主加盖 level>0 时
+        //   调色板 = 0 → 黑轮廓建筑，0x4091E5 实证）。
             //   dword_48AE48[level]（level 1..5）= g_specTiles[level-1]（地址 0x48AE48+4*level
             //   即 0x48AE4C 起的 g_specTiles 数组）= 地图预加载图块 map.mkf[5*base+38+level]
             //   （重写 specPointTiles[level-1]）；此前误全部画 estateFlag（大地块旗帜外观）
@@ -457,7 +458,7 @@ void renderMap(Application& app, int centerX, int centerY) {
         const int frame = (8 - (state.mapRotation + cp.dir)) & 7;
         // 同 estate：拾取形状改用帧 4（51x51）
         const int pickFrame = 4;
-        if (cp.owner == 0) {
+        if (cp.owner == 0 && cp.sub == 0) {
             int sx = 0;
             int sy = 0;
             if (state.flagTiles.frameCount() > pickFrame && projectItem(cp.x, cp.y, sx, sy)) {
@@ -477,7 +478,8 @@ void renderMap(Application& app, int centerX, int centerY) {
                     &state.flagTiles, pickFrame);
             continue;
         }
-        // [RE 0x409402] 有设施：按 type 分派图块组（子索引 = sub，别名偏移见上）
+        // [RE 0x409402] 有设施：按 type 分派图块组（子索引 = sub，别名偏移见上）；
+        //   **不检查 owner**（无主但 sub>0 时调色板 = 0 → 黑轮廓设施，0x4093F9 实证）
         int tileIndex = 0;
         switch (cp.type) {
             case 0: tileIndex = 0; break;                        // 公園
