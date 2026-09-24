@@ -65,6 +65,13 @@ void convertImageChannels(uint16_t* dst, const uint16_t* src, size_t pixelCount,
 // 用于已选头像变暗（-16）与悬停名字条（-20）
 void scaleSurfaceChannels(Surface& dst, int x, int y, int w, int h, const uint8_t table[32]);
 
+// [RE 0x451B9E] highlightRect：按下下沉浮雕——矩形内容向右下平移 shift px，再把顶边/左边
+//   scaleSurfaceChannels 变暗；仅按住期间绘制，抬起复原（全量重绘面板天然复原）
+// 依据: 0x451B9E 反编译（逐行右下移 + scaleElementChannels(-16) 顶/左 1px）；
+//       强度按控件大小调（shift 1px/kChannelHalf 小控件，2px/kChannelThird 大按钮）
+// 用途: 热键列表/按钮、股市按钮、卡片·道具格（0x44184A/0x445D59 按下反馈）
+void pressDown(Surface& dst, int x, int y, int w, int h, int shift, const uint8_t table[32]);
+
 // [RE 0x4553DA] grayscaleImage（经 0x455442 16bit 分支）
 // 依据: 0x455442 反汇编; gray = (R + G + B + 16) >> 2, 重组 R=G=B=gray; 0 保持
 // 用于 AI 玩家头像灰度化

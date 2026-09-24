@@ -102,19 +102,6 @@ bool hitRightColumn(int rx, int ry, int& row) {
     return false;
 }
 
-// [RE 0x451B9E] highlightRect：按住控件时矩形内容向右下平移 1px，再把顶/左 1px 变暗(-16)
-// 形成"下沉"浮雕（保存右列/底行供 sub_451D4E 恢复；本重写每帧全量重绘，抬起即复原）
-void pressDown(Surface& surface, int x, int y, int w, int h) {
-    uint16_t* p = surface.pixels();
-    for (int row = h - 2; row >= 0; --row) {
-        uint16_t* dst = p + static_cast<size_t>(y + row + 1) * Surface::kWidth + (x + 1);
-        const uint16_t* src = p + static_cast<size_t>(y + row) * Surface::kWidth + x;
-        std::memmove(dst, src, static_cast<size_t>(w - 2) * sizeof(uint16_t));
-    }
-    scaleSurfaceChannels(surface, x, y, w, 1, kChannelHalf);         // 顶边
-    scaleSurfaceChannels(surface, x, y + 1, 1, h - 1, kChannelHalf); // 左边
-}
-
 void redrawHotkeys(HotkeyDialogState& state) {
     Surface& surface = state.app->surface();
     if (!state.ui) {
@@ -166,7 +153,7 @@ void redrawHotkeys(HotkeyDialogState& state) {
         }
         // [RE 0x451B9E] 按住列表项（行矩形 55×16）：整体下沉（含已绘数值）+ 顶/左阴影
         if (i == state.pressed) {
-            pressDown(surface, x - 27, y - 8, 55, 16);
+            pressDown(surface, x - 27, y - 8, 55, 16, 1, kChannelHalf);
         }
     }
 
@@ -182,7 +169,7 @@ void redrawHotkeys(HotkeyDialogState& state) {
             {17, 281, 70, 30}, {130, 281, 70, 30}, {242, 281, 70, 30}};
         const int bi = state.pressed - 100;
         pressDown(surface, ox + kBtnRect[bi][0], oy + kBtnRect[bi][1], kBtnRect[bi][2],
-                  kBtnRect[bi][3]);
+                  kBtnRect[bi][3], 1, kChannelHalf);
     }
 }
 

@@ -154,6 +154,25 @@ void drawRectBorder(Surface& dst, int x, int y, int w, int h, uint16_t color) {
     }
 }
 
+void pressDown(Surface& dst, int x, int y, int w, int h, int shift, const uint8_t table[32]) {
+    // [RE 0x451B9E] 依据: 自底向上逐行把内容右移 shift/下移 shift（长度 w-shift），
+    // 再把顶边 shift 行 + 左边 shift 列（不含顶边）变暗
+    if (shift <= 0 || w <= shift || h <= shift) {
+        return;
+    }
+    if (x < 0 || y < 0 || x + w > dst.width() || y + h > dst.height()) {
+        return;
+    }
+    uint16_t* p = dst.pixels();
+    for (int row = h - 1 - shift; row >= 0; --row) {
+        uint16_t* d = p + static_cast<size_t>(y + row + shift) * Surface::kWidth + (x + shift);
+        const uint16_t* s = p + static_cast<size_t>(y + row) * Surface::kWidth + x;
+        std::memmove(d, s, static_cast<size_t>(w - shift) * sizeof(uint16_t));
+    }
+    scaleSurfaceChannels(dst, x, y, w, shift, table);          // 顶边
+    scaleSurfaceChannels(dst, x, y + shift, shift, h - shift, table);  // 左边
+}
+
 bool blitSpriteFrame(Surface& dst, const UiImage& spr, int frame, int x, int y) {
     return blitSpriteFrameClipped(dst, spr, frame, x, y, false);
 }

@@ -287,22 +287,6 @@ void drawRows(StockPanelState& s) {
     }
 }
 
-// [RE 0x451B9E] highlightRect：内容右下平移 1px + 顶行/左列半暗(-16) = 按下下沉浮雕
-//   （与 hotkey_dialog.cpp pressDown 一致；本重写每帧全量重绘，抬起即复原）
-void pressDown(Surface& dst, int l, int t, int r, int b) {
-    const int w = r - l;
-    const int h = b - t;
-    uint16_t* p = dst.pixels();
-    // 内容右下平移 2px（大按钮更夸张）
-    for (int row = h - 3; row >= 0; --row) {
-        uint16_t* d = p + static_cast<size_t>(t + row + 2) * Surface::kWidth + (l + 2);
-        const uint16_t* s = p + static_cast<size_t>(t + row) * Surface::kWidth + l;
-        std::memmove(d, s, static_cast<size_t>(w - 2) * sizeof(uint16_t));
-    }
-    scaleSurfaceChannels(dst, l, t, w, 2, kChannelThird);      // 顶边 2px（更暗）
-    scaleSurfaceChannels(dst, l, t, 2, h, kChannelThird);      // 左边 2px（更暗）
-}
-
 // 选框（白）+ 按钮悬停/按下下沉
 void drawSelection(StockPanelState& s) {
     Surface& dst = s.app->surface();
@@ -313,8 +297,9 @@ void drawSelection(StockPanelState& s) {
         drawRectBorder(dst, kSelX, kRowH * s.selStock + 48, kSelW, kRowH, kWhite555);
     }
     if (s.pressedBtn >= 0 && s.pressedBtn < 5) {
+        // [RE 0x451B9E] 仅按住时下沉；大按钮用 2px/kChannelThird（更夸张）
         const Btn& b = kBtns[s.pressedBtn];
-        pressDown(dst, b.l, b.t, b.r, b.b);  // 仅按住时下沉
+        pressDown(dst, b.l, b.t, b.r - b.l, b.b - b.t, 2, kChannelThird);
     }
 }
 

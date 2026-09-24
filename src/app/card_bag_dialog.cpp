@@ -9,6 +9,7 @@
 #include "game/app/map_objects.h"
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
+#include "game/app/new_game_tables.h"
 #include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/log.h"
@@ -39,18 +40,17 @@ constexpr int kHitX0 = 19;
 constexpr int kHitY0 = 135;
 constexpr int kHitW = 80;
 constexpr int kHitH = 56;
-constexpr int kHiL0 = 20;   // 高亮框 l = 80*(slot%5)+20
-constexpr int kHiT0 = 136;  // 高亮框 t = 56*(slot/5)+136
+constexpr int kHiL0 = 20;   // 下沉区 l = 80*(slot%5)+20
+constexpr int kHiT0 = 136;  // 下沉区 t = 56*(slot/5)+136
 constexpr int kHiW = 78;
 constexpr int kHiH = 54;
-constexpr uint16_t kWhite555 = 0x7FFF;
 
 struct CardBagState {
     Application* app = nullptr;
     const UiImage* sheet = nullptr;
     int cur = 0;
-    int selSlot = -1;  // 选中槽（高亮），-1 无
-    int selId = 0;     // 选中卡 id（0 无）
+    int pressedSlot = -1;  // 按住中的格（下沉浮雕），-1 无
+    int selId = 0;         // 按住时记下的卡 id（抬起送出）
 };
 
 // [RE 0x441B0A] drawCardBag：帧0 背景 + 5×3 网格卡名（非空槽）
@@ -73,10 +73,11 @@ void renderCardBag(CardBagState& s) {
             }
         }
     }
-    if (s.selSlot >= 0) {
-        const int l = kHiL0 + kHitW * (s.selSlot % 5);
-        const int top = kHiT0 + kHitH * (s.selSlot / 5);
-        drawRectBorder(dst, l, top, kHiW, kHiH, kWhite555);
+    // [RE 0x44184A] 按住格 highlightRect 下沉浮雕（1px/kChannelHalf；原版无白框）
+    if (s.pressedSlot >= 0) {
+        const int l = kHiL0 + kHitW * (s.pressedSlot % 5);
+        const int top = kHiT0 + kHitH * (s.pressedSlot / 5);
+        pressDown(dst, l, top, kHiW, kHiH, 1, kChannelHalf);
     }
 }
 
@@ -114,7 +115,7 @@ bool cardModalHandler(const SDL_Event* event, void* user) {
             if (slot >= 0 && slot < kSlots) {
                 const int card = st.cardState60[15 * s.cur + slot];
                 if (card != 0) {
-                    s.selSlot = slot;
+                    s.pressedSlot = slot;  // [RE 0x44184A] highlightRect 下沉
                     s.selId = card;
                     s.app->audio().playEffect(1);  // [RE 0x44187C] g_uiSoundClick
                     renderCardBag(s);
@@ -127,7 +128,7 @@ bool cardModalHandler(const SDL_Event* event, void* user) {
                 return true;
             }
             if (s.selId != 0) {  // [RE 0x441870] g_cardSelId → postModalExit
-                s.selSlot = -1;
+                s.pressedSlot = -1;
                 renderCardBag(s);
                 s.app->events().requestExit(s.selId);
             }

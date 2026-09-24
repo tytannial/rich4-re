@@ -58,7 +58,8 @@ else if (alive & 6) and (g_playerAiCardItem[cur] & bit): # AI: 卡&1 / 道&2
 
 - 命中区 `x∈[19,419)`, `y∈[135,303)`
 - `slot = 5*((y-135)/56) + (x-19)/80`
-- 高亮框 `highlightRect`：`[80*(slot%5)+20 .. +98] × [56*(slot/5)+136 .. +190]`（即 w=78 h=54）
+- 按下反馈 `highlightRect`：`[80*(slot%5)+20 .. +98] × [56*(slot/5)+136 .. +190]`（即 w=78 h=54）
+  内容右下移 1px + 顶/左 1px `kChannelHalf` 变暗（**下沉浮雕，不是白框**；重写 `pressDown`）
 - 消息：LBUTTONDOWN(0x201) 命中非空槽→高亮+记 `g_cardSelId`/`g_itemSelId`+`g_uiSoundClick`；
   LBUTTONUP(0x202)→`postModalExit(selId)`；MBUTTON(0x205)→`postModalExit(0)` 取消；
   WM_USER+1(0x401)→清 sel + `InvalidateRect`（重绘=贴回背景）
@@ -135,7 +136,8 @@ else if (alive & 6) and (g_playerAiCardItem[cur] & bit): # AI: 卡&1 / 道&2
 
 ## 重写要点
 
-- 原版「就地画进 mkf surface 帧 + saveBackground/highlightRect 原地改像素」→ 重写为**每帧全量重绘**（背景 blit + 文字/图标叠加 + 选中白框 `drawRectBorder`），等价。
+- 原版「就地画进 mkf surface 帧 + saveBackground/highlightRect 原地改像素」→ 重写为**每帧全量重绘**（背景 blit + 文字/图标叠加 + 按住格 `pressDown` 下沉），等价。
+  早期误用 `drawRectBorder` 白框当"选中高亮"，2026-09-25 修正为原版的按下下沉（`pressedSlot`，抬起复原）。
 - 模态用现有 `runModal(app, handler, user)` + `events().requestExit(id)`；null event = 重绘请求（对应 WM_USER+1）。
 - 效果分派：`g_cardEffectFuncs`/`g_itemEffectFuncs` 表以 `int effect(Application&)` 函数指针数组形式落地（索引 = id）。
   本次真实接入 **卡 id7 改建 / id22 送神 / id23 请神**（后两者复用 `map_objects.cpp` 现成 `useBanishGodCard`/`useInviteGodCard`，包 `bool→int`）；

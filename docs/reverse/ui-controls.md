@@ -90,33 +90,34 @@
 **原版**：`highlightRect 0x451B9E`。按住时把矩形**内容向右下平移 N px**，再把**顶行 + 左列**
 `scaleSurfaceChannels` 变暗，形成"凹陷"浮雕；抬起由 `sub_451D4E` 恢复。
 
-**重写实现**（`pressDown`，每帧全量重绘、抬起即复原，无需保存/恢复背景）：
+**重写实现**（公共 `blit.h:pressDown`，每帧全量重绘、抬起即复原，无需保存/恢复背景）：
 ```cpp
-void pressDown(Surface& dst, int l, int t, int r, int b, int SHIFT, const uint8_t* tbl) {
-    const int w = r - l, h = b - t;
+void pressDown(Surface& dst, int x, int y, int w, int h, int shift, const uint8_t tbl[32]) {
     uint16_t* p = dst.pixels();
-    for (int row = h - 1 - SHIFT; row >= 0; --row) {            // 自底向上，避免覆盖
-        uint16_t* d = p + (t + row + SHIFT) * Surface::kWidth + (l + SHIFT);
-        const uint16_t* s = p + (t + row) * Surface::kWidth + l;
-        std::memmove(d, s, (w - SHIFT) * sizeof(uint16_t));     // 内容右下平移 SHIFT px
+    for (int row = h - 1 - shift; row >= 0; --row) {            // 自底向上，避免覆盖
+        uint16_t* d = p + (y + row + shift) * Surface::kWidth + (x + shift);
+        const uint16_t* s = p + (y + row) * Surface::kWidth + x;
+        std::memmove(d, s, (w - shift) * sizeof(uint16_t));     // 内容右下平移 shift px
     }
-    scaleSurfaceChannels(dst, l, t, w, SHIFT, tbl);             // 顶行
-    scaleSurfaceChannels(dst, l, t, SHIFT, h, tbl);             // 左列
+    scaleSurfaceChannels(dst, x, y, w, shift, tbl);             // 顶行
+    scaleSurfaceChannels(dst, x, y + shift, shift, h - shift, tbl);  // 左列（不含顶角）
 }
 ```
 
-**触发时机**：**仅在按住时**（`pressed` / `pressedBtn >= 0`）绘制；悬停（hover）**不**下沉。
+**触发时机**：**仅在按住时**（`pressed` / `pressedBtn` / `pressedSlot >= 0`）绘制；悬停（hover）**不**下沉。
 `BUTTONDOWN` 记 pressed + 重绘，`BUTTONUP` 清 pressed + 执行动作 + 重绘。
 
 **强度调节**（按钮越大越可夸张）：
 
-| 场景 | 平移 | 阴影宽 | 变暗表 | 位置 |
-|------|------|--------|--------|------|
-| 热键小按钮/列表项 | 1px | 1px | `kChannelHalf` | `hotkey_dialog.cpp:pressDown` |
-| 股市顶部大按钮 | 2px | 2px | `kChannelThird` | `stock_market_dialog.cpp:pressDown` |
+| 场景 | 平移 | 阴影宽 | 变暗表 | 调用点 |
+|------|------|--------|--------|--------|
+| 热键小按钮/列表项（55×16） | 1px | 1px | `kChannelHalf` | `hotkey_dialog.cpp` |
+| 卡片/道具格（78×54） | 1px | 1px | `kChannelHalf` | `card_bag_dialog.cpp` / `item_bag_dialog.cpp`（0x44184A/0x445D59） |
+| 股市顶部大按钮 | 2px | 2px | `kChannelThird` | `stock_market_dialog.cpp` |
 
 **经验**：
 - 原版 `word_46CAEC=640` 是 surface 句柄/宽，**不是颜色**；选框用 `drawRectBorder`，下沉用 `pressDown`，勿混。
+- **卡片/道具格原版就是下沉，不是白框**：`cardModal/itemModal` 的 `LBUTTONDOWN` 直接 `highlightRect`（0x4416F0/0x445C14），无任何选框；重写早期误用 `drawRectBorder` 白框，2026-09-25 修正。
 - 平移方向决定"凹陷"观感：内容右下移 + 顶/左变暗 = 按下；反向会变"凸起"。
 - 增量重绘需自行保存/恢复背景（对齐 `sub_451D4E`）；全量重绘面板天然抬起即复原。
 

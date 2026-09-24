@@ -6,6 +6,7 @@
 
 #include "game/app/event_stack.h"
 #include "game/app/map_tables.h"
+#include "game/app/new_game_tables.h"
 #include "game/application.h"
 #include "game/core/log.h"
 #include "game/render/blit.h"
@@ -39,14 +40,13 @@ constexpr int kHiL0 = 20;
 constexpr int kHiT0 = 136;
 constexpr int kHiW = 78;
 constexpr int kHiH = 54;
-constexpr uint16_t kWhite555 = 0x7FFF;
 
 struct ItemBagState {
     Application* app = nullptr;
     const UiImage* sheet = nullptr;
     int cur = 0;
-    int selSlot = -1;
-    int selId = 0;
+    int pressedSlot = -1;  // 按住中的格（下沉浮雕），-1 无
+    int selId = 0;         // 按住时记下的道具 id（抬起送出）
     uint8_t visibleMap[15] = {};  // [RE 0x447C6E] g_itemVisibleMap：网格位 → 道具 id
 };
 
@@ -76,10 +76,11 @@ void renderItemBag(ItemBagState& s) {
             }
         }
     }
-    if (s.selSlot >= 0 && s.selSlot < 15) {
-        const int l = kHiL0 + kHitW * (s.selSlot % 5);
-        const int top = kHiT0 + kHitH * (s.selSlot / 5);
-        drawRectBorder(dst, l, top, kHiW, kHiH, kWhite555);
+    // [RE 0x445D59] 按住格 highlightRect 下沉浮雕（1px/kChannelHalf；原版无白框）
+    if (s.pressedSlot >= 0 && s.pressedSlot < 15) {
+        const int l = kHiL0 + kHitW * (s.pressedSlot % 5);
+        const int top = kHiT0 + kHitH * (s.pressedSlot / 5);
+        pressDown(dst, l, top, kHiW, kHiH, 1, kChannelHalf);
     }
 }
 
@@ -115,7 +116,7 @@ bool itemModalHandler(const SDL_Event* event, void* user) {
             if (slot >= 0 && slot < 15) {
                 const int itemId = s.visibleMap[slot];
                 if (itemId != 0) {
-                    s.selSlot = slot;
+                    s.pressedSlot = slot;  // [RE 0x445D59] highlightRect 下沉
                     s.selId = itemId;
                     s.app->audio().playEffect(1);  // [RE 0x445D75] g_uiSoundClick
                     renderItemBag(s);
@@ -128,7 +129,7 @@ bool itemModalHandler(const SDL_Event* event, void* user) {
                 return true;
             }
             if (s.selId != 0) {  // [RE 0x445DA3] g_itemSelId → postModalExit
-                s.selSlot = -1;
+                s.pressedSlot = -1;
                 renderItemBag(s);
                 s.app->events().requestExit(s.selId);
             }
