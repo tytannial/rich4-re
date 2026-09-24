@@ -55,6 +55,7 @@ struct ItemBagState {
 void renderItemBag(ItemBagState& s) {
     Surface& dst = s.app->surface();
     GameState& st = s.app->gameState();
+    std::memset(s.visibleMap, 0, sizeof(s.visibleMap));
     blitElementOpaque(dst, s.sheet->frame(kItemFrame), kPanelX, kPanelY);
     TextRenderer& t = s.app->text();
     t.setFont(20, 0xFFFFFF, 0x101010, kTextStyleShadow | kTextStyleBold, 0);
