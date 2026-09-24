@@ -179,6 +179,38 @@ int useItemCar(Application& app) {
     return 1;
 }
 
+// [RE 0x446AFB] 機器娃娃（id1）：扣道具+台词 → 虚拟槽 8 复制玩家状态（位置/格/资源）→
+//   currentPlayer=8 → startPlayerMove（槽 8 走 9 步，沿路由 onPlayerActionPhase 弹飞踢除
+//   物件）→ 走完 nextPlayer 恢复原玩家继续回合
+int useItemWorker(Application& app) {
+    GameState& st = app.gameState();
+    const int p = st.currentPlayer;
+    if (p < 0 || p >= 4 || st.players[p].alive != 1) {
+        return 0;
+    }
+    takePlayerItem(st, p, 1);  // [RE 0x446B05]
+    playItemLine(app, p, 1);   // [RE 0x44EF41] off_480D5A
+    const Player& src = st.players[p];
+    st.workerPlayer = static_cast<uint8_t>(p);  // [RE 0x499070] byte_498E70
+    st.workerFlag = 0;                          // [RE 0x498E72]
+    st.workerFromCell = src.cellEntId;          // [RE word_498E6C]
+    st.workerPrevCell = src.prevCellEnt;        // [RE word_498E6E]
+    Player& w = st.players[8];
+    w = src;              // 虚拟槽 = 玩家状态（坐标/格/朝向/角色资源）
+    w.travel = 0;
+    w.diceCount = 1;
+    w.alive = 0x80;       // 娃娃标记（非人类/AI 位；渲染/移动用）
+    w.cellNo = 0;
+    w.cellTableIdx = 0;
+    w.stateFlags = 0;
+    w.byte54 = 0;
+    st.currentPlayer = 8;  // [RE 0x446B94]
+    loadWalkResources(st, 8);
+    startPlayerMove(app);  // [RE 0x40DD1F] steps=9 state=1
+    RICH4_LOGI("itemWorker: p%d -> slot8 from cell %u (RE 0x446AFB)", p, st.workerFromCell);
+    return 1;
+}
+
 // ===== 放置类公共（路障 0x446BAA / 地雷 0x446C88 / 定時炸彈 0x446D69）=====
 // 流程: 台词 → selectTargetDialog(mode) → createMapObject(type, cellEnt) →
 //       flyObjectSprite(玩家→目标格, 100) → 音效 → refreshGameUi → itemStock-1
@@ -445,6 +477,7 @@ int useItemBulldozer(Application& app) {
 // [RE 0x475DD4] g_itemEffectFuncs[id] 分派（id = 道具 1..13）
 int itemEffect(Application& app, int id) {
     switch (id) {
+        case 1: return useItemWorker(app);
         case 2: return placeMapItem(app, 2, 16, 0x1, 4);       // 路障（dword_48236A=槽4）
         case 3: return placeMapItem(app, 3, 17, 0x10001, 5);   // 地雷（dword_482372=槽5）
         case 4: return placeMapItem(app, 4, 18, 0x20001, 2);   // 定時炸彈（g_effectSlot2=槽2）

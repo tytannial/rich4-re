@@ -562,6 +562,12 @@ struct GameState {
     // [RE 0x475DD8] byte_475DD8 遥控骰子强制点数（一次性：rollDice a2 = sub_447285() 读后清零；
     //   非 0 时骰子数强制为 1、点数 = 该值；case2 骰子 FLC 也按单骰选择）
     uint8_t forcedDice = 0;
+    // [RE 0x498E68..0x498E72] 機器娃娃（虚拟槽 8）状态：原玩家 / 标志（0x498E72）/
+    //   起始格（word_498E6C，弹飞 fromCell）/ 上一格（word_498E6E，弹飞 toCell）
+    uint8_t workerPlayer = 0;        // byte_498E70
+    uint8_t workerFlag = 0;          // byte_498E72（结束若 0 → 3）
+    uint16_t workerFromCell = 0;     // word_498E6C
+    uint16_t workerPrevCell = 0;     // word_498E6E
 
     // 事件槽（玩家 4..8 使用；16 字节步进）
     // [RE 0x498DF2] byte_498DF2 槽占用（sub_418EBD 轮换检查）

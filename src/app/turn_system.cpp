@@ -121,8 +121,27 @@ int facingFromDelta(int dx, int dy) {
 void onPlayerActionPhase(Application& app) {
     GameState& st = app.gameState();
     const int p = st.currentPlayer;
+    if (p == 8) {
+        // [RE 0x41B42D p==8] 機器娃娃沿路踢除物件：bounceObject(槽, 起始格, 上一格) 弹飞 +
+        //   deleteMapObject（0x41B4F1..0x41B531）；无物件格直接返回
+        Player& w = st.players[8];
+        if (w.cellEntId == 0 || w.cellEntId >= st.cellEnts.size()) {
+            return;
+        }
+        const CellEnt& ce = st.cellEnts[w.cellEntId];
+        const uint8_t slotHi = static_cast<uint8_t>((ce.occMask >> 16) & 0xFF);
+        if (slotHi == 0) {
+            return;
+        }
+        bounceObject(st, slotHi, st.workerFromCell, st.workerPrevCell);  // [RE 0x40FAFD]
+        releaseCellTableSlot(app, slotHi);                              // [RE 0x40E14D]
+        renderGameFrame(app);
+        app.renderFrame();
+        RICH4_LOGI("worker kick: slot %u at cell %u (RE 0x41B42D)", slotHi, w.cellEntId);
+        return;
+    }
     if (p < 0 || p >= 4 || st.players[p].cellEntId == 0) {
-        // [TODO P5] 事件槽 NPC（p 4..7）与 p==8 工程车（bounceObject+deleteMapObject）
+        // [TODO P5] 事件槽 NPC（p 4..7）
         return;
     }
     Player& pl = st.players[p];
@@ -337,10 +356,13 @@ void releaseWalkResources(GameState& st, int p, int group) {
 //   state37 → 组5: slot0=v1+16, slot2=v1+17, slot4=v1+2
 //   cellEnt+39 最高位（有路）→ 组1: slot1=v1+13, slot3=v1+14, slot5=v1+15
 //   travel → slot0=3*travel+v1, slot2=+1, slot4=+2, slot6=+3（travel==3）
-// 差异: 槽 4..8（事件槽）分支待补
+// 差异: 槽 4..7（事件槽 NPC）分支待补；槽 8 = 機器娃娃虚拟角色（正常流程）
 void loadWalkResources(GameState& st, int p) {
-    if (p < 0 || p >= st.playerCount || p >= 4) {
+    if (p < 0 || p >= 9) {
         return;
+    }
+    if (p >= 4 && p != 8) {
+        return;  // 事件槽 4..7（P5）
     }
     Player& pl = st.players[p];
     const int v1 = 21 * pl.charIndex + 128;
@@ -2620,10 +2642,15 @@ void nextPlayer(Application& app) {
     st.manualView = false;
     int cur = st.currentPlayer;
 
-    // 玩家 8 特殊分支
+    // [RE 0x418EBD] 玩家 8（機器娃娃）特殊分支：恢复原玩家（byte_498E70）+ byte_498E72
+    //   （0→3）+ 面板重绘（sub_415E70(1) 重写逐帧重绘等价）→ 该玩家重开回合
     if (cur == 8) {
-        // byte_498E70/72 事件槽回退（M2）
-        st.playerActionFlags[cur] |= 0x80;
+        st.currentPlayer = st.workerPlayer;
+        if (st.workerFlag == 0) {
+            st.workerFlag = 3;
+        }
+        st.playerActionFlags[st.currentPlayer] |= 0x80;
+        RICH4_LOGI("worker end: back to player %d (RE 0x418EBD)", st.currentPlayer);
         return;
     }
     // 有状态效果 0x30 分支

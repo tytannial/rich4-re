@@ -253,17 +253,17 @@ void renderMap(Application& app, int centerX, int centerY) {
 
     // [RE 0x40829D] 玩家棋子：资源 = walkRes[j][2*state + group]，
     //   帧 = byte_498EA3 + ((8 - dword_499088 + byte_496B78) & 7) * 每方向帧数
-    for (int j = 0; j < state.playerCount && j < 9; ++j) {
+    auto drawPiece = [&](int j) {
         const Player& p = state.players[j];
         if (p.spriteX == 0 && p.spriteY == 0) {
-            continue;
+            return;
         }
         // [RE 0x4086A1] 状态效果中（住宿/出國/監獄/醫院/消失）不绘制棋子（"消失"），
         //   例外 = alive&0x20（走进旅館步行中）；走出旅館启动前 stateFlags 已清（0x40D6BE 链路），
         //   到达清 0x20。住院 524/入狱 538 切换帧重绘后角色由此守卫隐藏（2026-09-24 补全：
         //   原仅查 BYTE0 导致住院/入狱角色仍绘制）
         if (p.stateFlags != 0 && (p.alive & 0x20) == 0) {
-            continue;
+            return;
         }
         const int slot = 2 * state.playerActionState[j] + state.playerMoveGroup[j];
         const UiImage* res = nullptr;
@@ -273,7 +273,7 @@ void renderMap(Application& app, int centerX, int centerY) {
             res = &state.pieceAnim[j];
         }
         if (!res) {
-            continue;
+            return;
         }
         const int dir = (8 - state.mapRotation + p.dir) & 7;
         const int perDir = res->frameCount() / 8;
@@ -285,6 +285,13 @@ void renderMap(Application& app, int centerX, int centerY) {
             frame = res->frameCount() - 1;
         }
         addItem(res, frame, p.spriteX, p.spriteY, -1, static_cast<uint16_t>(0xF000u | j));
+    };
+    for (int j = 0; j < state.playerCount && j < 9; ++j) {
+        drawPiece(j);
+    }
+    // [RE 0x40829D] 機器娃娃（虚拟槽 8）：currentPlayer==8 期间绘制
+    if (state.currentPlayer == 8) {
+        drawPiece(8);
     }
 
     // 特殊点（图块 = dword_48AE4C[sprite] = map.mkf[sprite+38]；帧 = 8 方向；色 = 拥有者/黑）
