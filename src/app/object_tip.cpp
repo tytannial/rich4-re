@@ -188,7 +188,16 @@ void showObjectTip(Application& app, int x, int y) {
         } else if (x < it->x || x >= it->x + it->w || y < it->y || y >= it->y + it->h) {
             continue;
         }
-        const std::string text = buildTipText(state, it->id);
+        // [2026-09-26 实机] 格命中优先显示 cellEnt+4 地名（"台北市/瀋陽"等城市名）——
+        //   地块格归一化后 id 变对象 id，直接 buildTipText 会盖掉地名；无名格回退
+        //   对象内容（地主/建筑/租金）；点建筑精灵（item 命中）仍显示地块信息
+        std::string text;
+        if (it->cellId != 0 && it->cellId < state.cellEnts.size()) {
+            text = nameAt(state.cellEnts[it->cellId].pad4, 20);
+        }
+        if (text.empty()) {
+            text = buildTipText(state, it->id);
+        }
         if (text.empty()) {
             continue;
         }

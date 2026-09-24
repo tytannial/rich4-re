@@ -413,6 +413,9 @@ struct GameState {
         int shapeFrame = 0;
         int anchorX = 0; // 形状绘制锚点（blit 的 x/y）
         int anchorY = 0;
+        // [PORT 2026-09-26] 来源格 id（仅"格命中"记录；item/玩家/物件命中 = 0）。
+        //   地块格归一化后 id 变对象 id（2000+），查看提示借源格显示 cellEnt+4 地名（城市名）
+        uint16_t cellId = 0;
     };
     std::vector<MapHitRegion> mapHitRegions;
     std::string objectTipText; // 非空时显示提示框

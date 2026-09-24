@@ -212,7 +212,8 @@ void renderMap(Application& app, int centerX, int centerY) {
             }
             const UiFrameView& pf = state.flagTiles.frame(4);
             state.mapHitRegions.push_back({sx - pf.offsetX, sy - pf.offsetY, pf.width, pf.height,
-                                           pickId, &state.flagTiles, 4, sx, sy});
+                                           pickId, &state.flagTiles, 4, sx, sy,
+                                           static_cast<uint16_t>(i)});
         }
         if (ce.sprite == 0) {
             continue;
