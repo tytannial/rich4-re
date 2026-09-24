@@ -37,6 +37,10 @@ public:
     //   UI 音效走此接口（原版独立结构 dword_48231A/482322/48232A/482332/48233A/unk_46CCD0
     //   → Effect.mkf 索引 0/1/2/4/3/5）
     bool playEffect(int effectId);
+    // [RE 0x4542CE a2=1] 循环播放专用单 buffer（老虎机滚动音 dword_475D3C；重播先停同 id）
+    bool playEffectLooping(int effectId);
+    // [RE 0x4542E9] 按 Effect.mkf 索引停止声部
+    void stopEffect(int effectId);
     // [RE 0x48234A] 播放游戏音效槽（0..23；原版 dword_48234A[2*slot] 映射到 Effect.mkf 索引）
     //   同槽替换（原版单 DirectSound buffer：sub_4542E9 停止 + sub_4542CE 播放）
     bool playEffectSlot(int slot);

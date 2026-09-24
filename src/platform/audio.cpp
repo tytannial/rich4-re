@@ -165,6 +165,8 @@ struct Audio::Impl {
         PcmBuffer pcm;
         size_t pos = 0;
         int slot = -1; // 游戏音效槽（-1 = UI/独立音效，不参与同槽替换）
+        int id = -1;   // Effect.mkf 索引（stopEffect 按 id 移除）
+        bool looping = false;  // [RE 0x4542CE a2=1] DSBPLAY_LOOPING（老虎机滚动音）
     };
     std::vector<Voice> voices;
 
@@ -299,7 +301,12 @@ void Audio::update() {
             }
             it->pos += static_cast<size_t>(n);
             if (it->pos >= pcm.size()) {
-                it = impl.voices.erase(it);
+                if (it->looping) {
+                    it->pos = 0;  // [RE 0x4542CE a2=1] 循环回卷（单 buffer 持续播）
+                    ++it;
+                } else {
+                    it = impl.voices.erase(it);
+                }
             } else {
                 ++it;
             }
@@ -338,8 +345,28 @@ bool Audio::playEffect(int effectId) {
     Impl::Voice voice;
     voice.pcm = it->second;
     voice.pos = 0;
+    voice.id = effectId;
     m_impl->voices.push_back(std::move(voice));
     return true;
+}
+
+// [RE 0x4542CE(handle, 1)] 循环播放专用 buffer（第二参 = DSBPLAY_LOOPING；老虎机滚动音
+//   dword_475D3C）：同 id 旧循环先停（单 buffer 重播语义），直至 stopEffect
+bool Audio::playEffectLooping(int effectId) {
+    stopEffect(effectId);
+    if (!playEffect(effectId)) {
+        return false;
+    }
+    m_impl->voices.back().looping = true;
+    return true;
+}
+
+// [RE 0x4542E9] 按 Effect.mkf 索引停止声部（老虎机 case8 停滚动音）
+void Audio::stopEffect(int effectId) {
+    auto& voices = m_impl->voices;
+    voices.erase(std::remove_if(voices.begin(), voices.end(),
+                                [effectId](const Impl::Voice& v) { return v.id == effectId; }),
+                 voices.end());
 }
 
 bool Audio::playEffectSlot(int slot) {

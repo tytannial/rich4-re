@@ -585,7 +585,13 @@ void playHighlightBlink(Application& app) {
 //       音频续喂同 playHighlightBlink
 // freeze=true: 播完**冻结末帧**持续显示（原版 backbuffer 保留，直到下一次全量重绘/
 //       showGodNarration 释放）——神明插图 + 旁白叠加需要
-void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, bool freeze) {
+// preserveScene=true: **不重绘地图**（原版 0x45144F 内部 saveBackground(word_46CAEC) +
+//       逐帧 Lock 表面 blit 语义）——住院 524/入狱 538 等"传送后过渡动画"：动画背景
+//       保持传送前的场景画面（角色仍显示在原格），每帧先回卷保存的区域背景再叠加
+//       当前帧（透明色键防残影）。2026-09-24 实机修正（原逐帧 renderGameFrame 导致
+//       动画一开始画面就切到医院/监狱）
+void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, bool freeze,
+                  bool preserveScene) {
     GameState& st = app.gameState();
     auto blob = st.data.read(mkfIndex);
     if (!blob || !st.eventFlc.open(std::move(*blob))) {
@@ -595,10 +601,39 @@ void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, boo
     st.eventFlcX = x;
     st.eventFlcY = y;
     st.eventFlcActive = true;
+    std::vector<uint16_t> bg;  // 回卷区域（preserveScene）：FLC 覆盖矩形与屏幕交集
+    int rx0 = 0;
+    int ry0 = 0;
+    int rw = 0;
+    int rh = 0;
+    Surface& dst = app.surface();
+    if (preserveScene) {
+        rx0 = std::max(0, x);
+        ry0 = std::max(0, y);
+        rw = std::max(0, std::min(Surface::kWidth, x + st.eventFlc.width()) - rx0);
+        rh = std::max(0, std::min(Surface::kHeight, y + st.eventFlc.height()) - ry0);
+        if (rw > 0 && rh > 0) {
+            bg.resize(static_cast<size_t>(rw) * rh);
+            for (int r = 0; r < rh; ++r) {
+                std::memcpy(&bg[static_cast<size_t>(r) * rw],
+                            dst.pixels() + static_cast<size_t>(ry0 + r) * Surface::kWidth + rx0,
+                            static_cast<size_t>(rw) * sizeof(uint16_t));
+            }
+        }
+    }
     const int interval = std::max(1, st.eventFlc.speedMs());
     bool soundPlayed = false;
     while (st.eventFlc.nextFrame()) {
-        renderGameFrame(app);
+        if (preserveScene && rw > 0 && rh > 0) {
+            for (int r = 0; r < rh; ++r) {
+                std::memcpy(dst.pixels() + static_cast<size_t>(ry0 + r) * Surface::kWidth + rx0,
+                            &bg[static_cast<size_t>(r) * rw],
+                            static_cast<size_t>(rw) * sizeof(uint16_t));
+            }
+            overlayEventFlcFrame(app);
+        } else {
+            renderGameFrame(app);
+        }
         app.renderFrame();
         app.pumpEvents();
         if (!soundPlayed && soundId >= 0) {
@@ -614,8 +649,8 @@ void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, boo
     if (!freeze) {
         st.eventFlcActive = false;
     }
-    RICH4_LOGI("eventFlc: data.mkf[%d] played @(%d,%d)%s (RE 0x45144F)", mkfIndex, x, y,
-               freeze ? " frozen" : "");
+    RICH4_LOGI("eventFlc: data.mkf[%d] played @(%d,%d)%s%s (RE 0x45144F)", mkfIndex, x, y,
+               freeze ? " frozen" : "", preserveScene ? " preserved" : "");
 }
 
 // ===== 卡片卡包（P2 卡片格 case 13；0x4412E4/0x441262/0x44128F/0x441343/0x441E12）=====
@@ -2168,7 +2203,9 @@ void jailPlayer(Application& app, int player, int days) {
     updatePlayerCarriedObjects(st, player);  // [RE 0x43D668] 挂身物件随玩家换位
     st.jailFlags[player] = 1;       // [RE 0x43D674]
     if (st.settings[1] != 0) {      // [RE 0x43D67B] byte_497159 动画过程开关
-        playEventFlc(app, 538, 0, 40, 94); // [RE 0x45144F(res, 0, 40, 0x120001, 94)]
+        // preserveScene：原版传送后**不重绘地图**（表面保留=角色仍在原位），538 押解动画
+        // 叠在旧场景上，播完主循环才切到监狱场景（2026-09-24 实机修正）
+        playEventFlc(app, 538, 0, 40, 94, /*freeze=*/false, /*preserveScene=*/true);
     }
     insurancePayout(app, player, 2000 * days * st.moneyMul); // [RE 0x43D749]
     pl.byte66 = static_cast<uint8_t>(pl.byte66 + days);      // [RE 0x43D755] byte_496BAA 累计
@@ -2211,7 +2248,10 @@ void hospitalizePlayer(Application& app, int player, int days) {
     updatePlayerCarriedObjects(st, player);  // [RE 0x43ED14] 挂身物件随玩家换位
     st.hospitalFlags[player] = 1;   // [RE 0x43ED20]
     if (st.settings[1] != 0) {      // [RE 0x43ED2E]
-        playEventFlc(app, 524, 0, 210, 92); // [RE 0x45144F(res, 0, 210, 0x1E0001, 92)]
+        // 原版流程：refreshGameUi(旧位置) → 传送 → 440x74 band 524 画在**旧位置地图**上
+        //   → 末尾 refreshGameUi(医院)。传送后地图并未立即重绘。preserveScene 还原此语义：
+        //   band 期间表面保持传送前画面（角色显示在原格/救护车情景带），播完主循环才切到医院
+        playEventFlc(app, 524, 0, 210, 92, /*freeze=*/false, /*preserveScene=*/true);
     }
     insurancePayout(app, player, 2000 * days * st.moneyMul); // [RE 0x43EDF8]
     pl.byte66 = static_cast<uint8_t>(pl.byte66 + days);      // [RE 0x43EE04]

@@ -429,6 +429,13 @@ bool gameEventHandler(const SDL_Event* event, void* user) {
             s_blinkTick = 0;
             st.advancePanelBlink ^= 1;
         }
+        // [RE 0x45144F] 事件 FLC 阻塞播放期间（playEventFlc 循环内 pumpEvents 会再次
+        //   收到本 timer）：原版 flcPlay 的 PeekMessage 只取消息不派发游戏逻辑——
+        //   游戏状态机与地图渲染由 playEventFlc 自己掌控（preserveScene 模式更需
+        //   保持表面为动画开始前画面，防止按传送后的玩家位置重居中）
+        if (st.eventFlcActive) {
+            return true;
+        }
         // [RE 0x401B9C] idle loop: sub_4192F7(渲染) + sub_40D7C4(状态机)
         updateGameState(app);
         updateScroll(app);
@@ -521,6 +528,13 @@ bool gameEventHandler(const SDL_Event* event, void* user) {
 }
 
 } // namespace
+
+// [RE 0x45144F] 仅叠加当前事件 FLC 帧（playEventFlc preserveScene 用——不重绘地图表面，
+//   对应原版 saveBackground + 直接 blit 的"过渡动画"语义：住院 524/入狱 538 播放期间
+//   场景保持动画开始前的画面）
+void overlayEventFlcFrame(Application& app) {
+    drawEventFlcFrame(app);
+}
 
 // [RE 0x417E26] 游戏内绘制（WM_PAINT 分支；定义见 gameEventHandler）
 // 顶部工具条 + 地图区 + 按 byte_49715D 布局的右侧面板；每 tick 全量重绘

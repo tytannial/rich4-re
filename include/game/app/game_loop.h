@@ -14,4 +14,8 @@ void enterGameLoop(Application& app);
 // 迁移: 原 static；供阻塞动画（收租联动闪烁 0x451985）等需要主动重绘的流程调用
 void renderGameFrame(Application& app);
 
+// [RE 0x45144F] 仅叠加当前事件 FLC 帧（不重绘地图；供 playEventFlc preserveScene 模式：
+//   住院 524/入狱 538 过渡动画期间保持动画开始前的场景表面，对齐原版 saveBackground）
+void overlayEventFlcFrame(Application& app);
+
 } // namespace rich4

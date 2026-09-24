@@ -265,9 +265,8 @@ bool slotHandler(const SDL_Event* event, void* user) {
         return true;  // 模态吞事件
     }
     const int lowest = sc.vis ? 1 : 0;
-    if (sc.phase <= 7) {
-        app.audio().playEffect(kSlotMachineSound);  // [RE 0x475D3C] 滚动循环音（同槽替换）
-    }
+    // 滚动循环音在 slotMachineDialog 进入时播一次（[RE 0x43F264 audioPlayEffect(dword_475D3C,1)
+    //   = DSBPLAY_LOOPING]），case8 定格时 stopEffect——**不再每 tick playEffect**（会多声部叠加）
     // 滚动：+1/帧（0..19 循环）；拉杆前每 10 帧全体重随机跳 [RE 0x43F2BF v1<3]；
     // phase≥4 已定格轮（r > 当前停轮号）不再动；
     // **phase≥8（金额显示）全部轮停转** [RE 0x43F5DD case8/9 不再调 sub_43EF3E，
@@ -321,6 +320,8 @@ bool slotHandler(const SDL_Event* event, void* user) {
             break;
         }
         case 8:  // 金额停留 40 帧 [RE case9 v15==40]
+            // [RE 0x43F5F0 case8] audioStopEffect(dword_475D3C)：定格金额出现即停滚动循环音
+            app.audio().stopEffect(kSlotMachineSound);
             if (sc.frame >= 40) {
                 sc.phase = 9;
             }
@@ -368,7 +369,11 @@ int slotMachineDialog(Application& app, int a1) {
     sc.humanCtl = cp >= 0 && cp < 4 && st.players[cp].alive == 1 && st.players[cp].state37 == 0;
     RICH4_LOGI("slotMachine: a1=%d vis=%d human=%d (RE 0x440706)", a1, sc.vis,
                sc.humanCtl ? 1 : 0);
+    // [RE 0x43F2A6] 进入滚动循环前 audioPlayEffect(dword_475D3C, a2=1 即 DSBPLAY_LOOPING)
+    //   ——**单次启动的循环音**（非每帧重播）；case8 停（见 slotHandler）+ 退出兜底 0x4408BF
+    app.audio().playEffectLooping(kSlotMachineSound);
     const int result = runModal(app, slotHandler, &sc, 30);  // [RE 0x43F791] 30ms/帧（v5<0x1E）
+    app.audio().stopEffect(kSlotMachineSound);  // [RE 0x4408BF] 对话框退出兜底停循环音
     RICH4_LOGI("slotMachine result=%d (RE 0x43F23E)", result);
     return result;
 }

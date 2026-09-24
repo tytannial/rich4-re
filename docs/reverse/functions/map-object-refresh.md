@@ -295,6 +295,23 @@ a3>0 且 creditor 同盟==debtor+1 → 解除同盟 sub_40CC1A：清双方 ally/
    （map_render.cpp；fly≠0 弹飞分支在其后，飞行动画 ent 已清走弹飞分支不受影响，
    请神/送神卡飞行动画已核对）。
 
+### 13.5d 老虎机滚动音 + 住院/入狱过渡动画时序（2026-09-24 实机修正）
+
+1. **老虎机滚动音 = 单次循环，非每帧重播**：原版 `slotMachineValue` 进 do 循环前
+   `audioPlayEffect(dword_475D3C, a2=1)`（[RE 0x43F2A6]，a2=DSBPLAY_LOOPING）播一次循环，
+   case8 金额定格时 `audioStopEffect`（[RE 0x43F5F0]）停，对话框退出（0x4408BF）兜底再停。
+   重写曾每 timer tick 调 `playEffect`（追加新声部）→ 多声部叠加成轰鸣。修复：Audio 加
+   `playEffectLooping(id)`（Voice.looping，update 回卷不清除）+ `stopEffect(id)`（按 Effect.mkf
+   索引移除声部）；`slotMachineDialog` 进入播一次循环、case8 停、退出兜底停。Effect 51=dword_475D3C[0]。
+2. **住院 524 / 入狱 538 两段式体验**：524 是 440×74 横条叙事带（救护车+抬人，62 帧），原版
+   `hospitalizePlayer` 顺序 = `refreshGameUi(旧位置)`→传送医院→**地图表面不重绘**（DDraw 保留
+   = 角色仍显示在旧格）→ 524 条带 blit 在旧场景上→末尾 `refreshGameUi(医院)` 才切换。
+   `jailPlayer`（538 押解带 @ (0,40)）完全对称。重写 `playEventFlc` 曾每帧 `renderGameFrame`
+   （按已传送坐标重居中）→ 动画一开始就跳到医院/监狱。修复：`playEventFlc` 加 `preserveScene`
+   参数（不重绘、每帧回卷带区域背景 + `overlayEventFlcFrame` 透明叠加，对应原版 saveBackground）；
+   且 `gameEventHandler` timer 分支加 `eventFlcActive` 提前返回守卫（原版 flcPlay 的 PeekMessage
+   只取不派发，动画期冻结状态机/视口）。住院/入狱调用点 `playEventFlc(..., preserveScene=true)`。
+
 ### 13.6 踩坑：IDA 字符串视图对 BIG5 格式串截断（2026-09-25）
 
 `0x4634C0` 在 IDA 反编译里显示为 `aS_7 = "%s"`，**实际字节**（cp950 解码）为

@@ -200,6 +200,15 @@ python tools/re_map.py
   `decodeRawBitmap`（按字节数推断尺寸）；FLC 用 `FliDecoder`。
 - **单 buffer 语义**：原版每个音效槽是单 DirectSound buffer
   （`sub_4542E9` 停 + `sub_4542CE` 播）→ 重写用同槽替换，避免多声部叠加。
+- **循环音效 ≠ 每帧重播**：`sub_4542CE(handle, 1)` 第二参 = DSBPLAY_LOOPING（老虎机滚动音
+  dword_475D3C 进入时播一次、case8 `audioStopEffect` 停）；每 tick `playEffect` 会叠加多
+  声部（重写已加 `playEffectLooping`/`stopEffect`）。
+- **阻塞 FLC 动画期间游戏必须冻结**：原版 `sub_45144F` 的 PeekMessage 只取消息**不派发**
+  窗口过程；重写 `playEventFlc` 循环 `pumpEvents` 会重入 gameEventHandler（状态机在动画
+  下偷跑）且 `renderGameFrame` 把视口按**传送后**的玩家重居中（住院 524/入狱 538 一开演
+  画面就跳到医院/监狱的根因）。修复=timer 分支 `eventFlcActive` 守卫直接返回 +
+  `playEventFlc(preserveScene)` 不重绘场景、每帧回卷区域背景叠帧（对应原版
+  saveBackground/表面保留）。传送后过渡动画（住院/入狱）必须用 preserveScene。
 - **帮助文档是第一手机制依据**：`help.mkf` 99 条（8 分类，分类/标题表 `[RE 0x4761B4]`/`0x4761B8`）
   已提取为 `docs/help-checklist.md`；研究/实现时用 `[HELP idx]` 标注引用。
   但**帮助文本可能错**（idx 58 冬眠卡误用红卡文本）或与实现不符
@@ -231,6 +240,17 @@ python tools/re_map.py
 - **原版阻塞动画靠"表面保留"叠加**（0x45144F 播完不清屏、0x40E2A2 旁白/老虎机金额都画在
   末帧上）→ 重写的逐帧 `renderGameFrame` 即时模式必须**显式冻结末帧**（`playEventFlc(freeze)`
   + 叠加期间不重绘、结束解冻），否则出现"动画消失后才出文字"类时序差。
+- **音效单 buffer 语义**：原版每个音效槽是单 DirectSound buffer
+  （`sub_4542E9` 停 + `sub_4542CE` 播）→ 重写用同槽替换，避免多声部叠加。
+- **循环音效 ≠ 每帧重播**：`sub_4542CE(handle, 1)` 第二参 = DSBPLAY_LOOPING（老虎机滚动音
+  dword_475D3C 进入时播一次、case8 `audioStopEffect` 停）；每 tick `playEffect` 会叠加多
+  声部（重写已加 `playEffectLooping`/`stopEffect`）。
+- **阻塞 FLC 动画期间游戏必须冻结**：原版 `sub_45144F` 的 PeekMessage 只取消息**不派发**
+  窗口过程；重写 `playEventFlc` 循环 `pumpEvents` 会重入 gameEventHandler（状态机在动画
+  下偷跑）且 `renderGameFrame` 把视口按**传送后**的玩家重居中（住院 524/入狱 538 一开演
+  画面就跳到医院/监狱的根因）。修复=timer 分支 `eventFlcActive` 守卫直接返回 +
+  `playEventFlc(preserveScene)` 不重绘场景、每帧回卷区域背景叠帧（对应原版
+  saveBackground/表面保留）。传送后过渡动画（住院/入狱）必须用 preserveScene。
 - **视口**：`manualView=true` 且 `viewSmooth=0` → 场景跳左上角，并触发重选出生点/跳伞；
   小地图旋转只改 `mapRotation`，**不要**切视角模式。
 - **事件槽（玩家 4-7）**：无激活 NPC 时不能进入（否则 `currentPlayer` 指向无数据槽）。
