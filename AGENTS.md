@@ -67,7 +67,7 @@ damagePlayer/demolish/givePlayerItem）；`economy.cpp` deleteMapObject **配对
   面板底座 `ui-controls.md` §25，事件槽 NPC 路面行走待 P5）
 - 任务 F 建造菜单（大地块特殊建筑外观 + 5 页签；**入口已确认 = 工具条 case 6
   `sub_424492`→`sub_423CF3`**；`g_miscTable336` 建造队列每日计数 sub_428475 待接入）
-- 经济系统剩余：物價指數面板显示（idx 5）、股市交易市场/挂单、卡片与道具使用（P4）
+- 经济系统剩余：物價指數面板显示（idx 5）、股市交易市场/挂单；**P4 卡片栏/道具栏 UI ✅（2026-09-24，工具条 case7/8 `useCardDialog` 0x441BAA / `itemBagDialog` 0x447D97，panel.mkf[11] 5×3 网格 + `cardRebuildEffect`/神符；改建/请神/送神卡可用，其余 27 卡 + 13 道具效果 stub，见 `441baa-inventory-panels.md`）**
 - AI 决策：AI 买地 ✅（`sub_41D7D4`，2026-09-23）；`alive & 6` 电脑/托管自动行动
   （`landingEvent` 0x41982D 回合主流程）
 - 存档完整恢复：`loadGameFromSlot` 目前仅恢复地图/模式/玩家数

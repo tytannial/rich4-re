@@ -22,7 +22,7 @@
 | `Ctrl+1` | 鼠标指向地块 **owner = 当前回合玩家** | 支持地产(estate)/公司(corp)/特殊点(specPt)；同时重建小地图/大地图色块 |
 | `Ctrl+2` | 指向地块 **等级 +1** | 地产 `level` / 公司 `sub`，上限 5 |
 | `Ctrl+3` | 指向地块 **等级 -1** | 下限 0 |
-| `Ctrl+4` | 指向地块 **改建卡效果切换** | estate：`level!=0` 时 `type^=1`（住宅↔连锁店）；corp：`sub!=0` 时弹设施选择变更 `type`（公園/加油站降为 1 级）——对齐 0x44309B |
+| `Ctrl+4` | **改建卡效果**（`cardRebuildEffect` 0x44309B，针对当前玩家所站格） | estate：`level!=0` 时 `type^=1`（住宅↔连锁店）；corp：`sub!=0` 时弹设施选择变更 `type`（公園/加油站降为 1 级）；成功 `cardBagRemove(cur,7)`。与工具条卡片栏 case8 走**同一函数** |
 | `Ctrl+5` | **全图住宅用地归当前回合玩家** | 遍历 estates + corps + specPts |
 | `Ctrl+6` | **全图有主住宅用地 level = 1** | 仅 `owner != 0` 的地产（便于快速铺建筑测收租） |
 | `Ctrl+7` | 当前回合玩家 **现金 +100000** | 直接改 `players[cur].cash` |

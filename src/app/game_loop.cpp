@@ -3,10 +3,12 @@
 #include <algorithm>
 
 #include "game/app/ai_dialog.h"
+#include "game/app/card_bag_dialog.h"
 #include "game/app/debug_keys.h"
 #include "game/app/event_stack.h"
 #include "game/app/game_panel.h"
 #include "game/app/help_dialog.h"
+#include "game/app/item_bag_dialog.h"
 #include "game/app/load_dialog.h"
 #include "game/app/map_dialog.h"
 #include "game/app/map_render.h"
@@ -176,12 +178,20 @@ void handleTopBarButton(Application& app, int index) {
             // [RE 0x417D65] case 5: sub_40A9BD（大地图）
             mapDialog(app);
             break;
+        case 7:
+            // [RE 0x447D97] case 7: itemPanelFlow（道具栏）
+            itemBagDialog(app);
+            break;
+        case 8:
+            // [RE 0x441BAA] case 8: useCardFlow（卡片栏）
+            useCardDialog(app);
+            break;
         case 10:
             // [RE 0x417D65] case 10: sub_42B58F(0)（股票行情界面）
             stockMarketDialog(app);
             break;
         default:
-            // 2/4-10 依赖游戏内逻辑（存檔/地圖/卡片/道具/股票等）
+            // case 6=建造菜单(任务F)、case 9=交易市场 依赖游戏内逻辑，待实现
             RICH4_LOGI("top bar button %d not implemented (RE 0x417D65)", index);
             break;
     }

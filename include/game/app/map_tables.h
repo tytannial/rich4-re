@@ -44,6 +44,10 @@ extern const uint8_t kMisc8Init[8];
 extern const uint8_t kItemPrice[13];
 // [RE 0x47FEEA] 道具名表（13 种，道具结构 +4 指针；0x445ADA 礼物显示）
 extern const char* const kItemNames[13];
+// [RE 0x47FEDA] g_itemNames：道具栏用名表，直接对齐道具 id 1..13（[0] 占位空）；
+//   与礼物池显示用的 kItemNames（自「路障」起 0-indexed）索引不同，见
+//   docs/reverse/functions/441baa-inventory-panels.md
+extern const char* const kItemBagNames[14];
 // [RE 0x47ECEC] unk_47ECEC
 extern const uint32_t kMiscTable80[10][2];
 

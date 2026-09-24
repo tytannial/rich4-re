@@ -85,4 +85,8 @@ void cardBagRemove(GameState& st, int player, int card);
 void giveCardToBag(GameState& st, int player, int card);
 int drawFreeCard(GameState& st, int player);
 
+// [RE 0x441F73] showCardGet：卡片获得显示（卡片图 data.mkf[570+id] 165×256 @(138,200)
+//   + FloatMessage 提示框 text，1500ms）；定义见 turn_system.cpp，useCardFlow 复用
+void showCardGet(Application& app, int cardId, const char* text);
+
 } // namespace rich4

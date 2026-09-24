@@ -4,6 +4,7 @@
 #include <string>
 
 #include "game/app/bank_stay_dialog.h"
+#include "game/app/card_bag_dialog.h"
 #include "game/app/dividend.h"
 #include "game/app/facility_dialog.h"
 #include "game/app/game_loop.h"
@@ -379,51 +380,9 @@ bool handleDebugKey(Application& app, int code, bool shift) {
             }
             return true;
         }
-        case 4: { // 改建卡效果（0x44309B）：住宅↔连锁店 / 商業用地变更设施类型
-            const uint16_t id = pointedObject(app);
-            if (id >= 2000 && id < 4000) {
-                // estate：level(+26) != 0 才可改建；type ^= 1；变连锁店且 level>1 → level=1
-                const int i = id - 2000;
-                if (i > 0 && i < static_cast<int>(st.estates.size())) {
-                    Estate& es = st.estates[i];
-                    if (es.level == 0) {
-                        RICH4_LOGW("debug: Ctrl+4 estate[%d] level==0 (need building, RE 0x44309B)",
-                                   i);
-                        return true;
-                    }
-                    const bool wasChain = (es.type == 1);
-                    es.type ^= 1;
-                    if (!wasChain && es.level > 1) {
-                        es.level = 1;
-                    }
-                    buildMiniMapMarks(app);
-                    RICH4_LOGI("debug: estate[%d] %s type=%u level=%u (RE 0x44309B)", i,
-                               wasChain ? "chain->house" : "house->chain", es.type, es.level);
-                }
-            } else if (id >= 4000 && id < 6000) {
-                // corp：sub != 0 时 selectFacilityDialog(1) 变更设施类型；
-                //   公園/加油站（type 0/3）时 sub 降为 1（原版 0x4431FC）
-                const int i = id - 4000;
-                if (i > 0 && i < static_cast<int>(st.corps.size())) {
-                    Corp& cp = st.corps[i];
-                    if (cp.sub == 0) {
-                        RICH4_LOGW("debug: Ctrl+4 corp[%d] sub==0 (need facility, RE 0x443174)", i);
-                        return true;
-                    }
-                    const int r = selectFacilityDialog(app, 1); // [RE 0x4431C4]
-                    if (r >= 0) {
-                        cp.type = static_cast<uint8_t>(r);
-                        if ((cp.type == 0 || cp.type == 3) && cp.sub > 1) {
-                            cp.sub = 1;
-                        }
-                        buildMiniMapMarks(app);
-                        RICH4_LOGI("debug: corp[%d] type -> %u sub %u (RE 0x44309B)", i, cp.type,
-                                   cp.sub);
-                    }
-                }
-            } else {
-                RICH4_LOGW("debug: Ctrl+4 no estate/corp under cursor (id=%u)", id);
-            }
+        case 4: { // 改建卡效果（0x44309B）：走 cardRebuildEffect（当前玩家所站格），与卡片栏 case8 同路径
+            const int r = cardRebuildEffect(app);
+            RICH4_LOGI("debug: Ctrl+4 cardRebuildEffect -> %d (RE 0x44309B)", r);
             return true;
         }
         case 5: { // 全图住宅用地归当前玩家
