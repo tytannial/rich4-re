@@ -52,11 +52,12 @@ damagePlayer/demolish/givePlayerItem）；`economy.cpp` deleteMapObject **配对
 `addPlayerDebt` 0x40DF69（不入存档，破产清算接入 TODO）；**消息文本 BIG5 截断踩坑修正**
 （0x4634C0/0x463514 IDA 显示 "%s" 实为 "%s顯靈\n\n加蓋一層房屋！/投資失敗！"）+
 `checkCarriedGod` 守卫 helper（五处付费流标 [HELP 41/45/51]）；详见 `map-object-refresh.md` §13。
-[TODO P4] 道具放置入口（0x446BAA/C88/D69/拆除卡 0x446AFB 已留桩）+ 角色台词语音；[TODO P5] NPC 分支。
+道具放置入口（0x446BAA/C88/D69）与 13 道具效果 ✅（2026-09-25，`item_effects.md`）；角色台词
+气泡 ✅（`playItemLine` 0x44EF41）；[TODO P5] NPC 分支/事件槽目标。
 请神/送神符效果函数 ✅（0x444E1A/0x444C45，`useInviteGodCard`/`useBanishGodCard`，
 调试 `Ctrl+Shift+I/H` 直调）；cellTable 拾取 id 改 0xA100|槽+1 修段重叠。
 
-**功能总览**：`docs/help-checklist.md`（帮助文档 99 条 → 实现状态，当前 ✅ 19 / 🟡 19 / ❌ 61）。
+**功能总览**：`docs/help-checklist.md`（帮助文档 99 条 → 实现状态，当前 ✅ 32 / 🟡 21 / ❌ 46）。
 
 **M2 执行计划**：见 `docs/m2-plan.md`
 
@@ -67,7 +68,7 @@ damagePlayer/demolish/givePlayerItem）；`economy.cpp` deleteMapObject **配对
   面板底座 `ui-controls.md` §25，事件槽 NPC 路面行走待 P5）
 - 任务 F 建造菜单（大地块特殊建筑外观 + 5 页签；**入口已确认 = 工具条 case 6
   `sub_424492`→`sub_423CF3`**；`g_miscTable336` 建造队列每日计数 sub_428475 待接入）
-- 经济系统剩余：物價指數面板显示（idx 5）、股市交易市场/挂单；**P4 卡片栏/道具栏 UI ✅（2026-09-24，工具条 case7/8 `useCardDialog` 0x441BAA / `itemBagDialog` 0x447D97，panel.mkf[11] 5×3 网格 + `cardRebuildEffect`/神符；改建/请神/送神卡可用，其余 27 卡 + 13 道具效果 stub，见 `441baa-inventory-panels.md`）**
+- 经济系统剩余：物價指數面板显示（idx 5）、股市交易市场/挂单；**P4 卡片栏/道具栏 UI ✅（2026-09-24，工具条 case7/8 `useCardDialog` 0x441BAA / `itemBagDialog` 0x447D97，panel.mkf[11] 5×3 网格 + `cardRebuildEffect`/神符；改建/请神/送神卡可用，其余 27 卡效果 stub，见 `441baa-inventory-panels.md`）；13 道具效果全实现 ✅（2026-09-25，`item_effects.cpp`：气泡台词/目标选择模态/expireAssets/遥控骰子/娃娃槽8/时光机快照，逐道具见 `item-effects.md`）**
 - AI 决策：AI 买地 ✅（`sub_41D7D4`，2026-09-23）；`alive & 6` 电脑/托管自动行动
   （`landingEvent` 0x41982D 回合主流程）
 - 存档完整恢复：`loadGameFromSlot` 目前仅恢复地图/模式/玩家数
