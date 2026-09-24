@@ -454,6 +454,7 @@ int itemEffect(Application& app, int id) {
         case 8: return useItemRemoteDice(app);
         case 9: return useItemRobotWorker(app);
         case 12: return useItemBulldozer(app);
+        case 13: return launchMissile(app, 13, 0x400C0, -1, 1, 530, 83);  // 核子飛彈（全图归公）
         default:
             RICH4_LOGI("item effect id=%d (%s) not implemented (P4, RE 0x475DD4 + 4*id)", id,
                        (id >= 1 && id <= 13) ? kItemBagNames[id] : "?");
