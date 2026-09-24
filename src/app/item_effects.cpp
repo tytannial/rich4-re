@@ -388,6 +388,22 @@ int useItemTimeMachine(Application& app) {
     return ok ? 1 : 0;
 }
 
+// [HELP 94] 傳送機目的地校验：人物/神明/物品必须移至**空道路**（无玩家/物件占用，
+//   且无房屋/设施/特殊点/事件格——房屋不占 occMask 物件位，拾取仍返回格 id，须显式排除）
+bool isVacantRoad(const GameState& st, int cellId) {
+    if (cellId <= 0 || cellId >= static_cast<int>(st.cellEnts.size())) {
+        return false;
+    }
+    const CellEnt& ce = st.cellEnts[cellId];
+    if (ce.special >= 2000) {
+        return false;  // 房屋/设施/特殊点/事件格（非空道路）
+    }
+    if ((ce.occMask & 0x00FFFF00u) != 0) {
+        return false;  // bit8-23：玩家/事件槽/物件占用
+    }
+    return true;
+}
+
 // [RE 0x447428] 傳送機（id11）：选目标（人物/神明/房屋/物品 0x1200036）→ 按类型选目的地
 //   （住宅 0x2090002 / 商业 0x2090004 / 空格 0x2090001）→ 搬迁；物件目标换算成 owner 玩家
 // 依据: 0x447428 反编译；AI 分支 = 0x8000|(1<<cur)；玩家传送后 dir=最优出口朝向、
@@ -503,9 +519,20 @@ int useItemTeleport(Application& app) {
         if (pi < 0 || pi >= 4) {
             return 0;  // 事件槽 4..7（P5）
         }
+        // [HELP 94] 人物必须移至空道路
         int dest = 0;
         if (st.players[p].alive == 1) {
-            dest = selectTargetDialog(app, 0x2090001);
+            for (int guard = 0; guard < 64; ++guard) {
+                dest = selectTargetDialog(app, 0x2090001);
+                if (dest == 0) {
+                    break;
+                }
+                if (dest < 2000 && isVacantRoad(st, dest)) {
+                    break;
+                }
+                showMessage(app, "只能移到空的道路！", 1000);
+                dest = 0;
+            }
         } else {
             dest = 0;  // [RE 0x420EEE] AI 预选（P5）
         }
@@ -577,8 +604,23 @@ int useItemTeleport(Application& app) {
         RICH4_LOGI("teleport player %d -> cell %d dir %d prev %u (RE 0x447428)", pi, dest,
                    bestDir, prevExit);
     } else if ((v40 & 0x8000) != 0 && (v40 & 0x3F00) != 0) {
-        // ---- 挂身物件/神明传送 ----
-        const int dest = selectTargetDialog(app, 0x2090001);
+        // ---- 神明/物品传送（[HELP 94] 必须移至空道路）----
+        int dest = 0;
+        if (st.players[p].alive == 1) {
+            for (int guard = 0; guard < 64; ++guard) {
+                dest = selectTargetDialog(app, 0x2090001);
+                if (dest == 0) {
+                    break;
+                }
+                if (dest < 2000 && isVacantRoad(st, dest)) {
+                    break;
+                }
+                showMessage(app, "只能移到空的道路！", 1000);
+                dest = 0;
+            }
+        } else {
+            dest = 0;  // [RE 0x420EEE] AI 预选（P5）
+        }
         if (dest == 0 || dest >= static_cast<int>(st.cellEnts.size())) {
             return 0;
         }
