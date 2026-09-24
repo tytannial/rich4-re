@@ -2,6 +2,9 @@
 
 #include <SDL3/SDL.h>
 
+#include <cstring>
+#include <vector>
+
 #include "game/app/economy.h"
 #include "game/app/event_stack.h"
 #include "game/app/game_loop.h"
@@ -275,10 +278,17 @@ int useItemRobotWorker(Application& app) {
     st.viewSmoothY = y;
     st.viewScrolling = false;
     renderGameFrame(app);
-    const int flags = angelUpgrade(app, v);          // [RE 0x40B110]
-    // 商业用地无设施时 angelUpgrade 内弹出设施选择面板；面板关闭后 surface 仍残留面板画面
-    //   （FLC 553 为保帧模式，会快照当前 surface 作背景）→ 先重绘干净场景，避免动画叠着面板
-    renderGameFrame(app);
+    // 动画前场景快照（升级前的旧建筑 + 无残留面板）：angelUpgrade 内部会弹设施选择面板
+    //   （关闭后 surface 残留面板画面）且内存已加盖——返回后恢复此快照，使 FLC 553 的保帧
+    //   基准 = **旧建筑**；[RE 0x450F04] switchFrame=44 切换帧全量重绘时才显示加盖后的新建筑
+    //   （原版面板自身 saveBackground/restoreBackground，调用方看到的就是旧建筑画面）
+    Surface& dst = app.surface();
+    std::vector<uint16_t> preUpgrade(
+        dst.pixels(),
+        dst.pixels() + static_cast<size_t>(Surface::kWidth) * Surface::kHeight);
+    const int flags = angelUpgrade(app, v);  // [RE 0x40B110]
+    std::memcpy(dst.pixels(), preUpgrade.data(),
+                preUpgrade.size() * sizeof(uint16_t));
     app.renderFrame();
     playEventFlc(app, 553, 0, 40, 91, false, 44);    // [RE 0x45144F flags 0x2C0001 音效 91]
     if ((flags & 0x80) != 0) {
