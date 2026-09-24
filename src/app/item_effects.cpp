@@ -364,7 +364,8 @@ int useItemBulldozer(Application& app) {
 // [RE 0x475DD4] g_itemEffectFuncs[id] 分派（id = 道具 1..13）
 int itemEffect(Application& app, int id) {
     switch (id) {
-        case 2: return placeMapItem(app, 2, 16, 0x1, 4);  // 路障（dword_48236A=槽4）
+        case 2: return placeMapItem(app, 2, 16, 0x1, 4);       // 路障（dword_48236A=槽4）
+        case 3: return placeMapItem(app, 3, 17, 0x10001, 5);   // 地雷（dword_482372=槽5）
         case 5: return useItemFoot(app);
         case 6: return useItemCar(app);
         case 8: return useItemRemoteDice(app);
