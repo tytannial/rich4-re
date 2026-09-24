@@ -310,7 +310,7 @@ void renderMap(Application& app, int centerX, int centerY) {
     }
 
     // [RE 0x40E033/0x40829D 0x408C5E..0x4090AC] cellTable 物件绘制（图块 = cellTypeSprites[类型]，
-    //   ID = 槽号<<8）。三分支：①拥有者挂身 → 跟随玩家（屏幕偏移 kPieceOffset/kPieceOffset18、
+    //   ID = 0xA100|槽+1）。三分支：①拥有者挂身 → 跟随玩家（屏幕偏移 kPieceOffset/kPieceOffset18、
     //   帧 (+4)、type18 且玩家另有附身时头顶画寿命）；②flyCount(+6)≠0 → 弹飞（f32 坐标
     //   +速度逐帧推进、出视口清除）；③常规 → 逻辑格投影、帧 = (朝向+8−视角)&7
     for (int slot = 0; slot < 46; ++slot) {
@@ -324,7 +324,10 @@ void renderMap(Application& app, int centerX, int centerY) {
             continue;
         }
         UiImage& img = state.cellTypeSprites[type];
-        const uint16_t objDrawId = static_cast<uint16_t>((slot + 1) << 8);
+        // [RE 0x40B066] 原版拾取 id = (slot<<8)+33024（0x8160）；重写 hit 区段
+        //   2000/4000/6000/8000 已按十进制段分配，直译 (slot+1)<<8 会与 estate/corp/specPt
+        //   段重叠 → 用 0xA100|（槽+1）独立段（object_tip 同规则解码）
+        const uint16_t objDrawId = static_cast<uint16_t>(0xA100 | (slot + 1));
         if (owner != 0 && owner - 1 < 9) {
             const Player& o = state.players[owner - 1];
             if (o.stateFlags != 0) {
@@ -506,7 +509,7 @@ void renderMap(Application& app, int centerX, int centerY) {
         }
         if (it.objLife) {
             // [RE 0x4098BD] 炸弹挂身：寿命数字（16 号字，y−60，样式 2）
-            const int slotIdx = (it.id >> 8) - 1;
+            const int slotIdx = (it.id & 0xFF) - 1;  // id = 0xA100|(槽+1)
             char ltext[8];
             std::snprintf(ltext, sizeof(ltext), "%d",
                           state.cellTable[static_cast<size_t>(24 * slotIdx) + 4]);

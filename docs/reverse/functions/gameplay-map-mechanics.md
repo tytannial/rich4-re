@@ -348,6 +348,9 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
 - [x] `givePlayerItem`(0x445A4D) / `takePlayerItem`(0x445AA2) / `drawGiftCard`(0x445ADA) ✅（P3 随礼物接入）
 - [ ] 路障/地雷/炸彈放置 `sub_446BAA/446C88/446D69`（flyObject 动画 0x40E669 已备）+ 拆除卡工程车
       `sub_446AFB`（p==8 弹飞删除 bounceObject 0x40FAFD 已备）
+- [x] 请神符效果 `useInviteGodCard`(0x444E1A/0x444D1A) / 送神符效果 `useBanishGodCard`(0x444C45) ✅
+      （`map_objects.cpp`；卡使用 UI 未接，调试 `Ctrl+Shift+I`/`H` 塞卡直调）；
+      cellTable 拾取 id 修正为 0xA100|槽+1（原直译 (slot+1)<<8 与 estate 段重叠）
 - [ ] `sub_444E1A` 使用流程（`sub_444D1A` 人类选择 / `sub_41E6F2` AI 选择 / `sub_40E669` 移动动画）
 - [ ] 验收：用卡/用道具生效
 

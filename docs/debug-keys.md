@@ -61,6 +61,9 @@
 | `Ctrl+Shift+C` | 清空玩家状态+神明 | `stateFlags`/`byte54`/`state37`/`cellTableIdx` 归零 |
 | `Ctrl+Shift+O` | **当前格生成物件** | `createMapObject` 类型 1..18 循环（神明/禮物/寶箱/死神/路障/地雷/炸彈），测附身挂身、渲染跟随、寿命 |
 | `Ctrl+Shift+X` | **附身/挂身寿命→1** | `cellTable[..].life` 置 1，下次落地/回合开始归零 → 测飘走轮替 / 炸弹爆炸链 |
+| `Ctrl+Shift+I` | **使用请神符** | 先 `giveCardToBag(23)` 再 `useInviteGodCard`（0x444E1A：视野内最近可附身神明 → 丢卡 → 飞行动画 → 附身全套效果） |
+| `Ctrl+Shift+H` | **使用送神符** | 先 `giveCardToBag(22)` 再 `useBanishGodCard`（0x444C45：清挂身炸弹 / 送走负面神明→轮替；正面神失败不丢卡） |
+| `Ctrl+Shift+Y` | **dump cellTable** | 活动槽 type/ent/life/owner/fly + 玩家附身/挂件/luckA/B/C + 礼物池/道具库存，日志诊断刷新轮替 |
 
 拾取与右键物件提示同一套：鼠标位置 → `pickMapObject`（复用渲染期 `mapHitRegions`，
 含 SPR 像素掩码精确命中）。日志前缀 `debug:`。

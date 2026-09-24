@@ -125,8 +125,8 @@ std::string buildTipText(const GameState& state, uint16_t id) {
         }
         return nameAt(state.evtCells[i].pad4, 20);
     }
-    if ((id & 0xFF) == 0) { // cellTable 物件（槽号<<8）→ 神明/商店名
-        const int slot = (id >> 8) & 0x7F;
+    if ((id & 0xFF00) == 0xA100) { // cellTable 物件（0xA100|槽+1，map_render 同规则）→ 神明/商店名
+        const int slot = id & 0xFF;
         if (slot >= 1 && slot <= 46) {
             const int type = state.cellTable[24 * (slot - 1)];
             if (type >= 0 && type < 19) {

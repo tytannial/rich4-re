@@ -7,6 +7,7 @@
 #include "game/app/dividend.h"
 #include "game/app/facility_dialog.h"
 #include "game/app/game_loop.h"
+#include "game/app/map_objects.h"
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
 #include "game/app/month_settle.h"
@@ -275,7 +276,7 @@ bool handleDebugKey(Application& app, int code, bool shift) {
                 sDebugObjType = sDebugObjType % 18 + 1;
                 return true;
             }
-            case 'x': { // [NEW] 附身/挂身物件寿命 -1（测飘走轮替 / 炸弹爆炸）
+            case 'x': { // [NEW] 附身/挂身物件寿命→1（测飘走轮替 / 炸弹爆炸）
                 Player& pl = st.players[cur];
                 for (int idx : {pl.cellTableIdx, pl.cellNo}) {
                     if (idx != 0) {
@@ -286,6 +287,40 @@ bool handleDebugKey(Application& app, int code, bool shift) {
                         RICH4_LOGI("debug: Ctrl+Shift+X obj %d life -> %u", idx, life);
                     }
                 }
+                return true;
+            }
+            case 'i': { // [NEW] 使用请神符（0x444E1A：视野最近神明飞行附身；先塞卡走完整路径）
+                giveCardToBag(st, cur, 23);
+                const bool ok = useInviteGodCard(app);
+                RICH4_LOGI("debug: Ctrl+Shift+I useInviteGodCard -> %d", ok ? 1 : 0);
+                return true;
+            }
+            case 'h': { // [NEW] 使用送神符（0x444C45：清挂身炸弹/送走负面神明；先塞卡）
+                giveCardToBag(st, cur, 22);
+                const bool ok = useBanishGodCard(app);
+                RICH4_LOGI("debug: Ctrl+Shift+H useBanishGodCard -> %d", ok ? 1 : 0);
+                return true;
+            }
+            case 'y': { // [NEW] dump cellTable（活动槽 + 玩家附身/挂件/三属性 + 池）
+                for (int slot = 0; slot < 46; ++slot) {
+                    const uint8_t* e = &st.cellTable[24 * slot];
+                    if (e[2] == 0 && e[3] == 0 && e[5] == 0 && e[6] == 0) {
+                        continue;
+                    }
+                    const uint16_t ent = static_cast<uint16_t>(e[2] | (e[3] << 8));
+                    RICH4_LOGI("  cellTable[%d] type %u(%s) ent %u dir %u life %u owner %u fly %u",
+                               slot, e[0], e[0] < 19 ? kObjectNames[e[0]] : "?", ent, e[1], e[4],
+                               e[5], e[6]);
+                }
+                for (int i = 0; i < st.playerCount && i < 4; ++i) {
+                    const Player& pl = st.players[i];
+                    RICH4_LOGI("  player %d attached %u cellNo %u luckA/B/C %d/%d/%d", i,
+                               pl.cellTableIdx, pl.cellNo, pl.luckA, pl.luckB, pl.luckC);
+                }
+                RICH4_LOGI("  giftPool %u,%u,%u,%u,.. trapStock %u,%u,%u", st.misc8A[0],
+                           st.misc8A[1], st.misc8A[2], st.misc8A[3], st.trapStock[0],
+                           st.trapStock[1], st.trapStock[2]);
+                RICH4_LOGI("debug: Ctrl+Shift+Y cellTable dump done");
                 return true;
             }
             default:

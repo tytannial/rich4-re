@@ -174,14 +174,33 @@ slot<12 → 配对轮替重建（§2.1）
 - 音效：dword_48237A 礼物、dword_482382 宝箱、g_effectSlot3 炸弹挂身循环
 - 台词表：off_4808A2（哭，神明离开/受伤通用）、off_48086A（大笑）、off_480862（暴富）、off_480D92/96/9A（路障/地雷/炸弹）
 
-## 10. 与重写现状差距（2026-09-23 分析基线）
+## 10. 请神符 / 送神符挂点（0x444E1A / 0x444C45，卡系统先行实现）
+
+- **请神符（卡 id 23，0x444E1A）**：人类经 `pickNearestAttachable`(0x444D1A) —— 原版遍历
+  **视口拾取表**（word_48B8C4），重写遍历渲染期 `mapHitRegions` 中 `0xA100|槽+1` 物件，
+  过滤 `canAttach && owner==0 && cellEnt!=0`，取距玩家 cellEnt 世界坐标最近者 →
+  `cardBagRemove(cur,23)` 丢卡 →（请神台词 off_481292 → [TODO P4]）→
+  `flyObjectSprite`（神明格 → 玩家屏幕位置）→ `attachObject`（完整附身效果）。
+  无候选静默失败不丢卡。AI 选择 0x41E6F2 → [TODO P5]。
+- **送神符（卡 id 22，0x444C45）**：`cellNo`（挂身炸弹）→ `deleteMapObject` 直接清除；
+  附身神明且类型 ∈ {5,6,7,8,10,15}（窮/衰/惡魔/死神 = **负面神**）→ `attachEndAnim` 送走
+  （→配对轮替）；**正面神（財/福/天使/土地公）不可送走**、两者皆无 → 静默失败不丢卡；
+  成功 → `cardBagRemove(cur,22)`。
+- **重写位置**：`src/app/map_objects.cpp` `useInviteGodCard` / `useBanishGodCard` /
+  `pickNearestAttachable`；调试入口 `Ctrl+Shift+I` / `Ctrl+Shift+H`（先 giveCardToBag 塞卡）。
+- **拾取 id 修正**：原 cellTable 物件 hit id 直译 `(slot+1)<<8` 与 estate/corp/specPt 十进制段
+  重叠（slot 7..30 会被误判）→ 改 `0xA100 | (slot+1)`（map_render/object_tip 同步；
+  原版实为 `(slot<<8)+33024` 高地址段无冲突）。
+- **卡使用外层**（手牌面板/0x443052 dispatch、点卡确认）属 P4 卡片 UI；本函数即其效果挂点。
+
+## 11. 与重写现状差距（2026-09-23 分析基线）
 - ✅ createMapObject / randomCellEnt / 月度换位（advanceDay）/ cellTableIdx 字段 / 整表存档 / 拾取提示 / 静态帧渲染
 - ❌ deleteMapObject+轮替、attachObject、attachEnd 动画、寿命双入口递减、路过/停留分派（恶犬/礼物/宝箱/路障/地雷/炸弹）、
   8 方向帧、跟随绘制、浮空寿命数字、弹飞、giftPool/propStock/luckABC 字段与存档
 - [TODO P4] 道具放置入口（卡片使用）、拆除卡虚拟工程车（currentPlayer=8）、research 室道具
 - [TODO P5] 事件槽 NPC 4..7 物件分支、AI 使用三属性决策（sub_41FACC 等）
 
-## 11. 验证方式
+## 12. 验证方式
 新开局：6 神明（小財神/小福神/小窮神/小衰神/天使/惡犬）+礼物+宝箱。
 踩小財神 → 插图+老虎机 → 其他玩家钱转我 → 小財神悬浮头顶 → 7 回合后飘走 → **大財神出现在远处**；
 步行踩惡犬 → 咬伤插图 → 住院 3 天 → 对向槽生成**土地公**；有车踩 → 无事；

@@ -72,6 +72,19 @@ void relocatePlayer(GameState& st, int p);
 // 神明旁白文本（索引 = cellTable 类型 1..15；[RE 0x463250..0x463495] BIG5→UTF-8）
 const char* godNarrText(int type);
 
+// [RE 0x444D1A] pickNearestAttachable：视野内（mapHitRegions 的 cellTable 物件）
+//   可附身+无主、距当前玩家世界坐标最近者，返回物件 ID（0=无）
+int pickNearestAttachable(Application& app);
+
+// [RE 0x444E1A] useInviteGodCard：请神符(卡23)——选中最近神明 → 丢卡 →
+//   飞行动画（神明→玩家）→ attachObject 附身。返回是否成功（无候选失败不丢卡）
+bool useInviteGodCard(Application& app);
+
+// [RE 0x444C45] useBanishGodCard：送神符(卡22)——挂身道具(炸弹)直接清除；
+//   附身负面神明（窮/衰/惡魔/死神 5/6/7/8/10/15）送走（→轮替）；
+//   正面神无可送 → 失败不丢卡。返回是否成功
+bool useBanishGodCard(Application& app);
+
 // [RE 0x445A4D] givePlayerItem：发放道具（itemStock[15p+id-1]++，上限 9；
 //   id≤8 受礼物池 misc8A[id-1] 库存限制）
 void givePlayerItem(GameState& st, int player, int itemId);

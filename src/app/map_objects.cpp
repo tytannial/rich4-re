@@ -877,6 +877,107 @@ void flyObjectSprite(Application& app, int objId, int fromX, int fromY, int toX,
                toX, toY, frames);
 }
 
+// ===== 请神符 / 送神符（P4 卡片系统挂点，UI 入口后续接入）=====
+
+// [RE 0x444D1A] pickNearestAttachable：视野内可附身+无主神明，取距玩家最近者
+// 依据: 0x444D1A 反编译; 原版遍历视口拾取表 word_48B8C4（高位置位 + 槽号）——
+//   重写遍历渲染期 mapHitRegions（同为视口内记录，id=0xA100|槽+1）；
+//   距离 = cellEnt 世界坐标与玩家 spriteX/Y 欧氏距离平方
+int pickNearestAttachable(Application& app) {
+    GameState& st = app.gameState();
+    const Player& pl = st.players[st.currentPlayer];
+    int best = 0;
+    double bestDist = 10000.0;
+    for (const GameState::MapHitRegion& hr : st.mapHitRegions) {
+        if ((hr.id & 0xFF00) != 0xA100) {
+            continue;
+        }
+        const int objId = hr.id & 0xFF;
+        if (!canAttachObject(st, objId)) {
+            continue;
+        }
+        const size_t off = static_cast<size_t>(24 * (objId - 1));
+        const uint16_t ent = static_cast<uint16_t>(st.cellTable[off + 2] | (st.cellTable[off + 3] << 8));
+        if (ent == 0 || st.cellTable[off + 5] != 0) {
+            continue;
+        }
+        const CellEnt& ce = st.cellEnts[ent];
+        const double dx = ce.x - static_cast<double>(pl.spriteX);
+        const double dy = ce.y - static_cast<double>(pl.spriteY);
+        const double d = std::sqrt(dx * dx + dy * dy);
+        if (d < bestDist) {
+            bestDist = d;
+            best = objId;
+        }
+    }
+    return best;
+}
+
+// [RE 0x444E1A] useInviteGodCard：请神符（卡 id 23）
+// 依据: 0x444E1A 反编译; 人类选择走 0x444D1A（AI → sub_41E6F2 [TODO P5]）；
+//   选中 → cardBagRemove(cur,23) 丢卡 → 台词（off_481292 → [TODO P4]）→
+//   flyObjectSprite（神明格 → 玩家屏幕位置，无停留）→ attachObject 附身（走完整效果）
+// 差异: 无候选时原版静默返回（不丢卡）
+bool useInviteGodCard(Application& app) {
+    GameState& st = app.gameState();
+    const int p = st.currentPlayer;
+    if (p < 0 || p >= 4) {
+        RICH4_LOGI("useInviteGodCard: p%d AI/NPC selection (RE 0x41E6F2) TODO P5", p);
+        return false;
+    }
+    const int objId = pickNearestAttachable(app);
+    if (objId == 0) {
+        RICH4_LOGI("useInviteGodCard: no visible attachable god (RE 0x444D1A)");
+        return false;
+    }
+    const size_t off = static_cast<size_t>(24 * (objId - 1));
+    const uint16_t ent =
+        static_cast<uint16_t>(st.cellTable[off + 2] | (st.cellTable[off + 3] << 8));
+    cardBagRemove(st, p, 23);  // [RE 0x444E52 0x441343(cur,23)]
+    // [TODO P4] 请神台词 sub_44EF41(p, 0, off_481292[27? stride 90 * charIndex])
+    const CellEnt& ce = st.cellEnts[ent];
+    Player& pl = st.players[p];
+    flyObjectSprite(app, objId, ce.x, ce.y, pl.spriteX, pl.spriteY, 0);
+    attachObject(app, p, ent, objId);
+    RICH4_LOGI("useInviteGodCard: god obj %d (type %u) invited to p%d (RE 0x444E1A)", objId,
+               st.cellTable[off], p);
+    return true;
+}
+
+// [RE 0x444C45] useBanishGodCard：送神符（卡 id 22）
+// 依据: 0x444C45 反编译; 挂身道具（cellNo=炸弹）→ deleteMapObject 直接清除（其
+//   type18 分支自清玩家 cellNo）；附身神明且类型 ∈ {5,6,7,8 窮/衰, 10 惡魔, 15 死神}
+//   → attachEndAnim 送走（→配对轮替）；**正面神明不可送走**；两者皆无 → 失败静默
+//   （原版 JUMPOUT 回使用流程，不丢卡）；成功 → cardBagRemove(cur,22)
+bool useBanishGodCard(Application& app) {
+    GameState& st = app.gameState();
+    const int p = st.currentPlayer;
+    if (p < 0 || p >= 9) {
+        return false;
+    }
+    Player& pl = st.players[p];
+    bool sent = false;
+    if (pl.cellNo != 0) {
+        releaseCellTableSlot(app, pl.cellNo);  // [RE 0x444C64 deleteMapObject]
+        sent = true;
+    }
+    if (pl.cellTableIdx != 0) {
+        const uint8_t type =
+            st.cellTable[static_cast<size_t>(24 * (pl.cellTableIdx - 1))];
+        if (type == 5 || type == 6 || type == 7 || type == 8 || type == 10 || type == 15) {
+            attachEnd(app, p);  // [RE 0x444CC4 attachEndAnim]
+            sent = true;
+        }
+    }
+    if (!sent) {
+        RICH4_LOGI("useBanishGodCard: nothing to banish (RE 0x444C45)");
+        return false;
+    }
+    cardBagRemove(st, p, 22);  // [RE 0x444CE4 0x441343(cur,22)]
+    RICH4_LOGI("useBanishGodCard: p%d banished (RE 0x444C45)", p);
+    return true;
+}
+
 // [RE 0x445A4D] givePlayerItem：itemStock[15p+id-1]++（上限 9）；id≤8 消耗礼物池 misc8A
 // 依据: 0x445A4D 反编译; 原版 g_playerCards 基址 0x49915B、重写 itemStock 基址
 //   0x49915C（索引 = 15p+id-1）；g_cardPool[1..8] = misc8A[0..7]

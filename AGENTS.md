@@ -46,6 +46,8 @@ damagePlayer/demolish/givePlayerItem）；`economy.cpp` deleteMapObject **配对
 `updatePlayerStates` 附身寿命 7·13 天递减；渲染 8 方向帧/跟随玩家/浮空寿命数字/弹飞 flt；
 `Player.luckA/B/C` + `GameState.trapStock`；详见 `map-object-refresh.md`。
 [TODO P4] 道具放置入口（0x446BAA/C88/D69/拆除卡 0x446AFB 已留桩）+ 角色台词语音；[TODO P5] NPC 分支。
+请神/送神符效果函数 ✅（0x444E1A/0x444C45，`useInviteGodCard`/`useBanishGodCard`，
+调试 `Ctrl+Shift+I/H` 直调）；cellTable 拾取 id 改 0xA100|槽+1 修段重叠。
 
 **功能总览**：`docs/help-checklist.md`（帮助文档 99 条 → 实现状态，当前 ✅ 19 / 🟡 19 / ❌ 61）。
 
