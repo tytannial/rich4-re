@@ -3054,7 +3054,6 @@ void updateGameState(Application& app) {
             if (hit) {
                 pl.byte27 = pl.dir;                                         // [RE 0x40DB45]
                 pl.dir = static_cast<uint8_t>(facingFromDelta(dx, dy));     // [RE 0x454FB4]
-                demolishAtObjId(app, objId, 2);                             // [RE 0x40DC19]
                 int sx = 0;
                 int sy = 0;
                 if (!projectMapPoint(st, wx, wy, sx, sy)) {
@@ -3062,7 +3061,10 @@ void updateGameState(Application& app) {
                     sy = wy;
                 }
                 app.audio().playEffectSlot(22);                             // [RE 0x40DC32 敲打音]
+                // 先播工程车"打拳"动画（FLC 526；保帧期间保持未降级画面），播完再降级
                 playEventFlc(app, 526, sx - 55, sy - 55, -1, false, 3);     // [RE 0x450CED flags 0xFF0001]
+                demolishAtObjId(app, objId, 2);                             // [RE 0x40DC19]
+                renderGameFrame(app);  // 降级结果立即刷新
                 pl.dir = pl.byte27;                                         // [RE 0x40DCA8]
                 RICH4_LOGI("bulldozer demolish: p%d obj %u (RE 0x40DA4B)", p, objId);
             }
