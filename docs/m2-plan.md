@@ -294,8 +294,9 @@
 - 事件格 case 2..16（P2；~~新聞 ✅ 2026-09-26（拍卖 idx 7 桩）~~；命運/魔法屋待做；~~物價指數面板~~ ✅ 右侧面板 0x415F69）
 - ~~AI 买地决策 `sub_41D7D4`~~ ✅ 2026-09-23（`aiBuyDecision` 接入 landingEvent 住宅/商業用地 AI 分支）；`alive&6` 自动行动（P5）
 - ~~`updateMoneyIndex` 物價指數月度更新~~ ✅ 2026-09-23 接入（每日 advanceDay；**右侧面板显示 ✅**
-  d0b4154，物價指數显示核对 2026-09-25 见 `415d31-game-panel.md`）；到期清算 `expireAssets` 未实现
-- ~~银行贷款/存款利息（case 14 銀行格）~~ ✅ 2026-09-23 全链；~~每月 15 号分红~~ ✅ 2026-09-23（`dividend_dialog.cpp`）；~~月初结息~~ ✅ 2026-09-23（`month_settle_dialog.cpp`）；股市交易市场/挂单、资产清单（idx 16）待做
+  d0b4154，物價指數显示核对 2026-09-25 见 `415d31-game-panel.md`）；~~到期清算 `expireAssets`~~ ✅
+  `economy.cpp`（飛彈/核彈接入；地块期限到期回收在 `advanceDay` 内联——语义订正见 `gameplay-map-mechanics.md`）
+- ~~银行贷款/存款利息（case 14 銀行格）~~ ✅ 2026-09-23 全链；~~每月 15 号分红~~ ✅ 2026-09-23（`dividend_dialog.cpp`）；~~月初结息~~ ✅ 2026-09-23（`month_settle_dialog.cpp`）；~~资产清单（idx 16）~~ ✅ 2026-09-25（查詢面板 `query_dialog.cpp`）；股市交易市场/挂单待做
 - 研究所研发 `labDevelopDialog`（P4 道具系统）
 - 收租的同盟分账 / 死神代付 / 免租卡片 / 浮动数字（P4 卡片与神明系统）
 - 角色语音 `sub_44EF41` / 卡片获得语音 `sub_44F230`（P4）

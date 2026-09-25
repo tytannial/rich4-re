@@ -2,7 +2,7 @@
 
 > 本文汇总原版所有「玩家付钱 / 收钱」计算公式（购地/建设/升级/过路费/设施使用费/罚款/到期清算），
 > 逐条标注原始地址与反编译依据。数据依据：`sub_41982D`（landingEvent）case 0 全段
-> （0x4198B9..0x41B074）、`expireAssets`（到期 0x40AC7B）、`updateMoneyIndex`（物價指數 0x423ACF）、
+> （0x4198B9..0x41B074）、`expireAssets`（屏幕破坏 0x40AC7B）、`updateMoneyIndex`（物價指數 0x423ACF）、
 > `roulettePrompt`/`slotMachineValue`（轮盘 0x44090E/0x43F23E）。
 > 格子机制总览见 `gameplay-map-mechanics.md`；住宅用地收租细节见 `41982d-estate-rent.md`；
 > 事件格见 `41982d-p2-events.md`。
@@ -298,5 +298,5 @@ owner 自己停留（0x41A9C0 段，✅ 2026-09-26 实现）：index4 → 轮盘
 | `g_moneyMul` 更新 | ✅ 本文 §1.1（`updateMoneyIndex` 0x423ACF 每日接入 `advanceDay`；已消除"恒 1"） |
 | `playerTotalAssets` | ✅ `economy.cpp`（股票市值 + 地产 + 公司；贷款/存款已计入） |
 | 轮盘/老虎机读数（3/4 位） | ✅ **完整转盘 UI**（`roulette_dialog.cpp` `roulettePrompt`）：panel.mkf[68+theme] 14 帧 + 指针逐格步进（40ms/帧）+ 减速停止（间隔 1..5）+ 停留 40 帧；读数 = `byte_475D0C` 终格值。神明轮盘（`slotMachineValue` 4 滚轮）❌ 未接入 |
-| 到期处理 `sub_40AC7B` | 🟡 期限写入已有（`g_landPermDays`），到期清算 ❌ |
+| 到期处理 `sub_40AC7B`（`expireAssets`，屏幕可见地块批量破坏） | ✅ `economy.cpp`（飛彈/核彈 `item_effects.cpp` 接入：归公/降级/事件槽释放）；地块期限到期回收在 `advanceDay` 内联（owner=0 + `rebuildMiniMap`）——旧标"到期清算"有误 |
 | 事件格金额 | 见 `41982d-p2-events.md` |

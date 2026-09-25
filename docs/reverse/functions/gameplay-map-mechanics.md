@@ -192,7 +192,7 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
 | `labDevelopDialog` | 研究所（corp type4）「請選擇欲開發道具」：逐级研发槽选 1，写 +29/+30 | 0x44101D | ❌ |
 | `updateMoneyIndex` | **物价指数**：`g_moneyMul = max(M, Σ存活 playerTotalAssets / 存活数 / g_startMoneyVal)`（只升不降；**每日** advanceDay 0x41CFBF） | 0x423ACF | ✅（`economy.cpp`；玩家面板 idx 5 显示 ❌） |
 | `playerTotalAssets` | 总资产 = 现金+存款−贷款+Σ持股×现价+Σestate(+28+30×级/连锁)+Σcorp(+34+36×级) | 0x4239B9 | ✅（`economy.cpp`） |
-| `expireAssets` | **屏幕可见地块批量破坏**（旧标"到期清算"有误）：`word_48B8C4` = `sub_40A0B1` 收集的视口内有主地块列表（`sub_40A45C` 计数）；flags&2 estate / flags&4 corp：a3≠0 归公（地主欠 `30×M×level`）+ rebuildMiniMap，a3==0 降级（连锁→清 type+level）；flags&0x20 事件槽释放（damagePlayer/住院/deleteMapObject）。调用点 = 卡片/道具全屏破坏效果（0x446FBC/447ACE/44913D/44AB2C）→ P4 | 0x40AC7B | ❌（P4 效果系统）|
+| `expireAssets` | **屏幕可见地块批量破坏**（旧标"到期清算"有误）：`word_48B8C4` = `sub_40A0B1` 收集的视口内有主地块列表（`sub_40A45C` 计数）；flags&2 estate / flags&4 corp：a3≠0 归公（地主欠 `30×M×level`）+ rebuildMiniMap，a3==0 降级（连锁→清 type+level）；flags&0x20 事件槽释放（damagePlayer/住院/deleteMapObject）。调用点 = 卡片/道具全屏破坏效果（0x446FBC/447ACE/44913D/44AB2C）→ P4 | 0x40AC7B | ✅（`economy.cpp`；飛彈/核彈/新聞灾害已接入）|
 | **到期回收**（真） | estate`+48`/corp`+52` == 当前日期 → owner=0（归公）+ 查封高半字节递减，**内联在 `advanceDay`**（非 expireAssets）；重写 `turn_system.cpp:2477` ✅ | 0x41CF67 尾段 | ✅ |
 | `queryDialog` | **查詢面板**（工具条 case 6，[HELP 16]）：資產/地產/股票清單 3 页签 + 地產 5 子页签/翻页 + 玩家条；右侧資訊面板 4 页签（資金/地產/股票/其他）+ 物价指数 + 点击切换 | 0x424492/0x423CF3/0x423070/0x4225A3/0x422443/0x415F69/0x4182FA | ✅ 2026-09-25（`query_dialog.cpp`/`game_panel.cpp`；ui-controls §27） |
 | `collectOwnedAssetIds` | 地产列表筛选（0=estate+corp / 1=estate / 2=corp / 3=有建筑普通地产 / 4=有建筑连锁店） | 0x423B3B | ✅ |
