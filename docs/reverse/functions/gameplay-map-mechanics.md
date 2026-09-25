@@ -95,7 +95,7 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
 | 4 | 監獄 | 7 | 34 | 10 | `jailBailDialog`（保释面板 + AI；开局默认在押 小偷/強盜 0x40734F） | ✅ |
 | 5 | 醫院 | 9 | 37 | 10 | `hospitalVisitDialog`（出院面板+护士动画；开局默认在院 流氓/間諜） | ✅ |
 | 6 | 企鵝挖寶 | 11 | 26 | 10 | `miniGameVisit`（`minigame_dialog.cpp`；原版 `sub_415215`）→ `g_playerPoints += ax`；交互版待接入（`41982d-p2-events.md` §6） | 🟡 兜底 ✅ |
-| 7 | 七彩氣球 | 15 | 23 | 10 | `miniGameVisit`（原版 `sub_4154DC`）→ `g_playerPoints += ax`；交互版待接入 | 🟡 兜底 ✅ |
+| 7 | 七彩氣球 | 15 | 23 | 10 | `miniGameBalloonsRun`（原版 `sub_4154DC`）→ `g_playerPoints += ax` | ✅ 交互版 2026-09-25 |
 | 8 | 喜從天降 | 13 | 32 | 10 | `miniGameVisit`（原版 `sub_4155FC`）→ `g_playerPoints += ax`；交互版待接入 | 🟡 兜底 ✅ |
 | 9 | 樂透 | 17 | 36 | 10 | `lotteryVisit`（投注/开奖） | ✅ |
 | 10 | 得５０點 | 19 | 31 | 16 | 0x41B184：FLC 537 + `"得點券５０點"`（0x463A81）+50 点 + 角色语音（P4） | ✅ |
@@ -198,7 +198,7 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
 | `collectOwnedAssetIds` | 地产列表筛选（0=estate+corp / 1=estate / 2=corp / 3=有建筑普通地产 / 4=有建筑连锁店） | 0x423B3B | ✅ |
 | `rollDice` / `g_diceValue` | 本次行走总步数（掷骰后保留，供加油/修车/过路×步数公式） | 0x419572 / 0x40D9B7 | ✅（`GameState.diceValue` 0x48BAFC，掷骰定格记录） |
 | `sub_41D2C6` | 转账（flags&4 付款方银行优先；flags&1 收款方入现金，否则入银行；不足 → `sub_40CD87` 破产） | 0x41D2C6 | `transferMoney` ✅（收租 flags=0） |
-| `miniGameVisit` | 挖宝/射气球/接钱小游戏（原 `sub_415215/4DC/5FC`；返回得分，调用方 `g_playerPoints += ax`；当前共享 else 0x415457 兜底 rand()%20+50） | 0x415215 等 | 🟡 兜底 ✅ 2026-09-25（`minigame_dialog.cpp`；交互逐游戏接入，`41982d-p2-events.md` §6） |
+| `miniGameVisit` | 挖宝/射气球/接钱小游戏（原 `sub_415215/4DC/5FC`；返回得分，调用方 `g_playerPoints += ax`；case 7 交互版 ✅，case 6/8 暂共享 else 0x415457 兜底 rand()%20+50） | 0x415215 等 | 🟡 2026-09-25（`minigame_dialog.cpp`；`41982d-p2-events.md` §6） |
 | `sub_441E12` | 抽卡（返回卡片 id，0=无） | 0x441E12 | ❌ |
 | `sub_441F73` | 给玩家卡片（`sub_441E12` 结果 + 文本缓冲） | 0x441F73 | ❌ |
 | `sub_44F230` | 卡片/道具获得语音 | 0x44F230 | ❌ |
@@ -331,8 +331,9 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
       插画 + 6 类标题 + `funcs_44B7BD`/`funcs_44DC44` 效果函数表）
 - [x] case 6/7/8 小游戏**兜底得分**（`miniGameVisit` 0x415457 else：rand()%20+50 点券 +
       "得點券%d點" + 台词；四大恶人忽略；2026-09-25）
-- [ ] case 6/7/8 小游戏**交互版**（框架/公式/资源已逆向，`41982d-p2-events.md` §6；
-      待精读 sub_412287/4124C8/4146EE/413F07/412F6F/413248）
+- [x] case 7 七彩氣球**交互版** ✅ 2026-09-25（`miniGameBalloonsRun`，`minigame_dialog.cpp`）
+- [ ] case 6/8 小游戏**交互版**（框架/公式/资源已逆向，`41982d-p2-events.md` §6；
+      待精读 sub_412287/4124C8（挖宝企鹅）、sub_413248（钱袋））
 - [x] case 9 樂透（`lotteryVisit`，每月 15 号开奖——先分红后乐透；`lottery-system.md`）
 - [ ] case 14/15/16 銀行/百貨公司/魔法屋（`sub_4379C9`/`sub_42E931`/`sub_43380A`）
 - [ ] case 1 公園 = default（无事件）—— 确认与重写返回一致

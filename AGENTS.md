@@ -27,10 +27,12 @@
 右侧資訊面板 4 页签 `game_panel.cpp`，见 `ui-controls.md` §27）**；**P2 事件格推进中**
 （得點券 case 10/11/12 ✅、卡片格 case 13 ✅、監獄/醫院 case 4/5 ✅ 含保释·出院面板+护士动画
 + **开局默认在押 NPC**（小偷·強盜/流氓·間諜，0x40734F）+ **NPC 释放动画**（panel[64] 全身像
-+ 答谢消息，0x43CFDB/0x43DE4C；事件槽路面行走待 P5）；**小游戏 case 6/7/8 兜底得分 ✅ 2026-09-25**
-  （`minigame_dialog.cpp` `miniGameVisit`：原版共享 else 0x415457——随机 50..69 点券 + "得點券%d點"
-  + 台词 `kValueLines[char][rand&1]`；四大恶人忽略；交互小游戏逐游戏接入，框架/公式/资源已沉淀
-  `41982d-p2-events.md` §6）；事件格 FLC 阻塞播放模板 `playEventFlc` + `drawEventFlcFrame` +
++ 答谢消息，0x43CFDB/0x43DE4C；事件槽路面行走待 P5）；  **小游戏 case 6/7/8 ✅ 2026-09-25**
+  （`minigame_dialog.cpp` `miniGameVisit`：**case 7 七彩氣球交互版 ✅**（0x4154DC：15s 射气球，
+  分值/×2/÷2/? 随机效果/诱饵球，panel[78/79/91]+枪光标+音效 19/20/21+音乐场景 11）；
+  case 6/8 与 AI/动画关走原版共享 else 0x415457——随机 50..69 点券 + "得點券%d點" +
+  台词 `kValueLines[char][rand&1]`；四大恶人忽略；框架/公式/资源已沉淀 `41982d-p2-events.md` §6）；
+  事件格 FLC 阻塞播放模板 `playEventFlc` + `drawEventFlcFrame` +
 `showCardGet` + `jailPlayer`/`hospitalizePlayer`/`insurancePayout`；面板底座
 `FloatMessage`/语音 `playVoice`/音乐栈见 `ui-controls.md` §25）。
 **M2 股市 ✅**：`stock_system.cpp`（stockTick/认购/控股/买卖交易量）+ `spec_pt_dialog.cpp`
