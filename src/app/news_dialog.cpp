@@ -23,6 +23,7 @@
 #include "game/app/event_stack.h"
 #include "game/app/game_loop.h"
 #include "game/app/map_objects.h"
+#include "game/app/map_tables.h"
 #include "game/app/stock_system.h"
 #include "game/app/turn_system.h"
 #include "game/application.h"
@@ -336,6 +337,43 @@ void evt05_monsterDestroy(NewsCtx& ctx, int phase) {
     playEventFlc(app, 539, 0, 40, 84, false, 0x20); // [RE 0x44947D flags 0x200001]
     // [TODO P4] 业主台词 sub_44EF41(targetParam-1, 2, off_480856[char*27+(rand&1)])
     resetView(app);
+}
+
+// [RE 0x4494E0] idx 6：%s公告地價調漲３０％
+void evt06_landPriceUp(NewsCtx& ctx, int phase) {
+    Application& app = *ctx.app;
+    GameState& st = app.gameState();
+    if (phase == 0) {
+        const int objId = pickRandom(collectAllObjIds(st));
+        ctx.targetObjId = objId;
+        char text[192];
+        std::snprintf(text, sizeof(text), kNewsTexts[6], objNameUtf8(st, objId).c_str());
+        drawEffectText(ctx, text, 310);
+        return;
+    }
+    const int objId = ctx.targetObjId;
+    if (objId > 2000 && objId < 4000) {
+        Estate& es = st.estates[objId - 2000];
+        focusView(app, es.x, es.y);
+        st.highlightEstates.clear();
+        for (size_t i = 1; i < st.estates.size(); ++i) {
+            Estate& e = st.estates[i];
+            if (std::strncmp(e.name, es.name, sizeof(es.name)) == 0) {
+                st.highlightEstates.push_back(static_cast<int>(i));
+                // [RE dbl_4654DC = 1.3] 同路段每块 +28 ×1.3
+                e.priceAdd = static_cast<uint16_t>(static_cast<int>(e.priceAdd * 1.3));
+            }
+        }
+        blinkHighlight(app);
+        resetView(app);
+    } else if (objId > 4000 && objId < 6000) {
+        Corp& cp = st.corps[objId - 4000];
+        focusView(app, cp.x, cp.y);
+        // [RE 0x449721 共享段] +34 buildPrice ×1.3
+        cp.buildPrice = static_cast<uint16_t>(static_cast<int>(cp.buildPrice * 1.3));
+        // [差异] 原版此分支 markPickBuffer(corp) 单块高亮：重写高亮机制仅支持 estate（跳过）
+        resetView(app);
+    }
 }
 
 // [RE 0x44A220] idx 14：%s房屋鬧鬼 地價下跌３０％
@@ -863,6 +901,186 @@ void evt35_profitDouble(NewsCtx& ctx, int phase) {
     }
 }
 
+// ===== 股市/银行/坐牢类（idx 7、23-29）=====
+
+// 无主地块 objId（idx 7 拍卖目标）
+std::vector<int> collectUnownedObjIds(const GameState& st) {
+    std::vector<int> out;
+    for (size_t i = 1; i < st.estates.size(); ++i) {
+        if (st.estates[i].owner == 0) {
+            out.push_back(static_cast<int>(i) + 2000);
+        }
+    }
+    for (size_t i = 1; i < st.corps.size(); ++i) {
+        if (st.corps[i].owner == 0) {
+            out.push_back(static_cast<int>(i) + 4000);
+        }
+    }
+    return out;
+}
+
+// [RE 0x449735] idx 7：公開拍賣%s 公有土地一處
+// [TODO 拍卖] 原版阶段 1 = sub_43BDE5(-1, objId, 1) 土地拍卖 UI（panel[26] 多帧 +
+//   竞价 runModal 0x43A2DD + 成交转账）——独立子任务，另开一轮实现。
+void evt07_landAuction(NewsCtx& ctx, int phase) {
+    GameState& st = ctx.app->gameState();
+    if (phase == 0) {
+        const int objId = pickRandom(collectUnownedObjIds(st));
+        ctx.targetObjId = objId;
+        ctx.targetParam = 0;
+        if (objId > 0) {
+            // [RE 0x44980C] 原版 g_newsParam = 坐标打包 x|(y<<16)（拍卖模块未接，仅记录）
+            const int16_t x = (objId < 4000) ? st.estates[objId - 2000].x : st.corps[objId - 4000].x;
+            const int16_t y = (objId < 4000) ? st.estates[objId - 2000].y : st.corps[objId - 4000].y;
+            ctx.targetParam = (static_cast<int>(x) & 0xFFFF) | (static_cast<int>(y) << 16);
+        }
+        char text[192];
+        std::snprintf(text, sizeof(text), kNewsTexts[7], objNameUtf8(st, objId).c_str());
+        drawEffectText(ctx, text, 310);
+        return;
+    }
+    RICH4_LOGI("news: event 7 auction TODO (RE 0x4498A1 objId=%d param=0x%X)", ctx.targetObjId,
+               ctx.targetParam);
+}
+
+// [RE 0x44AEDB] idx 23：銀行加發１０％儲金紅利（无贷款玩家 bank × 0.1 入银行）
+void evt23_bankBonus(NewsCtx& ctx, int phase) {
+    if (phase != 0) {
+        return;
+    }
+    Application& app = *ctx.app;
+    GameState& st = app.gameState();
+    drawEffectText(ctx, kNewsTexts[23], 310);
+    int y = 346;
+    for (int i = 0; i < st.playerCount; ++i) {
+        if (st.players[i].alive == 0 || st.players[i].loan != 0) {
+            continue; // [RE 0x44AF36] 有贷款不参与
+        }
+        // [RE dbl_465734 = 0.1] (int)(存款 × 0.1)
+        const int32_t bonus =
+            static_cast<int32_t>(static_cast<double>(st.players[i].bank) * 0.1);
+        addMoney(app, i, bonus, false); // [RE 0x44AF66 入银行]
+        app.text().setFont(24, 0xF0F0F0, 0x101010, 3, 0);
+        char line[128];
+        std::snprintf(line, sizeof(line), "%s得到%d元", playerNameNoSpace(st, i).c_str(), bonus);
+        app.text().drawText(app.surface(), line, 24, y, 0);
+        drawPiece(ctx, i, kPieceFrameRelease, y + 12);
+        y += 32;
+    }
+}
+
+// [RE 0x44B00A] idx 24：股市低迷不振重挫崩盤（全 12 支跌）
+void evt24_stockCrash(NewsCtx& ctx, int phase) {
+    if (phase != 0) {
+        return;
+    }
+    Application& app = *ctx.app;
+    GameState& st = app.gameState();
+    drawEffectText(ctx, kNewsTexts[24], 310);
+    for (int i = 0; i < 12; ++i) {
+        st.stockNews[i] = 1; // [RE 0x44B03C]（低 4 位非 0 = 跌）
+    }
+    stockNewsApply(app, 0); // [RE 0x44B04B]
+}
+
+// [RE 0x44B055] idx 25：股市氣勢如虹全面上漲（全 12 支涨）
+void evt25_stockRally(NewsCtx& ctx, int phase) {
+    if (phase != 0) {
+        return;
+    }
+    Application& app = *ctx.app;
+    GameState& st = app.gameState();
+    drawEffectText(ctx, kNewsTexts[25], 310);
+    for (int i = 0; i < 12; ++i) {
+        st.stockNews[i] = 16; // [RE 0x44B087]（高 4 位非 0 = 涨）
+    }
+    stockNewsApply(app, 0); // [RE 0x44B096]
+}
+
+// [RE 0x44B0A0] idx 26：股市暫停交易１０天（全市场休市）
+void evt26_stockHaltAll(NewsCtx& ctx, int phase) {
+    if (phase != 0) {
+        return;
+    }
+    GameState& st = ctx.app->gameState();
+    drawEffectText(ctx, kNewsTexts[26], 310);
+    st.stockMarketClosed = 10; // [RE 0x44B0C6 dword_4990DC = 10；每日 advanceDay 递减]
+}
+
+// [RE 0x44B0D1] idx 27：%s股票暫停交易１０天（随机单支停牌 + 现价=昨收 + 历史）
+void evt27_stockHaltOne(NewsCtx& ctx, int phase) {
+    if (phase != 0) {
+        return;
+    }
+    Application& app = *ctx.app;
+    GameState& st = app.gameState();
+    const int s = std::rand() % 12; // [RE 0x44B0F8]
+    char text[192];
+    std::snprintf(text, sizeof(text), kNewsTexts[27],
+                  kStockNames[st.gameMode * 4 + st.mapIndex][s]);
+    drawEffectText(ctx, text, 310);
+    st.stockHalted[s] = 15; // [RE 0x44B154] byte_496986[36*s] = 15
+    st.stocks[s][5] = st.stocks[s][4]; // [RE 0x44B17B] 现价 = 昨收
+    const int slot = (st.turnCounter - 1 + 144) % 144; // [RE 0x44B161]
+    st.stockHistory[s][slot] = *reinterpret_cast<int32_t*>(&st.stocks[s][5]);
+}
+
+// [RE 0x44B1A3] idx 28：%s股票恢復上市交易（随机停牌股复牌）
+void evt28_stockResume(NewsCtx& ctx, int phase) {
+    if (phase != 0) {
+        return;
+    }
+    GameState& st = ctx.app->gameState();
+    std::vector<int> list;
+    for (int i = 0; i < 12; ++i) {
+        if (st.stockHalted[i] != 0) {
+            list.push_back(i); // [RE 0x44B1CA]
+        }
+    }
+    if (list.empty()) {
+        return;
+    }
+    const int s = list[static_cast<size_t>(std::rand()) % list.size()];
+    char text[192];
+    std::snprintf(text, sizeof(text), kNewsTexts[28],
+                  kStockNames[st.gameMode * 4 + st.mapIndex][s]);
+    drawEffectText(ctx, text, 310);
+    st.stockHalted[s] = 0; // [RE 0x44B24D] 恢复交易
+}
+
+// [RE 0x44B25B] idx 29：%s違法超貸 經營者%s坐牢５天
+void evt29_badLoanJail(NewsCtx& ctx, int phase) {
+    Application& app = *ctx.app;
+    GameState& st = app.gameState();
+    if (phase == 0) {
+        std::vector<int> list;
+        for (size_t i = 1; i < st.specPts.size(); ++i) {
+            if (st.specPts[i].owner != 0) {
+                list.push_back(static_cast<int>(i)); // [RE 0x44B28C]
+            }
+        }
+        if (list.empty()) {
+            return;
+        }
+        const SpecPt& sp = st.specPts[list[static_cast<size_t>(std::rand()) % list.size()]];
+        const int owner = sp.owner - 1;
+        char text[224];
+        std::snprintf(text, sizeof(text), kNewsTexts[29], specPtNameUtf8(sp).c_str(),
+                      playerNameNoSpace(st, owner).c_str());
+        drawEffectText(ctx, text, 310);
+        ctx.targetObjId = owner; // [RE 0x44B31C]
+        return;
+    }
+    const int p = ctx.targetObjId;
+    if (p < 0 || p >= 4) {
+        return;
+    }
+    focusView(app, st.players[p].spriteX, st.players[p].spriteY);
+    // [TODO P4] resolveJailTarget 0x441210：免罪卡 21 → 抵消返回 -1；嫁祸卡 19 → 换目标
+    jailPlayer(app, p, 5); // [RE 0x44B362]
+    resetView(app);
+}
+
 // ===== newsEventCheck 触发判定（0x448BE2，36 条；详见研究文档 §1）=====
 
 bool anyJailed(const GameState& st) {
@@ -1043,22 +1261,6 @@ bool newsEventCheck(const GameState& st, int idx) {
 
 using NewsPhaseFn = void (*)(NewsCtx& ctx, int phase);
 
-// 桩文本：展开 %s/%d 为零值（未实现效果的中间提交可安全显示）
-std::string stubText(const char* src) {
-    std::string out;
-    for (const char* p = src; *p != '\0';) {
-        if (p[0] == '%' && (p[1] == 's' || p[1] == 'd')) {
-            if (p[1] == 'd') {
-                out += '0';
-            }
-            p += 2;
-        } else {
-            out += *p++;
-        }
-    }
-    return out;
-}
-
 // [RE 0x448ECA] idx 0：獄中囚犯無罪開釋
 void evt00_jailFree(NewsCtx& ctx, int phase) {
     if (phase != 0) {
@@ -1197,16 +1399,6 @@ void evt22_bankRun(NewsCtx& ctx, int phase) {
     }
 }
 
-// 未实现事件桩（提交 3/4/5 逐个替换；显示展开后的文本便于实机核对）
-void evtStub(NewsCtx& ctx, int phase) {
-    if (phase != 0) {
-        return;
-    }
-    const std::string text = stubText(kNewsTexts[ctx.eventIdx]);
-    drawEffectText(ctx, text.c_str(), 310);
-    RICH4_LOGI("news: event %d effect TODO (RE 0x475E24)", ctx.eventIdx);
-}
-
 // [RE 0x475E24] g_newsFuncs 36 项（顺序与 kNewsTexts 对齐）
 const NewsPhaseFn kNewsFuncs[36] = {
     /* 00 */ evt00_jailFree,
@@ -1215,8 +1407,8 @@ const NewsPhaseFn kNewsFuncs[36] = {
     /* 03 */ evt03_hospitalExtend,
     /* 04 */ evt04_alienAttack,
     /* 05 */ evt05_monsterDestroy,
-    /* 06 */ evtStub,
-    /* 07 */ evtStub,
+    /* 06 */ evt06_landPriceUp,
+    /* 07 */ evt07_landAuction,
     /* 08 */ evt08_topLandlord,
     /* 09 */ evt09_landSubsidy,
     /* 10 */ evt10_topShareholder,
@@ -1232,13 +1424,13 @@ const NewsPhaseFn kNewsFuncs[36] = {
     /* 20 */ evt20_typhoon,
     /* 21 */ evt21_tornado,
     /* 22 */ evt22_bankRun,
-    /* 23 */ evtStub,
-    /* 24 */ evtStub,
-    /* 25 */ evtStub,
-    /* 26 */ evtStub,
-    /* 27 */ evtStub,
-    /* 28 */ evtStub,
-    /* 29 */ evtStub,
+    /* 23 */ evt23_bankBonus,
+    /* 24 */ evt24_stockCrash,
+    /* 25 */ evt25_stockRally,
+    /* 26 */ evt26_stockHaltAll,
+    /* 27 */ evt27_stockHaltOne,
+    /* 28 */ evt28_stockResume,
+    /* 29 */ evt29_badLoanJail,
     /* 30 */ evt30_pollutionFine,
     /* 31 */ evt31_investGain,
     /* 32 */ evt32_investLoss,
