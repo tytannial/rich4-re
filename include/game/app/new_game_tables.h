@@ -46,4 +46,7 @@ extern const uint8_t kChannelThird[32];
 // [RE 0x485BE8] 通道缩放表 -12（按钮按下变暗）
 extern const uint8_t kChannelDim[32];
 
+// [RE 0x485C28] 通道缩放表 -10（乐透投注界面已售号码格变暗）
+extern const uint8_t kChannelTen[32];
+
 } // namespace rich4

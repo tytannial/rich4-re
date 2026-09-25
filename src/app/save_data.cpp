@@ -189,8 +189,8 @@ bool saveGameToSlot(const std::string& gameDir, int slot, const GameState& state
         const uint8_t v = state.newGameConfig.aiUsed[i] ? 2 : 0;
         wbuf(&v, 1);
     }
-    w32(0); // dword_499080
-    wbuf(zeros, 36);                                   // g_miscTable36A
+    w32(static_cast<uint32_t>(state.publicFund));      // dword_499080 公库/乐透奖金池
+    wbuf(state.lotteryNumbers, 36);                    // g_miscTable36A 乐透号码归属
     wbuf(state.misc8A, 8);                             // g_misc8A
     wbuf(state.misc8B, 8);                             // g_misc8B
     w32(static_cast<uint32_t>(state.cardShufflePos));  // dword_4990E0

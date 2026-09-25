@@ -22,6 +22,7 @@
 #include "game/app/game_loop.h"
 #include "game/app/item_lines.h"
 #include "game/app/jail_dialog.h"
+#include "game/app/lottery.h"
 #include "game/app/map_objects.h"
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
@@ -1426,6 +1427,11 @@ int landingEvent(Application& app, uint16_t cellEntId) {
         RICH4_LOGI("landingEvent: card cell -> %s (RE 0x41982D case 13)", text);
         return 0x80;
     }
+    if (cellType == 9) {
+        // [RE 0x41B17A] case 9 樂透：人类投注界面（sub_4315CC→sub_42F7FC）/ AI 自动投注
+        lotteryVisit(app);
+        return 0x80;
+    }
     if (cellType != 0) {
         RICH4_LOGI("landingEvent: cellType %u objId %u (RE 0x41982D, P2 TODO)", cellType, objId);
         return 0x80;
@@ -2300,7 +2306,8 @@ void saveTurnSnapshot(GameState& st, int p) {
     s.stockMarketClosed = st.stockMarketClosed;
     s.stockTotalValue = st.stockTotalValue;
     s.marketIndex = st.marketIndex;
-    s.stockPublicFund = st.stockPublicFund;
+    s.publicFund = st.publicFund;
+    std::memcpy(s.lotteryNumbers, st.lotteryNumbers, sizeof(s.lotteryNumbers));
     s.stockGlobalDrift = st.stockGlobalDrift;
     std::memcpy(s.stocks, st.stocks, sizeof(s.stocks));
     std::memcpy(s.stockHistory, st.stockHistory, sizeof(s.stockHistory));
@@ -2344,7 +2351,8 @@ bool restoreTurnSnapshot(Application& app, int p) {
     st.stockMarketClosed = s.stockMarketClosed;
     st.stockTotalValue = s.stockTotalValue;
     st.marketIndex = s.marketIndex;
-    st.stockPublicFund = s.stockPublicFund;
+    st.publicFund = s.publicFund;
+    std::memcpy(st.lotteryNumbers, s.lotteryNumbers, sizeof(st.lotteryNumbers));
     st.stockGlobalDrift = s.stockGlobalDrift;
     std::memcpy(st.stocks, s.stocks, sizeof(st.stocks));
     std::memcpy(st.stockHistory, s.stockHistory, sizeof(st.stockHistory));
@@ -2833,10 +2841,10 @@ void advanceDay(Application& app) {
     stockTick(app);
     // [RE 0x42915A] 每日交易量刷新（保留股份 → 交易量 10%~30%）
     refreshBankStockShares(app);
-    // [RE 0x41CF67] 15 号：股东大会分红（sub_42BA97）+ 乐透开奖（sub_431712）
+    // [RE 0x41CF67] 15 号：股东大会分红（sub_42BA97）+ 乐透开奖（sub_431712）——顺序：先分红后乐透
     if ((st.gameDate & 0xFF) == 15) {
-        dividendMeeting(app); // [RE 0x41D08F] 15 号分红（panel.mkf[76]）
-        // TODO(P2 樂透): sub_431712 乐透开奖（依赖 case 9 投注）
+        dividendMeeting(app);    // [RE 0x41D08F] 15 号分红（panel.mkf[76]）
+        lotteryDrawMeeting(app); // [RE 0x41D094] 乐透开奖（依赖 case 9 投注）
     }
     // [RE 0x41CF67] 新月（跨月 1 号）：月初结息（sub_439BFA → sub_437E61）+ 事件格换位 + 月份计数
     if (newMonth) {

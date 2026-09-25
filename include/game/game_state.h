@@ -221,7 +221,8 @@ struct TurnSnapshot {
     int32_t stockMarketClosed = 0;       // dword_4990DC
     int32_t stockTotalValue = 0;         // dword_49907C
     int32_t marketIndex = 0;             // dword_499078
-    int32_t stockPublicFund = 0;         // dword_499080
+    int32_t publicFund = 0;              // dword_499080
+    uint8_t lotteryNumbers[36] = {};     // g_miscTable36A 乐透号码归属（0=未售，N=玩家 N-1）
     float stockGlobalDrift = 0.0f;       // dword_4990EC
     float stocks[12][9] = {};
     int32_t stockHistory[12][144] = {};
@@ -465,7 +466,9 @@ struct GameState {
     int32_t stockVolume[12] = {};    // [RE 0x49698A] word_49698A 交易量（sub_42915A 每日生成）
     int32_t stockMarketClosed = 0;   // [RE 0x4990DC] dword_4990DC 休市剩余天数（bit7=到期标志）
     int32_t stockDivPeriod = 1;      // [RE 0x499084] dword_499084 分红期数（走势图累積盈餘除数）
-    int32_t stockPublicFund = 0;     // [RE 0x499080] dword_499080 卖股入系统时的公库池
+    // [RE 0x499080] dword_499080 系统公库：卖股入系统 + 意外损失（transferMoney to=-1）
+    //   + 乐透投注/奖金池（sub_4315CC +1000 / 开奖发放清零）
+    int32_t publicFund = 0;
     int32_t stockTotalValue = 0;     // [RE 0x49907C] dword_49907C 股票总市值（Σ基准价×10）
     int32_t marketIndex = 0;         // [RE 0x499078] dword_499078 大盘指数（Σ价格×10）
     float stockGlobalDrift = 0.0f;   // [RE 0x4990EC] dword_4990EC 全局扰动
@@ -477,6 +480,9 @@ struct GameState {
     uint8_t misc37[37] = {};         // [RE 0x496B38] g_miscTable37
     int32_t cardShufflePos = 0;      // [RE 0x4990E0] dword_4990E0
     int32_t misc37Pos = 0;           // [RE 0x4990B4] dword_4990B4
+    // [RE 0x4990B8] g_miscTable36A 乐透号码归属（36 号，0=未售，N=玩家 N-1；
+    //   投注 sub_4315CC/42F7FC 写、开奖 431712 读、破产 sub_40CD87 清该玩家号）
+    uint8_t lotteryNumbers[36] = {};
 
     uint32_t miscTable80[10][2] = {}; // [RE 0x498E28] g_miscTable80
     // [RE 0x497320] byte_497320 **礼物卡池**（8 种可赠卡库存；drawGiftCard 0x445ADA 展开随机抽；

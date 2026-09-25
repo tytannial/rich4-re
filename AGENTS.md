@@ -65,8 +65,20 @@ damagePlayer/demolish/givePlayerItem）；`economy.cpp` deleteMapObject **配对
 **M2 待办**（详见 `docs/reverse/functions/` 各档案「差异」段，按选定路线排序）：
 
 - P2 事件格实现（研究已完成，见 `41982d-p2-events.md`；**得點券/卡片格/監獄/醫院/銀行 ✅
-  2026-09-23**（银行全链含週轉/催收/月度结息/15 号分红），继续：物價面板 → 新聞/命運 → 小游戏/樂透/百貨/魔法屋；
+  2026-09-23**（银行全链含週轉/催收/月度结息/15 号分红），继续：物價面板 → 新聞/命運 → 小游戏/魔法屋；
   面板底座 `ui-controls.md` §25，事件槽 NPC 路面行走待 P5）
+- **P2 樂透（case 9）✅ 2026-09-25**：`lottery_dialog.cpp` + `lottery.h`——投注界面
+  （0x42F7FC：9×4 网格选号/红圈帧 7/已售 -10 变暗/panel[14] FLC 循环/装饰闪烁/钱不足链；AI
+  `cash>1000` 自动随机号）+ 15 号开奖（0x431712+0x43010C：panel[15/16/17]、摇号算法
+  「全玩家 ≤10 注随机否则已售号随机」、中奖 FLC/角色名爆炸气泡/无人累积、人物眨眼·嘴部动画
+  含 0x1000/0x2000 锁存位与覆盖帧持久保留）；数据 `lotteryNumbers`(0x4990B8) +
+  `publicFund`(0x499080，原 stockPublicFund 改名) + 破产清号 + 存档/时光机快照；调试 `Ctrl+Shift+R`
+  保送中奖；详见 `lottery-system.md`、`ui-controls.md` §29
+- **P2 百貨公司（case 15）✅ 2026-09-25**：`shop_dialog.cpp`（0x42E931/0x42D37F——自家赠礼 +
+  人类商店 UI（panel[10] 38 帧：抽屉缓动滑入/店员/招牌动画/切页/卡片·道具买卖/卖出 90%）+
+  AI 自动买卖；`playValueLine` 0x44F230；`drawCardBagAt/drawItemBagAt` 带坐标复用；
+  `landingEvent` case 15（实参 objId=special 6000+n）；调试 `Ctrl+Shift+W`；
+  详见 `42e931-department-store.md`、`ui-controls.md` §28
 - ~~任务 F 建造菜单~~ ✅ 2026-09-25 订正为**查詢面板**（资产/地产/股票清單 + 右侧面板 4 页签；
   工具条 case 6 `sub_424492`→`sub_423CF3`；旧称"建造队列"的 `g_miscTable336`/`sub_428475`
   实为股票交易委托队列，归交易系统待办）

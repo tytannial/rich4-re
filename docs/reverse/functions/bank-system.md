@@ -14,7 +14,7 @@
 | **每日贷款到期** | `sub_436A5A`（0x436A5A，由 `sub_41C84F` 回合开始状态更新 0x41C86D 调用） | 到期前 3 天提醒 → 强制执行 | 同 |
 | **月初结息** | `sub_439BFA`（0x439BFA，advanceDay 新月 0x41D09E） | ✅ 2026-09-23 `month_settle_dialog.cpp`（panel.mkf[25] + 存款 ×1.1 + 排行演出） | 同（全员面板） |
 | **15 号股东大会** | `sub_42BA97`（0x42BA97，advanceDay 0x41D08F） | ✅ 2026-09-23 `dividend_dialog.cpp`（panel.mkf[76] + 持股比例分红） | 同 |
-| **15 号乐透开奖** | `sub_431712`（0x431712，advanceDay 0x41D094） | **后置**（依赖 case 9 投注，TODO(P2 樂透)） | 同 |
+| **15 号乐透开奖** | `sub_431712`（0x431712，advanceDay 0x41D094） | ✅ 2026-09-25 `lottery_dialog.cpp`（**先分红后乐透**；`lottery-system.md`） | 投注 case 9 `lotteryVisit`；AI 自动投注 |
 
 ## 1. 数据与字段
 
@@ -403,7 +403,7 @@ runModal(sub_42B3EB)                    // 确认界面（动画待查）
 | panel.mkf[24] 275,912B | 路过柜员机 UI |
 | panel.mkf[25] 3,603,204B | 月初结息面板（**实测 83 帧**：0 底图 / 1·3·4 消息板 / 2 信息板 / 11-14 行图 / 15-18 立绘 / 19·24 左列 / 47-70 头像 47+3*charIdx） |
 | panel.mkf[76] 511,512B | 股东大会分红（**实测 1 帧 592×432**，黑底 @(24,24)） |
-| panel.mkf[13/15/16/17] | 乐透（后置） |
+| panel.mkf[13/15/16/17] | 乐透 ✅（投注 12/13/14 + 开奖 15/13/16/17，见 `lottery-system.md`） |
 
 ### 7.1 消息文本（BIG5 已解码）
 
@@ -454,7 +454,7 @@ runModal(sub_42B3EB)                    // 确认界面（动画待查）
    `sub_437E61` 全状态机 + `sub_437D1A`/`sub_437DFE` 排行 + FLC 全身像；
    随机微动画未复刻，见 §5 实现状态）
 7. ~~**15 号分红**~~ ✅ 2026-09-23（`dividend_dialog.cpp`：panel[76] + `sub_42BA97` +
-   `sub_42B3EB` 确认界面；乐透开奖留 TODO）
+   `sub_42B3EB` 确认界面）；~~乐透开奖~~ ✅ 2026-09-25（`lottery_dialog.cpp`，先分红后乐透）
 
 ### 待查清单（实现时补逆向）
 

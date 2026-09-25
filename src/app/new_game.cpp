@@ -322,7 +322,7 @@ bool newGameInit(Application& app, bool mode1) {
     }
     state.stockMarketClosed = 0;
     state.stockDivPeriod = 1;
-    state.stockPublicFund = 0;
+    state.publicFund = 0;
     state.marketIndex = 0;
     state.stockGlobalDrift = 0.0f;
     refreshBankStockShares(app); // [RE 0x42915A] 初始交易量

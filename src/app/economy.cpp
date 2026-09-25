@@ -163,7 +163,8 @@ void transferMoney(Application& app, int from, int to, int32_t amount, int flags
     }
 
     if (to == -1) {
-        // 银行/系统（原版 dword_499080 总资金，重写未建模）
+        // [RE 0x41D38C] 系统公库：卖股入系统 / 意外损失 / 乐透奖金池（帮助 idx36）
+        st.publicFund += paid;
     } else if (to <= 100) {
         if (to >= 0 && to < playerCount) {
             if ((flags & 1) != 0) {
@@ -427,6 +428,12 @@ void eliminatePlayer(Application& app, int p) {
     for (auto& s : st.specPts) {
         if (s.owner == p + 1) {
             s.owner = 0;
+        }
+    }
+    // [RE 0x40D1AA] 破产者所购乐透号码作废（g_miscTable36A[n] == p+1 → 0，不退款）
+    for (int n = 0; n < 36; ++n) {
+        if (st.lotteryNumbers[n] == p + 1) {
+            st.lotteryNumbers[n] = 0;
         }
     }
     // 失败流程（原版：无存活玩家 → 1；仅剩人类 → 2/3；重写仅在全灭时回主菜单）

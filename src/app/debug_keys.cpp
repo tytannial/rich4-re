@@ -8,6 +8,7 @@
 #include "game/app/dividend.h"
 #include "game/app/facility_dialog.h"
 #include "game/app/game_loop.h"
+#include "game/app/lottery.h"
 #include "game/app/map_objects.h"
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
@@ -188,6 +189,20 @@ bool handleDebugKey(Application& app, int code, bool shift) {
                 } else {
                     RICH4_LOGW("debug: Ctrl+Shift+U no bank cellEnt (specPt %d)", bankIdx);
                 }
+                return true;
+            }
+            case 'r': { // 乐透测试：当前玩家保送中奖（清号 → 11 注 >10 → 开奖从已售号随机）并立即开奖
+                std::memset(st.lotteryNumbers, 0, sizeof(st.lotteryNumbers));
+                for (int i = 0; i < 11; ++i) {
+                    st.lotteryNumbers[i] = static_cast<uint8_t>(cur + 1);
+                }
+                if (st.publicFund < 3000) {
+                    st.publicFund = 3000; // 调试注入奖金池，便于观察金额显示
+                }
+                RICH4_LOGI("debug: Ctrl+Shift+R lottery 11 notes for player %d, pool=%d -> draw UI",
+                           cur, st.publicFund);
+                lotteryDrawMeeting(app);
+                renderGameFrame(app);
                 return true;
             }
             case 'j': // 当前玩家入狱 3 天（jailPlayer 0x43D593：移格/标志/FLC 538/保险理赔）

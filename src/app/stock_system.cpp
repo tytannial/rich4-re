@@ -280,7 +280,7 @@ int sellStock(Application& app, int player, int stock, int count, bool toBank) {
     if (toBank) {
         st.players[player].bank += amount;
     } else {
-        st.stockPublicFund += amount;
+        st.publicFund += amount;
     }
     RICH4_LOGI("sellStock: player %d stock %d count %d amount %d toBank=%d (RE 0x428E23)", player,
                stock, count, amount, toBank ? 1 : 0);
