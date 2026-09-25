@@ -7,7 +7,9 @@
 #include "game/app/event_stack.h"
 #include "game/app/economy.h"
 #include "game/app/map_tables.h"
+#include "game/app/turn_system.h"
 #include "game/application.h"
+#include "game/core/encoding.h"
 #include "game/core/log.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
@@ -374,8 +376,120 @@ void drawAssetPage(QueryPanelState& s) {
     }
 }
 
+// [RE 0x4225A3] 地產清單页：5 子页签 + 5 列列表（10 行/页）
+// 依据: 0x4225A3 反编译; 子页签底 panel[9] 帧 11 @ (120+75k,64)、文字 off_4753D4 @ (+37,80)；
+//   列表行 y=144+32*row；列 x = 168（地點 align2）/ 264（開發狀況）/ 394（價 格 align6）/
+//   490（收 費 align6）/ 540（租 期 align2）；estate 字体 16/0x101010、corp 16/0x101110；
+//   價格 = M×(priceAdd+priceBase×level) / M×(buildPrice+feeTable[0]×sub)；
+//   收費 estate 普通 = estateRouteRent(地主, 同街)，連鎖行 = 查看玩家連鎖總租；
+//   corp = M×feeTable[sub]；租期 = "%02d/%d/%d"（expireDate 年%100/月/日）或「無限期」
 void drawLandPage(QueryPanelState& s) {
-    (void)s; // 功能点 3 实现（5 子页签 + 列表）
+    GameState& st = s.app->gameState();
+    Surface& dst = s.app->surface();
+    TextRenderer& t = s.app->text();
+    const int sel = s.selPlayer;
+    char buf[32];
+
+    // 5 子页签
+    for (int i = 0; i < 5; ++i) {
+        const int sx = kSubTabX + kSubTabW * i;
+        if (i == s.subPage && s.sheet.frameCount() > 11) {
+            blitElement(dst, s.sheet.frame(11), sx, kSubTabT, false);
+        }
+        t.setFont(20, kTextDark, 0, 2, 0);
+        t.drawText(dst, kQuerySubPageNames[i], sx + 37, kSubTabT + 16, 2);
+    }
+    // 列头（sub_422443 画在帧 1 上：off_4753E8 @ x=168/264/356/448/540 y=112）
+    static const int kColX[5] = {168, 264, 356, 448, 540};
+    for (int i = 0; i < 5; ++i) {
+        t.setFont(20, kTextDark, 0, 2, 0);
+        t.drawText(dst, kQueryLandCols[i], kColX[i], 112, 2);
+    }
+
+    // 查看玩家的連鎖店總租（原版 v3 = estateRouteRent(dword_48C27C + 1, 0)）
+    int chainCount = 0;
+    for (size_t i = 1; i < st.estates.size(); ++i) {
+        if (st.estates[i].owner == sel + 1 && st.estates[i].type != 0) {
+            ++chainCount;
+        }
+    }
+    const int32_t chainRent = chainCount * 2000 * st.moneyMul;
+
+    for (int row = 0; row < s.pageShown; ++row) {
+        const int idx = s.pageStart + row;
+        if (idx < 0 || idx >= static_cast<int>(s.assetIds.size())) {
+            break;
+        }
+        const uint16_t id = s.assetIds[idx];
+        const int y = kListRowY0 + kListRowStep * row;
+        if (id >= 4000) {
+            // 商業用地/设施行（0x101110）
+            const size_t ci = id - 4000;
+            if (ci >= st.corps.size()) {
+                continue;
+            }
+            const Corp& cp = st.corps[ci];
+            const std::string name = big5ToUtf8(reinterpret_cast<const char*>(cp.pad4),
+                                                sizeof(cp.pad4));
+            t.setFont(16, 0x101110, 0, 2, 1);
+            t.drawText(dst, name.c_str(), kColX[0], y, 2);
+            if (cp.sub != 0 && cp.type <= 4) {
+                t.drawText(dst, kBuildingNames[6 + cp.type], kColX[1], y, 2);
+            } else {
+                t.drawText(dst, kBuildingNames[0], kColX[1], y, 2);
+            }
+            std::snprintf(buf, sizeof(buf), "%d",
+                          st.moneyMul * (cp.buildPrice + cp.feeTable[0] * cp.sub));
+            t.drawText(dst, buf, kColX[2] + 38, y, 6);
+            const int fee = (cp.type != 0 && cp.sub != 0 && cp.sub < 6)
+                                ? st.moneyMul * cp.feeTable[cp.sub]
+                                : 0;
+            std::snprintf(buf, sizeof(buf), "%d", fee);
+            t.drawText(dst, buf, kColX[3] + 42, y, 6);
+            if (cp.expireDate != 0) {
+                std::snprintf(buf, sizeof(buf), "%02d/%d/%d",
+                              static_cast<int>((cp.expireDate >> 16) % 100),
+                              static_cast<int>((cp.expireDate >> 8) & 0xF),
+                              static_cast<int>(cp.expireDate & 0xFF));
+                t.drawText(dst, buf, kColX[4], y, 2);
+            } else {
+                t.drawText(dst, "無限期", kColX[4], y, 2);
+            }
+        } else {
+            // 住宅用地产行
+            const size_t ei = id - 2000;
+            if (ei >= st.estates.size()) {
+                continue;
+            }
+            const Estate& es = st.estates[ei];
+            const std::string name = big5ToUtf8(es.name, sizeof(es.name));
+            t.setFont(16, kTextDark, 0, 2, 1);
+            t.drawText(dst, name.c_str(), kColX[0], y, 2);
+            int32_t fee = 0;
+            if (es.type != 0) {
+                t.drawText(dst, "連鎖店", kColX[1], y, 2);
+                fee = chainRent;
+            } else {
+                const int lv = es.level < 17 ? es.level : 0;
+                t.drawText(dst, kBuildingNames[lv], kColX[1], y, 2);
+                fee = estateRouteRent(st, es.owner, es);
+            }
+            std::snprintf(buf, sizeof(buf), "%d",
+                          st.moneyMul * (es.priceAdd + es.priceBase * es.level));
+            t.drawText(dst, buf, kColX[2] + 38, y, 6);
+            std::snprintf(buf, sizeof(buf), "%d", fee);
+            t.drawText(dst, buf, kColX[3] + 42, y, 6);
+            if (es.expireDate != 0) {
+                std::snprintf(buf, sizeof(buf), "%02d/%d/%d",
+                              static_cast<int>((es.expireDate >> 16) % 100),
+                              static_cast<int>((es.expireDate >> 8) & 0xF),
+                              static_cast<int>(es.expireDate & 0xFF));
+                t.drawText(dst, buf, kColX[4], y, 2);
+            } else {
+                t.drawText(dst, "無限期", kColX[4], y, 2);
+            }
+        }
+    }
 }
 
 void drawStockPage(QueryPanelState& s) {
