@@ -25,6 +25,7 @@
 #include "game/app/game_loop.h"
 #include "game/app/item_lines.h"
 #include "game/app/jail_dialog.h"
+#include "game/app/lab_dialog.h"
 #include "game/app/lottery.h"
 #include "game/app/magic_house_dialog.h"
 #include "game/app/map_objects.h"
@@ -1786,8 +1787,7 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                 // 研究所（type4）owner 停留：研发道具（labDevelopDialog 0x44101D）
                 // 条件：sub!=0 且 flag(+28) 低半字节为 0（0x41B0FC）
                 if (cp.sub != 0 && (cp.flag & 0x0F) == 0) {
-                    RICH4_LOGI("lab develop dialog TODO (corp %d sub %u, RE 0x41B106)", idx,
-                               cp.sub);
+                    labDevelopDialog(app, cp);  // [RE 0x44101D] 人类选/变暗未解锁，AI 恒选最高解锁项
                 }
                 goto landingTail;
             } else {
@@ -2848,6 +2848,27 @@ void updatePlayerStates(Application& app, int p) {
             loadWalkResources(st, p);  // [RE 0x41CD83]
             RICH4_LOGI("temp vehicle expired: p%d travel=%u dice=%u (RE 0x41C84F)", p, pl.travel,
                        pl.diceCount);
+        }
+    }
+    // [RE 0x41CD8C] 研究所研发倒计时：仅当前玩家的 type4，归零产出道具
+    for (Corp& cpr : st.corps) {
+        if (cpr.type == 4 && cpr.researchLeft != 0 &&
+            cpr.owner == static_cast<uint8_t>(p + 1)) {
+            if (cpr.researchItem > cpr.sub) {
+                cpr.researchLeft = 0;  // [RE 0x41CE2F] 研究中被拆到 sub<item → 作废
+            } else {
+                --cpr.researchLeft;
+                if (cpr.researchLeft == 0) {
+                    renderGameFrame(app);  // [RE 0x41CDCE] refreshGameUi(0,0,1)
+                    char labMsg[64];
+                    std::snprintf(labMsg, sizeof(labMsg), "%s開發成功！",
+                                  kItemBagNames[8 + cpr.researchItem]);
+                    showMessage(app, labMsg, 1500);                 // [RE 0x41CDFC]
+                    givePlayerItem(st, p, cpr.researchItem + 8);    // [RE 0x41CE25] item id=+8
+                    RICH4_LOGI("lab done: p%d researchItem=%u -> %s (RE 0x41C84F)", p,
+                               cpr.researchItem, kItemBagNames[8 + cpr.researchItem]);
+                }
+            }
         }
     }
     RICH4_LOGI("player states: p=%d flags=%08X byte54=%u state37=%u ins=%u bankRefuse=%u bankFin=%u "
