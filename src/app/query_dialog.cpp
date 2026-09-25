@@ -492,8 +492,33 @@ void drawLandPage(QueryPanelState& s) {
     }
 }
 
+// [RE 0x423070] 股票清單页：12 支股票名/持有股数/市值
+// 依据: 0x423070 反编译 page==2 分支; 列头 off_475448 @ x=204/332/476 y=68；
+//   行 y=100+32*i；股票名 kStockNames[4*mode+map] @ 204 align2、
+//   持有張數 @ 384 align6、總市價 = 股数×现价 @ 536 align6；字体 16 深灰
 void drawStockPage(QueryPanelState& s) {
-    (void)s; // 功能点 4 实现（12 支持仓/市值）
+    GameState& st = s.app->gameState();
+    Surface& dst = s.app->surface();
+    TextRenderer& t = s.app->text();
+    const int sel = s.selPlayer;
+    const int gn = st.gameMode * 4 + st.mapIndex;
+    char buf[32];
+
+    static const int kStockColX[3] = {204, 332, 476};
+    t.setFont(20, kTextDark, 0, 2, 0);
+    for (int j = 0; j < 3; ++j) {
+        t.drawText(dst, kQueryStockCols[j], kStockColX[j], 68, 2);
+    }
+    t.setFont(16, kTextDark, 0, 2, 0);
+    for (int i = 0; i < 12; ++i) {
+        const int y = 100 + 32 * i;
+        t.drawText(dst, kStockNames[gn][i], kStockColX[0], y, 2);
+        fmtMoney(buf, st.playerShares[sel][i]);
+        t.drawText(dst, buf, kStockColX[1] + 52, y, 6);
+        const int value = static_cast<int>(st.playerShares[sel][i] * st.stocks[i][5]);
+        fmtMoney(buf, value);
+        t.drawText(dst, buf, kStockColX[2] + 60, y, 6);
+    }
 }
 
 // [RE 0x423CF3] sub_423CF3 模态窗口过程

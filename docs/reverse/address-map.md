@@ -2,7 +2,7 @@
 
 > 由 `python tools/re_map.py` 自动生成，勿手改。
 
-## RE 映射（200 条）
+## RE 映射（201 条）
 
 | 地址 | 原符号 | 重写位置 | 依据 |
 |------|--------|----------|------|
@@ -101,6 +101,7 @@
 | `0x41E345` | aiDialog（託管AI | `src/app/ai_dialog.cpp:394` | 0x41E345 反编译; panel.mkf[77] 帧 0 画布 + 槽数组 byte_48BE34 只列入 alive&1 的人类玩家（最多 4），默认选中当前玩家；runModal(sub_41DDA9) |
 | `0x4225A3` | 地產清單页 | `src/app/query_dialog.cpp:379` | 0x4225A3 反编译; 子页签底 panel[9] 帧 11 @ (120+75k,64)、文字 off_4753D4 @ (+37,80)； 列表行 y=144+32*row；列 x = 168（地點 align2）/ 264（開發狀況）/ 394（價 格 align6）/ 490（收 費 align6）/ 540（租 期 align2）；estate 字体 16/0x101010、corp 16/0x101110； 價格 = M×(priceAdd+priceBase×level) / M×(buildPrice+feeTable[0]×sub)； 收費 estate 普通 = estateRouteRent(地主, 同街)，連鎖行 = 查看玩家連鎖總租； corp = M×feeTable[sub]；租期 = "%02d/%d/%d"（expireDate 年%100/月/日）或「無限期」 |
 | `0x423070` | 資產清單页 | `src/app/query_dialog.cpp:258` | 0x423070 反编译 page==0 分支（330/602/250 右对齐，字体 28；道具 panel[74] 图标 + 数量，卡片 kCardNames[id]）；0x422443 画 12 字段标签（x=142/430 两列 + 第二排 142） |
+| `0x423070` | 股票清單页 | `src/app/query_dialog.cpp:495` | 0x423070 反编译 page==2 分支; 列头 off_475448 @ x=204/332/476 y=68； 行 y=100+32*i；股票名 kStockNames[4*mode+map] @ 204 align2、 持有張數 @ 384 align6、總市價 = 股数×现价 @ 536 align6；字体 16 深灰 |
 | `0x4239B9` | playerTotalAssets | `src/app/economy.cpp:29` | 0x4239B9 反编译; bank + cash - loan + Σ(12股×现价 flt_496994) + 地产(priceAdd(+28) + [type(+24)? priceBase(+30) : level(+26)? priceBase×level]) + 公司(buildPrice(+34) + feeTable[0](+36) × sub(+26))；胜利判定输入 |
 | `0x423ACF` | updateMoneyIndex | `src/app/economy.cpp:65` | 0x423ACF 反编译; g_moneyMul = max(旧值, Σ存活 playerTotalAssets / 存活数 / g_startMoneyVal) （只升不降；advanceDay 每日调用 0x41CFBF） 差异: 存活数为 0 / 起始资金 ≤0 时保持原值（原版未防护除零） |
 | `0x423B3B` | collectOwnedAssetIds | `src/app/query_dialog.cpp:75` | 0x423B3B 反编译; mode 0=estate+corp 1=estate 2=corp 3=有建筑普通地产 （level≠0 && type==0） 4=有建筑连锁店（level≠0 && type≠0） |
