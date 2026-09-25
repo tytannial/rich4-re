@@ -156,8 +156,8 @@ return v;
 
 - 去重：同一文本指针连续调用只显示一次（`dword_4762C8`）
 - p&0x8000 → 不 refreshGameUi；p 在监/院/挂起状态（`BYTE1(dword_496B9A[26p])`/`playerState37[104p]`/`byte_496B9E[104p]`）→ **不显示**
-- 演出：tip 气泡框 `g_tipFrame`（0x48BAD8）@(220,130) + 角色头像
-  `pieceSprites[13p]` 帧 `expr+1` @(170,130)
+- 演出：tip 气泡框 `g_tipFrame`（0x48BAD8）**帧 6**（`+84`，271×199 红边云朵带下指尾，
+  **勿误用帧 5 消息框**）@(220,130) + 角色头像 `pieceSprites[13p]` 帧 `expr+1` @(170,130)
 - 文本格式：
   - `#NNNN文本` → `drawText` 解析语音（重写 text.cpp 已处理 `#NNNN`→playVoice）
   - `#NNNN@MM` → 语音 + 显示角色表情帧 `MM-1`（`dword_48BAD4` 表情图；MM=19/20）

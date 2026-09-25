@@ -341,9 +341,12 @@ void pressDown(Surface& dst, int x, int y, int w, int h, int shift, const uint8_
 | 物件信息气泡 `object_tip` | 0x417559 | 像素掩码拾取（§2）取最上层 → 生成多行文本 → **方向感知**画框 `data.mkf[517]` 帧 0..3（`v5 = (y-40<框高)?+1 | (x>440-框宽)?+2`，帧自带方向偏移），逐行 `align 2`、行距 18 |
 | 悬停信息条 | 0x41DB91 等 | 悬停行画变暗条 + 居中名（§4/§7） |
 | 卡片获得显示 `showCardGet` | 0x441F73 | 卡片图 `data.mkf[570+id]`（165×256 **无头 RGB555** @(138,200) 不透明拷贝）+ 帧 5 提示框 @(220,129) + 文本；音效槽 23；`runModal(...,16ms)` 停留 1500ms 吞输入（重写逐帧 `renderGameFrame` 免背景保存/恢复） |
+| 角色台词气泡 `playLine` | 0x44EF41 | `data.mkf[517]` **帧 6 云朵气泡**（`+84`，271×199，**非帧 5 消息框**）@(220,130) + 头像 `pieceSprites[13p]` 帧 `expr+1` @(170,130) + 文本 @(200,130) 或 `@MM` 表情 `data.mkf[519]` 帧 MM-1 @(240,130)；`#NNNN` 前缀播语音；同指针去重（`dword_4762C8`）；监/院/挂起态不显示；1000ms |
 
-**提示框族资源**：`data.mkf[517]`（`g_tipFrame`，`st.estateTiles`）——帧 4 设施图标底、**帧 5 通用提示框**、
-帧 0..3 方向气泡、帧 18..21 小地图旋转箭头。
+**提示框族资源**：`data.mkf[517]`（`g_tipFrame`，`st.estateTiles`）——帧 4 设施图标底、**帧 5 通用提示框**（249×170
+绿装饰框，`showMessage`/`askDialog`/`roulettePrompt`/`showCardGet`/老虎机/设施标题共用，`+72`）、
+**帧 6 角色台词气泡**（271×199 红边云朵带下指尾，`sub_44EF41` 专用，`+84`，勿与帧 5 混用）、
+帧 0..3 方向气泡、帧 8..17 数字、帧 18..21 小地图旋转箭头。
 
 ## 16. HUD 常驻控件（`renderGameFrame`/`renderGamePanel`，0x417E26/0x416E6D…）
 

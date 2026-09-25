@@ -41,8 +41,8 @@ void drawItemLine(ItemLineCtx& ctx) {
     Surface& dst = app.surface();
     renderGameFrame(app);
     const UiImage& tip = st.estateTiles;  // [RE 0x48BAD8] g_tipFrame = data.mkf[517]
-    if (tip.frameCount() > 5) {
-        blitElement(dst, tip.frame(5), 220, 130, false);  // [RE 0x456418]
+    if (tip.frameCount() > 6) {
+        blitElement(dst, tip.frame(6), 220, 130, false);  // [RE 0x44F033] g_tipFrame+84 = 帧6 云朵气泡
     }
     // 说话头像 = pieceSprites[p] 帧 expr+1（expr=0 → 帧 1）[RE 0x44EF41]
     if (ctx.player >= 0 && ctx.player < 9 && st.pieceSprites[ctx.player].frameCount() > 1) {
@@ -61,7 +61,7 @@ void drawItemLine(ItemLineCtx& ctx) {
         }
         return;
     }
-    app.text().setFont(16, 0xF0F0F0, 0x101010, kTextStyleShadow | kTextStyleBold, 1);
+    app.text().setFont(16, 0x101010, 0, kTextStyleBold, 1);  // [RE 0x44EFD2] setTextFont(16,0x101010,0,2,1) 黑字
     app.text().drawText(dst, t, 200, 130, 5);  // [RE 0x44FABC]
 }
 
@@ -86,7 +86,8 @@ bool itemLineHandler(const SDL_Event* event, void* user) {
 }  // namespace
 
 // [RE 0x44EF41] playLine：通用角色气泡台词（原 sub_44EF41 本体）
-// 依据: 0x44EF41 反编译；tip 框 data.mkf[517] 帧 5 @(220,130) + 头像 pieceSprites[p] 帧 1
+// 依据: 0x44EF41 反编译；tip 框 data.mkf[517] 帧 6（g_tipFrame+84，271×199 红边云朵气泡）@(220,130)
+//   + 头像 pieceSprites[p] 帧 1
 //   @(170,130) + 文本 @(200,130) 或 '@MM' 表情 data.mkf[519] 帧 MM-1 @(240,130)；
 //   时长 1000ms；同文本指针去重（dword_4762C8）；状态中（stateFlags BYTE1/state37/byte54）不显示
 void playLine(Application& app, int player, const char* line) {
