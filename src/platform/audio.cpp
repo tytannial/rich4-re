@@ -86,6 +86,28 @@ bool parseWav(const std::vector<uint8_t>& wav, WavInfo& info) {
     return info.pcm != nullptr && info.size > 0;
 }
 
+// 8bit mono PCM 线性重采样（Speaking.mkf 部分语音为 44100Hz，原版 DirectSound 按
+// WAV 头 nSamplesPerSec 建 buffer 硬件重采样 [RE 0x453DCF memcpy fmt→DSBUFFERDESC]；
+// 重写混音固定 sampleRate → 加载时降采样）
+std::vector<uint8_t> resample8Mono(const uint8_t* src, size_t srcN, uint32_t srcRate,
+                                   uint32_t dstRate) {
+    if (srcN == 0 || srcRate == 0 || dstRate == 0) {
+        return {};
+    }
+    const size_t dstN = srcN * dstRate / srcRate;
+    std::vector<uint8_t> dst(dstN);
+    for (size_t i = 0; i < dstN; ++i) {
+        const double pos = static_cast<double>(i) * srcRate / dstRate;
+        const size_t i0 = static_cast<size_t>(pos);
+        const double frac = pos - i0;
+        const double s0 = src[i0];
+        const double s1 = (i0 + 1 < srcN) ? src[i0 + 1] : s0;
+        int v = static_cast<int>(s0 + (s1 - s0) * frac + 0.5);
+        dst[i] = static_cast<uint8_t>(v < 0 ? 0 : (v > 255 ? 255 : v));
+    }
+    return dst;
+}
+
 // ---- 音乐解码器（stb_vorbis；44100 stereo → 22050 mono）----
 class MusicDecoder {
 public:
@@ -408,12 +430,18 @@ bool Audio::playVoice(int voiceId) {
             return false;
         }
         WavInfo info;
-        if (!parseWav(*blob, info) || info.channels != 1 || info.bits != 8 ||
-            info.rate != static_cast<uint32_t>(m_impl->sampleRate)) {
-            RICH4_LOGW("playVoice: Speaking.mkf[%d] not 22050/8bit/mono RIFF", voiceId);
+        if (!parseWav(*blob, info) || info.channels != 1 || info.bits != 8) {
+            RICH4_LOGW("playVoice: Speaking.mkf[%d] not 8bit/mono RIFF", voiceId);
             return false;
         }
-        auto pcm = std::make_shared<std::vector<uint8_t>>(info.pcm, info.pcm + info.size);
+        std::vector<uint8_t> resampled;
+        if (info.rate != static_cast<uint32_t>(m_impl->sampleRate)) {
+            resampled = resample8Mono(info.pcm, info.size, info.rate,
+                                      static_cast<uint32_t>(m_impl->sampleRate));
+        }
+        const uint8_t* src = resampled.empty() ? info.pcm : resampled.data();
+        const size_t srcN = resampled.empty() ? info.size : resampled.size();
+        auto pcm = std::make_shared<std::vector<uint8_t>>(src, src + srcN);
         it = cache.emplace(voiceId, Impl::PcmBuffer(std::move(pcm))).first;
     }
     Impl::Voice voice;

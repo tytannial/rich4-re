@@ -83,7 +83,7 @@
 
 | 原版 | 重写 | 说明 |
 |------|------|------|
-| `sub_45441A`（drawText 遇 `#NNNN` 播语音；查 g_effectVolume） | `Audio::playVoice(id)`（`text.cpp` drawText 解析 4 位十进制触发） | **单通道**：新语音打断旧（对齐 sub_454493 先停后播）；Speaking.mkf = 22050/8bit/mono RIFF（1374 项，懒加载缓存）；effectVolume=0 不播 |
+| `sub_45441A`（drawText 遇 `#NNNN` 播语音；查 g_effectVolume） | `Audio::playVoice(id)`（`text.cpp` drawText 解析 4 位十进制触发） | **单通道**：新语音打断旧（对齐 sub_454493 先停后播）；Speaking.mkf = 8bit/mono RIFF（1374 项，懒加载缓存）；**采样率混合：1184 条 22050 + 190 条 44100**（idx 266..1238 散布，含忍太郎 266-281/宫本宝藏 330-345 道具台词段）——原版 `sub_453DCF` 把 WAV fmt 原样填 DSBUFFERDESC 由 DirectSound 硬件重采样；重写混音固定 22050 → `resample8Mono` 线性降采样；effectVolume=0 不播 |
 | `sub_4544B9`（Status&PLAYING；完成即释放） | `Audio::voicePlaying()` | 语音声部 = `voices[slot == -2]`，播完由 update 清理 |
 | `sub_454493`（Stop+Release） | `Audio::stopVoice()` | |
 | `sub_4549CF`（musicPlayScene；当前可选曲目时先 `sub_454B1A` push） | `Audio::pushSceneMusic(i)` | 仅 track 1-8 入栈（场景音乐重复进入不叠栈，对齐 byte_47E772<0 判定） |
