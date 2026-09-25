@@ -6,8 +6,9 @@
 >
 > 状态（2026-09-26）：✅ **已实现**（`src/app/news_dialog.cpp` + `include/game/app/news_dialog.h`；
 > `newsEvent`/`newsEventCheck` 36 条/`g_newsFuncs` 36 效果全实现；调试 `Ctrl+Shift+A`）。
-> 未做：**拍卖 idx 7**（`sub_43BDE5` 桩，下一轮）、语音 `sub_44EF41` / 浮动数字 `sub_44F354`
-> （`TODO(P4)`）。高亮（estate+corp）已按原版 `g_pickMask` 形状修复（2026-09-26，见 §7）。
+> 未做：语音 `sub_44EF41` / 浮动数字 `sub_44F354`（`TODO(P4)`）。
+> **拍卖 idx 7 ✅ 2026-09-26**（`auction_dialog.cpp` `runAuction`，价款入公库）。
+> 高亮（estate+corp）已按原版 `g_pickMask` 形状修复（2026-09-26，见 §7）。
 
 ## 0. 总览
 
@@ -199,13 +200,16 @@ newsEvent:
 | 玩家头像 | `g_pieceSprites[13*玩家] + 帧`（+36=帧3 豪雨/交通、+48=帧4 各类列表、+60=帧5 释放/奖励）@ x=390 |
 | 阻塞时长 | 2400ms（`sub_4544F6`）；部分函数内部另有 `sub_4528B9(300/500)` 阶段 1 延时 |
 
-## 5. 拍卖（idx 7，另开一轮）
+## 5. 拍卖（idx 7，**✅ 2026-09-26 已实现**）
 
-`sub_43BDE5(a1=-1, a2=objId, a3=1)` 0x43BDE5（0xB16B）：土地拍卖 UI。
-- 计算底价：estate `(priceAdd + priceBase*level) × M` / corp `(buildPrice + feeTable[0]*sub) × M`；
-- 载入 panel.mkf[26]（多帧）、逐玩家头像/现金、`runModal(sub_43A2DD)` 竞价、获胜者 `owner=胜者` + `transferMoney(胜者-1, a1, 成交价, 0)` + 期限日期；
-- 同时被破产清算 `sub_40CD87`、魔法屋 `sub_431CAA`、卡片 `sub_443225` 调用（共用设施）。
-- **重写实现留待下一轮**；本轮 idx 7 桩：日志 + `TODO(拍卖)`。
+`runAuction(a1=-1, a2=objId, a3=1)` 0x43BDE5：土地拍卖 UI（重写 `src/app/auction_dialog.cpp`）。
+- 计算底价：`M × (int)(base × (1 + level×0.5))`（estate+28 / corp+34 基价，+26 等级）——
+  **订正**：非旧记 `(priceAdd+priceBase*level)`，实测公式为基价×(1+等级×0.5)；
+- panel.mkf[26]（184 帧）、逐玩家头像/现金、`runModal(0x43A2DD)` 竞价（7 按钮 PASS/+100..+10000/
+  Give up + AI 出价公式 0x439F0D）、获胜者 `owner=胜者` + `transferMoney(胜者-1, a1, 成交价, 0)`
+  （a1=-1 → 入公库）+ 地权期限；
+- 同时被魔法屋惩罚 11（seller=玩家）调用（破产清算 `sub_40CD87`、卡片 `sub_443225` 复用待查）。
+- 全部细节/帧表/状态机见 **`43bde5-auction.md`**。
 
 ## 6. 通用辅助 / 共享尾部
 
@@ -257,7 +261,8 @@ newsEvent:
 
 ## 8. 待深入清单
 
-- [ ] `sub_43BDE5` / `sub_43A2DD` 拍卖 UI（下一轮）
+- [x] `sub_43BDE5` / `sub_43A2DD` 拍卖 UI —— **2026-09-26 完成**（`auction_dialog.cpp`，
+      见 `43bde5-auction.md`）
 - [ ] `sub_441210` 卡片分支（`sub_4413AD`/`sub_444BB2`/`sub_44476A`）→ P4
 - [ ] `dword_4990DC`（idx 26 暂停交易天数）消费点与 `advanceDay` 递减
 - [ ] `stockNewsApply` 与重写 `stockTick` 的精确对齐（`flt_49699C` 动量字段是否已建模）

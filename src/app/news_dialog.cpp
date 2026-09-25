@@ -6,7 +6,8 @@
 //   440×480，用帧 0）+ data.mkf[441+idx] 插画（388×251 RGB555 @25,44）+ 标题 @(24,8) →
 //   效果函数(0) → 全屏 blt → 阻塞 2400ms → 效果函数(1) → 释放。
 // 重写：单 Surface 事件驱动，进入时绘制一次；runModal 每 tick renderFrame 呈现。
-// 差异: 语音 sub_44EF41 / 浮动数字 sub_44F354 → TODO(P4)；idx 7 拍卖 sub_43BDE5 → TODO(拍卖)。
+// 差异: 语音 sub_44EF41 / 浮动数字 sub_44F354 → TODO(P4)；idx 7 拍卖 ✅ 2026-09-26
+//   （auction_dialog.cpp runAuction 0x43BDE5，价款入公库）。
 
 #include "game/app/news_dialog.h"
 
@@ -19,6 +20,7 @@
 #include <string>
 #include <vector>
 
+#include "game/app/auction_dialog.h"
 #include "game/app/economy.h"
 #include "game/app/event_common.h"
 #include "game/app/event_stack.h"
@@ -774,8 +776,7 @@ std::vector<int> collectUnownedObjIds(const GameState& st) {
 }
 
 // [RE 0x449735] idx 7：公開拍賣%s 公有土地一處
-// [TODO 拍卖] 原版阶段 1 = sub_43BDE5(-1, objId, 1) 土地拍卖 UI（panel[26] 多帧 +
-//   竞价 runModal 0x43A2DD + 成交转账）——独立子任务，另开一轮实现。
+//   阶段 1 = runAuction(-1, objId, 1)（0x43BDE5，auction_dialog.cpp）——价款入公库。
 void evt07_landAuction(NewsCtx& ctx, int phase) {
     GameState& st = ctx.app->gameState();
     if (phase == 0) {
@@ -783,7 +784,7 @@ void evt07_landAuction(NewsCtx& ctx, int phase) {
         ctx.targetObjId = objId;
         ctx.targetParam = 0;
         if (objId > 0) {
-            // [RE 0x44980C] 原版 g_newsParam = 坐标打包 x|(y<<16)（拍卖模块未接，仅记录）
+            // [RE 0x44980C] 原版 g_newsParam = 坐标打包 x|(y<<16)
             const int16_t x = (objId < 4000) ? st.estates[objId - 2000].x : st.corps[objId - 4000].x;
             const int16_t y = (objId < 4000) ? st.estates[objId - 2000].y : st.corps[objId - 4000].y;
             ctx.targetParam = (static_cast<int>(x) & 0xFFFF) | (static_cast<int>(y) << 16);
@@ -793,7 +794,10 @@ void evt07_landAuction(NewsCtx& ctx, int phase) {
         drawEffectText(ctx, text, 310);
         return;
     }
-    RICH4_LOGI("news: event 7 auction TODO (RE 0x4498A1 objId=%d param=0x%X)", ctx.targetObjId,
+    if (ctx.targetObjId > 2000 && ctx.targetObjId < 6000) {
+        runAuction(*ctx.app, -1, ctx.targetObjId, true); // [RE 0x4498A1 sub_43BDE5(-1, obj, 1)]
+    }
+    RICH4_LOGI("news: event 7 auction done (RE 0x4498A1 objId=%d param=0x%X)", ctx.targetObjId,
                ctx.targetParam);
 }
 
