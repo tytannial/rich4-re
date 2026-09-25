@@ -3,6 +3,8 @@
 #include <cstdio>
 #include <cstring>
 
+#include "game/app/date_util.h"
+#include "game/app/economy.h"
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
 #include "game/application.h"
@@ -118,40 +120,139 @@ void drawPlayerBar(Application& app) {
     app.text().drawText(dst, buf, 634, 63, 1);
 }
 
-// [RE 0x415F69] 玩家信息面板（布局 0/1，440,0-640,280）— 阶段 1 简化
-// 差异: 4 页签（資金/地產/股票/其他）切换与地產/股票统计阶段 2 接入
+// [RE 0x415F69] 玩家信息面板（布局 0/1，440,0-640,280）
+// 依据: 0x415F69 反编译; 背景帧 = panel.mkf[0] 帧 panelTab（dword_48BE24[玩家]）；
+//   物价指数 "物價指數  %d" @ (450,260) font12；
+//   4 页签资金/地產/股票/其他 @ (627, 35/108/181/254) font18（当前页 0x101010 / 其他 0x404040）；
+//   色条 fillRect(523,57,86,12,0)+fillRect(522,56,86,12,玩家色)、棋子 @ (482,40)、
+//   同盟头像 pieceSprites[ally-1] 帧 2 @ (524,64)、玩家名 @ (564,40) font22；
+//   内容 font18 数值 @ (600, 102/166/230) 右上对齐：
+//     0 資金 = 現金/存款/總資產（"$"+千分位）；1 地產 = 土地(estate+corp)/連鎖店/設施；
+//     2 股票 = 總市值(Σ股数×现价)/成本(Σ股数×均价)/經營權家数；3 其他 = 點券/貸款/保險期
+//     （"%d天"）+ 貸款剩餘天數 @ (500,146) font12
+// 差异: 事件槽回合（currentPlayer≥玩家数）NPC 面板分支待 P5；脏区标志 dword_475110&0xC 忽略（逐帧重绘）
 void drawPlayerInfoPanel(Application& app) {
     GameState& state = app.gameState();
     Surface& dst = app.surface();
     if (state.panelFrame0.frameCount() <= 0) {
         return;
     }
-    blitElementOpaque(dst, state.panelFrame0.frame(0), 440, 0);
     const int v1 = state.currentPlayer;
-    if (v1 >= state.playerCount) {
-        return;
+    if (v1 < 0 || v1 >= state.playerCount) {
+        return; // 事件槽分支（帧 6 + NPC 名 + 棋子外观）待 P5
     }
     const Player& p = state.players[v1];
+    const int tab = p.panelTab & 3;
+    if (tab < state.panelFrame0.frameCount()) {
+        blitElementOpaque(dst, state.panelFrame0.frame(tab), 440, 0);
+    }
+    char buf[32];
+    // 物价指数
+    app.text().setFont(12, kTextDark, 0, 2, 1);
+    std::snprintf(buf, sizeof(buf), "物價指數  %d", state.moneyMul);
+    app.text().drawText(dst, buf, 450, 260, 0);
+    // 4 页签
+    static const int kTabY[4] = {35, 108, 181, 254};
+    for (int i = 0; i < 4; ++i) {
+        app.text().setFont(18, (i == tab) ? kTextDark : 0x404040, 0, 2, 0);
+        app.text().drawText(dst, kTabText[i], 627, kTabY[i], 3);
+    }
+    // 色条 + 棋子 + 同盟 + 名字
+    dst.fillRect(523, 57, 0x56, 12, 0);
+    dst.fillRect(522, 56, 0x56, 12, rgb888To555(p.color));
     if (state.pieceSprites[v1].frameCount() > 0) {
         blitElement(dst, state.pieceSprites[v1].frame(0), 482, 40, false);
+    }
+    if (p.ally && p.ally <= 9 && state.pieceSprites[p.ally - 1].frameCount() > 2) {
+        blitElement(dst, state.pieceSprites[p.ally - 1].frame(2), 524, 64, false);
     }
     if (p.name) {
         app.text().setFont(22, kTextDark, 0, 2, 0);
         app.text().drawText(dst, p.name, 564, 40, 2);
     }
-    app.text().setFont(16, kTextDark, 0, 2, 0);
-    for (int i = 0; i < 4; ++i) {
-        app.text().drawText(dst, kTabText[i], 627, 20 + 15 + i * 15, 3);
+    // 页签内容（原版内容沿用最后设置的 font18）
+    app.text().setFont(18, kTextDark, 0, 2, 0);
+    auto drawMoney = [&](int32_t value, int y) {
+        buf[0] = '$';
+        formatMoney(buf + 1, value);
+        app.text().drawText(dst, buf, 600, y, 1);
+    };
+    switch (tab) {
+        case 0: // 資金
+            drawMoney(p.cash, 102);
+            drawMoney(p.bank, 166);
+            drawMoney(playerTotalAssets(app, v1), 230);
+            break;
+        case 1: { // 地產：土地(estate+corp)/連鎖店/設施
+            int land = 0;
+            int chain = 0;
+            for (size_t i = 1; i < state.estates.size(); ++i) {
+                if (state.estates[i].owner == v1 + 1) {
+                    ++land;
+                    if (state.estates[i].type != 0) {
+                        ++chain;
+                    }
+                }
+            }
+            int facility = 0;
+            for (size_t i = 1; i < state.corps.size(); ++i) {
+                if (state.corps[i].owner == v1 + 1) {
+                    ++land;
+                    if (state.corps[i].sub != 0) {
+                        ++facility;
+                    }
+                }
+            }
+            std::snprintf(buf, sizeof(buf), "%d", land);
+            app.text().drawText(dst, buf, 600, 102, 1);
+            std::snprintf(buf, sizeof(buf), "%d", chain);
+            app.text().drawText(dst, buf, 600, 166, 1);
+            std::snprintf(buf, sizeof(buf), "%d", facility);
+            app.text().drawText(dst, buf, 600, 230, 1);
+            break;
+        }
+        case 2: { // 股票：總市值/成本/經營權家数
+            int marketValue = 0;
+            int costValue = 0;
+            for (int i = 0; i < 12; ++i) {
+                const int shares = state.playerShares[v1][i];
+                if (shares == 0) {
+                    continue;
+                }
+                marketValue = static_cast<int>(shares * state.stocks[i][5]) + marketValue;
+                costValue = static_cast<int>(shares * state.playerAvgCost[v1][i]) + costValue;
+            }
+            drawMoney(marketValue, 102);
+            drawMoney(costValue, 166);
+            int holdCorp = 0;
+            for (size_t i = 1; i < state.specPts.size(); ++i) {
+                if (state.specPts[i].owner == v1 + 1) {
+                    ++holdCorp;
+                }
+            }
+            std::snprintf(buf, sizeof(buf), "%d", holdCorp);
+            app.text().drawText(dst, buf, 600, 230, 1);
+            break;
+        }
+        case 3: { // 其他：點券/貸款/保險期
+            std::snprintf(buf, sizeof(buf), "%u", p.points);
+            app.text().drawText(dst, buf, 600, 102, 1);
+            std::snprintf(buf, sizeof(buf), "%d天", p.insuranceDays);
+            app.text().drawText(dst, buf, 600, 230, 1);
+            drawMoney(p.loan, 166);
+            if (p.loan != 0) {
+                const int left = dateDiff(state.gameDate, p.loanDate);
+                if (left != 0) {
+                    app.text().setFont(12, kTextDark, 0, 2, 1);
+                    std::snprintf(buf, sizeof(buf), "%d天", left);
+                    app.text().drawText(dst, buf, 500, 146, 0);
+                }
+            }
+            break;
+        }
+        default:
+            break;
     }
-    app.text().setFont(12, kTextDark, 0, 2, 1);
-    char buf[24];
-    buf[0] = '$';
-    formatMoney(buf + 1, p.cash);
-    app.text().drawText(dst, buf, 600, 102, 1);
-    formatMoney(buf + 1, p.bank);
-    app.text().drawText(dst, buf, 600, 166, 1);
-    formatMoney(buf + 1, p.cash + p.bank);
-    app.text().drawText(dst, buf, 600, 230, 1);
 }
 
 // [RE 0x416E6D] 小地图（200x200，位置由 kMiniMapY[布局] 决定）

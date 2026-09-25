@@ -2,7 +2,7 @@
 
 > 由 `python tools/re_map.py` 自动生成，勿手改。
 
-## RE 映射（201 条）
+## RE 映射（202 条）
 
 | 地址 | 原符号 | 重写位置 | 依据 |
 |------|--------|----------|------|
@@ -69,12 +69,13 @@
 | `0x411E8F` | loadConfig | `include/game/app/date_dialog.h:15` | 0x411F21 dos_getdate; 年<0x7CE(1998)→1998-1-1, 年>0x7DA(2010)→2010-1-1， 否则系统日期；0x411A7C 尾跳转写 dword_497160（不写 dword_48BB50） |
 | `0x411E8F` | 读取 | `src/app/game_init.cpp:40` | 0x411E8F CFG 存在时读 16B 设置 + 56B 键位；不存在时设置区保留默认值 （byte_497158=1, 497159=1, 49715A=4, 49715B=4, 49715C=1, 49715D=1） CFG 第 8..11 字节（byte_497158+8）与 dword_497160 重叠，但读取后即被 尾部 dos_getdate 钳位值覆盖（0x411F21..0x411A7C），不落回 settings[8..11] |
 | `0x415872` | playIntro | `src/app/new_game.cpp:527` | 0x415872 反编译; JUMP.MKF 45/46 资源 + sub_451677 播放 AVI （AIRPLANE.AVI 或 off_4750E8[地图索引]） 差异: AVI 播放依赖 MCI，SDL 侧暂无替代（跳过） |
-| `0x415D31` | 顶部工具条（panel.mkf[1]） | `src/app/game_panel.cpp:60` | 帧 0 背景 blit 到 (0,0); 11 个按钮帧 1+i 画在 (40*i+20, 20); 高亮帧 12+i（dword_48BDE4 为高亮索引） （原版 (u16*)dword_475118 + 6*i + 12 → 帧 i+1；+78 → 帧 i+12） |
-| `0x4166F8` | 玩家信息条（布局 | `src/app/game_panel.cpp:80` | 0x4166F8 反编译; dword_48BE0C + 60 → 帧 4（+12 主头 + 12*4） |
-| `0x4169BC` | 日历（440,280-640,480；panel.mkf[2]） | `src/app/game_panel.cpp:346` | 0x4169BC 反编译; byte_497164 二选一： !=0 月历网格（背景帧 kMonthFrame[月-1]+4，1..N 数字，节日红字 sub_4523D5，当日画框） ==0 大数字（背景帧 kMonthFrame[月-1]；sub_4521F0 命中节日→专属背景 kCalendarRes[base]+idx； 装饰帧 + 星期名 off_47511C[wd] at 454,352 + 大号「日」at 500,376） 两模式共有 LABEL_28：年 at 580,288（24号）、月 at 500,328（28号） |
-| `0x417191` | 前进面板（panel.mkf[7] | `src/app/game_panel.cpp:430` | 0x417191 反编译; 背景帧 = dword_48BDD4 + v1（v1 = byte_496BA0?2 : byte_496BA1?4 : 0） GO/骰子图标（帧 6..11）: travel 0/3: 帧 6（byte_496BA0）或 7，(x+8/y+26) 或 (x+7/y+26) travel 1: 2 个骰子（帧 2i+6 未选 / 2i+7 选中），(x+8/y+19i+16) / (x+7/y+19i+16) travel 2: 3 个骰子，(x+8/y+16j+9) / (x+7/y+16j+9) 差异: 位置 qword_475284 原版动态确定，当前用 advancePanelX/Y |
+| `0x415D31` | 顶部工具条（panel.mkf[1]） | `src/app/game_panel.cpp:62` | 帧 0 背景 blit 到 (0,0); 11 个按钮帧 1+i 画在 (40*i+20, 20); 高亮帧 12+i（dword_48BDE4 为高亮索引） （原版 (u16*)dword_475118 + 6*i + 12 → 帧 i+1；+78 → 帧 i+12） |
+| `0x415F69` | 玩家信息面板（布局 | `src/app/game_panel.cpp:123` | 0x415F69 反编译; 背景帧 = panel.mkf[0] 帧 panelTab（dword_48BE24[玩家]）； 物价指数 "物價指數  %d" @ (450,260) font12； 4 页签资金/地產/股票/其他 @ (627, 35/108/181/254) font18（当前页 0x101010 / 其他 0x404040）； 色条 fillRect(523,57,86,12,0)+fillRect(522,56,86,12,玩家色)、棋子 @ (482,40)、 同盟头像 pieceSprites[ally-1] 帧 2 @ (524,64)、玩家名 @ (564,40) font22； 内容 font18 数值 @ (600, 102/166/230) 右上对齐： 0 資金 = 現金/存款/總資產（"$"+千分位）；1 地產 = 土地(estate+corp)/連鎖店/設施； 2 股票 = 總市值(Σ股数×现价)/成本(Σ股数×均价)/經營權家数；3 其他 = 點券/貸款/保險期 （"%d天"）+ 貸款剩餘天數 @ (500,146) font12 差异: 事件槽回合（currentPlayer≥玩家数）NPC 面板分支待 P5；脏区标志 dword_475110&0xC 忽略（逐帧重绘） |
+| `0x4166F8` | 玩家信息条（布局 | `src/app/game_panel.cpp:82` | 0x4166F8 反编译; dword_48BE0C + 60 → 帧 4（+12 主头 + 12*4） |
+| `0x4169BC` | 日历（440,280-640,480；panel.mkf[2]） | `src/app/game_panel.cpp:447` | 0x4169BC 反编译; byte_497164 二选一： !=0 月历网格（背景帧 kMonthFrame[月-1]+4，1..N 数字，节日红字 sub_4523D5，当日画框） ==0 大数字（背景帧 kMonthFrame[月-1]；sub_4521F0 命中节日→专属背景 kCalendarRes[base]+idx； 装饰帧 + 星期名 off_47511C[wd] at 454,352 + 大号「日」at 500,376） 两模式共有 LABEL_28：年 at 580,288（24号）、月 at 500,328（28号） |
+| `0x417191` | 前进面板（panel.mkf[7] | `src/app/game_panel.cpp:531` | 0x417191 反编译; 背景帧 = dword_48BDD4 + v1（v1 = byte_496BA0?2 : byte_496BA1?4 : 0） GO/骰子图标（帧 6..11）: travel 0/3: 帧 6（byte_496BA0）或 7，(x+8/y+26) 或 (x+7/y+26) travel 1: 2 个骰子（帧 2i+6 未选 / 2i+7 选中），(x+8/y+19i+16) / (x+7/y+19i+16) travel 2: 3 个骰子，(x+8/y+16j+9) / (x+7/y+16j+9) 差异: 位置 qword_475284 原版动态确定，当前用 advancePanelX/Y |
 | `0x417559` | showObjectTip | `src/app/object_tip.cpp:168` | 0x417559 反编译; sub_40A9D7 拾取（重写用渲染记录的 mapHitRegions 代替）; 命中用拾取形状的 SPR 像素掩码（原版拾取缓冲语义），无形状时用矩形; 文本分支 cellEnt 名/estate 地主+建筑名+等级+费用/corp/specPt/evtCell/ cellTable 类型名/玩家名; 框 = data.mkf[517] 帧 0..3（四方向） |
-| `0x417E26` | gameEventHandler | `src/app/game_loop.cpp:409` | 0x417E26 反编译; WM_PAINT 绘制面板, WM_MOUSEMOVE 地图坐标换算 （×761856>>16 ≈ 11.625，限幅 220..2084）与小地图拖拽, WM_LBUTTONDOWN 地图点击/玩家移动, WM_USER+1 绘制玩家信息面板 差异: sub_417559 物件信息框、日历/页签切换阶段 3 接入 |
+| `0x417E26` | gameEventHandler | `src/app/game_loop.cpp:421` | 0x417E26 反编译; WM_PAINT 绘制面板, WM_MOUSEMOVE 地图坐标换算 （×761856>>16 ≈ 11.625，限幅 220..2084）与小地图拖拽, WM_LBUTTONDOWN 地图点击/玩家移动, WM_USER+1 绘制玩家信息面板 差异: sub_417559 物件信息框、日历/页签切换阶段 3 接入 |
 | `0x418C55` | beginPlayerTurn | `src/app/turn_system.cpp:2225` | 0x418C55 反编译; dword_475114 待处理玩家 → sub_40B93B/sub_40B93B 重置； sub_40C912(0) 返回: 0/1 → 等待玩家操作（sub_4196F1 + setPauseDraw(1)）, 2/5 → sub_40DD1F（AI/自动） 差异: dword_475114（传送/移动待处理玩家）与 sub_41D546 面板刷新待补 |
 | `0x418E7F` | calcPlayerWait | `src/app/turn_system.cpp:2205` | 0x418E7F 反编译; sub_40C912(1) 非 0 → byte_498EA5 = sub_41982D(当前格)， 否则 -125（0x83，bit7 置位 = 下一位玩家） |
 | `0x418EBD` | nextPlayer | `src/app/turn_system.cpp:2872` | 0x418EBD 反编译; 当前玩家 +1；越过 g_playerCount 进入事件槽 4； 4..7 检查 byte_498DF2 占用；8 → 回 0 并过天；跳过死亡玩家； byte_46CAFF（跳过请求）→ sub_41906A(1) + alive[0]&=~4； v1 时 advanceDay；sub_41C84F 状态效果倒计时；自动存档；末尾 byte_498EA0\|=0x80 差异: sub_41C84F（状态效果倒计时）、sub_40F381/sub_448A7E（槽渲染）、 自动存档（saveGameToSlot）待接入 |
@@ -155,7 +156,7 @@
 | `0x4520A6` | 日历计算 | `src/app/date_dialog.cpp:80` | 0x4520A6 中 v6 = (天数+4)%7（1998-01-01 为周四）; 2 月闰年 29 天（年%4） |
 | `0x45218F` | dateAddDays | `src/app/date_util.cpp:42` | 0x45218F 反编译（daysSince1998 → +days → sub_45201F 天数→日期） |
 | `0x4521AA` | dateDiff | `src/app/date_util.cpp:35` | 0x4521AA 反编译; daysSince1998(a2) - daysSince1998(a1) （例：dateDiff(今天, loanDate) = 贷款到期剩余天数） |
-| `0x4521F0` | 节日查询 | `src/app/game_panel.cpp:255` | 0x4521F0; type 0=固定(月,日)、2=第N个星期X；1=浮动(需 dword_47639C 表) 差异: type1 浮动节日暂未实现（跳过） |
+| `0x4521F0` | 节日查询 | `src/app/game_panel.cpp:356` | 0x4521F0; type 0=固定(月,日)、2=第N个星期X；1=浮动(需 dword_47639C 表) 差异: type1 浮动节日暂未实现（跳过） |
 | `0x453544` | numberInputDialog | `src/app/number_input_dialog.cpp:346` | 0x453544 反编译（panel[21] 背景/滑块/按键 + panel[22] 索引图 + runModal(sub_452C02)）; 上限 clamp（超限 → 上限）、"最大"= 上限、"清除"归 0、退格、滑块按档位比例； 0x452C02: 按键/滑块音效（g_effectSlots[0]/dword_482352）、按下态画帧 keyId、 byte_48CAC2==1 拖动面板（word_48CAB8/CAB6）、byte_48CAC2==16 拖动滑块实时更新、 进入 cursorSelect(27)/退出 cursorSelect(41)（迁移: panel[21] 为 SPR（8bit 索引 + RGB555 调色板），按原版 sub_456512 实现 blitSprRegion 差异: 背景保存恢复（saveBackground/allocUiElement）改为逐帧全量重绘（等价）） |
 | `0x453A32` | confirmDialog（data.mkf[440]，YES/NO | `include/game/app/confirm_dialog.h:7` | 0x453A32 → sub_450441(data, 440) + 居中 (x,y) + runModal(sub_45367E); sub_45367E 鼠标 x 左/右半 → 帧 1/2 高亮; 左键抬起左半→1(YES)/右半→0(NO); 右键抬起或取消键 → 0 [RE 0x440BA8] askDialog 形式：text 非空时先在 (cx, 140) 居中绘制文本 （setTextFont(16, 0xF0F0F0, 0x101010, 3, 1)，原版另有 g_tipFrame+72 背景框待补） 返回: true = YES（确定）, false = NO（取消） |
 | `0x454FE1` | sub_454FE1 | `src/app/turn_system.cpp:90` | 0x454FE1 查表 word_48242C（atan(min/max)），0x454FB4 映射 8 方向 差异: 用标准 atan2 等价替代查表（结果一致，避免硬编码 2049 项表） |

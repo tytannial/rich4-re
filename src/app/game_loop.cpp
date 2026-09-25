@@ -318,6 +318,18 @@ void handleLeftButtonDown(Application& app, int x, int y) {
         renderGameFrame(app);      // 按下态箭头（帧 18/19）
         return;
     }
+    // [RE 0x4182FA] 右侧信息面板页签点击（layout≠2；x∈[616,640) y∈[0,280) → tab = y/70）
+    if (layout != 2 && x >= 616 && x < 640 && y >= 0 && y < 280 &&
+        state.currentPlayer >= 0 && state.currentPlayer < state.playerCount) {
+        const int tab = (y / 70) & 3; // [RE 0x41831D] idiv 0x46(70)
+        Player& pl = state.players[state.currentPlayer];
+        if (pl.panelTab != tab) {
+            app.audio().playEffect(1); // [RE 0x41833B] dword_482322
+            pl.panelTab = static_cast<uint8_t>(tab);
+            renderGameFrame(app);
+        }
+        return;
+    }
     // 小地图拖拽 / 点击平滑跳转
     int mx = 0;
     int my = 0;
