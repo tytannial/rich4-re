@@ -57,9 +57,15 @@ int main(int argc, char** argv) {
     int gameClick2X = -1;
     int gameClick2Y = -1;
     int gameClick2Frame = 0;
-    int gameClick3X = -1;
-    int gameClick3Y = -1;
-    int gameClick3Frame = 0;
+int gameClick3X = -1;
+int gameClick3Y = -1;
+int gameClick3Frame = 0;
+int gameClick4X = -1;
+int gameClick4Y = -1;
+int gameClick4Frame = 0;
+int gameClick5X = -1;
+int gameClick5Y = -1;
+int gameClick5Frame = 0;
     int gameEscFrame = -1;
     bool debugMode = false;
     for (int i = 1; i < argc; ++i) {
@@ -118,6 +124,18 @@ int main(int argc, char** argv) {
                 gameClick3X = -1;
                 gameClick3Y = -1;
             }
+        } else if (arg == "--game-click4" && i + 1 < argc) {
+            if (std::sscanf(argv[++i], "%d,%d,%d", &gameClick4X, &gameClick4Y, &gameClick4Frame) !=
+                3) {
+                gameClick4X = -1;
+                gameClick4Y = -1;
+            }
+        } else if (arg == "--game-click5" && i + 1 < argc) {
+            if (std::sscanf(argv[++i], "%d,%d,%d", &gameClick5X, &gameClick5Y, &gameClick5Frame) !=
+                3) {
+                gameClick5X = -1;
+                gameClick5Y = -1;
+            }
         } else if (arg == "--game-esc" && i + 1 < argc) {
             gameEscFrame = std::atoi(argv[++i]);
         } else if (arg == "--auto-click2" && i + 1 < argc) {            if (std::sscanf(argv[++i], "%d,%d", &click2X, &click2Y) != 2) {
@@ -151,7 +169,9 @@ int main(int argc, char** argv) {
             }
         } else if (arg == "--help" || arg == "-h") {
             std::printf("usage: rich4 [--game <dir>] [--shot <file.bmp>] [--shot-cursor x,y] "
-                        "[--auto-click] [--auto-click2 x,y]\n");
+                        "[--auto-click] [--auto-click2 x,y] [--game-click x,y,frame] "
+                        "[--game-click2 x,y,frame] [--game-click3 x,y,frame] "
+                        "[--game-click4 x,y,frame] [--game-click5 x,y,frame] [--game-drag x1,y1,x2,y2,frame]\n");
             return 0;
         }
     }
@@ -184,6 +204,12 @@ int main(int argc, char** argv) {
     }
     if (gameClick3X >= 0 && gameClick3Y >= 0) {
         app.setGameClick3(gameClick3X, gameClick3Y, gameClick3Frame);
+    }
+    if (gameClick4X >= 0 && gameClick4Y >= 0) {
+        app.setGameClick4(gameClick4X, gameClick4Y, gameClick4Frame);
+    }
+    if (gameClick5X >= 0 && gameClick5Y >= 0) {
+        app.setGameClick5(gameClick5X, gameClick5Y, gameClick5Frame);
     }
     if (gameEscFrame >= 0) {
         app.setGameEsc(gameEscFrame);

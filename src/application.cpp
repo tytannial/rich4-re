@@ -500,6 +500,48 @@ void Application::renderFrame() {
         }
     }
 
+    // [NEW] 调试：第四次点击逻辑坐标（面板内多级交互验证，如页签→子页签）
+    if (m_gameClick4X >= 0 && m_frameCount == m_gameClick4Frame) {
+        float wx = 0.0f;
+        float wy = 0.0f;
+        if (SDL_RenderCoordinatesToWindow(m_renderer.handle(), static_cast<float>(m_gameClick4X),
+                                          static_cast<float>(m_gameClick4Y), &wx, &wy)) {
+            RICH4_LOGI("game-click4 frame=%d logical=(%d,%d) window=(%.0f,%.0f)", m_frameCount,
+                       m_gameClick4X, m_gameClick4Y, wx, wy);
+            SDL_WarpMouseInWindow(m_window.handle(), wx, wy);
+            SDL_Event ev{};
+            ev.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+            ev.button.button = SDL_BUTTON_LEFT;
+            ev.button.clicks = 1;
+            ev.button.x = wx;
+            ev.button.y = wy;
+            SDL_PushEvent(&ev);
+            ev.type = SDL_EVENT_MOUSE_BUTTON_UP;
+            SDL_PushEvent(&ev);
+        }
+    }
+
+    // [NEW] 调试：第五次点击逻辑坐标
+    if (m_gameClick5X >= 0 && m_frameCount == m_gameClick5Frame) {
+        float wx = 0.0f;
+        float wy = 0.0f;
+        if (SDL_RenderCoordinatesToWindow(m_renderer.handle(), static_cast<float>(m_gameClick5X),
+                                          static_cast<float>(m_gameClick5Y), &wx, &wy)) {
+            RICH4_LOGI("game-click5 frame=%d logical=(%d,%d) window=(%.0f,%.0f)", m_frameCount,
+                       m_gameClick5X, m_gameClick5Y, wx, wy);
+            SDL_WarpMouseInWindow(m_window.handle(), wx, wy);
+            SDL_Event ev{};
+            ev.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+            ev.button.button = SDL_BUTTON_LEFT;
+            ev.button.clicks = 1;
+            ev.button.x = wx;
+            ev.button.y = wy;
+            SDL_PushEvent(&ev);
+            ev.type = SDL_EVENT_MOUSE_BUTTON_UP;
+            SDL_PushEvent(&ev);
+        }
+    }
+
     // [NEW] 调试：在指定帧合成 ESC 按下+抬起（游戏内取消操作验证）
     if (m_gameEscFrame >= 0 && m_frameCount == m_gameEscFrame) {
         RICH4_LOGI("game-esc: synthesize ESC at frame %d", m_frameCount);

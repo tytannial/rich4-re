@@ -107,6 +107,20 @@ public:
         m_gameClick3Frame = frame;
     }
 
+    // [NEW] 调试：第四次点击逻辑坐标（面板内多级交互验证，如页签→子页签）
+    void setGameClick4(int x, int y, int frame) {
+        m_gameClick4X = x;
+        m_gameClick4Y = y;
+        m_gameClick4Frame = frame;
+    }
+
+    // [NEW] 调试：第五次点击逻辑坐标
+    void setGameClick5(int x, int y, int frame) {
+        m_gameClick5X = x;
+        m_gameClick5Y = y;
+        m_gameClick5Frame = frame;
+    }
+
     // [NEW] 调试：在指定帧合成 ESC（游戏内系统菜单验证）
     void setGameEsc(int frame) { m_gameEscFrame = frame; }
 
@@ -187,6 +201,12 @@ private:
     int m_gameClick3X = -1;
     int m_gameClick3Y = -1;
     int m_gameClick3Frame = 0;
+    int m_gameClick4X = -1;
+    int m_gameClick4Y = -1;
+    int m_gameClick4Frame = 0;
+    int m_gameClick5X = -1;
+    int m_gameClick5Y = -1;
+    int m_gameClick5Frame = 0;
     int m_gameEscFrame = -1;
     int m_gameDragX1 = -1;
     int m_gameDragY1 = -1;
