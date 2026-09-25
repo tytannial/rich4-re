@@ -82,8 +82,11 @@ damagePlayer/demolish/givePlayerItem）；`economy.cpp` deleteMapObject **配对
 气泡 ✅（`playItemLine` 0x44EF41）；[TODO P5] NPC 分支/事件槽目标。
 请神/送神符效果函数 ✅（0x444E1A/0x444C45，`useInviteGodCard`/`useBanishGodCard`，
 调试 `Ctrl+Shift+I/H` 直调）；cellTable 拾取 id 改 0xA100|槽+1 修段重叠。
+研究所研发道具 ✅（2026-09-26，`lab_dialog.cpp` 0x44101D + `updatePlayerStates` 0x41C84F 尾倒计时产出）：
+owner 停留 type4 逐级解锁选 1（`corp.sub` 门槛变暗）→ `researchItem/researchLeft=5` → 归零
+`givePlayerItem(researchItem+8)`；机器工人/時光機/傳送機/工程車/核子飛彈 5 非卖品唯一入口，**道具 13 获取闭环**（`44101d-lab-develop.md`、`ui-controls.md` §35）。
 
-**功能总览**：`docs/help-checklist.md`（帮助文档 99 条 → 实现状态，当前 ✅ 33 / 🟡 20 / ❌ 46）。
+**功能总览**：`docs/help-checklist.md`（帮助文档 99 条 → 实现状态，当前 ✅ 45 / 🟡 21 / ❌ 33）。
 
 **M2 执行计划**：见 `docs/m2-plan.md`
 

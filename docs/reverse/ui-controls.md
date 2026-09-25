@@ -47,6 +47,7 @@
 | 选人对话框（横排头像+绿框悬停） | 0x440E1A/0x43FF56 | `player_select_dialog.cpp` | 嫁祸卡/命运 | §32 |
 | 径向图标选择（RAW pick + 悬停大图/名称） | 0x4325C2/0x431842 | `magic_house_dialog.cpp` | 魔法屋惩罚选择 | §33 |
 | 拍卖竞价面板（7 按钮/AI 出价/头像翻滚/落槌） | 0x43BDE5/0x43A2DD/0x439F0D | `auction_dialog.cpp` | 魔法屋惩罚 11 / 新聞 idx 7 | §34 |
+| 图标条选择框（等级门槛变暗禁用） | 0x44101D/0x4402D7 | `lab_dialog.cpp` | 研究所研发道具 | §35 |
 
 ## 1. 渲染原语速查（`render/blit.h` / `surface.h`）
 
@@ -783,7 +784,27 @@ UI 音效与游戏音效槽**是两套**，勿混：
   （1住宿中…7賣方/8现金不足），**PASS 也置 1**（仅"不再竞争"计数，人仍在轮转名单）；放弃=出列；
   有效出价后**全部清零**（重新开放）；③ 表情帧 78+charIndex 只画在首个正常行（原版一次性 quirk）；
   ④ 赢家表情帧原版 blit 实参传 Rect.right/bottom=(223,95) 为笔误（同医院 bug），重写按 (183,65)；
-  ⑤ 法槌闪烁双车道（帧 26/27 @(163,45) 28×15 + @(127,90) 16×14）纯装饰，相位 3=patch 恢复。
+   ⑤ 法槌闪烁双车道（帧 26/27 @(163,45) 28×15 + @(127,90) 16×14）纯装饰，相位 3=patch 恢复。
+
+## 35. 图标条选择框（等级门槛变暗禁用，0x44101D / 0x4402D7）
+
+- **用途**：研究所（corp type4）研发道具选择（`labDevelopDialog`），`44101d-lab-develop.md`。
+  与 `selectFacilityDialog`（0x440AAC）同族（图标横条 + 悬停描边 + 居中名 + hover/click/cancel 音效），
+  **增量 = "可选数 = 等级 `corp.sub`" 的门槛禁用**（未解锁图标变暗且点击无效）。
+- **资源**：图标 = panel.mkf[11] 帧 10..14（**帧 = 道具 id + 1**，id=researchItem+8=9..13，
+  機器工人/時光機/傳送機/工程車/核子飛彈，与道具栏 `kItemBagNames`/帧序一致）；
+  底图 = estateTiles(data.mkf[517]) 帧 8 `@(20,280)`、标题框 帧 6 `@(220,140)`（色键 `blitElement`）。
+- **命中/布局**：5 格步进 76；图标 `blitElement` 实参 `(68+76i, 324)`（panel[11] 帧头 offset ≈(33,30)
+  → 实际像素落 ≈ `(35+76i, 294)`，即描边/命中起点）；悬停命中 `x∈[35,407] y∈[297,351]`，`idx=(x-35)/76`；
+  双描边 `drawRectBorder(32+76i, 294, 0x47, 59)` + `(33, 295, 0x45, 57)`（`word_46CAEC`=0x0280）；
+  名 `drawText(kItemBagNames[9+idx], 220, 154)`。
+- **变暗禁用（关键）**：`redraw` 顺序 = 底图帧8 → 逐图标 blit → **未解锁区**（`i>=sub`）
+  `scaleSurfaceChannels(35+76i, 297, 65, 53, kChannelHalf)` → 标题框帧6 → 标题 → 悬停描边/名。
+  变暗必须在**底图之上**做（否则暗到下层游戏地图）；点击 `hover < sub` 才 `requestExit(hover)`，
+  AI（`alive!=1`）不弹框、`idx = sub-1`。
+- **重写位置**：`src/app/lab_dialog.cpp:labDevelopDialog/labEventHandler/redrawLab`。
+- **经验/坑**：① 图标帧 `10+i` ≠ 选择框 index，是"道具 id+1"（id=idx+9），跨"研究所/道具栏"两套序勿混；
+  ② `researchLeft` 写入恒 5，产出倒计时在 `updatePlayerStates`（非本控件）。
 
 ## 新增控件模板（发现新控件时复制填写）
 

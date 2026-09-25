@@ -189,7 +189,7 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
 | `sub_448A7E` | case 3 触发：步行（travel&0x83==3）落在他人有建筑的住宅用地/商業用地 → state=3 | 0x448A7E | case 3 入口 ✅ |
 | `roulettePrompt` | **转盘 UI**：帧 `(a1&3)+68` 弹轮盘（0..3 主题），指针逐格步进+减速停止，读数 = `byte_475D0C` 终格值；供航空/保險/旅館/購物 费用乘数 | 0x44090E | ✅（`roulette_dialog.cpp` 完整还原；神明 `slotMachineValue` 4 滚轮 0x43F23E ❌ 未接入） |
 | `selectFacilityDialog` | 「請選擇設施類別」建设选择 UI（返回 corp type） | 0x440AAC | ✅（`facility_dialog.cpp`；0x41A22A 建设施接入，改建卡 flag=1 0x4431C4） |
-| `labDevelopDialog` | 研究所（corp type4）「請選擇欲開發道具」：逐级研发槽选 1，写 +29/+30 | 0x44101D | ❌ |
+| `labDevelopDialog` | 研究所（corp type4）「請選擇欲開發道具」：逐级研发槽选 1（可选数=`corp.sub`，未解锁变暗），写 +29/+30；`updatePlayerStates`(0x41C84F 尾) 倒计时归零 `givePlayerItem(researchItem+8)` | 0x44101D | ✅（`lab_dialog.cpp`；`44101d-lab-develop.md`）|
 | `updateMoneyIndex` | **物价指数**：`g_moneyMul = max(M, Σ存活 playerTotalAssets / 存活数 / g_startMoneyVal)`（只升不降；**每日** advanceDay 0x41CFBF） | 0x423ACF | ✅（`economy.cpp`；玩家面板 idx 5 显示 ❌） |
 | `playerTotalAssets` | 总资产 = 现金+存款−贷款+Σ持股×现价+Σestate(+28+30×级/连锁)+Σcorp(+34+36×级) | 0x4239B9 | ✅（`economy.cpp`） |
 | `expireAssets` | **屏幕可见地块批量破坏**（旧标"到期清算"有误）：`word_48B8C4` = `sub_40A0B1` 收集的视口内有主地块列表（`sub_40A45C` 计数）；flags&2 estate / flags&4 corp：a3≠0 归公（地主欠 `30×M×level`）+ rebuildMiniMap，a3==0 降级（连锁→清 type+level）；flags&0x20 事件槽释放（damagePlayer/住院/deleteMapObject）。调用点 = 卡片/道具全屏破坏效果（0x446FBC/447ACE/44913D/44AB2C）→ P4 | 0x40AC7B | ✅（`economy.cpp`；飛彈/核彈/新聞灾害已接入）|
@@ -235,7 +235,7 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
 - [x] 回合缓冲：case 0 有 objId 路径统一返回 **0x88**（loc_41B111，等 8 帧后下一位）；objId==0 → 0x80
 - [x] 吐槽机制（0x44F627）：同路段（同名）住宅用地 ≥3 时 `sub_44EF41` 角色语音/表情（买地后必定、升级后 1/3 概率）→ **P4 待实现**
 - [x] 现金不足提示（`byte_46398B` 实测 = **"您的現金不足！"**，非"現金不夠支付！"）+ 神明阻止文本（`kObjectNames[槽]`）
-- 差异（待补）：AI 决策 `sub_41D7D4`；提示框背景（`g_tipFrame+72`）✅；落地后处理 `sub_40F381`/`sub_448A7E`；研究所道具開發 `labDevelopDialog`（0x44101D，非"连锁奖励"——旧称误）
+- 差异（待补）：AI 决策 `sub_41D7D4`；提示框背景（`g_tipFrame+72`）✅；落地后处理 `sub_40F381`/`sub_448A7E`；研究所道具開發 `labDevelopDialog`（0x44101D，非"连锁奖励"——旧称误）✅ 2026-09-26 `lab_dialog.cpp`
 
 ### P1 升级 + 收租（同链路）
 
@@ -308,7 +308,7 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
       （`dword_48AE78/48AE90` 实为 `dword_48AE64` 的 +5/+11 项别名，无独立加载）；owner 调色板
 - [x] **右键提示对齐**（0x41783C/0x417999）：estate `level==0`→"空  地"、`type!=0`→"連鎖店"、
       应收租金（type==0→同街联合 / type!=0→数量×2000×M / 无主→fees[level]）；corp `sub==0`→"空  地"
-- [ ] 研究所（type4）研发 `labDevelopDialog`（P4 道具系统）
+- [x] 研究所（type4）研发 `labDevelopDialog`（0x44101D，`lab_dialog.cpp` + `updatePlayerStates` 产出）✅ 2026-09-26
 - [ ] 验收：购地/建设施（5 类图标选择）/升级（上限）/旅館·購物·加油站收费/住宿状态免收租
 
 ### P2 事件格（`sub_41982D` case 2..16，语义见 §3）
