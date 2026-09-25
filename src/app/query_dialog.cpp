@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "game/app/event_stack.h"
+#include "game/app/economy.h"
 #include "game/app/map_tables.h"
 #include "game/application.h"
 #include "game/core/log.h"
@@ -226,8 +227,151 @@ void drawQueryPanel(QueryPanelState& s) {
     }
 }
 
+// [RE 0x452793] 千分位金额（sub_452793）
+void fmtMoney(char* out, int32_t value) {
+    char tmp[24];
+    bool neg = value < 0;
+    unsigned u = neg ? static_cast<unsigned>(-(value + 1)) + 1u : static_cast<unsigned>(value);
+    std::snprintf(tmp, sizeof(tmp), "%u", u);
+    const int n = static_cast<int>(std::strlen(tmp));
+    char rev[32];
+    int r = 0;
+    int cnt = 0;
+    for (int i = n - 1; i >= 0; --i) {
+        rev[r++] = tmp[i];
+        if (++cnt % 3 == 0 && i > 0) {
+            rev[r++] = ',';
+        }
+    }
+    int o = 0;
+    if (neg) {
+        out[o++] = '-';
+    }
+    for (int i = r - 1; i >= 0; --i) {
+        out[o++] = rev[i];
+    }
+    out[o] = '\0';
+}
+
+// [RE 0x423070] 資產清單页：12 字段（标签画在背景帧 0 上）+ 道具 13 格 + 卡片 15 槽
+// 依据: 0x423070 反编译 page==0 分支（330/602/250 右对齐，字体 28；道具 panel[74] 图标 +
+//       数量，卡片 kCardNames[id]）；0x422443 画 12 字段标签（x=142/430 两列 + 第二排 142）
 void drawAssetPage(QueryPanelState& s) {
-    (void)s; // 功能点 2 实现（12 字段/道具/卡片）
+    GameState& st = s.app->gameState();
+    Surface& dst = s.app->surface();
+    TextRenderer& t = s.app->text();
+    const int sel = s.selPlayer;
+    const Player& p = st.players[sel];
+    char buf[32];
+
+    // 12 字段标签（sub_422443：off_475418）
+    t.setFont(20, kTextDark, 0, 2, 0);
+    for (int i = 0; i < 4; ++i) {
+        t.drawText(dst, kQueryFieldNames[i], 142, 88 + 48 * i, 2);
+    }
+    for (int i = 4; i < 8; ++i) {
+        t.drawText(dst, kQueryFieldNames[i], 430, 88 + 48 * (i - 4), 2);
+    }
+    for (int i = 8; i < 12; ++i) {
+        t.drawText(dst, kQueryFieldNames[i], 142, 296 + 48 * (i - 8), 2);
+    }
+
+    // 第一排数值（font 28 深灰，右对齐）
+    t.setFont(28, kTextDark, 0, 2, 0);
+    fmtMoney(buf, p.cash);
+    t.drawText(dst, buf, 330, 88, 6);
+    fmtMoney(buf, p.bank);
+    t.drawText(dst, buf, 330, 136, 6);
+    fmtMoney(buf, p.loan);
+    t.drawText(dst, buf, 330, 184, 6);
+    fmtMoney(buf, playerTotalAssets(*s.app, sel));
+    t.drawText(dst, buf, 330, 232, 6);
+    // 持股市值 Σ(股数 × 现价)（逐项浮点累加后截断，同原版 sub_423070）
+    int stockValue = 0;
+    for (int i = 0; i < 12; ++i) {
+        stockValue = static_cast<int>(st.playerShares[sel][i] * st.stocks[i][5]) + stockValue;
+    }
+    fmtMoney(buf, stockValue);
+    t.drawText(dst, buf, 602, 88, 6);
+    std::snprintf(buf, sizeof(buf), "%u", p.points); // itoa10(u16)
+    t.drawText(dst, buf, 602, 136, 6);
+    std::snprintf(buf, sizeof(buf), "%d", p.insuranceDays);
+    t.drawText(dst, buf, 602, 184, 6);
+    int holdCorp = 0; // 控股企業（specPt owner 计数）
+    for (size_t i = 1; i < st.specPts.size(); ++i) {
+        if (st.specPts[i].owner == sel + 1) {
+            ++holdCorp;
+        }
+    }
+    std::snprintf(buf, sizeof(buf), "%d", holdCorp);
+    t.drawText(dst, buf, 602, 232, 6);
+    // 第二排：土地 / 連鎖店 / 房 屋 / 設 施
+    int land = 0;
+    int chain = 0;
+    int house = 0;
+    for (size_t i = 1; i < st.estates.size(); ++i) {
+        const Estate& es = st.estates[i];
+        if (es.owner != sel + 1) {
+            continue;
+        }
+        ++land;
+        if (es.type != 0) {
+            ++chain;
+        } else if (es.level != 0) {
+            ++house;
+        }
+    }
+    int facility = 0;
+    for (size_t i = 1; i < st.corps.size(); ++i) {
+        if (st.corps[i].owner == sel + 1 && st.corps[i].sub != 0) {
+            ++facility;
+        }
+    }
+    std::snprintf(buf, sizeof(buf), "%d", land);
+    t.drawText(dst, buf, 250, 296, 6);
+    std::snprintf(buf, sizeof(buf), "%d", chain);
+    t.drawText(dst, buf, 250, 344, 6);
+    std::snprintf(buf, sizeof(buf), "%d", house);
+    t.drawText(dst, buf, 250, 392, 6);
+    std::snprintf(buf, sizeof(buf), "%d", facility);
+    t.drawText(dst, buf, 250, 440, 6);
+
+    // 道具 13 格（panel[74] 帧 id-1 @ (i-16, y)，数量 @ (i+30, y) 右对齐，白字）
+    t.setFont(16, kTextWhite, kTextDark, 3, 0);
+    int ix = 300;
+    int iy = 281;
+    for (int i = 0; i < 13; ++i) {
+        const uint8_t n = st.itemStock[15 * sel + i];
+        if (n == 0) {
+            continue;
+        }
+        if (i < s.icons.frameCount()) {
+            blitElement(dst, s.icons.frame(i), ix - 16, iy, false);
+        }
+        std::snprintf(buf, sizeof(buf), "%d", n);
+        t.drawText(dst, buf, ix + 30, iy, 6);
+        ix += 72;
+        if (ix > 588) {
+            ix = 300;
+            iy += 32;
+        }
+    }
+    // 卡片 15 槽（kCardNames[id] @ (i, y) 居中；深灰）
+    t.setFont(16, kTextDark, 0, 2, 1);
+    ix = 300;
+    iy = 385;
+    for (int i = 0; i < 15; ++i) {
+        const uint8_t id = st.cardState60[15 * sel + i];
+        if (id == 0) {
+            continue;
+        }
+        t.drawText(dst, kCardNames[id], ix, iy, 2);
+        ix += 72;
+        if (ix > 588) {
+            ix = 300;
+            iy += 32;
+        }
+    }
 }
 
 void drawLandPage(QueryPanelState& s) {

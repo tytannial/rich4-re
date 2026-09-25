@@ -2,7 +2,7 @@
 
 > 由 `python tools/re_map.py` 自动生成，勿手改。
 
-## RE 映射（198 条）
+## RE 映射（199 条）
 
 | 地址 | 原符号 | 重写位置 | 依据 |
 |------|--------|----------|------|
@@ -99,9 +99,10 @@
 | `0x41DB91` | aiDialogRedraw（整框重绘） | `src/app/ai_dialog.cpp:131` | 0x41DB91 反编译; blit 画布 → 玩家槽（选中：高亮框帧1 + 棋子帧0 覆盖头像帧6+charIndex； 托管：勾选框帧3）→ 选项勾选（卡片/道具/个性）→ sub_41DA61 比例条 |
 | `0x41DDA9` | aiDialogWndProc | `src/app/ai_dialog.cpp:318` | 0x41DDA9 反编译; WM_LBUTTONDOWN 玩家槽（再点选中槽 → alive^=4 托管）/控件； WM_MOUSEMOVE 拖动滑块；WM_LBUTTONUP 动作；WM_RBUTTONUP/WM_KEYDOWN 取消关闭 |
 | `0x41E345` | aiDialog（託管AI | `src/app/ai_dialog.cpp:394` | 0x41E345 反编译; panel.mkf[77] 帧 0 画布 + 槽数组 byte_48BE34 只列入 alive&1 的人类玩家（最多 4），默认选中当前玩家；runModal(sub_41DDA9) |
+| `0x423070` | 資產清單页 | `src/app/query_dialog.cpp:256` | 0x423070 反编译 page==0 分支（330/602/250 右对齐，字体 28；道具 panel[74] 图标 + 数量，卡片 kCardNames[id]）；0x422443 画 12 字段标签（x=142/430 两列 + 第二排 142） |
 | `0x4239B9` | playerTotalAssets | `src/app/economy.cpp:29` | 0x4239B9 反编译; bank + cash - loan + Σ(12股×现价 flt_496994) + 地产(priceAdd(+28) + [type(+24)? priceBase(+30) : level(+26)? priceBase×level]) + 公司(buildPrice(+34) + feeTable[0](+36) × sub(+26))；胜利判定输入 |
 | `0x423ACF` | updateMoneyIndex | `src/app/economy.cpp:65` | 0x423ACF 反编译; g_moneyMul = max(旧值, Σ存活 playerTotalAssets / 存活数 / g_startMoneyVal) （只升不降；advanceDay 每日调用 0x41CFBF） 差异: 存活数为 0 / 起始资金 ≤0 时保持原值（原版未防护除零） |
-| `0x423B3B` | collectOwnedAssetIds | `src/app/query_dialog.cpp:72` | 0x423B3B 反编译; mode 0=estate+corp 1=estate 2=corp 3=有建筑普通地产 （level≠0 && type==0） 4=有建筑连锁店（level≠0 && type≠0） |
+| `0x423B3B` | collectOwnedAssetIds | `src/app/query_dialog.cpp:73` | 0x423B3B 反编译; mode 0=estate+corp 1=estate 2=corp 3=有建筑普通地产 （level≠0 && type==0） 4=有建筑连锁店（level≠0 && type≠0） |
 | `0x428CAF` | refreshStockSpecPtMap | `src/app/stock_system.cpp:59` | 0x428CAF 反编译; 遍历 12 支股票，对"上市公司"（kStockInit[s][1] != 0）按 specPt.stockNo == 股票号 反查 specPt 索引并回写 stocks[s][1]（迁移: 上市判断改用 kStockInit 表（不依赖运行时初值，幂等）； 股票表未初始化（如读档路径未经过 newGameInit）时用 kStockInit 重建） |
 | `0x428D2A` | buyStock | `src/app/stock_system.cpp:218` | 0x428D2A 反编译; viaBank=false（现金）：价格 = specPt.feeBase/10000 × count， sharesLeft -= count，现金扣款；viaBank=true：金额 = 当前价 × count，银行扣款， 交易量/保留股份(word_49698A/88) -= count； 末尾：持股 += count；均价 = (旧持股×旧均价 + 金额) / 新持股；再调 updateSpecPtControl 返回 1 表示经营権（owner）变化 |
 | `0x428E23` | sellStock | `src/app/stock_system.cpp:259` | 0x428E23 反编译; 持股 -= count（归零则均价清 0）；收入 = 现价(flt_496994) × count； word_49698A/88 += count（回归市场）；toBank 入 g_playerBank 否则入 dword_499080 公库； 末尾 updateSpecPtControl；返回 1 表示经营権变化 |
