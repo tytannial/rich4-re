@@ -3,12 +3,14 @@
 // 依据: docs/reverse/functions/43380a-magic-house.md §1..§4。
 //
 // 流程：人类 → panel[18] 施法 UI（100ms 状态机 1..8）：
-//   #0037→#0038→#0039 → EXIT 按钮(帧3) → 倒计时(动画开 1s/关 1tick) → 随机条件（0x431842
+//   #0037→#0038→#0039 → 女巫闭眼冥想(帧3 闭眼贴片) → 倒计时 1s → 随机条件（0x431842
 //   非空目标）→ 条件图标帧(cond+11)@(326,296) + 浮字条件名 → #0040 → 交互：
-//   panel[19] RAW pick（1..12 惩罚 / 13 EXIT / 0 无）hover 高亮（帧 v+22 小图标 @off_4756E4
+//   panel[19] RAW pick（1..12 惩罚 / 13 眼部区 / 0 无）hover 高亮（帧 v+22 小图标 @off_4756E4
 //   + 144×128 大图/名称 saveBackground 缓冲 + 音效 39）→ 点击 → 大图恢复 + 帧2 确认罩
 //   @(182,142) + #0041 → 播 panel[20] FLC @(0,0)（音效 59）→ postModalExit(pen)。
-//   右键/双击（state<3）→ 跳过动画直达选择；EXIT → 回浮字重看。
+//   右键/双击（state<3）→ 跳过动画直达选择；点 13（眼部区）→ 回浮字重看。
+//   帧4/5=嘴贴片：FloatMessage 显示期间 25%/tick 随机张合（说话口型），末拍归闭嘴；
+//   倒计时结束重绘帧1 全身 = 重新睁眼。
 //   AI/托管 → 条件 rand%12（须有目标）+ 惩罚 rand%11（6→7；自己中招强制 6）+
 //   showMessage("条件名\n\n惩罚名")（'#' 前缀跳 5 字节）。
 // 惩罚执行（applyMagicPenalty）：对目标名单逐一（≤4）：强制场景重绘（[RE 0x41906A]）→
@@ -84,21 +86,21 @@ const int kIconPos[12][2] = {
     {322, 394}, {239, 393}, {188, 316}, {131, 222}, {184, 161}, {225, 83},
 };
 
-// [RE 0x4645E4..0x464653] UI 流程浮字
-constexpr char kTextIn[] = "#0037進來魔法屋，就得完全照我的指示！";
+// [RE 0x4645E4..0x464653] UI 流程浮字（#0037 原版自带换行，勿合并成一行）
+constexpr char kTextIn[] = "#0037進來魔法屋，就得\n完全照我的指示！";
 constexpr char kTextPick[] = "#0038我選出符合條件的人。";
 constexpr char kTextFate[] = "#0039你來決定他們的命運～";
 constexpr char kTextTurn[] = "#0040嘿～輪到你了！";
 constexpr char kTextCast[] = "#0041天靈靈地靈靈～";
 
-// panel[18] 帧号
+// panel[18] 帧号（帧 3/4/5 图像实测 2026-09-26：女巫眼部/嘴部贴片，非装饰）
 constexpr int kFrameBg = 0;
-constexpr int kFrameBall = 1;      // 165×213 @(241,140)
-constexpr int kFrameConfirm = 2;   // 284×210 @(182,142)
-constexpr int kFrameExit = 3;      // 60×35 @(286,188)
-constexpr int kFrameExitSub = 4;   // 60×18 @(286,220) 擦除层
-constexpr int kFrameSparkle = 5;   // 60×21 @(286,217)
-constexpr int kFrameMsg = 8;       // 280×173 浮动消息框 @(320,384)
+constexpr int kFrameBall = 1;        // 165×213 女巫全身（睁眼闭嘴）@(241,140)
+constexpr int kFrameConfirm = 2;     // 284×210 @(182,142)
+constexpr int kFrameEyesClosed = 3;  // 60×35 闭眼贴片 @(286,188)（#0039 说完 → 冥想）
+constexpr int kFrameMouthClosed = 4; // 60×18 闭嘴贴片 @(286,220)（说话末拍归位）
+constexpr int kFrameMouthOpen = 5;   // 60×21 张嘴贴片 @(286,217)（FloatMessage 期间口型）
+constexpr int kFrameMsg = 8;         // 280×173 浮动消息框 @(320,384)
 constexpr int kCondIconBase = 11;  // 条件图标帧 cond+11
 constexpr int kPenIconBase = 22;   // 惩罚小图标帧 pen+22
 
@@ -417,7 +419,7 @@ struct MagicCtx {
     int countdown = 0;          // byte_48C3A1（state 3/4 倒计时）
     int hover = 0;              // byte_48C3A1（state 7 悬停项）
     bool skipAnim = false;      // byte_48C3A5
-    int sparkleT = 0;           // byte_48C3A0
+    int mouthT = 0;           // byte_48C3A0 口型驻留拍数
     std::vector<int> targets;   // g_magicTargets
     FloatMessage msg;
     std::vector<uint16_t> hoverBuf;  // 144×128 大图区背景
@@ -460,36 +462,21 @@ bool magicHandler(const SDL_Event* event, void* user) {
     }
     switch (event->type) {
     case kModalTimerEvent: {
-        // [RE 0x432713] 状态 4：倒计时 → 随机条件
+        // [RE 0x432713] 状态 4：倒计时（冥想闭眼 1s）→ 随机条件
         if (ui.state == 4 && ui.countdown > 0 && --ui.countdown == 0) {
             do {
                 ui.cond = std::rand() % 12;
                 ui.targets = magicSelectTargets(app, ui.cond);
             } while (ui.targets.empty());
+            // [RE 0x432791] 重绘女巫全身帧（**重新睁眼**）后再叠条件图标（图标落点与女巫下半重叠）
+            blitElement(dst, ui.sheet.frame(kFrameBall), 241, 140, false);
             blitElement(dst, ui.sheet.frame(kCondIconBase + ui.cond), kIconCondX, kIconCondY,
                         false);
             ui.state = 5;
             ui.msg.show(app, kCondNames[ui.cond]);
         }
-        // 水晶球/EXIT 区闪烁（[RE 0x432894]：state 8 或（无消息且无闪烁计数）时跳过）
-        if (ui.state != 8 && (ui.msg.active() || ui.sparkleT != 0)) {
-            if (ui.sparkleT != 0) {
-                if (ui.sparkleT == 1) {
-                    blitElement(dst, ui.sheet.frame(kFrameExitSub), 286, 220, false);
-                }
-                --ui.sparkleT;
-            } else if ((std::rand() >> 11) < 4) {
-                if ((std::rand() & 1) != 0) {
-                    blitElementRegionOpaque(dst, ui.sheet.frame(kFrameBall), 286, 217, 45, 77, 60,
-                                            21, false);
-                } else {
-                    blitElement(dst, ui.sheet.frame(kFrameSparkle), 286, 217, false);
-                }
-                ui.sparkleT = (std::rand() & 7) + 1;
-            }
-        }
-        if (!ui.msg.active()) {
-            // [RE 0x432830] 无消息时状态推进
+        // [RE 0x432830] 消息超时/空闲时状态推进（advance 内部处理背景恢复）
+        if (ui.msg.advance(app)) {
             switch (ui.state) {
             case 1:
                 ui.state = 2;
@@ -501,7 +488,7 @@ bool magicHandler(const SDL_Event* event, void* user) {
                 break;
             case 3:
                 ui.state = 4;
-                blitElement(dst, ui.sheet.frame(kFrameExit), 286, 188, false);
+                blitElement(dst, ui.sheet.frame(kFrameEyesClosed), 286, 188, false); // 闭眼冥想
                 ui.countdown = ui.skipAnim ? 1 : 10;
                 break;
             case 5:
@@ -538,6 +525,24 @@ bool magicHandler(const SDL_Event* event, void* user) {
             }
             default:
                 break;
+            }
+        }
+        // [RE 0x432894] 说话口型：FloatMessage 显示期间（或口型驻留中）每 tick 25% 随机
+        // 张嘴（帧5）/闭嘴擦除（帧1 嘴区 patch），末拍画帧4 归闭嘴；state 8 不播
+        if (ui.state != 8 && (ui.msg.active() || ui.mouthT != 0)) {
+            if (ui.mouthT != 0) {
+                if (ui.mouthT == 1) {
+                    blitElement(dst, ui.sheet.frame(kFrameMouthClosed), 286, 220, false);
+                }
+                --ui.mouthT;
+            } else if ((std::rand() >> 11) < 4) {
+                if ((std::rand() & 1) != 0) {
+                    blitElementRegionOpaque(dst, ui.sheet.frame(kFrameBall), 286, 217, 45, 77, 60,
+                                            21, false);
+                } else {
+                    blitElement(dst, ui.sheet.frame(kFrameMouthOpen), 286, 217, false);
+                }
+                ui.mouthT = (std::rand() & 7) + 1;
             }
         }
         app.renderFrame();
@@ -599,7 +604,7 @@ bool magicHandler(const SDL_Event* event, void* user) {
             return true;
         }
         if (ui.state == 7) {
-            if (ui.hover == 13) { // EXIT → 重看条件浮字
+            if (ui.hover == 13) { // 眼部区 → 重看条件浮字
                 ui.state = 6;
                 ui.msg.show(app, kCondNames[ui.cond]);
             } else if (ui.hover != 0) { // 选定惩罚
