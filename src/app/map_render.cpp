@@ -519,6 +519,27 @@ void renderMap(Application& app, int centerX, int centerY) {
                                        hfView.width, hfView.height, it.id,
                                        it.hitSpr ? it.hitSpr : nullptr,
                                        it.hitSpr ? it.hitFrame : 0, it.x, it.y});
+        // [RE 0x409B18] 高亮形状 = 原版 pickBuffer 写入形状：estate g_pickMask 帧 (8-rot-dir)&1、
+        //   corp 帧 ((8-rot-dir)&1)+2，落点 = (drawListX, drawListY-40)
+        //   （重写拾取体感改用帧 4，此处单独记录供 highlightBlink 使用）
+        {
+            GameState::MapHitRegion& hit = state.mapHitRegions.back();
+            if (it.id > 2000 && it.id < 4000 &&
+                static_cast<size_t>(it.id - 2000) < state.estates.size()) {
+                const Estate& es = state.estates[it.id - 2000];
+                hit.hlShape = &state.flagTiles;
+                hit.hlFrame = (8 - (state.mapRotation + es.dir)) & 1;
+                hit.hlAnchorX = it.x;
+                hit.hlAnchorY = it.y - 40;
+            } else if (it.id > 4000 && it.id < 6000 &&
+                       static_cast<size_t>(it.id - 4000) < state.corps.size()) {
+                const Corp& cp = state.corps[it.id - 4000];
+                hit.hlShape = &state.flagTiles;
+                hit.hlFrame = ((8 - (state.mapRotation + cp.dir)) & 1) + 2;
+                hit.hlAnchorX = it.x;
+                hit.hlAnchorY = it.y - 40;
+            }
+        }
         const UiFrameView& f = it.spr->frame(it.frame);
         if (it.spr->isSprite()) {
             // [RE 0x40986A] 调色板[255] = 拥有者颜色（0=黑轮廓、1..8=玩家色、-1=原图）
@@ -829,17 +850,47 @@ int randomCellEnt(const GameState& state, int nearCellEnt) {
     return cand[std::rand() % n];
 }
 
-// [RE 0x451985] drawEstateHighlight：收租联动高亮（整条街/连锁店闪烁，纯渲染）
+// [RE 0x451985] captureHighlightShapes：从最后一次渲染的 mapHitRegions 提取高亮形状快照
+//   （原版 pickBuffer 标记语义：标记后不再随地图数据变化重建）
+void captureHighlightShapes(Application& app) {
+    GameState& state = app.gameState();
+    state.highlightShapes.clear();
+    for (const auto& it : state.mapHitRegions) {
+        if (it.hlShape == nullptr) {
+            continue;
+        }
+        bool marked = false;
+        if (it.id > 2000 && it.id < 4000) {
+            marked = std::find(state.highlightEstates.begin(), state.highlightEstates.end(),
+                               static_cast<int>(it.id) - 2000) != state.highlightEstates.end();
+        } else if (it.id > 4000 && it.id < 6000) {
+            marked = std::find(state.highlightCorps.begin(), state.highlightCorps.end(),
+                               static_cast<int>(it.id) - 4000) != state.highlightCorps.end();
+        }
+        if (!marked) {
+            continue;
+        }
+        const UiFrameView& sf = it.hlShape->frame(it.hlFrame);
+        state.highlightShapes.push_back({it.hlShape, it.hlFrame, it.hlAnchorX - sf.offsetX,
+                                         it.hlAnchorY - sf.offsetY});
+    }
+    RICH4_LOGI("highlight shapes: %zu (estates %zu, corps %zu, RE 0x451985)",
+               state.highlightShapes.size(), state.highlightEstates.size(),
+               state.highlightCorps.size());
+}
+
+// [RE 0x451985] drawEstateHighlight：高亮快照闪烁（整条街/连锁店/单块，纯渲染）
 // 依据: 0x451985 每帧取 byte_476380[i] 亮度偏移（16 帧，30ms/帧）→ sub_4554FC 按
 //       g_pickBuffer 的 0xFFFF 标记重绘高亮像素；循环后 sub_4528B9(400) 停留；
 //       byte_476380 = {4,8,12,16,12,8,4,0,252,248,244,240,244,248,252,0}（252..240 = -4..-16）
-// 迁移: 重写无 pickBuffer，用 mapHitRegions 中 estate（2000+idx）的绘制区域/像素掩码，
-//       对 RGB555 逐通道偏移（8bit 亮度量 → 5bit: >>2）；
+// 迁移: 重写无 pickBuffer，用 highlightShapes 快照（captureHighlightShapes 提取自
+//       mapHitRegions 的原版 g_pickMask 形状）对 RGB555 逐通道偏移（8bit 亮度量 → 5bit: >>2）；
 //       帧推进/停留由阻塞播放 playHighlightBlink（turn_system.cpp）负责，本函数仅按
 //       highlightFrame 渲染（0..15 有效；16=停留期无偏移）
 void drawEstateHighlight(Application& app) {
     GameState& state = app.gameState();
-    if (state.highlightFrame < 0 || state.highlightFrame > 15 || state.highlightEstates.empty()) {
+    if (state.highlightFrame < 0 || state.highlightFrame > 15 ||
+        state.highlightShapes.empty()) {
         return;
     }
     // [RE 0x476380] 高亮亮度偏移序列（16 帧；i8）
@@ -861,34 +912,16 @@ void drawEstateHighlight(Application& app) {
         const int b = std::clamp((c & 0x1F) + off5, 0, 31);
         px[o] = static_cast<uint16_t>((r << 10) | (g << 5) | b);
     };
-    for (const auto& it : state.mapHitRegions) {
-        if (it.id < 2000 || it.id >= 4000) {
+    for (const auto& hs : state.highlightShapes) {
+        const UiFrameView& sf = hs.shape->frame(hs.frame);
+        const uint8_t* mask = hs.shape->frameBytes(hs.frame);
+        if (!mask) {
             continue;
         }
-        const int idx = static_cast<int>(it.id) - 2000;
-        if (std::find(state.highlightEstates.begin(), state.highlightEstates.end(), idx) ==
-            state.highlightEstates.end()) {
-            continue;
-        }
-        if (it.shape) {
-            const UiFrameView& sf = it.shape->frame(it.shapeFrame);
-            const uint8_t* mask = it.shape->frameBytes(it.shapeFrame);
-            if (!mask) {
-                continue;
-            }
-            const int ox = it.anchorX - sf.offsetX;
-            const int oy = it.anchorY - sf.offsetY;
-            for (int ly = 0; ly < sf.height; ++ly) {
-                for (int lx = 0; lx < sf.width; ++lx) {
-                    if (mask[static_cast<size_t>(ly) * sf.width + lx] != 0) {
-                        adjust(ox + lx, oy + ly);
-                    }
-                }
-            }
-        } else {
-            for (int ly = 0; ly < it.h; ++ly) {
-                for (int lx = 0; lx < it.w; ++lx) {
-                    adjust(it.x + lx, it.y + ly);
+        for (int ly = 0; ly < sf.height; ++ly) {
+            for (int lx = 0; lx < sf.width; ++lx) {
+                if (mask[static_cast<size_t>(ly) * sf.width + lx] != 0) {
+                    adjust(hs.x + lx, hs.y + ly);
                 }
             }
         }

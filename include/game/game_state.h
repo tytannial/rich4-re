@@ -422,6 +422,13 @@ struct GameState {
         // [PORT 2026-09-26] 来源格 id（仅"格命中"记录；item/玩家/物件命中 = 0）。
         //   地块格归一化后 id 变对象 id（2000+），查看提示借源格显示 cellEnt+4 地名（城市名）
         uint16_t cellId = 0;
+        // [RE 0x409B18/0x451985] 高亮形状（原版拾取掩码 g_pickMask：estate 帧 0/1、
+        //   corp 帧 2/3，落点 = 绘制锚点 y-40）；拾取形状 shape 为体感改用帧 4，
+        //   highlightBlink 用 hl* 恢复原版形状/位置；无主空地 hlShape=null（原版不写缓冲）
+        const UiImage* hlShape = nullptr;
+        int hlFrame = 0;
+        int hlAnchorX = 0;
+        int hlAnchorY = 0;
     };
     std::vector<MapHitRegion> mapHitRegions;
     std::string objectTipText; // 非空时显示提示框
@@ -435,6 +442,18 @@ struct GameState {
     // 迁移: 重写无 pickBuffer，改用 mapHitRegions 的 estate 绘制区域做 RGB555 亮度偏移；
     //       帧推进/停留由阻塞播放 playHighlightBlink 控制，drawEstateHighlight 仅渲染
     std::vector<int> highlightEstates; // 联动组 estate idx（含自身）
+    // [RE 0x451985] corp 单块高亮（新闻 idx 6/14/18/19 的商業用地分支；原版 markPickBuffer(corp)
+    //   单块闪烁；重写高亮支持 estate+corp 两类，二选一使用）
+    std::vector<int> highlightCorps;   // corp idx
+    // [RE 0x451985] 高亮形状快照（原版 pickBuffer 标记语义：启动时从已渲染场景提取，
+    //   播放期间不随地图数据变化重建——拆除后的地块仍可高亮，如新闻 idx 19 山洪）
+    struct HighlightShape {
+        const UiImage* shape = nullptr; // g_pickMask（estate 帧 0/1 / corp 帧 2/3）
+        int frame = 0;
+        int x = 0; // 落点左上角（已含帧 offset；原版 = 锚点 y-40）
+        int y = 0;
+    };
+    std::vector<HighlightShape> highlightShapes;
     int highlightFrame = -1;           // -1=未激活；0..15=闪烁帧；16=400ms 停留期
 
     // ===== 经济/回合全局 =====

@@ -32,10 +32,15 @@ void initMapEntities(Application& app);
 //   重写为小地图每次绘制时重建，保证标记随物件变化更新
 void buildMiniMapMarks(Application& app);
 
-// [RE 0x451985] 收租联动高亮：对 highlightEstates 的地块区域做亮度闪烁
-//   （原版 sub_451985 16 帧 byte_476380 + sub_4554FC 按 g_pickBuffer 标记重绘；
-//    重写用 mapHitRegions 的 estate 绘制区域/像素掩码做 RGB555 亮度偏移）
-//   每帧调用，内部按 30ms/帧推进 + 400ms 停留后自动结束
+// [RE 0x451985] 收租/新闻联动高亮：
+//   captureHighlightShapes = 从当前 mapHitRegions 提取 highlightEstates/highlightCorps 的
+//   原版掩码形状快照（estate 帧 0/1、corp 帧 2/3，落点 = 锚点 y-40）到
+//   GameState.highlightShapes；playHighlightBlink 启动时调用一次（原版 pickBuffer 语义：
+//   播放期间不随地图数据重建，拆除后的地块仍高亮）
+void captureHighlightShapes(Application& app);
+
+//   drawEstateHighlight = 对快照区域做 RGB555 亮度闪烁（每帧调用；帧推进/停留由
+//   playHighlightBlink 驱动）
 void drawEstateHighlight(Application& app);
 
 } // namespace rich4

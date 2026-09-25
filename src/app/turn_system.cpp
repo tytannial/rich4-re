@@ -575,6 +575,7 @@ int facingBetween(GameState& st, int fromId, int toId) {
 // 差异: 原版高亮含同盟地块（v140）→ P4
 void startRouteHighlight(GameState& st, const Estate& es) {
     st.highlightEstates.clear();
+    st.highlightCorps.clear();
     if (es.type == 0) {
         for (size_t j = 1; j < st.estates.size(); ++j) {
             const Estate& e = st.estates[j];
@@ -605,7 +606,11 @@ void playHighlightBlink(Application& app) {
     if (st.highlightFrame < 0) {
         return; // 联动组 ≤ 1（原版 v141 > 1 才播放）
     }
-    RICH4_LOGI("route highlight: %zu estates blink (RE 0x451985)", st.highlightEstates.size());
+    // [RE 0x451985] 形状快照（原版 pickBuffer 标记语义：启动时提取，播放期间不随地图数据
+    //   重建——拆除后的地块仍显示高亮，如新闻 idx 19 山洪归公）
+    captureHighlightShapes(app);
+    RICH4_LOGI("route highlight: %zu estates + %zu corps -> %zu shapes (RE 0x451985)",
+               st.highlightEstates.size(), st.highlightCorps.size(), st.highlightShapes.size());
     auto waitAudio = [&app](int ms) {
         for (int t = 0; t < ms; t += 5) {
             app.audio().update();
@@ -627,6 +632,8 @@ void playHighlightBlink(Application& app) {
     waitAudio(400);
     st.highlightFrame = -1;
     st.highlightEstates.clear();
+    st.highlightCorps.clear();
+    st.highlightShapes.clear();
 }
 
 // [RE 0x45144F] playEventFlc：阻塞播放事件 FLC 帧（得點券 data.mkf[537] 等）

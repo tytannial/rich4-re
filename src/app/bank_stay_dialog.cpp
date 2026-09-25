@@ -971,7 +971,10 @@ bool stayHandler(const SDL_Event* event, void* user) {
             char text[64];
             std::snprintf(text, sizeof(text), "銀行暫停放款\n\n還剩%d天！",
                           (pl.bankFinanceFlags & 0x7F) + 1); // [RE 0x464AD5]
-            showMessage(app, text, 8000);
+            // [RE 0x4351EE] 原版 showMessage(text, 0x800005DC) = 1500ms + 文本左移 100px
+            //   （0x800005DC & 0x7FFFFFFF = 0x5DC；重写 showMessage 未实现左移，且负值会被
+            //   当作超大 uint64 → 永不退出，故传正 1500；曾误传 8000 导致提示框久留）
+            showMessage(app, text, 1500);
         }
         if (st.settings[1] != 0) { // [RE 0x435200] 动画过程开关
             ui.state = 1;

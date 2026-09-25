@@ -271,15 +271,28 @@ void forceHotelCheckout(GameState& st) {
     }
 }
 
-// [RE 0x451985] 同名（同路段）estate 高亮闪烁：填列表 → highlightFrame=0 → 阻塞播放
+// [RE 0x451985] 地块高亮闪烁：填列表（estate/corp）→ highlightFrame=0 → 阻塞播放
 // 注：原版调用点直接 highlightBlink（无 >1 判定），单块也播
 void blinkHighlight(Application& app) {
     GameState& st = app.gameState();
-    if (st.highlightEstates.empty()) {
+    if (st.highlightEstates.empty() && st.highlightCorps.empty()) {
         return;
     }
     st.highlightFrame = 0;
     playHighlightBlink(app);
+}
+
+// [RE 0x451985] 单块高亮（原版 markPickBuffer(单块) → highlightBlink）：objId 为 estate/corp
+void blinkSingleObj(Application& app, int objId) {
+    GameState& st = app.gameState();
+    st.highlightEstates.clear();
+    st.highlightCorps.clear();
+    if (objId > 2000 && objId < 4000) {
+        st.highlightEstates.push_back(objId - 2000);
+    } else if (objId > 4000 && objId < 6000) {
+        st.highlightCorps.push_back(objId - 4000);
+    }
+    blinkHighlight(app);
 }
 
 // 破坏类事件阶段 1 公共：视口对准 + 输出对象坐标（expireAssets 范围中心）
@@ -356,6 +369,7 @@ void evt06_landPriceUp(NewsCtx& ctx, int phase) {
         Estate& es = st.estates[objId - 2000];
         focusView(app, es.x, es.y);
         st.highlightEstates.clear();
+        st.highlightCorps.clear();
         for (size_t i = 1; i < st.estates.size(); ++i) {
             Estate& e = st.estates[i];
             if (std::strncmp(e.name, es.name, sizeof(es.name)) == 0) {
@@ -371,7 +385,7 @@ void evt06_landPriceUp(NewsCtx& ctx, int phase) {
         focusView(app, cp.x, cp.y);
         // [RE 0x449721 共享段] +34 buildPrice ×1.3
         cp.buildPrice = static_cast<uint16_t>(static_cast<int>(cp.buildPrice * 1.3));
-        // [差异] 原版此分支 markPickBuffer(corp) 单块高亮：重写高亮机制仅支持 estate（跳过）
+        blinkSingleObj(app, objId); // [RE 0x4496EC] 单块 corp 高亮
         resetView(app);
     }
 }
@@ -393,6 +407,7 @@ void evt14_haunted(NewsCtx& ctx, int phase) {
         Estate& es = st.estates[objId - 2000];
         focusView(app, es.x, es.y);
         st.highlightEstates.clear();
+        st.highlightCorps.clear();
         for (size_t i = 1; i < st.estates.size(); ++i) {
             Estate& e = st.estates[i];
             if (std::strncmp(e.name, es.name, sizeof(es.name)) == 0) {
@@ -408,7 +423,7 @@ void evt14_haunted(NewsCtx& ctx, int phase) {
         focusView(app, cp.x, cp.y);
         // [RE 0x44A6B6 共享段] +34 buildPrice ×0.7
         cp.buildPrice = static_cast<uint16_t>(static_cast<int>(cp.buildPrice * 0.7));
-        // [差异] 原版此分支 markPickBuffer(corp) 单块高亮：重写高亮机制仅支持 estate（跳过）
+        blinkSingleObj(app, objId); // [RE 0x44A40D] 单块 corp 高亮
         resetView(app);
     }
 }
@@ -456,6 +471,7 @@ void evt18_earthquake(NewsCtx& ctx, int phase) {
         Estate& es = st.estates[objId - 2000];
         focusView(app, es.x, es.y);
         st.highlightEstates.clear();
+        st.highlightCorps.clear();
         for (size_t i = 1; i < st.estates.size(); ++i) {
             Estate& e = st.estates[i];
             if (std::strncmp(e.name, es.name, sizeof(es.name)) != 0) {
@@ -483,7 +499,7 @@ void evt18_earthquake(NewsCtx& ctx, int phase) {
                 forceHotelCheckout(st); // [RE 0x44A8EE sub_40DFFA]
             }
         }
-        // [差异] 原版单块 corp 高亮：重写机制仅支持 estate（跳过）
+        blinkSingleObj(app, ctx.targetObjId); // [RE 0x44A8D3] 单块 corp 高亮
         resetView(app);
         newsWait(app, 500);
     }
@@ -509,11 +525,7 @@ void evt19_flood(NewsCtx& ctx, int phase) {
     int y = 0;
     focusObjId(app, ctx.targetObjId, x, y);
     demolishAtObjId(app, ctx.targetObjId, 1); // [RE 0x44AAAF] 夷平归公
-    st.highlightEstates.clear();
-    if (ctx.targetObjId < 4000) {
-        st.highlightEstates.push_back(ctx.targetObjId - 2000);
-    }
-    blinkHighlight(app);
+    blinkSingleObj(app, ctx.targetObjId);     // [RE 0x44AA9F] 单块高亮（estate/corp）
     resetView(app);
     newsWait(app, 300); // [RE 0x44AACA]
     // [TODO P4] 业主台词 sub_44EF41(targetParam-1, 2, ...)
