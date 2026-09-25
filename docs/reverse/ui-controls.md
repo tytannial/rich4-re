@@ -669,8 +669,15 @@ UI 音效与游戏音效槽**是两套**，勿混：
   0x405 标题 FLC（重写按 tick 逐帧推进，原版阻塞）→ 游戏体 →
   倒计时到 0 → 等待场上气球全清 → 大字 2s → 退出。
   **勿照抄 99**（实机表现为"进去干等 10 秒才 ready go"）。
-- **数字/大字 = 色键 blit**：原版 `sub_456418` 是 `0x455C52 blitElement` 薄封装
-  （**跳过色键 0**，非不透明）；误用 `blitElementOpaque` 会出现黑底方块。
+- **数字 blit 两种方式勿混**：HUD 小数字（帧 0..9）原版 `blitElementFullscreen`(0x4563F5)
+  = **不透明**拷贝（黑色填充像素值=0，色键会吃掉填充只剩线框）；结算大字（帧 10..19）
+  原版 `sub_456418` = `blitElement` **色键**封装（opaque 会出黑底方块）。
+- **标题 FLC 叠加勿漏**：三游戏 uiState==1 期间每 tick 在场景上叠画 panel[78]
+  READY GO 帧（挖寶曾漏 → 实机看不到 ready go）。
+- **接钱音效表 = {22,23,24,15}**（0x4750BF，stride 8 {index,handle}）：投掷 22、
+  **引线嘶嘶 24 循环**（playEffectLooping，接中/漏接停）、爆炸 15。
+  `audioPlayEffect` 第一参是**表项指针**；读表必须覆盖到 -1 终止符（曾因 get_bytes
+  范围截断误判空表）。
 - **气球绘制裁剪 y<387**：sky 区画布 clip → 气球从底部面板**后面**升起（初生 y=420
   不可见）；重写 `blitElementRegion` 限高等价。
 - **挖寶=记忆游戏**：宝物堆仅开场（intro+标题 FLC）显示，FLC 后 `digInitDraw(0)`

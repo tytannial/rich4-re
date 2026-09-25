@@ -11,7 +11,7 @@
 //   HUD y=421（panel[79] 小数字帧 0..9 不透明）：倒计时 @(49,69,94)+单位帧0 @(114)；
 //   四计数 @(185,205)/(276,296)/(367,387)/(458,478)；总分 @(529|549,569,589)。
 //   音乐：挖 12 / 气 11 / 接 10。音效：挖 {11,12,13,14,16,17,18,15}、气 {19,20,21}、
-//   接 = 空表（原版句柄未初始化=静音 quirk）。
+//   接 {22,23,24,15}（投掷 22 / 预留 23 / 引线嘶嘶循环 24 / 爆炸 15）。
 //
 // case 6 企鵝挖寶（digWndProc 0x414858，100ms×150）：9×9 等距网格（静态坐标表
 //   0x474D7C，x=0 无效、高 nibble=1 冰屋邻格）；digInitLayout 0x412014 埋宝 5 类
@@ -162,10 +162,12 @@ void blitFlcFrame(Surface& dst, const FliDecoder& flc, int x, int y, bool transp
     }
 }
 
-// HUD 数字（panel[79] 帧 0..9；原版 sub_456418 = 色键 blitElement）
+// HUD 小数字（panel[79] 帧 0..9）：原版 blitElementFullscreen(0x4563F5) = **不透明**
+//   像素拷贝——数字黑色填充像素值恰为 0，色键 blit 会把填充当透明吃掉只剩白线框。
+//   （结算大字帧 10..19 才用 sub_456418 色键 blitElement，背景需透明）
 void drawHudNumber(Surface& dst, const UiImage& digits, const char* buf, const int* xs, int n) {
     for (int i = 0; i < n; ++i) {
-        blitElement(dst, digits.frame(buf[i] - '0'), xs[i], 421, false);
+        blitElementOpaque(dst, digits.frame(buf[i] - '0'), xs[i], 421);
     }
 }
 
@@ -364,7 +366,11 @@ void digTick(DigCtx& ui) {
         }
         break;
     }
-    case 3: {  // 挖掘（4 tick）：phase3 判定宝物
+    case 3: {  // 挖掘（4 tick）：phase2 画洞（**无论有无宝**，[RE 0x41287A]）、
+              // phase3 判定宝物
+        if (ui.phase == 2) {
+            ui.dug[static_cast<int>(ui.posY)][static_cast<int>(ui.posX)] = true;
+        }
         if (ui.phase == 3) {
             const int c = static_cast<int>(ui.posX);
             const int r = static_cast<int>(ui.posY);
@@ -373,7 +379,6 @@ void digTick(DigCtx& ui) {
                 ui.showX = kDigCells[r][c].x;
                 ui.showY = kDigCells[r][c].y;
                 ui.cellType[r][c] = 0;
-                ui.dug[r][c] = true;
             } else {
                 ui.showType = 0;
             }
@@ -495,14 +500,14 @@ void drawDig(DigCtx& ui) {
     std::snprintf(buf, sizeof(buf), "%03d", ui.countdown);
     static const int kTimeX[3] = {49, 69, 94};
     drawHudNumber(dst, ui.digits, buf, kTimeX, 3);
-    blitElement(dst, ui.digits.frame(0), 114, 421, false);
+    blitElementOpaque(dst, ui.digits.frame(0), 114, 421);
     struct { int v; int x0; int x1; } rows[4] = {
         {ui.cnt[5], 185, 205}, {ui.cnt[3], 276, 296}, {ui.cnt[4], 367, 387}, {ui.cnt[2], 458, 478},
     };
     for (auto& r : rows) {
         std::snprintf(buf, sizeof(buf), "%02d", r.v);
-        blitElement(dst, ui.digits.frame(buf[0] - '0'), r.x0, 421, false);
-        blitElement(dst, ui.digits.frame(buf[1] - '0'), r.x1, 421, false);
+        blitElementOpaque(dst, ui.digits.frame(buf[0] - '0'), r.x0, 421);
+        blitElementOpaque(dst, ui.digits.frame(buf[1] - '0'), r.x1, 421);
     }
     const int score = digScore(ui);
     std::snprintf(buf, sizeof(buf), "%03d", score);
@@ -511,6 +516,9 @@ void drawDig(DigCtx& ui) {
     if ((ui.state == 1 || ui.state == 6) && (ui.anim & 0xF) == 4 || ui.state == 4 ||
         ui.state == 5) {
         drawBigScore(dst, ui.digits, score);
+    }
+    if (ui.uiState == 1) {
+        blitFlcFrame(dst, ui.title, 0, 0, true);  // READY GO 标题 FLC（0x405 阻塞播）
     }
 }
 
@@ -758,9 +766,10 @@ void moneyTick(MoneyCtx& ui, bool runLogic) {
             if (bx > left && bx < left + fr.width && b.y > top && b.y < top + fr.height &&
                 !ui.boomActive) {
                 if (type == 4) {  // [RE 0x4133D7] 炸弹 → 爆炸 FLC + 结束
-                    // 原版此处 audioStop(0x4750CF)/audioPlay(0x4750D7) 句柄未注册=静音，
-                    // 补全语义：爆炸音 Effect.mkf[82]（同地雷爆炸）
-                    ui.app->audio().playEffect(82);
+                    // 原版：audioStopEffect(0x4750CF)=停 Effect[24] 引线嘶嘶循环、
+                    //       audioPlayEffect(0x4750D7,0)=Effect[15] 爆炸音
+                    ui.app->audio().stopEffect(24);
+                    ui.app->audio().playEffect(15);
                     ui.dollDir = 0;
                     ui.dollExpr = 4;
                     ui.gamePhase = 1;
@@ -792,8 +801,9 @@ void moneyTick(MoneyCtx& ui, bool runLogic) {
                 b.y = static_cast<int16_t>(b.y + b.vy);
             }
             if (b.y > 380) {  // 漏接消失（炸弹仅计数，无惩罚）
-                if (type == 4 && --ui.bombs < 0) {
+                if (type == 4 && --ui.bombs <= 0) {
                     ui.bombs = 0;
+                    ui.app->audio().stopEffect(24);  // [RE 0x41351B] 末颗炸弹落地停引线音
                 }
                 b.x = 0;
                 continue;
@@ -826,7 +836,7 @@ void moneyTick(MoneyCtx& ui, bool runLogic) {
     if (!runLogic) {
         return;
     }
-    // 云触发/投弹（[RE 0x41374B] 原版音效句柄未初始化=静音 quirk）
+    // 云触发/投弹（[RE 0x41374B] 音效表 g_moneySoundTable={22,23,24,15}）
     if (ui.cloudFrame == -1) {
         if ((ui.richState < 2 && ui.richX > 320) || (ui.richState > 3 && ui.richX < 320)) {
             if (std::rand() % 10 < 7 && ui.gamePhase == 0) {
@@ -837,8 +847,10 @@ void moneyTick(MoneyCtx& ui, bool runLogic) {
     } else {
         ++ui.cloudFrame;
         if (ui.cloudFrame == 8 && !ui.boomActive) {
-            // 原版 audioPlayEffect(空表句柄)=静音（作者未完成），补全投掷音
-            ui.app->audio().playEffect(19);  // Effect.mkf[19]「噗」投掷音
+            // 原版：audioPlayEffect(g_moneySoundTable,0)=Effect[22] 投掷音、
+            //       audioPlayEffect(0x4750CF,1)=Effect[24] 引线嘶嘶**循环**
+            ui.app->audio().playEffect(22);
+            ui.app->audio().playEffectLooping(24);
             moneySpawn(ui, ui.cloudX, true);
         }
         if (ui.cloudFrame == 12) {
@@ -920,11 +932,11 @@ void drawMoney(MoneyCtx& ui, bool runLogic) {
     std::snprintf(buf, sizeof(buf), "%03d", ui.countdown >> 1);  // 50ms tick → 秒
     static const int kTimeX[3] = {49, 69, 94};
     drawHudNumber(dst, ui.digits, buf, kTimeX, 3);
-    blitElement(dst, ui.digits.frame(0), 114, 421, false);
+    blitElementOpaque(dst, ui.digits.frame(0), 114, 421);
     for (int r = 0; r < 4; ++r) {
         std::snprintf(buf, sizeof(buf), "%02d", ui.cnt[r]);
-        blitElement(dst, ui.digits.frame(buf[0] - '0'), 185 + r * 91, 421, false);
-        blitElement(dst, ui.digits.frame(buf[1] - '0'), 205 + r * 91, 421, false);
+        blitElementOpaque(dst, ui.digits.frame(buf[0] - '0'), 185 + r * 91, 421);
+        blitElementOpaque(dst, ui.digits.frame(buf[1] - '0'), 205 + r * 91, 421);
     }
     const int score = moneyScore(ui);
     std::snprintf(buf, sizeof(buf), "%03d", score);
@@ -1012,7 +1024,8 @@ bool moneyHandler(const SDL_Event* event, void* user) {
 
 // [RE 0x4155FC] miniGameMoneyRun：喜從天降交互版
 // 依据: 0x4155FC 反编译（资源 panel[78/79/92..99/100+char]、data[526]、
-//   musicPlayScene(10)、runModal moneyWndProc 0x414FCD 50ms；音效表空=静音 quirk）
+//   musicPlayScene(10)、runModal moneyWndProc 0x414FCD 50ms；
+//   音效表 g_moneySoundTable(0x4750BF)={22 投掷, 23, 24 引线循环, 15 爆炸}）
 int miniGameMoneyRun(Application& app) {
     GameState& st = app.gameState();
     const int p = st.currentPlayer;
@@ -1240,7 +1253,7 @@ void drawBalloon(BalloonCtx& ui) {
     std::snprintf(buf, sizeof(buf), "%03d", ui.countdown);
     static const int kTimeX[3] = {49, 69, 94};
     drawHudNumber(dst, ui.digits, buf, kTimeX, 3);
-    blitElement(dst, ui.digits.frame(0), 114, 421, false);
+    blitElementOpaque(dst, ui.digits.frame(0), 114, 421);
     std::snprintf(buf, sizeof(buf), "%04d", ui.score);
     static const int kScoreX[4] = {529, 549, 569, 589};
     drawHudNumber(dst, ui.digits, buf, kScoreX, 4);

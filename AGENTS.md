@@ -248,6 +248,12 @@ python tools/re_map.py
   （挖寶方向公式 0x412658：反编译 `dcx<=0→3-dr / dcx>0→(dr+7)&7`，反汇编实为
   `dcx>0→3-dr / dcx<0→(dr+7)&7`，照抄导致**企鹅倒退走路**，2026-09-25 实机发现）。
   凡"方向/对称/阈值比较"类分支，实现前用 `disasm` 核对原始跳转。
+- **get_bytes 读表必须覆盖到终止符**：Effect 音效表 = {index, handle} 对 stride 8、-1 终止
+  （`audioPlayEffect` 第一参是**表项指针**非句柄值）。曾因读取范围恰好截断在表首项之前，
+  把接钱音效表 {22,23,24,15} 误判成"空表静音 quirk"（2026-09-25 实机反馈才发现）。
+- **像素值恰为 0 的黑色内容勿用色键 blit**：panel[79] HUD 小数字黑色填充 RGB555=0，
+  色键 blit 会吃掉填充只剩线框（原版 `blitElementFullscreen` = 不透明拷贝）；
+  同资源的大数字（结算用）才走色键 `sub_456418`。
 - **指针表解码**：`off_XXXX`/`funcs_XXXX` 是指针数组，用 Python 读 exe 解码
   （VA→文件偏移 = `VA - 0x401A00`，BIG5 用 cp950；`get_string` 遇 BIG5 常失败）。
 - **IDA 串视图会截断 BIG5 格式串**：反编译显示 `"%s"` 的地址实际字节可能是
