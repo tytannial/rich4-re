@@ -376,21 +376,25 @@ void drawClerkSmall(StayCtx& ui, int frame) {
 
 // [RE 0x435669 WM_TIMER 0x4358B2] 每 tick 推进柜员动画
 void tickClerk(StayCtx& ui) {
-    // 上窗：bits 低 4 位 = 状态；1=循环眨眼、2=随机动作、0=等待随机触发
-    if ((ui.clerkBits & 0xF) == 1) {
+    // 上窗（眼区 80×40）：bits 低 4 位 = 状态；1=循环眨眼、2=随机眼态、**0=等待随机触发**
+    //（原版判定 (byte_48C3DF & 0xF)——高 6 位残留 v<<6/0x80 不影响再触发；
+    //  曾误写 clerkBits==0 → 状态 2/循环结束（bits=0x40/0x80）后永久冻结在闭眼帧，
+    //  实机"眼睛一直闭着"根因，2026-09-26 修）
+    const int phase = ui.clerkBits & 0xF;
+    if (phase == 1) {
         const int idx = (ui.clerkBits & 0x30) >> 4;
         drawClerkEye(ui, kClerkCycle[idx]);
         ui.clerkBits = static_cast<uint8_t>((ui.clerkBits + 16) & 0x3F);
         if ((ui.clerkBits & 0x30) == 0) {
             ui.clerkBits = 0x80;
         }
-    } else if ((ui.clerkBits & 0xF) == 2) {
+    } else if (phase == 2) {
         const int v = std::rand() % 3;
         if (((ui.clerkBits & 0xC0) >> 6) != v) {
             drawClerkEye(ui, kFrameEye3 + v);
             ui.clerkBits = static_cast<uint8_t>(v << 6);
         }
-    } else if (ui.clerkBits == 0) {
+    } else {
         const int v = std::rand() >> 10;
         if (v == 0) {
             ui.clerkBits |= 1;
