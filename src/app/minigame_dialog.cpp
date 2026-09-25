@@ -1175,7 +1175,10 @@ void balloonClick(BalloonCtx& ui, int mx, int my) {
         return;
     }
     Application& app = *ui.app;
-    int lastSound = 0;
+    // 命中/未命中各为表内独立槽（21/20）；一次射击多球同类只落一声（原版同 buffer
+    //   重启语义），命中优先保证爆裂音必响（2026-09-25 实机修正：曾被后续 miss 覆盖）
+    bool anyHit = false;
+    bool anyMiss = false;
     for (int i = 0; i < 16; ++i) {
         Balloon& b = ui.balloons[i];
         if (b.x == 0 || (b.type & 0xF0) != 0) {
@@ -1184,10 +1187,10 @@ void balloonClick(BalloonCtx& ui, int mx, int my) {
         const int hw = (b.type >= 6) ? 18 : 22;
         const int hh = (b.type >= 6) ? 26 : 30;
         if (mx < b.x - hw || mx > b.x + hw || my < b.y - hh || my > b.y + hh) {
-            lastSound = kSfxBalloonMiss;
+            anyMiss = true;
             continue;
         }
-        lastSound = kSfxBalloonHit;
+        anyHit = true;
         switch (b.type) {
         case 9:
             ui.score *= 2;
@@ -1215,8 +1218,10 @@ void balloonClick(BalloonCtx& ui, int mx, int my) {
         }
         b.type = 60;
     }
-    if (lastSound != 0) {
-        app.audio().playEffect(lastSound);
+    if (anyHit) {
+        app.audio().playEffect(kSfxBalloonHit);
+    } else if (anyMiss) {
+        app.audio().playEffect(kSfxBalloonMiss);
     }
 }
 
