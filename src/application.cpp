@@ -542,6 +542,56 @@ void Application::renderFrame() {
         }
     }
 
+    // [NEW] 调试：任意帧合成按键（--game-key "ctrl+shift+i,1500"；支持 ctrl+/shift+ 修饰）
+    for (const auto& [spec, frame] : m_gameKeys) {
+        if (m_frameCount != frame) {
+            continue;
+        }
+        std::string name = spec;
+        SDL_Keymod mod = SDL_KMOD_NONE;
+        for (;;) {
+            if (name.rfind("ctrl+", 0) == 0) {
+                mod |= SDL_KMOD_CTRL;
+                name = name.substr(5);
+                continue;
+            }
+            if (name.rfind("shift+", 0) == 0) {
+                mod |= SDL_KMOD_SHIFT;
+                name = name.substr(6);
+                continue;
+            }
+            break;
+        }
+        const SDL_Keycode key = SDL_GetKeyFromName(name.c_str());
+        if (key == SDLK_UNKNOWN) {
+            RICH4_LOGW("game-key: unknown key '%s' at frame %d", spec.c_str(), frame);
+            continue;
+        }
+        RICH4_LOGI("game-key frame=%d spec=%s", m_frameCount, spec.c_str());
+        auto pushKey = [&](SDL_Keycode k, uint8_t type) {
+            SDL_Event ev{};
+            ev.type = type;
+            ev.key.key = k;
+            ev.key.scancode = SDL_GetScancodeFromKey(k, nullptr);
+            ev.key.mod = mod;
+            SDL_PushEvent(&ev);
+        };
+        if ((mod & SDL_KMOD_CTRL) != 0) {
+            pushKey(SDLK_LCTRL, SDL_EVENT_KEY_DOWN);
+        }
+        if ((mod & SDL_KMOD_SHIFT) != 0) {
+            pushKey(SDLK_LSHIFT, SDL_EVENT_KEY_DOWN);
+        }
+        pushKey(key, SDL_EVENT_KEY_DOWN);
+        pushKey(key, SDL_EVENT_KEY_UP);
+        if ((mod & SDL_KMOD_SHIFT) != 0) {
+            pushKey(SDLK_LSHIFT, SDL_EVENT_KEY_UP);
+        }
+        if ((mod & SDL_KMOD_CTRL) != 0) {
+            pushKey(SDLK_LCTRL, SDL_EVENT_KEY_UP);
+        }
+    }
+
     // [NEW] 调试：在指定帧合成 ESC 按下+抬起（游戏内取消操作验证）
     if (m_gameEscFrame >= 0 && m_frameCount == m_gameEscFrame) {
         RICH4_LOGI("game-esc: synthesize ESC at frame %d", m_frameCount);

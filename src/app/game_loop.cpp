@@ -506,8 +506,10 @@ bool gameEventHandler(const SDL_Event* event, void* user) {
         GameState& st = app.gameState();
         // [NEW] 调试热键（--debug 启用）：Ctrl+1..9 / Ctrl+Shift+1..5 / Ctrl+Shift+字母
         //   （测试辅助，无原版对应；不受 gamePlayerControl 限制，AI 回合/移动中亦可操作）
-        if (st.debugMode && (SDL_GetModState() & SDL_KMOD_CTRL)) {
-            const bool dbgShift = (SDL_GetModState() & SDL_KMOD_SHIFT) != 0;
+        //   mod 判定联合事件 mod 字段（支持 --game-key 合成按键）
+        const SDL_Keymod dbgMod = static_cast<SDL_Keymod>(SDL_GetModState() | event->key.mod);
+        if (st.debugMode && (dbgMod & SDL_KMOD_CTRL)) {
+            const bool dbgShift = (dbgMod & SDL_KMOD_SHIFT) != 0;
             int dbgCode = 0;
             if (event->key.key >= SDLK_1 && event->key.key <= SDLK_9) {
                 dbgCode = static_cast<int>(event->key.key - SDLK_1) + 1;

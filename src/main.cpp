@@ -5,6 +5,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <string>
+#include <utility>
+#include <vector>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -66,6 +68,7 @@ int gameClick4Frame = 0;
 int gameClick5X = -1;
 int gameClick5Y = -1;
 int gameClick5Frame = 0;
+std::vector<std::pair<std::string, int>> gameKeys; // [NEW] --game-key "ctrl+5,1500"
     int gameEscFrame = -1;
     bool debugMode = false;
     for (int i = 1; i < argc; ++i) {
@@ -135,6 +138,13 @@ int gameClick5Frame = 0;
                 3) {
                 gameClick5X = -1;
                 gameClick5Y = -1;
+            }
+        } else if (arg == "--game-key" && i + 1 < argc) {
+            const std::string spec = argv[++i];
+            const size_t comma = spec.rfind(',');
+            if (comma != std::string::npos) {
+                gameKeys.emplace_back(spec.substr(0, comma),
+                                      std::atoi(spec.c_str() + comma + 1));
             }
         } else if (arg == "--game-esc" && i + 1 < argc) {
             gameEscFrame = std::atoi(argv[++i]);
@@ -210,6 +220,9 @@ int gameClick5Frame = 0;
     }
     if (gameClick5X >= 0 && gameClick5Y >= 0) {
         app.setGameClick5(gameClick5X, gameClick5Y, gameClick5Frame);
+    }
+    for (const auto& [spec, frame] : gameKeys) {
+        app.addGameKey(spec, frame);
     }
     if (gameEscFrame >= 0) {
         app.setGameEsc(gameEscFrame);

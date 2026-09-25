@@ -3,6 +3,8 @@
 #include <SDL3/SDL.h>
 
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "game/app/event_stack.h"
 #include "game/game_state.h"
@@ -121,6 +123,11 @@ public:
         m_gameClick5Frame = frame;
     }
 
+    // [NEW] 调试：在指定帧合成按键（spec 支持 "ctrl+5" / "ctrl+shift+i"，验证任意帧热键）
+    void addGameKey(const std::string& spec, int frame) {
+        m_gameKeys.emplace_back(spec, frame);
+    }
+
     // [NEW] 调试：在指定帧合成 ESC（游戏内系统菜单验证）
     void setGameEsc(int frame) { m_gameEscFrame = frame; }
 
@@ -207,6 +214,7 @@ private:
     int m_gameClick5X = -1;
     int m_gameClick5Y = -1;
     int m_gameClick5Frame = 0;
+    std::vector<std::pair<std::string, int>> m_gameKeys; // [NEW] --game-key 任意帧按键
     int m_gameEscFrame = -1;
     int m_gameDragX1 = -1;
     int m_gameDragY1 = -1;

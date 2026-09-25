@@ -70,6 +70,9 @@ struct QueryPanelState {
     int pageShown = 0;              // dword_475408
     std::vector<uint16_t> assetIds; // word_48BE70（collectOwnedAssetIds 结果）
     std::vector<uint8_t> aliveList; // byte_48C278 存活玩家（0xFF 终止语义 → 用 size）
+    // [RE 0x48C284] byte_48C284 按下记录：1=EXIT / 2..4=3 大页签 / 5=上翻 / 6=下翻；
+    //   原版 DOWN 时记下并画按下态，UP 时按此分发（子页签/玩家条为 DOWN 立即切换，不记录）
+    int pressed = 0;
 };
 
 // [RE 0x423B3B] collectOwnedAssetIds：按子页签筛选玩家地产/公司（2000+/4000+）
@@ -190,9 +193,14 @@ void drawQueryPanel(QueryPanelState& s) {
             s.app->text().drawText(dst, buf, 60, 234, 2);
         }
     }
-    // 3 大页签文字（选中白/未选灰，font20 shadow+bold @ x=60 居中）
+    // 3 大页签文字（选中/按下白，其余灰；font20 shadow+bold @ x=60 居中）
+    // 按下态底 = 帧 12 @ (12, 282+64i)（原版 DOWN 分支；UP 切换后由 page 态取代）
     for (int i = 0; i < 3; ++i) {
-        s.app->text().setFont(20, (i == s.page) ? kTextWhite : kTextDim, kTextDark, 3, 0);
+        const bool active = (i == s.page) || (s.pressed == i + 2);
+        if (s.pressed == i + 2 && s.sheet.frameCount() > 12) {
+            blitElement(dst, s.sheet.frame(12), kBigTabX, 282 + 64 * i, false);
+        }
+        s.app->text().setFont(20, active ? kTextWhite : kTextDim, kTextDark, 3, 0);
         s.app->text().drawText(dst, kQueryPageNames[i], 60, 302 + 64 * i, 2);
     }
     // 顶部玩家条（按钮帧 3 选中 / 4 未选 @ (16+88k, 14/15) + 名字 @ (+44, 30)）
@@ -208,10 +216,19 @@ void drawQueryPanel(QueryPanelState& s) {
             s.app->text().drawText(dst, st.players[pi].name, bx + 44, 30, 2);
         }
     }
-    // 翻页箭头（帧 7 上 / 8 下）
-    if (s.sheet.frameCount() > 8) {
+    // 翻页按钮：正常态仅地產清單页背景帧（panel.mkf[9] 帧 1）自带；
+    // 按下态 = 帧 7（上）/8（下）（原版 DOWN 分支 blit，UP 后整页重绘恢复）
+    if (s.pressed == 5 && s.sheet.frameCount() > 7) {
         blitElement(dst, s.sheet.frame(7), kPageBtnL, kPageUpT, false);
+    }
+    if (s.pressed == 6 && s.sheet.frameCount() > 8) {
         blitElement(dst, s.sheet.frame(8), kPageBtnL, kPageDownT, false);
+    }
+    // EXIT 按下态（原版 DOWN：帧 0 的 (492,9) 110x29 恢复 + 帧 6 @ (547,23)）
+    if (s.pressed == 1 && s.sheet.frameCount() > 6) {
+        blitElementRegionOpaque(dst, s.sheet.frame(0), kCloseL, kCloseT, kCloseL, kCloseT,
+                                kCloseR - kCloseL, kCloseB - kCloseT, false);
+        blitElement(dst, s.sheet.frame(6), 547, 23, false);
     }
     // 页内容
     switch (s.page) {
@@ -415,6 +432,10 @@ void drawLandPage(QueryPanelState& s) {
     }
     const int32_t chainRent = chainCount * 2000 * st.moneyMul;
 
+    // 行文字色（sub_4225A3）：普通/住宅 0x101010（黑）；商業用地/設施 0x1010F0（蓝）；
+    //   子页签 2（商業區）整页蓝；子页签 0（全部）按列表序——首个 corp 行起后续行全部转蓝
+    //   （原版 v32 标志只切一次，estate 分支不再改回）
+    uint32_t rowColor = (s.subPage == 2) ? 0x1010F0 : kTextDark;
     for (int row = 0; row < s.pageShown; ++row) {
         const int idx = s.pageStart + row;
         if (idx < 0 || idx >= static_cast<int>(s.assetIds.size())) {
@@ -423,7 +444,7 @@ void drawLandPage(QueryPanelState& s) {
         const uint16_t id = s.assetIds[idx];
         const int y = kListRowY0 + kListRowStep * row;
         if (id >= 4000) {
-            // 商業用地/设施行（0x101110）
+            rowColor = 0x1010F0; // [RE 0x4225A3] 蓝（1052912 = 0x1010F0）
             const size_t ci = id - 4000;
             if (ci >= st.corps.size()) {
                 continue;
@@ -431,7 +452,7 @@ void drawLandPage(QueryPanelState& s) {
             const Corp& cp = st.corps[ci];
             const std::string name = big5ToUtf8(reinterpret_cast<const char*>(cp.pad4),
                                                 sizeof(cp.pad4));
-            t.setFont(16, 0x101110, 0, 2, 1);
+            t.setFont(16, rowColor, 0, 2, 1);
             t.drawText(dst, name.c_str(), kColX[0], y, 2);
             if (cp.sub != 0 && cp.type <= 4) {
                 t.drawText(dst, kBuildingNames[6 + cp.type], kColX[1], y, 2);
@@ -463,7 +484,7 @@ void drawLandPage(QueryPanelState& s) {
             }
             const Estate& es = st.estates[ei];
             const std::string name = big5ToUtf8(es.name, sizeof(es.name));
-            t.setFont(16, kTextDark, 0, 2, 1);
+            t.setFont(16, rowColor, 0, 2, 1);
             t.drawText(dst, name.c_str(), kColX[0], y, 2);
             int32_t fee = 0;
             if (es.type != 0) {
@@ -546,68 +567,97 @@ bool queryEventHandler(const SDL_Event* event, void* user) {
         }
         const int x = static_cast<int>(event->button.x);
         const int y = static_cast<int>(event->button.y);
-        // 关闭（EXIT 钮）
+        // 注意：原版 sub_423CF3 **全函数无音效调用**——本面板不播点击音
+        // [RE 0x423CF3] WM_LBUTTONDOWN：记 byte_48C284 + 画按下态（UP 时执行）
         if (x >= kCloseL && x <= kCloseR && y >= kCloseT && y <= kCloseB) {
-            s.app->audio().playEffect(1);
-            s.app->events().requestExit(0);
+            s.pressed = 1; // EXIT
+            drawQueryPanel(s);
             return true;
         }
-        bool changed = false;
-        // 3 大页签
-        for (int i = 0; i < 3 && !changed; ++i) {
+        for (int i = 0; i < 3; ++i) {
             const int ty = kBigTabY0 + kBigTabStep * i;
             if (x >= kBigTabX && x <= kBigTabX + kBigTabW && y >= ty && y <= ty + kBigTabH) {
-                if (s.page != i) {
-                    s.page = i;
-                    changed = true;
-                }
+                s.pressed = 2 + i;
+                drawQueryPanel(s);
+                return true;
             }
         }
-        if (!changed && s.page != kPageAsset) {
-            // 子页签（地產清單 5 项）
+        // 子页签：原版 DOWN 立即切换（sub_423070 + sub_4225A3(dir=0) 回首页），不记 byte_48C284
+        //   （原版外层条件 dword_4753FC == 1，仅地產清單页）
+        if (s.page == kPageLand) {
             for (int i = 0; i < 5; ++i) {
                 const int sx = kSubTabX + kSubTabW * i;
                 if (x >= sx && x <= sx + kSubTabW && y >= kSubTabT && y <= kSubTabB) {
                     if (s.subPage != i) {
                         s.subPage = i;
-                        changed = true;
+                        refreshLandPage(s);
+                        drawQueryPanel(s);
                     }
-                    break;
+                    return true;
                 }
             }
         }
-        if (!changed) {
-            // 顶部玩家条
-            for (size_t k = 0; k < s.aliveList.size(); ++k) {
-                const int bx = kPlayerBtnX + kPlayerBtnStep * static_cast<int>(k);
-                if (x >= bx && x <= bx + 88 && y >= kPlayerBtnT && y <= kPlayerBtnB) {
-                    if (s.selPlayer != s.aliveList[k]) {
-                        s.selPlayer = s.aliveList[k];
-                        changed = true;
-                    }
-                    break;
+        // 顶部玩家条：原版 DOWN 立即切换（byte_48C284=7 但 UP 分支无 case 7）
+        for (size_t k = 0; k < s.aliveList.size(); ++k) {
+            const int bx = kPlayerBtnX + kPlayerBtnStep * static_cast<int>(k);
+            if (x >= bx && x <= bx + 88 && y >= kPlayerBtnT && y <= kPlayerBtnB) {
+                if (s.selPlayer != s.aliveList[k]) {
+                    s.selPlayer = s.aliveList[k];
+                    refreshLandPage(s);
+                    drawQueryPanel(s);
                 }
+                return true;
             }
         }
-        if (!changed && x >= kPageBtnL && x <= kPageBtnR) {
-            // 翻页箭头
+        // 翻页箭头（仅地產清單页；DOWN 画帧 7/8 按下态，UP 翻页）
+        if (s.page == kPageLand && x >= kPageBtnL && x <= kPageBtnR) {
             if (y >= kPageUpT && y <= kPageUpB) {
-                if (s.page == kPageLand) {
-                    updateLandPage(s, 2);
-                    changed = true;
-                }
-            } else if (y >= kPageDownT && y <= kPageDownB) {
-                if (s.page == kPageLand) {
-                    updateLandPage(s, 1);
-                    changed = true;
-                }
+                s.pressed = 5;
+                drawQueryPanel(s);
+                return true;
+            }
+            if (y >= kPageDownT && y <= kPageDownB) {
+                s.pressed = 6;
+                drawQueryPanel(s);
+                return true;
             }
         }
-        if (changed) {
-            s.app->audio().playEffect(1);
-            refreshLandPage(s);
-            drawQueryPanel(s);
+        return true;
+    }
+    if (event->type == SDL_EVENT_MOUSE_BUTTON_UP) {
+        if (event->button.button != SDL_BUTTON_LEFT) {
+            return false;
         }
+        // [RE 0x423CF3] WM_LBUTTONUP：按 byte_48C284 分发（松开触发）
+        const int pressed = s.pressed;
+        s.pressed = 0;
+        switch (pressed) {
+            case 1: // EXIT：setPauseDraw(0) + postModalExit(0)
+                s.app->events().requestExit(0);
+                return true;
+            case 2:
+            case 3:
+            case 4: { // 切页签：dword_4753FC = byte_48C284-2；page==1 时 sub_4225A3(...,0)
+                const int page = pressed - 2;
+                if (s.page != page) {
+                    s.page = page;
+                    refreshLandPage(s);
+                }
+                drawQueryPanel(s);
+                return true;
+            }
+            case 5: // 上一页（sub_4225A3(dir=2)）
+                updateLandPage(s, 2);
+                drawQueryPanel(s);
+                return true;
+            case 6: // 下一页（sub_4225A3(dir=1)）
+                updateLandPage(s, 1);
+                drawQueryPanel(s);
+                return true;
+            default:
+                break;
+        }
+        drawQueryPanel(s);
         return true;
     }
     return false;
