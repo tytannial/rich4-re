@@ -2,6 +2,7 @@
 
 #include <SDL3/SDL.h>
 
+#include <cstdlib>
 #include <cstring>
 #include <vector>
 
@@ -84,25 +85,17 @@ bool itemLineHandler(const SDL_Event* event, void* user) {
 
 }  // namespace
 
-// [RE 0x44EF41] sub_44EF41：角色气泡台词（道具/卡片效果入口调用）
+// [RE 0x44EF41] playLine：通用角色气泡台词（原 sub_44EF41 本体）
 // 依据: 0x44EF41 反编译；tip 框 data.mkf[517] 帧 5 @(220,130) + 头像 pieceSprites[p] 帧 1
 //   @(170,130) + 文本 @(200,130) 或 '@MM' 表情 data.mkf[519] 帧 MM-1 @(240,130)；
 //   时长 1000ms；同文本指针去重（dword_4762C8）；状态中（stateFlags BYTE1/state37/byte54）不显示
-void playItemLine(Application& app, int player, int itemId) {
+void playLine(Application& app, int player, const char* line) {
     GameState& st = app.gameState();
-    if (player < 0 || player >= 4 || itemId < 1 || itemId > 13) {
+    if (player < 0 || player >= 4 || line == nullptr || line[0] == '\0') {
         return;
     }
     const Player& pl = st.players[player];
     if (((pl.stateFlags >> 8) & 0xFF) != 0 || pl.state37 != 0 || pl.byte54 != 0) {
-        return;
-    }
-    const int ci = pl.charIndex;
-    if (ci < 0 || ci >= 12) {
-        return;
-    }
-    const char* line = kItemLines[ci][itemId - 1];
-    if (line == nullptr || line[0] == '\0') {
         return;
     }
     static const char* s_last = nullptr;  // [RE 0x4762C8] 去重
@@ -129,8 +122,44 @@ void playItemLine(Application& app, int player, int itemId) {
     ctx.app = &app;
     ctx.line = line;
     ctx.player = player;
-    RICH4_LOGI("playItemLine: p%d item%d %s (RE 0x44EF41)", player, itemId, line);
+    RICH4_LOGI("playLine: p%d %s (RE 0x44EF41)", player, line);
     runModal(app, &itemLineHandler, &ctx, 16);
+}
+
+// [RE 0x44EF41] playItemLine：道具/卡片效果入口台词（查 kItemLines 表）
+void playItemLine(Application& app, int player, int itemId) {
+    GameState& st = app.gameState();
+    if (player < 0 || player >= 4 || itemId < 1 || itemId > 13) {
+        return;
+    }
+    const int ci = st.players[player].charIndex;
+    if (ci < 0 || ci >= 12) {
+        return;
+    }
+    playLine(app, player, kItemLines[ci][itemId - 1]);
+}
+
+// [RE 0x44F230] playValueLine：卡片/道具价值台词（12 角色 x 3 档）
+// 依据: 0x44F230 反编译; price<=50 → off_480852（列 2）；50<price<=100 → off_48084A+4*(rand&1)
+//   （列 0/1 随机）；price>100 → 列 0；随后 sub_44EF41(p, 0, 台词)
+void playValueLine(Application& app, int player, int price) {
+    GameState& st = app.gameState();
+    if (player < 0 || player >= 4) {
+        return;
+    }
+    const int ci = st.players[player].charIndex;
+    if (ci < 0 || ci >= 12) {
+        return;
+    }
+    const char* line;
+    if (price > 100) {
+        line = kValueLines[ci][0];
+    } else if (price > 50) {
+        line = (std::rand() & 1) ? kValueLines[ci][1] : kValueLines[ci][0];
+    } else {
+        line = kValueLines[ci][2];
+    }
+    playLine(app, player, line);
 }
 
 // [RE 0x446E4A] 機車（id5）：travel=1 / 骰子数 2；已是机车 → 0；原汽车 → 归还一辆汽车

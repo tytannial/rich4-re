@@ -53,35 +53,12 @@ struct ItemBagState {
 
 // [RE 0x447C6E] drawItemBag：帧1 背景 + 逐格图标(帧 id+1) + ×N 数量 + visibleMap
 void renderItemBag(ItemBagState& s) {
+    drawItemBagAt(*s.app, *s.sheet, s.cur, kPanelX, kPanelY, s.visibleMap);
     Surface& dst = s.app->surface();
-    GameState& st = s.app->gameState();
-    std::memset(s.visibleMap, 0, sizeof(s.visibleMap));
-    blitElementOpaque(dst, s.sheet->frame(kItemFrame), kPanelX, kPanelY);
-    TextRenderer& t = s.app->text();
-    t.setFont(20, 0xFFFFFF, 0x101010, kTextStyleShadow | kTextStyleBold, 0);
-    int vis = 0;
-    int x = kCol0;
-    int y = kRow0;
-    for (int i = 0; i < kItemTypes; ++i) {
-        const int n = st.itemStock[15 * s.cur + i];
-        if (n != 0) {
-            const int itemId = i + 1;
-            blitElement(dst, s.sheet->frame(itemId + 1), kPanelX + (x - 16), kPanelY + y, false);
-            char buf[16];
-            std::snprintf(buf, sizeof buf, "×%d", n);  // [RE 0x4653E0]
-            t.drawText(dst, buf, kPanelX + x + 34, kPanelY + y - 10, 1);
-            s.visibleMap[vis++] = static_cast<uint8_t>(itemId);
-            x += kColStep;
-            if (x > kColMax) {
-                x = kCol0;
-                y += kRowStep;
-            }
-        }
-    }
     // [RE 0x447DEE..0x447E24] 载具中（機車/汽車）→ 右下角「下車」按钮：
     //   panel[11] 帧 15（机车）/16（汽车）@ 资源内 (325,117)；g_itemVisibleMap[14] = 14
     //   （固定网格位 14 = 行 2 列 4，与图标位置对齐；点击返回 id 14 → 0x447C00 下车）
-    const uint8_t travel = st.players[s.cur].travel;
+    const uint8_t travel = s.app->gameState().players[s.cur].travel;
     if (travel == 1 || travel == 2) {
         const int frame = (travel == 1) ? 15 : 16;
         if (s.sheet->frameCount() > static_cast<size_t>(frame)) {
@@ -160,6 +137,42 @@ bool itemModalHandler(const SDL_Event* event, void* user) {
 }
 
 }  // namespace
+
+// [RE 0x447C6E] drawItemBagAt：道具栏绘制（帧1 背景 + 图标帧 id+1 + ×N）到 (x,y)
+// 依据: 0x447C6E 反编译; 工具条 (14,130) / 百货商店 (bagX,293) 共用；visibleMap 非空时写映射
+void drawItemBagAt(Application& app, const UiImage& sheet, int player, int x, int y,
+                   uint8_t visibleMap[15]) {
+    Surface& dst = app.surface();
+    GameState& st = app.gameState();
+    if (visibleMap != nullptr) {
+        std::memset(visibleMap, 0, 15);
+    }
+    blitElementOpaque(dst, sheet.frame(kItemFrame), x, y);
+    TextRenderer& t = app.text();
+    t.setFont(20, 0xFFFFFF, 0x101010, kTextStyleShadow | kTextStyleBold, 0);
+    int vis = 0;
+    int cx = kCol0;
+    int cy = kRow0;
+    for (int i = 0; i < kItemTypes; ++i) {
+        const int n = st.itemStock[15 * player + i];
+        if (n != 0) {
+            const int itemId = i + 1;
+            blitElement(dst, sheet.frame(itemId + 1), x + (cx - 16), y + cy, false);
+            char buf[16];
+            std::snprintf(buf, sizeof buf, "×%d", n);  // [RE 0x4653E0]
+            t.drawText(dst, buf, x + cx + 34, y + cy - 10, 1);
+            if (visibleMap != nullptr) {
+                visibleMap[vis] = static_cast<uint8_t>(itemId);
+            }
+            ++vis;
+            cx += kColStep;
+            if (cx > kColMax) {
+                cx = kCol0;
+                cy += kRowStep;
+            }
+        }
+    }
+}
 
 // [RE 0x447D97] itemPanelFlow
 void itemBagDialog(Application& app) {

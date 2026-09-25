@@ -3,6 +3,11 @@
 namespace rich4 {
 
 class Application;
+class UiImage;
+
+// [RE 0x441B0A] drawCardBagAt：卡片栏绘制（panel.mkf[11] 帧0 背景 + 5×3 卡名网格）到 (x,y)。
+//   工具条 useCardFlow 用 (14,130)；百货商店卡包区用 (bagX,293)（0x42D37F 动画位置）
+void drawCardBagAt(Application& app, const UiImage& sheet, int player, int x, int y);
 
 // [RE 0x441BAA] useCardFlow：工具条 case 8 卡片栏。人类在场 → 显示 15 槽卡包 →
 //   选卡 → showCardGet → 卡片效果表分派（返回非 0 结束、0 重选、取消结束）。

@@ -55,24 +55,8 @@ struct CardBagState {
 
 // [RE 0x441B0A] drawCardBag：帧0 背景 + 5×3 网格卡名（非空槽）
 void renderCardBag(CardBagState& s) {
+    drawCardBagAt(*s.app, *s.sheet, s.cur, kPanelX, kPanelY);
     Surface& dst = s.app->surface();
-    GameState& st = s.app->gameState();
-    blitElementOpaque(dst, s.sheet->frame(kCardFrame), kPanelX, kPanelY);
-    TextRenderer& t = s.app->text();
-    t.setFont(20, 0xFFFFFF, 0x101010, kTextStyleShadow | kTextStyleBold, 0);
-    int x = kCol0;
-    int y = kRow0;
-    for (int i = 0; i < kSlots; ++i) {
-        const int card = st.cardState60[15 * s.cur + i];
-        if (card != 0) {
-            t.drawText(dst, kCardNames[card], kPanelX + x, kPanelY + y, 2);
-            x += kColStep;
-            if (x > kColMax) {
-                x = kCol0;
-                y += kRowStep;
-            }
-        }
-    }
     // [RE 0x44184A] 按住格 highlightRect 下沉浮雕（1px/kChannelHalf；原版无白框）
     if (s.pressedSlot >= 0) {
         const int l = kHiL0 + kHitW * (s.pressedSlot % 5);
@@ -169,6 +153,29 @@ int cardEffect(Application& app, int id) {
 }
 
 }  // namespace
+
+// [RE 0x441B0A] drawCardBagAt：卡片栏绘制（帧0 背景 + 5×3 网格卡名）到 (x,y)
+// 依据: 0x441B0A 反编译; 工具条 (14,130) / 百货商店 (bagX,293) 共用
+void drawCardBagAt(Application& app, const UiImage& sheet, int player, int x, int y) {
+    Surface& dst = app.surface();
+    GameState& st = app.gameState();
+    blitElementOpaque(dst, sheet.frame(kCardFrame), x, y);
+    TextRenderer& t = app.text();
+    t.setFont(20, 0xFFFFFF, 0x101010, kTextStyleShadow | kTextStyleBold, 0);
+    int cx = kCol0;
+    int cy = kRow0;
+    for (int i = 0; i < kSlots; ++i) {
+        const int card = st.cardState60[15 * player + i];
+        if (card != 0) {
+            t.drawText(dst, kCardNames[card], x + cx, y + cy, 2);
+            cx += kColStep;
+            if (cx > kColMax) {
+                cx = kCol0;
+                cy += kRowStep;
+            }
+        }
+    }
+}
 
 // [RE 0x44309B] cardRebuildEffect：见头文件说明。针对当前玩家所站格 special(objId)
 int cardRebuildEffect(Application& app) {

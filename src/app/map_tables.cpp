@@ -614,6 +614,16 @@ const char* const kItemBagNames[14] = {"",         "機器娃娃", "路障",    
                                         "機車",     "汽車",     "飛彈",     "遙控骰子", "機器工人",
                                         "時光機",   "傳送機",   "工程車",   "核子飛彈"};
 
+// [RE 0x47FDF9] byte_47FDF9 卡片 AI 性格字段（g_cardInfo[id] +7，id 1..30）
+// 依据: 0x47FDF9 = 0x47FDEA+15（结构 +7）；sub_42E931 0x42EDD4/0x42F09F 读取（- persona == 2）
+const uint8_t kCardAiPersona[31] = {0, 2, 2, 1, 0, 0, 0, 0, 1, 0, 2, 2, 1, 2, 0, 2,
+                                    1, 2, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0};
+
+// [RE 0x47FEE9] byte_47FEE9 道具 AI 性格字段（g_itemNames[id] +7，id 1..13）
+// 依据: 0x47FEE9 = 0x47FEDA+15（结构 +7）；sub_42E931 0x42EE64/0x42F289 与
+//   sub_4284BE 0x42899B 读取（- persona == 2 / != 2）
+const uint8_t kItemAiPersona[14] = {0, 0, 1, 1, 1, 0, 0, 2, 0, 1, 2, 1, 2, 2};
+
 // [RE 0x47ECEC] unk_47ECEC u32[10][2]
 const uint32_t kMiscTable80[10][2] = {
     {0, 0},

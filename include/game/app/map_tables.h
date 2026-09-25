@@ -48,6 +48,12 @@ extern const char* const kItemNames[13];
 //   与礼物池显示用的 kItemNames（自「路障」起 0-indexed）索引不同，见
 //   docs/reverse/functions/441baa-inventory-panels.md
 extern const char* const kItemBagNames[14];
+// [RE 0x47FDF9] byte_47FDF9 卡片 AI 性格字段（g_cardInfo[id] 结构 +7；id 1..30；
+//   sub_42E931 AI 百货买卖：值 - aiPersonality == 2 → 卖出；== 2 表示「不合性格」）
+extern const uint8_t kCardAiPersona[31];
+// [RE 0x47FEE9] byte_47FEE9 道具 AI 性格字段（g_itemNames[id] 结构 +7；id 1..13；
+//   sub_42E931 AI 百货买卖 + sub_4284BE 股票 AI 买卖同用）
+extern const uint8_t kItemAiPersona[14];
 // [RE 0x47ECEC] unk_47ECEC
 extern const uint32_t kMiscTable80[10][2];
 

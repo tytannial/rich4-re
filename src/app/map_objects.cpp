@@ -733,7 +733,8 @@ void attachObject(Application& app, int p, int cellEntId, int objId) {
 // ===== 道具/效果辅助 =====
 
 // [RE 0x40CD07] damagePlayer：载具报废 + 受伤（0x40 位）+ 步行资源重载
-// 差异: 载具损毁计数 byte_497324/25（新闻/统计用）未建模；淘汰分支同原版
+// 依据: 0x40CD07 反编译; 载具损毁回收进礼物池 —— byte_497324/25 = misc8A[4]/[5]
+//   （机车/汽车槽，0x497320+4/+5），供百货 AI 再购买/礼物抽取；淘汰分支同原版
 void damagePlayer(Application& app, int p) {
     GameState& st = app.gameState();
     if (p < 0 || p >= 9) {
@@ -747,6 +748,10 @@ void damagePlayer(Application& app, int p) {
         return;
     }
     if (pl.travel != 0) {
+        const int t = pl.travel & 3;
+        if (t == 1 || t == 2) {              // [RE 0x40CD3B/0x40CD43] ++byte_497324/25
+            ++st.misc8A[3 + t];
+        }
         pl.travel = 0;
         pl.diceCount = 1;
     }
