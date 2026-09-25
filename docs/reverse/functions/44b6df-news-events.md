@@ -145,13 +145,33 @@ newsEvent:
 | 26 | 0175 | 股市暫停交易１０天 | `sub_44B0A0` | 文本；`dword_4990DC = 10`（全市场停市天数）| 无 |
 | 27 | 0176 | %s股票暫停交易１０天 | `sub_44B0D1` | 随机股 `rand%12` → 名称/文本；`byte_496986[36*股]=15`；现价=昨收（`flt_496994 = flt_496990`）；`stockHistory[144*股+turn]` 记录 | 无 |
 | 28 | 0177 | %s股票恢復上市交易 | `sub_44B1A3` | 收集停牌股（`byte_496986!=0`）→ 随机 → 名称/文本 → `byte_496986=0` | 无 |
-| 29 | 0178 | %s違法超貸\n經營者%s坐牢５天 | `sub_44B25B` | 收集有主 specPt → 随机 → 公司名+业主名 → `g_newsTarget=owner-1` | `refreshGameUi(sprite)` → `resolveJailTarget`（`sub_441210`：免罪卡21→取消返回-1；嫁祸卡19→换目标）→ `jailPlayer(玩家, 5)` [卡片分支 TODO P4] |
+| 29 | 0178 | %s違法超貸\n經營者%s坐牢５天 | `sub_44B25B` | 收集有主 specPt → 随机 → 公司名+业主名 → `g_newsTarget=owner-1` | `refreshGameUi(sprite)` → `resolvePenaltyTarget`（`sub_441210`：免罪卡21→取消返回-1；嫁祸卡19→换目标）→ `jailPlayer(玩家, 5)` **✅ 2026-09-26 接入**（含淘汰业主防御） |
 | 30 | 0179 | %s工廠排放污水\n罰款10000元 | `sub_44B374` | 随机 specPt → 文本；公司 `fund(+40) -= 10000`、`(+44) -= 10000`；`stockNo(+25)<12` → `stockNews=3`（跌）→ `stockNewsApply(stockNo+1)` | 无 |
 | 31 | 0180 | %s海外投資\n獲利20000元 | `sub_44B419` | 随机 specPt → 文本；fund `+40 += 20000`、`+44 += 20000`；`stockNews=48`（涨）→ apply | 无 |
 | 32 | 0181 | %s海外投資\n虧損20000元 | `sub_44B4A8` | 同 31 但 `-20000`；`stockNews=4`（跌）→ apply | 无 |
 | 33 | 0182 | %s違規開發山坡地\n罰款10000元 | `sub_44B53F` | 自选 specPt + 文本 #0182 压栈后 JUMP `0x44B3AD`（与 idx 30 共享罚款段 -10000 + 跌 3）| 无 |
 | 34 | 0183 | %s製造噪音公害\n罰款5000元 | `sub_44B57D` | 随机 specPt → 文本；fund `-5000` → JUMP `0x44B3E7`（共享 idx 30 的股价跌 3 尾）| 无 |
 | 35 | 0184 | %s獲利調高一倍 | `sub_44B5F5` | 收集 `fund(+40)>10000` 公司 → 随机 → 文本；`+40 = 2*旧`、`+44 += 旧`；`stockNews = 16*(旧/10000)`（涨）→ apply | 无 |
+
+### 实机反馈修复（2026-09-26）
+
+- **相位1 未切回场景**：各效果函数原版先 `refreshGameUi` 重绘地图再播 FLC；重写单 Surface 需
+  显式 `renderGameFrame + renderFrame`（`newsHandler` phase1 前）。否则外星人/坐牢动画画在
+  事件面板上（与 fateEvent 同步修复）。
+- **高亮前重建命中区**：`playHighlightBlink` 在 `captureHighlightShapes` 前 `renderGameFrame`，
+  避免部分事件路径未重绘导致形状快照为空 → 地块不闪。
+- **idx 29 坐牢**：接入 `resolvePenaltyTarget`（免罪/嫁祸卡，见 §5.1 fate 文档）+ 淘汰业主
+  防御（`alive==0` 跳过，避免永不递减的 stateFlags）。
+- **资金日志**：`applySpecPtChange`（idx 30-34 公司 fund）、`rewardPlayerPhase1`（8/9/10）、
+  `taxPhase1`（11-13）、`evt23`（银行红利）均输出前后余额——**注意 idx 30-34 改动的是公司
+  `fund(+40/+44)` 与股价，不是玩家资金**（原版 0x44B419 反编译确认）。
+- **新闻无神明修正（IDA 证据）**：`sub_44B896`（命运/事件的幸运判定）15 个调用点全部位于
+  命运效果函数（0x44C0E8..0x44D80F）；新闻的 `addMoney`（0x41D3F4）与 `transferMoney`
+  无幸运逻辑 → 新闻资金事件不受携带神明影响（与命运不同，勿套用）。
+  神明修正机制详见 `44db81-fate-events.md` §3.1/§3.2。
+- **高亮上偏 40px（2026-09-26 修复）**：`captureHighlightShapes` 沿用原版 pickBuffer 局部坐标
+  `it.y-40`，但重写直接画屏幕（缺少 `highlightBlink 0x451985` 的 `+40` 回贴换算）→ 整体上移。
+  修复：锚点用 `it.y`；证据链见 `frame-anchor.md` §5.3（写入端 0x409B18、回贴端 0x451985）。
 
 ## 3. 股票新闻字段（提交 5 依据）
 

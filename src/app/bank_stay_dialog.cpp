@@ -184,21 +184,6 @@ bool isSpecialDate(const GameState& st, uint32_t date) {
     return false;
 }
 
-// [RE 0x433B7E] setLoanDate：loanDate 为 0 时设为今天+90 天（逐日跳过特殊日期）
-void setLoanDate(Application& app, int p) {
-    GameState& st = app.gameState();
-    Player& pl = st.players[p];
-    if (pl.loanDate != 0) {
-        return;
-    }
-    uint32_t d = dateAddDays(st.gameDate, 90);
-    int guard = 0;
-    while (isSpecialDate(st, d) && guard++ < 366) {
-        d = dateAddDays(d, 1); // [RE 0x452117] 原版 sub_452117(&date) = 日期+1
-    }
-    pl.loanDate = d;
-}
-
 // ===== 主 UI 绘制 =====
 
 struct StayCtx {
@@ -955,6 +940,19 @@ bool stayHandler(const SDL_Event* event, void* user) {
     Application& app = *ui.app;
     GameState& st = app.gameState();
     if (!event) { // WM_USER+1
+        // [RE 0x435197 → 0x405] 暫停放款提示：原版在 0x401（sub_434186 画银行场景/招牌）后由
+        //   0x405 分支叠加 showMessage；实机反馈要求提示先独立显示（此时屏幕上仍是地图场景），
+        //   提示消失后再画银行场景与欢迎动画 —— 差异: 与原版叠加显示不同（体验调整 2026-09-26）。
+        Player& pl = st.players[st.currentPlayer];
+        if (pl.bankFinanceFlags != 0) {
+            char text[64];
+            std::snprintf(text, sizeof(text), "銀行暫停放款\n\n還剩%d天！",
+                          (pl.bankFinanceFlags & 0x7F) + 1); // [RE 0x464AD5]
+            // [RE 0x4351EE] 原版 showMessage(text, 0x800005DC) = 1500ms + 文本左移 100px
+            //   （0x800005DC & 0x7FFFFFFF = 0x5DC；重写 showMessage 未实现左移，且负值会被
+            //   当作超大 uint64 → 永不退出，故传正 1500；曾误传 8000 导致提示框久留）
+            showMessage(app, text, 1500);
+        }
         ui.msg = FloatMessage();
         ui.msg.setup(*ui.sheet, kFrameMsgBoard, kMsgBoardX, kMsgBoardY, 20, 0, 0x101010, 0);
         ui.state = 0;
@@ -966,16 +964,6 @@ bool stayHandler(const SDL_Event* event, void* user) {
         ui.exitAfterSlide = false;
         drawStayBase(ui);
         captureStatic(ui); // [PORT] 静态层快照（滑出回填/週轉返回用）
-        Player& pl = st.players[st.currentPlayer];
-        if (pl.bankFinanceFlags != 0) { // [RE 0x435197]
-            char text[64];
-            std::snprintf(text, sizeof(text), "銀行暫停放款\n\n還剩%d天！",
-                          (pl.bankFinanceFlags & 0x7F) + 1); // [RE 0x464AD5]
-            // [RE 0x4351EE] 原版 showMessage(text, 0x800005DC) = 1500ms + 文本左移 100px
-            //   （0x800005DC & 0x7FFFFFFF = 0x5DC；重写 showMessage 未实现左移，且负值会被
-            //   当作超大 uint64 → 永不退出，故传正 1500；曾误传 8000 导致提示框久留）
-            showMessage(app, text, 1500);
-        }
         if (st.settings[1] != 0) { // [RE 0x435200] 动画过程开关
             ui.state = 1;
             ui.msg.show(app, "#0075歡迎光臨\n大富翁銀行！"); // [RE 0x475830]
@@ -1157,6 +1145,22 @@ bool stayHandler(const SDL_Event* event, void* user) {
 }
 
 } // namespace
+
+// [RE 0x433B7E] setLoanDate：loanDate 为 0 时设为今天+90 天（逐日跳过特殊日期）
+//   银行贷款与命运「人頭被盜用冒貸」(fateEvent id2) 共用（原版调用点 0x435228 / 0x44C201）
+void setLoanDate(Application& app, int p) {
+    GameState& st = app.gameState();
+    Player& pl = st.players[p];
+    if (pl.loanDate != 0) {
+        return;
+    }
+    uint32_t d = dateAddDays(st.gameDate, 90);
+    int guard = 0;
+    while (isSpecialDate(st, d) && guard++ < 366) {
+        d = dateAddDays(d, 1); // [RE 0x452117] 原版 sub_452117(&date) = 日期+1
+    }
+    pl.loanDate = d;
+}
 
 // [RE 0x436668] 停留银行（landingEvent case 14 → 路过柜员机后）
 void bankStayDialog(Application& app, int cellEntId) {

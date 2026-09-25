@@ -330,9 +330,9 @@ bool newGameInit(Application& app, bool mode1) {
 
     // [RE 0x448B81/0x44BAEA] 新闻/命运事件顺序洗牌
     shuffleIndices(state.newsOrder, 36);
-    shuffleIndices(state.misc37, 37);
+    shuffleIndices(state.fateOrder, 37);
     state.newsPos = 0;
-    state.misc37Pos = 0;
+    state.fatePos = 0;
 
     RICH4_LOGI("new game: map=%d mode=%d players=%d humans=%d travel=%d money=%d", state.mapIndex,
                state.gameMode, state.playerCount, state.humanCount, state.cfgTravel,

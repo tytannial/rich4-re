@@ -19,4 +19,17 @@ void useCardDialog(Application& app);
 //   成功则消耗卡（cardBagRemove(cur,7)）。返回非 0 = 结束使用流程
 int cardRebuildEffect(Application& app);
 
+// [RE 0x44192A] selectCardOrItemFromPlayerDialog：从目标玩家的卡包/道具包选一项（生日收卡）。
+//   panel.mkf[11] 卡包帧0 @(14,70) + 道具包帧1 @(14,270)（有道具才画）；
+//   命中区 x∈[19,419)、卡 y∈[75,243) / 道具 y∈[275,443)，5×3 网格；
+//   按下高亮（highlightRect 78×54）、抬起确认、右键取消（sub_4413EC 回调）。
+//   返回 0=取消 / 卡 = 卡 id / 道具 = 0x8000|道具 id。
+int selectCardOrItemFromPlayerDialog(Application& app, int targetPlayer);
+
+// [RE 0x44476A] passOnCardDialog：嫁祸卡（19）目标选择（原版 sub_44476A(user,0,0)）。
+//   先显示卡图 "%s\n\n嫁禍卡生效！"；人类：1 候选 → askDialog「是否嫁禍給%s？」、
+//   多候选 → selectPlayerDialog「請選擇嫁禍對象...」；AI：findMaxCreditor（无则随机存活
+//   无状态玩家）→ showMessage「嫁禍給%s！」。选定消耗卡 19，返回目标；取消/无目标 -1。
+int passOnCardDialog(Application& app, int user);
+
 }  // namespace rich4

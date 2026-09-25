@@ -10,7 +10,7 @@
 |------|------|------|---------|---------|
 | 1 | 公園 | 1 = default | —（无事件） | 已实现（返回 0x80） |
 | 2 | 新聞 | 2 | `newsEvent`（36 事件表） | ✅ 已实现 2026-09-26（`news_dialog.cpp`；36 判定+36 效果；拍卖 idx 7 桩；详见 `44b6df-news-events.md`） |
-| 3 | 命運 | 3 | `fateEvent`（37 事件表） | ✅ 结构已明 |
+| 3 | 命運 | 3 | `fateEvent`（37 事件表/49 效果） | ✅ 已实现（2026-09-26，`fate_event.cpp`；卡片联动见专项文档） |
 | 4 | 監獄 | 4 | `jailBailDialog`（门外保释） | ✅ 保释面板（人類 UI+AI）；NPC 格占位待 P5 |
 | 5 | 醫院 | 5 | `hospitalVisitDialog`（门外辦理出院） | ✅ 出院面板（阶段机+护士动画）；NPC 格占位待 P5 |
 | 6 | 企鵝挖寶 | 6 | `miniGameDigRun` 0x415215 | ✅ 交互版 2026-09-25（`minigame_dialog.cpp`） |
@@ -421,7 +421,10 @@ do {
 > ⚠️ 重写代码中 `GameState.cardShuffle`/`cardShufflePos`（`new_game.cpp`/`save_data.cpp`）
 > 实为**新闻事件顺序表** `g_newsOrder`/`g_newsPos`——建议改名 `newsOrder`/`newsPos`。
 
-## 5. case 3 命運（`fateEvent`，37 事件）
+## 5. case 3 命運（`fateEvent`，37 事件）✅ 已实现 2026-09-26
+
+> 完整研究（49 效果/幸运判定 `sub_44B896`/卡片联动/出国状态）见 `44db81-fate-events.md`；
+> 本节保留早期骨架笔记。已知订正：`g_fateOrder` 为**洗牌**（`sub_44BAEA`），非固定顺序。
 
 ```
 dword_48C5E0 = panel.mkf[66]
@@ -444,11 +447,11 @@ do {
 
 | 数据 | 地址 | 说明 |
 |------|------|------|
-| `g_fateOrder` | 0x496B38 | 37 项命运事件表（顺序固定，非洗牌） |
+| `g_fateOrder` | 0x496B38 | 37 项命运事件顺序表（**开局 `newGameInit` 0x44BAEA 洗牌**；旧文档"固定顺序"有误） |
 | `g_fatePos` | 0x4990B4 | 当前索引（0..36） |
-| `word_475FB4[37+4*地图]` | 0x475FB4 | 插画资源索引（前 33 项共用 + 每地图 4 项专属） |
-| `funcs_44DC44` | 0x475EF0 | 效果函数表（0x44BE16, 0x44BFB1, …） |
-| `fateEventCheck` | 0x44BB4B | 触发判定（待深入） |
+| `word_475FB4` | 0x475FB4 | 插画资源索引 49 项（0..36 通用 + 37..48 = map1..3 的 33..36 变体） |
+| `funcs_44DC44` | 0x475EF0 | 效果函数表 49 项（0x44BE16..0x44DB53） |
+| `fateEventCheck` | 0x44BB4B | 触发判定（载具/股票/地产/卡数 + gameMode；已实现） |
 
 ## 6. case 6/7/8 小游戏（三游戏交互版 ✅ 2026-09-25，`minigame_dialog.cpp`）
 

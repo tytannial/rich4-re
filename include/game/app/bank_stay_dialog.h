@@ -17,4 +17,8 @@ void bankStayDialog(Application& app, int cellEntId);
 //   3 条消息（"XXX您好" → "您向銀行借貸的 貸款即將到期。" → "請不要忘記喔！"）
 void bankDueDialog(Application& app);
 
+// [RE 0x433B7E] setLoanDate：loanDate 为 0 时设为今天+90 天（逐日跳过特殊日期）。
+//   银行贷款与命运「人頭被盜用冒貸」(fateEvent id2) 共用。
+void setLoanDate(Application& app, int player);
+
 } // namespace rich4

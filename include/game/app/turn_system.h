@@ -62,6 +62,9 @@ void endPlayerState(Application& app, int p);
 void jailPlayer(Application& app, int player, int days);
 void hospitalizePlayer(Application& app, int player, int days);
 
+// [RE 0x44BA63] insurancePayout：保险期内费用由保险公司给付（保险期 +62 非 0 → 理赔 + 消息）
+int32_t insurancePayout(Application& app, int player, int32_t amount);
+
 // [RE 0x419572] rollDice（点数 = byte_496B7A 个 rand()%6+1 之和）
 int rollDice(Application& app);
 
@@ -102,6 +105,7 @@ void loadWalkResources(GameState& st, int p);
 
 // ===== 卡片卡包（0x441262/0x441343/0x4412E4/0x441E12；定义见 turn_system.cpp）=====
 int cardBagCount(const GameState& st, int player);
+bool cardBagHas(const GameState& st, int player, int card);
 void cardBagRemove(GameState& st, int player, int card);
 void giveCardToBag(GameState& st, int player, int card);
 int drawFreeCard(GameState& st, int player);
@@ -109,5 +113,11 @@ int drawFreeCard(GameState& st, int player);
 // [RE 0x441F73] showCardGet：卡片获得显示（卡片图 data.mkf[570+id] 165×256 @(138,200)
 //   + FloatMessage 提示框 text，1500ms）；定义见 turn_system.cpp，useCardFlow 复用
 void showCardGet(Application& app, int cardId, const char* text);
+
+// [RE 0x441210] resolvePenaltyTarget：惩罚前自动处理免罪卡(21)/嫁祸卡(19)：
+//   免罪 → 显示卡图（"%s\n\n免罪卡生效！"）并消耗，返回 -1（取消惩罚）；
+//   嫁祸 → passOnCardDialog 选目标（0x44476A），返回转移目标；
+//   无卡 / 嫁祸取消 → 返回 player 自己。命运惩罚类与新闻 29 共用。
+int resolvePenaltyTarget(Application& app, int player);
 
 } // namespace rich4

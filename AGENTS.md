@@ -39,8 +39,13 @@
   画布 + data[441+idx] 388×251 插画 + 6 类标题 + 2400ms 阶段机；`newsEventCheck` 0x448BE2 36 条判定
   + `g_newsFuncs` 36 效果全实现（监狱医院/灾害破坏/三税/排行/股价停牌/超贷坐牢/公司罚款）；
   `stockNewsApply` 0x429040 入 `stock_system.cpp`；**拍卖 idx 7 桩另开一轮**、语音/浮动数字 P4、
-  corp 单块高亮差异；详见 `44b6df-news-events.md`；调试 `Ctrl+Shift+A`）；
-  事件格 FLC 阻塞播放模板 `playEventFlc` + `drawEventFlcFrame` +
+   corp 单块高亮差异；详见 `44b6df-news-events.md`；调试 `Ctrl+Shift+A`）；
+   **命運 case 3 ✅ 2026-09-26**（`fate_event.cpp` + `event_common.cpp`：37 项判定/载具改写 +
+   49 效果（通用 33 + 4 地图专属坐牢 16，文本 #0185..#0233）/幸运判定 `sub_44B896`（luckB/C →
+   免付/逃过/作废/加倍）/卡片联动（生日选卡面板 0x44192A、免罪 0x444BB2、嫁祸 0x44476A、
+   选人对话框 0x440E1A）/出国·绑架状态 0x40D375；公共辅助自新闻提取；调试 `Ctrl+Shift+z`；
+   详见 `44db81-fate-events.md`）；
+   事件格 FLC 阻塞播放模板 `playEventFlc` + `drawEventFlcFrame` +
 `showCardGet` + `jailPlayer`/`hospitalizePlayer`/`insurancePayout`；面板底座
 `FloatMessage`/语音 `playVoice`/音乐栈见 `ui-controls.md` §25）。
 **M2 股市 ✅**：`stock_system.cpp`（stockTick/认购/控股/买卖交易量）+ `spec_pt_dialog.cpp`
@@ -80,7 +85,8 @@ damagePlayer/demolish/givePlayerItem）；`economy.cpp` deleteMapObject **配对
 - P2 事件格实现（研究已完成，见 `41982d-p2-events.md`；**得點券/卡片格/監獄/醫院/銀行 ✅
   2026-09-23**（银行全链含週轉/催收/月度结息/15 号分红）；**小游戏 case 6/7/8 ✅ 2026-09-25**
   （`minigame_dialog.cpp` 三游戏交互版+兜底，实机验证通过）；**新聞 case 2 ✅ 2026-09-26**
-  （36 判定+36 效果；拍卖 idx 7 桩另开一轮；`44b6df-news-events.md`），继续：命運 → 魔法屋；
+  （36 判定+36 效果；拍卖 idx 7 桩另开一轮；`44b6df-news-events.md`）；**命運 case 3 ✅ 2026-09-26**
+  （37 判定+49 效果+卡片联动；`44db81-fate-events.md`），继续：魔法屋；
   面板底座 `ui-controls.md` §25，事件槽 NPC 路面行走待 P5）
 - **P2 樂透（case 9）✅ 2026-09-25**：`lottery_dialog.cpp` + `lottery.h`——投注界面
   （0x42F7FC：9×4 网格选号/红圈帧 7/已售 -10 变暗/panel[14] FLC 循环/装饰闪烁/钱不足链；AI

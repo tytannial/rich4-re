@@ -215,6 +215,39 @@ void addPlayerDebt(GameState& st, int creditor, int debtor, int32_t amount) {
                v);
 }
 
+// [RE 0x40D2D3] findMaxCreditor：p 行欠款矩阵（[p][i]，即"欠 p 最多"）中最大且存活的玩家
+int findMaxCreditor(const GameState& st, int player) {
+    if (player < 0 || player >= 8) {
+        return -1;
+    }
+    int best = -1;
+    int32_t maxDebt = 0;
+    const int n = st.playerCount < 8 ? st.playerCount : 8;
+    for (int i = 0; i < n; ++i) {
+        if (i != player && st.players[i].alive != 0 && st.playerDebt[player][i] > maxDebt) {
+            maxDebt = st.playerDebt[player][i];
+            best = i;
+        }
+    }
+    return best;
+}
+
+// [RE 0x40D31C] pickRandomActiveTarget：随机存活且无状态的非自己玩家
+int pickRandomActiveTarget(const GameState& st, int exclude) {
+    int ids[8];
+    int n = 0;
+    const int count = st.playerCount < 8 ? st.playerCount : 8;
+    for (int i = 0; i < count; ++i) {
+        if (i != exclude && st.players[i].alive != 0 && st.players[i].stateFlags == 0) {
+            ids[n++] = i;
+        }
+    }
+    if (n == 0) {
+        return -1;
+    }
+    return ids[std::rand() % n];
+}
+
 // [RE 0x40E14D] releaseCellTableSlot = deleteMapObject
 // 依据: 0x40E14D 反编译；详见 map-object-refresh.md §2.1/§6。流程：
 //   type<16 → 拥有者属性回退（cellTableIdx 清 + luckA/B/C −= kLuck*[type]）

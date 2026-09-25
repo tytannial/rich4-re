@@ -66,7 +66,7 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
 |------|---------|------|------|
 | 移动中每格 | `onPlayerActionPhase` 0x41B42D | `onPlayerActionPhase` ✅（P3：物件分派/乞丐/挂身炸弹/银行路过） | ✅ |
 | 移动结束（面向目标 + 30×物价记账 + FLC 526） | `playerActionStateMachine` case 3（0x40DA4B），由 `sub_448A7E` 触发 | case 3 修正（仅日志/面向，不再转账） | ✅ |
-| 停留格结算（购地/升级/收租/事件） | `landingEvent`（`sub_41982D`，case 0..16） | 购地 ✅ / 升级 ✅ / 他人住宅用地收租 ✅ / **商業用地 corp 收费 ✅**（旅館轮盘+住宿/購物轮盘/加油站步数） / **行業設施點 specPt 收费 ✅**（6 公式+公库） / 事件格：得點券 10/11/12 ✅、卡片 13 ✅、監獄/醫院 4/5 ✅、銀行 14 ✅、新聞 2 ✅（36 事件；拍卖 idx 7 桩）、小游戏 6/7/8 ✅、樂透 9 ✅、百貨 15 ✅；命運 3 / 魔法屋 16 ❌ | 🚧 |
+| 停留格结算（购地/升级/收租/事件） | `landingEvent`（`sub_41982D`，case 0..16） | 购地 ✅ / 升级 ✅ / 他人住宅用地收租 ✅ / **商業用地 corp 收费 ✅**（旅館轮盘+住宿/購物轮盘/加油站步数） / **行業設施點 specPt 收费 ✅**（6 公式+公库） / 事件格：得點券 10/11/12 ✅、卡片 13 ✅、監獄/醫院 4/5 ✅、銀行 14 ✅、新聞 2 ✅（36 事件；拍卖 idx 7 桩）、小游戏 6/7/8 ✅、樂透 9 ✅、百貨 15 ✅；命運 3 ✅（2026-09-26，`fate_event.cpp`；49 效果+卡片联动）/ 魔法屋 16 ❌ | 🚧 |
 
 > **收租在 landingEvent，不在 case 3**：case 3（`sub_448A7E` 触发，步行落在他人有建筑的住宅用地/商業用地）
 > 仅 `addPlayerDebt(owner-1, cur, 30*g_moneyMul)` **记账**（欠款矩阵 `dword_496BB4`，不扣现金）+
@@ -91,7 +91,7 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
 | 0 | 普通格（城市名/住宅用地/商業用地/行業設施點/事件格，按 objId 分派） | 0 / 33 | — | 9 | case 0（0x4198B9） | 🚧 P0 |
 | 1 | 公園 | 1 | 24 | 0 | case 1 = default：无事件（返回 0x80） | ❌ |
 | 2 | 新聞 | 3 | 33 | 10 | `newsEvent`（`news_dialog.cpp` 0x44B6DF：panel[66]+插画+36 事件表；拍卖 idx 7 桩） | ✅ 2026-09-26 |
-| 3 | 命運 | 5 | 28 | 10 | `fateEvent`（命运事件） | ❌ |
+| 3 | 命運 | 5 | 28 | 10 | `fateEvent`（命运事件；49 效果 + 卡片联动） | ✅ |
 | 4 | 監獄 | 7 | 34 | 10 | `jailBailDialog`（保释面板 + AI；开局默认在押 小偷/強盜 0x40734F） | ✅ |
 | 5 | 醫院 | 9 | 37 | 10 | `hospitalVisitDialog`（出院面板+护士动画；开局默认在院 流氓/間諜） | ✅ |
 | 6 | 企鵝挖寶 | 11 | 26 | 10 | `miniGameDigRun`（`minigame_dialog.cpp` 0x415215）15s 企鹅挖宝（5 类宝物/火煤球即终/8 方向行走）→ `g_playerPoints += ax` | ✅ 2026-09-25 |
@@ -202,7 +202,7 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
 | `sub_441E12` | 抽卡（返回卡片 id，0=无） | 0x441E12 | ❌ |
 | `sub_441F73` | 给玩家卡片（`sub_441E12` 结果 + 文本缓冲） | 0x441F73 | ❌ |
 | `sub_44F230` | 卡片/道具获得语音 | 0x44F230 | ❌ |
-| `newsEvent` / `fateEvent` | 新聞 / 命運 事件全屏 UI（36/37 事件表 + 判定 + 效果） | 0x44B6DF / 0x44DB81 | newsEvent ✅ 2026-09-26（`news_dialog.cpp`）；fateEvent ❌ |
+| `newsEvent` / `fateEvent` | 新聞 / 命運 事件全屏 UI（36/37 事件表 + 判定 + 效果） | 0x44B6DF / 0x44DB81 | newsEvent ✅ 2026-09-26（`news_dialog.cpp`）；fateEvent ✅ 2026-09-26（`fate_event.cpp`，49 效果 + 卡片联动；公共辅助 `event_common`） |
 | `jailBailDialog` / `hospitalVisitDialog` | 監獄（保釋）/ 醫院（辦理出院）处理 | 0x43D304 / 0x43E9A4 | ✅（`jail_dialog.cpp`；NPC 格释放待 P5） |
 | `lotteryVisit` | 樂透（投注/开奖） | 0x4315CC | ✅ 2026-09-25 |
 | `sub_4379C9` / `sub_436668` | 銀行 UI / 停留银行处理 | 0x4379C9 / 0x436668 | ❌ |
@@ -316,7 +316,7 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
 > 研究详情见 **`41982d-p2-events.md`**（各 case 的处理函数、数据结构、实现顺序与待深入清单）。
 > 进度：**得點券 ✅ / 卡片格 ✅ / 監獄·醫院 ✅（2026-09-23）/ 銀行·樂透·小游戏·百貨 ✅ /
 > 新聞 ✅（2026-09-26，`44b6df-news-events.md`；拍卖 idx 7 下一轮）**；
-> 剩余 = 命運（3）→ 魔法屋（16）。
+> 剩余 = 魔法屋（16）。
 
 - [x] case 10/11/12 得點券（FLC 537 阻塞播放（透明=索引 0）+ showMessage + 50/30/10 點券；
       语音 P4）：`playEventFlc` + `landingEvent` case 10/11/12 + `drawEventFlcFrame`（详见 `41982d-p2-events.md` §2）
@@ -332,7 +332,7 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
 - [x] case 2 新聞（`newsEvent` 0x44B6DF：`newsOrder` 抽取 + `newsEventCheck` 36 条判定 +
       `g_newsFuncs` 36 效果（释放/灾害/三税/排行/股价停牌/坐牢）；`news_dialog.cpp`，2026-09-26；
       **拍卖 idx 7 桩待下一轮**、语音/浮动数字 → P4；详见 `44b6df-news-events.md`）
-- [ ] case 3 命運（`fateEvent` 37 事件表 `g_fateOrder`；插画 + `funcs_44DC44` 效果函数表）
+- [x] case 3 命運（`fateEvent` 49 效果 + 卡片联动）✅ 2026-09-26，详见 `44db81-fate-events.md`
 - [x] case 6/7/8 小游戏**兜底得分**（`miniGameVisit` 0x415457 else：rand()%20+50 点券 +
       "得點券%d點" + 台词；四大恶人忽略；2026-09-25）
 - [x] case 7 七彩氣球**交互版** ✅ 2026-09-25（`miniGameBalloonsRun`，`minigame_dialog.cpp`）

@@ -13,12 +13,15 @@
 #include "game/application.h"
 #include "game/app/bank_dialog.h"
 #include "game/app/bank_stay_dialog.h"
+#include "game/app/card_bag_dialog.h"
 #include "game/app/confirm_dialog.h"
 #include "game/app/date_util.h"
 #include "game/app/dividend.h"
 #include "game/app/economy.h"
+#include "game/app/event_common.h"
 #include "game/app/event_stack.h"
 #include "game/app/facility_dialog.h"
+#include "game/app/fate_event.h"
 #include "game/app/game_loop.h"
 #include "game/app/item_lines.h"
 #include "game/app/jail_dialog.h"
@@ -608,6 +611,9 @@ void playHighlightBlink(Application& app) {
     }
     // [RE 0x451985] 形状快照（原版 pickBuffer 标记语义：启动时提取，播放期间不随地图数据
     //   重建——拆除后的地块仍显示高亮，如新闻 idx 19 山洪归公）
+    // 防御: 先按当前视口重建 mapHitRegions（部分事件路径可能自上次渲染后未重绘，
+    //   否则形状快照为空 → 高亮不可见）
+    renderGameFrame(app);
     captureHighlightShapes(app);
     RICH4_LOGI("route highlight: %zu estates + %zu corps -> %zu shapes (RE 0x451985)",
                st.highlightEstates.size(), st.highlightCorps.size(), st.highlightShapes.size());
@@ -788,6 +794,42 @@ void cardBagRemove(GameState& st, int player, int card) {
             return;
         }
     }
+}
+
+// [RE 0x4413AD] cardBagHas：卡包是否存在指定卡（免罪/嫁祸判定用）
+bool cardBagHas(const GameState& st, int player, int card) {
+    if (player < 0 || player >= 4 || card <= 0) {
+        return false;
+    }
+    for (int i = 0; i < 15; ++i) {
+        if (st.cardState60[15 * player + i] == card) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// [RE 0x441210] resolvePenaltyTarget：惩罚目标解析（免罪卡 21 → -1；嫁祸卡 19 → 新目标）
+// 依据: 0x441210 反编译; 免罪 sub_444BB2（showCardGet(21,"%s\n\n免罪卡生效！") + 移除卡）;
+//   嫁祸 sub_44476A(p,0,0)（详见 passOnCardDialog 0x44476A）
+int resolvePenaltyTarget(Application& app, int player) {
+    GameState& st = app.gameState();
+    if (cardBagHas(st, player, 21)) {
+        char text[160];
+        std::snprintf(text, sizeof text, "%s\n\n免罪卡生效！",
+                      playerNameNoSpace(st, player).c_str());
+        showCardGet(app, 21, text); // [RE 0x444BB2 sub_441F73(21,...)]
+        cardBagRemove(st, player, 21);
+        RICH4_LOGI("resolvePenaltyTarget: p=%d 免罪卡抵消 (RE 0x441210/0x444BB2)", player);
+        return -1;
+    }
+    if (cardBagHas(st, player, 19)) {
+        const int t = passOnCardDialog(app, player); // [RE 0x44476A]
+        if (t != -1) {
+            return t;
+        }
+    }
+    return player;
 }
 
 // [RE 0x4412E4] giveCardToBag：放入玩家卡包（满 15 → 先舍弃最低价；赠卡池递减）
@@ -1377,6 +1419,13 @@ int landingEvent(Application& app, uint16_t cellEntId) {
         //   panel.mkf[66] + 插画 data.mkf[441+idx] + 2400ms 阻塞；返回 0x80
         RICH4_LOGI("landingEvent: case 2 新聞格 cellEnt=%u cur=%d (RE 0x41982D)", cellEntId, p);
         newsEvent(app);
+        return 0x80;
+    }
+    if (cellType == 3) {
+        // [RE 0x41B129] case 3 命運格：fateEvent（0x44DB81）全屏事件，
+        //   panel.mkf[66] + 插画 data.mkf[477..516]（word_475FB4）+ 1600+800ms 阻塞；返回 0x80
+        RICH4_LOGI("landingEvent: case 3 命運格 cellEnt=%u cur=%d (RE 0x41982D)", cellEntId, p);
+        fateEvent(app);
         return 0x80;
     }
     if (cellType == 4) {

@@ -45,7 +45,15 @@ int32_t playerTotalAssets(Application& app, int player);
 void updateMoneyIndex(Application& app);
 
 // [RE 0x433BD8] payFromBank（银行扣款）：bank -= amount；不足由 cash 补；再不足破产（eliminatePlayer）
-//   用于偿还贷款/贷款强执/週轉归还（0x436668 / 0x436A5A / 0x434492 等）
+//   用于偿还贷款/贷款强执/週转归还（0x436668 / 0x436A5A / 0x434492 等）
 void payFromBank(Application& app, int player, int32_t amount);
+
+// [RE 0x40D2D3] findMaxCreditor：p 行（creditor=p）欠款矩阵中金额最大的存活玩家，无则 -1。
+//   注: 矩阵索引 [creditor][debtor]，故语义为「欠 p 最多的人」；原版嫁祸卡 AI 目标 sub_44476A。
+int findMaxCreditor(const GameState& st, int player);
+
+// [RE 0x40D31C] pickRandomActiveTarget：随机存活且无状态（stateFlags==0）的非自己玩家，无则 -1。
+//   原版 findMaxCreditor 无结果时的嫁祸备选。
+int pickRandomActiveTarget(const GameState& st, int exclude);
 
 } // namespace rich4

@@ -8,6 +8,7 @@
 #include "game/app/dividend.h"
 #include "game/app/facility_dialog.h"
 #include "game/app/game_loop.h"
+#include "game/app/fate_event.h"
 #include "game/app/lottery.h"
 #include "game/app/map_objects.h"
 #include "game/app/map_render.h"
@@ -50,6 +51,25 @@ std::string nameAt(const uint8_t* p, int maxLen) {
     return big5ToUtf8(buf, n);
 }
 
+// [NEW] 调试直调事件（命运/新闻）后的回合推进：正常路径经 landingEvent 返回 0x80
+//   （playerActionWait=-128）由状态机切下一位；直调时若事件使当前玩家入院/坐牢/出国
+//   （stateFlags != 0），必须走 [RE 0x40DEFE] 对齐的 beginPlayerTurn 状态分支，
+//   否则回合卡在等待操作（与 Ctrl+Shift+J/L 同款处理）。
+void debugAdvanceIfIncapacitated(Application& app) {
+    GameState& st = app.gameState();
+    const int p = st.currentPlayer;
+    if (p < 0 || p >= 4 || st.players[p].stateFlags == 0) {
+        return;
+    }
+    if (st.playerActionState[p] == 0 && st.playerActionWait[p] == 0) {
+        disablePlayerControl(app);
+        st.playerActionFlags[p] |= 0x80;
+        st.gameStateActive = true;
+        RICH4_LOGI("debug: event state p=%d flags=0x%X -> skip turn (RE 0x40DEFE)", p,
+                   st.players[p].stateFlags);
+    }
+}
+
 } // namespace
 
 // [NEW] 调试热键（--debug 启用；测试辅助，无原版依据）
@@ -76,10 +96,24 @@ bool handleDebugKey(Application& app, int code, bool shift) {
             }
             return true;
         }
+        // ===== Ctrl+Shift+6/7：发惩罚联动卡（6=免罪卡21 / 7=嫁祸卡19）=====
+        if (code == 6 || code == 7) {
+            const int card = (code == 6) ? 21 : 19;
+            giveCardToBag(st, cur, card);
+            RICH4_LOGI("debug: give card %d to p=%d (Ctrl+Shift+%d)", card, cur, code);
+            return true;
+        }
         // ===== Ctrl+Shift+字母：难测机制快捷构造 =====
         switch (code) {
             case 'a': { // [NEW] 触发新闻（newsEvent 0x44B6DF：抽下一条可触发事件，阻塞 2400ms）
                 newsDebugFire(app, -1);
+                debugAdvanceIfIncapacitated(app); // 事件导致当前玩家入院/坐牢 → 补回合推进
+                renderGameFrame(app);
+                return true;
+            }
+            case 'z': { // [NEW] 触发命运（fateEvent 0x44DB81：抽下一条可触发事件，阻塞 1600+800ms）
+                fateDebugFire(app, -1);
+                debugAdvanceIfIncapacitated(app); // 事件导致当前玩家入院/坐牢/出国 → 补回合推进
                 renderGameFrame(app);
                 return true;
             }
@@ -237,24 +271,16 @@ bool handleDebugKey(Application& app, int code, bool shift) {
                 }
                 jailPlayer(app, cur, 3);
                 // [RE 0x40DEFE] 对齐原版"工具条功能（含卡片）结束"的回合推进：有状态 →
-                //   byte_498EA0 |= 0x80 触发 beginPlayerTurn（状态分支提示后自动跳过回合），
-                //   不恢复玩家控制。等待操作阶段（wait=0）必须走此路径，否则前进面板因状态隐藏而悬空
-                if (st.playerActionState[cur] == 0 && st.playerActionWait[cur] == 0) {
-                    disablePlayerControl(app);
-                    st.playerActionFlags[cur] |= 0x80;
-                    st.gameStateActive = true;
-                }
+                //   beginPlayerTurn 触发（状态分支提示后自动跳过回合），不恢复玩家控制。
+                //   等待操作阶段（wait=0）必须走此路径，否则前进面板因状态隐藏而悬空
+                debugAdvanceIfIncapacitated(app);
                 return true;
             case 'l': // 当前玩家住院 3 天（hospitalizePlayer 0x43EC3F：FLC 524）
                 if (st.eventFlcActive) {
                     return true;
                 }
                 hospitalizePlayer(app, cur, 3);
-                if (st.playerActionState[cur] == 0 && st.playerActionWait[cur] == 0) {
-                    disablePlayerControl(app);
-                    st.playerActionFlags[cur] |= 0x80;
-                    st.gameStateActive = true;
-                }
+                debugAdvanceIfIncapacitated(app); // [RE 0x40DEFE] 同 Ctrl+Shift+J
                 return true;
             case 'm': // 打开股市面板（测试 0x42B58F）
                 if (st.gameLoopActive) {

@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "game/app/economy.h"
+#include "game/app/event_common.h"
 #include "game/app/event_stack.h"
 #include "game/app/game_loop.h"
 #include "game/app/map_objects.h"
@@ -92,13 +93,6 @@ const uint8_t kNewsTitleClass[36] = {
     4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
 };
 
-// 玩家头像帧号：原版 blitElementToCanvas(panel, g_pieceSprites[13*i]+N)（N/12 = 帧号）
-enum : int {
-    kPieceFrameRest = 3,    // +36（豪雨/交通：休息玩家）
-    kPieceFramePenalty = 4, // +48（延长刑期/住院、列表行）
-    kPieceFrameRelease = 5, // +60（释放/奖励）
-};
-
 // ===== 事件上下文 =====
 
 struct NewsCtx {
@@ -116,33 +110,16 @@ struct NewsCtx {
     int32_t taxAmounts[4] = {}; // idx 11-13 每玩家税额（原版 dword_48C59C 数组）
 };
 
-// ===== 绘制辅助 =====
-
-// 不透明贴一块 RGB555 位图（panel 底图/插画；原版 blitBackground 无色键）
-void blitOpaqueRgb(Surface& dst, const uint16_t* src, int w, int h, int x, int y) {
-    UiFrameView view{};
-    view.width = static_cast<uint16_t>(w);
-    view.height = static_cast<uint16_t>(h);
-    view.pixels = src;
-    blitElementOpaque(dst, view, x, y);
-}
+// ===== 绘制辅助（公共实现见 event_common.h；此处保留 NewsCtx 适配）=====
 
 // 事件文本（默认字体 28 号白字阴影 @ x=24）
 void drawEffectText(NewsCtx& ctx, const char* text, int y, int size = 28) {
-    ctx.app->text().setFont(size, 0xF0F0F0, 0x101010, 3, 0); // [RE setTextFont]
-    ctx.app->text().drawText(ctx.app->surface(), text, 24, y, 0);
+    drawEventText(*ctx.app, text, 24, y, size);
 }
 
 // [RE blitElementToCanvas(panel, g_pieceSprites[13*i]+N, 390, y)] 玩家头像（8bit 索引色键）
 void drawPiece(NewsCtx& ctx, int player, int frame, int y) {
-    const GameState& st = ctx.app->gameState();
-    if (player < 0 || player >= 9) {
-        return;
-    }
-    if (st.pieceSprites[player].frameCount() <= frame) {
-        return;
-    }
-    blitSpriteFrame(ctx.app->surface(), st.pieceSprites[player], frame, 390, y);
+    drawPieceFrame(*ctx.app, player, frame, 390, y);
 }
 
 // 底图 + 插画 + 标题（进入时绘制一次）
@@ -162,148 +139,11 @@ void drawNewsBase(NewsCtx& ctx) {
     app.text().drawText(dst, kNewsTitles[kNewsTitleClass[ctx.eventIdx]], 24, 8, 0);
 }
 
-// ===== 破坏类辅助（idx 4/5/14/15/18-21；原版 g_newsTarget 复用见研究文档 §0）=====
+// ===== 破坏类辅助（公共实现见 event_common.h：collect*/pickRandom/名称/objOwner）=====
 
-// 有建筑地块 objId（estate level!=0 / corp sub!=0）
-std::vector<int> collectBuiltObjIds(const GameState& st) {
-    std::vector<int> out;
-    for (size_t i = 1; i < st.estates.size(); ++i) {
-        if (st.estates[i].level != 0) {
-            out.push_back(static_cast<int>(i) + 2000);
-        }
-    }
-    for (size_t i = 1; i < st.corps.size(); ++i) {
-        if (st.corps[i].sub != 0) {
-            out.push_back(static_cast<int>(i) + 4000);
-        }
-    }
-    return out;
-}
-
-// 全部地块 objId（estate + corp）
-std::vector<int> collectAllObjIds(const GameState& st) {
-    std::vector<int> out;
-    for (size_t i = 1; i < st.estates.size(); ++i) {
-        out.push_back(static_cast<int>(i) + 2000);
-    }
-    for (size_t i = 1; i < st.corps.size(); ++i) {
-        out.push_back(static_cast<int>(i) + 4000);
-    }
-    return out;
-}
-
-// 有建筑 estate 索引（idx 15 专用：原版只收集 estate，不含 corp）
-std::vector<int> collectBuiltEstateIndices(const GameState& st) {
-    std::vector<int> out;
-    for (size_t i = 1; i < st.estates.size(); ++i) {
-        if (st.estates[i].level != 0) {
-            out.push_back(static_cast<int>(i));
-        }
-    }
-    return out;
-}
-
-int pickRandom(const std::vector<int>& list) {
-    return list.empty() ? 0 : list[static_cast<size_t>(std::rand()) % list.size()];
-}
-
-std::string estateNameUtf8(const Estate& es) {
-    return big5ToUtf8(es.name, sizeof(es.name));
-}
-
-std::string corpNameUtf8(const Corp& cp) {
-    return big5ToUtf8(reinterpret_cast<const char*>(cp.pad4), sizeof(cp.pad4));
-}
-
-std::string objNameUtf8(const GameState& st, int objId) {
-    if (objId > 2000 && objId < 4000 && objId - 2000 < static_cast<int>(st.estates.size())) {
-        return estateNameUtf8(st.estates[objId - 2000]);
-    }
-    if (objId > 4000 && objId < 6000 && objId - 4000 < static_cast<int>(st.corps.size())) {
-        return corpNameUtf8(st.corps[objId - 4000]);
-    }
-    return {};
-}
-
-int objOwner(const GameState& st, int objId) {
-    if (objId > 2000 && objId < 4000 && objId - 2000 < static_cast<int>(st.estates.size())) {
-        return st.estates[objId - 2000].owner;
-    }
-    if (objId > 4000 && objId < 6000 && objId - 4000 < static_cast<int>(st.corps.size())) {
-        return st.corps[objId - 4000].owner;
-    }
-    return 0;
-}
-
-// [RE 0x41D476] refreshGameUi(x, y, 2)：视口对准目标并全量重绘（收租/破坏共用）
-void focusView(Application& app, int x, int y) {
-    GameState& st = app.gameState();
-    st.manualView = true;
-    st.viewSmoothX = x;
-    st.viewSmoothY = y;
-    st.viewScrolling = false;
-    renderGameFrame(app);
-    app.renderFrame();
-}
-
-// [RE 0x41D546] 视口复位（还原主循环居中玩家）
-void resetView(Application& app) {
-    GameState& st = app.gameState();
-    st.manualView = false;
-    renderGameFrame(app);
-    app.renderFrame();
-}
-
-// [RE 0x4528B9] 阻塞延时（音频续喂；阶段 1 内 300/500ms 停顿）
+// [RE 0x4528B9] 阻塞延时（转发 event_common）
 void newsWait(Application& app, int ms) {
-    for (int t = 0; t < ms; t += 5) {
-        app.audio().update();
-        SDL_Delay(5);
-    }
-}
-
-// [RE 0x40DFFA forceHotelCheckout] 地产/设施拆除：住宿中玩家状态 BYTE0=0x80（强制退房）
-void forceHotelCheckout(GameState& st) {
-    for (int i = 0; i < st.playerCount; ++i) {
-        if (st.players[i].alive != 0 && (st.players[i].stateFlags & 0xFFu) != 0) {
-            st.players[i].stateFlags = (st.players[i].stateFlags & 0xFFFFFF00u) | 0x80u;
-        }
-    }
-}
-
-// [RE 0x451985] 地块高亮闪烁：填列表（estate/corp）→ highlightFrame=0 → 阻塞播放
-// 注：原版调用点直接 highlightBlink（无 >1 判定），单块也播；
-//   显示路径与收租**完全复用**：playHighlightBlink（turn_system.cpp）→
-//   captureHighlightShapes → drawEstateHighlight（map_render.cpp，每帧 renderGameFrame 调用）
-void blinkHighlight(Application& app) {
-    GameState& st = app.gameState();
-    if (st.highlightEstates.empty() && st.highlightCorps.empty()) {
-        return;
-    }
-    RICH4_LOGI("news highlight: estates=%zu corps=%zu (RE 0x451985)", st.highlightEstates.size(),
-               st.highlightCorps.size());
-    st.highlightFrame = 0;
-    playHighlightBlink(app);
-}
-
-// [RE 0x451985] 单块高亮（原版 markPickBuffer(单块) → highlightBlink）：objId 为 estate/corp
-void blinkSingleObj(Application& app, int objId) {
-    GameState& st = app.gameState();
-    st.highlightEstates.clear();
-    st.highlightCorps.clear();
-    if (objId > 2000 && objId < 4000) {
-        st.highlightEstates.push_back(objId - 2000);
-    } else if (objId > 4000 && objId < 6000) {
-        st.highlightCorps.push_back(objId - 4000);
-    }
-    RICH4_LOGI("news highlight single: objId=%d (RE 0x451985)", objId);
-    blinkHighlight(app);
-}
-
-// 破坏类事件阶段 1 公共：视口对准 + 输出对象坐标（expireAssets 范围中心）
-void focusObjId(Application& app, int objId, int& outX, int& outY) {
-    getObjectPosition(app.gameState(), objId, outX, outY);
-    focusView(app, outX, outY);
+    eventAudioWait(app, ms);
 }
 
 // [RE 0x44913D] idx 4：外星人攻打地球
@@ -588,20 +428,7 @@ void evt21_tornado(NewsCtx& ctx, int phase) {
 }
 
 // ===== 奖励/税务/公司类辅助（idx 8-13、30-35）=====
-
-// [RE sub_452946] 玩家名去空格（sprintf 用；原版 g_players[26*p] BIG5）
-std::string playerNameNoSpace(const GameState& st, int p) {
-    std::string out;
-    if (p < 0 || p >= 9 || st.players[p].name == nullptr) {
-        return out;
-    }
-    for (const char* q = st.players[p].name; *q != '\0'; ++q) {
-        if (*q != ' ') {
-            out += *q;
-        }
-    }
-    return out;
-}
+// 注: playerNameNoSpace 已提取至 event_common.h
 
 std::string specPtNameUtf8(const SpecPt& sp) {
     return big5ToUtf8(reinterpret_cast<const char*>(sp.pad4), sizeof(sp.pad4));
@@ -639,6 +466,8 @@ void rewardPlayerPhase1(NewsCtx& ctx) {
     }
     focusView(app, st.players[p].spriteX, st.players[p].spriteY);
     addMoney(app, p, ctx.targetParam, true); // [RE 0x449A5C cash=true]
+    RICH4_LOGI("news reward: p=%d +%d cash=%d bank=%d (RE 0x4498B3)", p, ctx.targetParam,
+               st.players[p].cash, st.players[p].bank);
     // [TODO P4] 浮动数字 sub_44F354(p, amount)
     resetView(app);
 }
@@ -669,6 +498,8 @@ void taxPhase1(NewsCtx& ctx) {
     for (int i = 0; i < st.playerCount && st.sceneRequest == 0; ++i) {
         if (st.players[i].alive != 0 && ctx.taxAmounts[i] != 0) {
             transferMoney(app, i, -1, ctx.taxAmounts[i], 0); // [RE 0x449DDB] 入银行
+            RICH4_LOGI("news tax: p=%d -%d cash=%d bank=%d (RE 0x449C7C)", i, ctx.taxAmounts[i],
+                       st.players[i].cash, st.players[i].bank);
         }
     }
 }
@@ -685,11 +516,17 @@ void applySpecPtChange(NewsCtx& ctx, int32_t delta, uint8_t newsValue, int textI
     char text[192];
     std::snprintf(text, sizeof(text), kNewsTexts[textIdx], specPtNameUtf8(sp).c_str());
     drawEffectText(ctx, text, 310);
+    const int32_t fundBefore = sp.fund;
     sp.fund += delta;     // [RE +40]
     sp.fundPaid += delta; // [RE +44]
+    RICH4_LOGI("news specPt: idx=%d fund %d -> %d (delta=%d) stockNo=%u (RE 0x44B3AD)",
+               textIdx, fundBefore, sp.fund, delta, static_cast<unsigned>(sp.stockNo));
     if (sp.stockNo < 12) {
         st.stockNews[sp.stockNo] = newsValue;
         stockNewsApply(app, sp.stockNo + 1); // [RE sub_429040(stockNo+1)]
+        RICH4_LOGI("news specPt: stockNews[%u]=%u -> apply(stock %u) (RE 0x44B3E7)",
+                   static_cast<unsigned>(sp.stockNo), static_cast<unsigned>(newsValue),
+                   static_cast<unsigned>(sp.stockNo) + 1);
     }
 }
 
@@ -977,6 +814,8 @@ void evt23_bankBonus(NewsCtx& ctx, int phase) {
         const int32_t bonus =
             static_cast<int32_t>(static_cast<double>(st.players[i].bank) * 0.1);
         addMoney(app, i, bonus, false); // [RE 0x44AF66 入银行]
+        RICH4_LOGI("news bankBonus: p=%d +%d bank=%d (RE 0x44AEDB)", i, bonus,
+                   st.players[i].bank);
         app.text().setFont(24, 0xF0F0F0, 0x101010, 3, 0);
         char line[128];
         std::snprintf(line, sizeof(line), "%s得到%d元", playerNameNoSpace(st, i).c_str(), bonus);
@@ -1089,12 +928,19 @@ void evt29_badLoanJail(NewsCtx& ctx, int phase) {
         return;
     }
     const int p = ctx.targetObjId;
-    if (p < 0 || p >= 4) {
+    // 防御: stage0 收集仅查 specPt.owner（原版照抄），业主可能已淘汰 —— 淘汰者入狱会留下
+    //   永不递减的 stateFlags（updatePlayerStates 对 alive==0 提前返回），跳过并记录
+    if (p < 0 || p >= 4 || st.players[p].alive == 0) {
+        RICH4_LOGI("news badLoan: owner=%d invalid/eliminated, skip (RE 0x44B25B)", p);
         return;
     }
     focusView(app, st.players[p].spriteX, st.players[p].spriteY);
-    // [TODO P4] resolveJailTarget 0x441210：免罪卡 21 → 抵消返回 -1；嫁祸卡 19 → 换目标
-    jailPlayer(app, p, 5); // [RE 0x44B362]
+    // [RE 0x441210] resolveJailTarget：免罪卡 21 → 取消（-1）；嫁祸卡 19 → 换目标
+    const int t = resolvePenaltyTarget(app, p);
+    RICH4_LOGI("news badLoan: owner=%d resolve -> %d (RE 0x44B25B/0x441210)", p, t);
+    if (t != -1) {
+        jailPlayer(app, t, 5); // [RE 0x44B362]
+    }
     resetView(app);
 }
 
@@ -1473,6 +1319,10 @@ bool newsHandler(const SDL_Event* event, void* user) {
     if (event->type == kModalTimerEvent) {
         if (!ctx.phase1Done && SDL_GetTicks() - ctx.startMs >= kNewsShowMs) {
             ctx.phase1Done = true;
+            // [RE 各效果函数 phase1 开头 refreshGameUi(0,0,3)] 先切回场景再执行效果：
+            //   否则 FLC（外星人/坐牢等）画在全屏事件面板上（实机反馈 2026-09-26，同 fateEvent）
+            renderGameFrame(app);
+            app.renderFrame();
             kNewsFuncs[ctx.eventIdx](ctx, 1); // [RE 0x44B875] funcs[v5](1)
             app.events().requestExit(0);
         }

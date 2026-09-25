@@ -700,6 +700,39 @@ UI 音效与游戏音效槽**是两套**，勿混：
   ④ 生成列候选条件 `y>300`（气球还压在下方未升起）防同列叠球；⑤ 得分 cap 999 只在
   加分路径检查，×2 可越 999（%04d 显示 4 位）。
 
+## 31. 双页选卡/道具面板（生日收卡，0x44192A / 0x4413EC）
+
+- **原版依据**：0x44192A 人类分支加载 panel.mkf[11] 元素 → `drawItemBag(0,面板,目标)`
+  + `drawCardBag(0,面板,目标)` → `blitElementFullscreen(backbuffer, 帧0, 14, 70)`；
+  `drawItemBag` 返回 1（目标有道具）时再 `blitElementFullscreen(帧1, 14, 270)`；
+  `runModal(sub_4413EC, 目标 | (道具页可见<<16))`。
+- **资源**：`panel.mkf[11]` 帧 0 = 卡包（412×180）、帧 1 = 道具包；卡名/图标网格 5×3
+  （列 80/行 56，图标帧 id+1）。
+- **交互**：命中 x∈[19,419)、卡 y∈[75,243) / 道具 y∈[275,443)；按下 `highlightRect`
+  下沉（卡区 t=56j+76 / 道具区 t=56j+276，78×54）+ `g_uiSoundClick`；**抬起确认**
+  （`postModalExit(选中)`）；右键 `g_uiSoundCancel` → 0。返回值：卡 = 卡 id；
+  道具 = `0x8000|道具 id`（原版 `dword_48C538`）。
+- **重写位置**：`src/app/card_bag_dialog.cpp:selectCardOrItemFromPlayerDialog`
+  （复用 `drawCardBagAt`/`drawItemBagAt` 与 `pressDown`）。
+- **经验/坑**：① 与工具条卡包（y=130、命中 135..303）落点不同，勿混常量；② 道具槽经
+  `drawItemBagAt` 的 `visibleMap[15]` 映射回道具 id；③ 抬起确认而非双击；④ 原版人类
+  逐人顶部行演出（「向%s收一張卡片」）在重写中省略（面板直接弹出）。
+
+## 32. 选人对话框（0x440E1A / 0x43FF56）
+
+- **原版依据**：0x440E1A 按候选数取 `data.mkf[518]` 帧 `count-2`（2..8 → 帧 0..6）作横排框
+  @(220,320)；框内逐个 `blitBackground(..., data.mkf[2] 头像帧 charIndex, 12+80i, 12)`；
+  提示 = `sub_456418(g_tipFrame 帧 5, 220, 140)` + `drawText(220,140,align 4)`；
+  `runModal(sub_43FF56)`。
+- **交互**：命中 x∈[220-offX+12, +80n)、y∈[320-offY+12, +72)；悬停 `g_uiSoundHover` +
+  三层绿框 80×78（`word_46CAEC`=0x0280）；左键 `g_uiSoundClick` → 返回玩家索引；
+  右键 `g_uiSoundCancel` → -1。
+- **重写位置**：`src/app/player_select_dialog.cpp:selectPlayerDialog`
+  （嫁祸卡调用；`resolvePenaltyTarget` 0x441210 → `passOnCardDialog` 0x44476A）。
+- **经验/坑**：① 帧头 offset 参与落点（`blitElementOpaque` 实参 − offset），命中起点按
+  `220-offX+12` 计算；② 头像落点实参 = `框内坐标 + 头像 offset`，直接用
+  `blitElementOpaque(..., bx+12+80i, by+12)` 即自动扣除；③ 帧数不足（<count-1）时降级返回 -1。
+
 ## 新增控件模板（发现新控件时复制填写）
 
 ```

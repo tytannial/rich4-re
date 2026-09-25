@@ -194,9 +194,9 @@ bool saveGameToSlot(const std::string& gameDir, int slot, const GameState& state
     wbuf(state.misc8A, 8);                             // g_misc8A
     wbuf(state.misc8B, 8);                             // g_misc8B
     w32(static_cast<uint32_t>(state.newsPos));         // dword_4990E0 g_newsPos
-    w32(static_cast<uint32_t>(state.misc37Pos));       // dword_4990B4
+    w32(static_cast<uint32_t>(state.fatePos));         // dword_4990B4 g_fatePos
     wbuf(state.newsOrder, 36);                         // g_newsOrder 0x499090
-    wbuf(state.misc37, 37);                            // g_miscTable37
+    wbuf(state.fateOrder, 37);                         // g_fateOrder 0x496B38
     w32(static_cast<uint32_t>(state.mapRotation));     // dword_499088
     w32(0);                                            // dwSize（阶段 3 地图数据）
     // 每玩家棋盘数据（阶段 3；原版 10008B + dwSize）

@@ -497,9 +497,9 @@ struct GameState {
     uint8_t itemStock[60] = {};
     // [RE 0x499090] g_newsOrder **新闻事件顺序表**（36 项，newGameInit 洗牌；newsEvent 0x44B6DF 抽取）
     uint8_t newsOrder[36] = {};
-    uint8_t misc37[37] = {};         // [RE 0x496B38] g_miscTable37 命运事件表（固定顺序）
+    uint8_t fateOrder[37] = {};      // [RE 0x496B38] g_fateOrder 命运事件顺序表（37 项，newGameInit 0x44BAEA 洗牌；fateEvent 0x44DB81 抽取）
     int32_t newsPos = 0;             // [RE 0x4990E0] g_newsPos 当前新闻索引（0..35 循环）
-    int32_t misc37Pos = 0;           // [RE 0x4990B4] dword_4990B4 命运索引
+    int32_t fatePos = 0;             // [RE 0x4990B4] g_fatePos 当前命运索引（0..36 循环）
     // [RE 0x4990B8] g_miscTable36A 乐透号码归属（36 号，0=未售，N=玩家 N-1；
     //   投注 sub_4315CC/42F7FC 写、开奖 431712 读、破产 sub_40CD87 清该玩家号）
     uint8_t lotteryNumbers[36] = {};

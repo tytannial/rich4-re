@@ -4,12 +4,18 @@
 
 #include <cstdio>
 
+#include "game/app/confirm_dialog.h"
+#include "game/app/economy.h"
+#include "game/app/event_common.h"
 #include "game/app/event_stack.h"
 #include "game/app/facility_dialog.h"
+#include "game/app/item_bag_dialog.h"
 #include "game/app/map_objects.h"
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
+#include "game/app/message_dialog.h"
 #include "game/app/new_game_tables.h"
+#include "game/app/player_select_dialog.h"
 #include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/log.h"
@@ -269,6 +275,202 @@ void useCardDialog(Application& app) {
         }
         // 效果返回 0 → 重弹面板再选
     }
+}
+
+// ===== [RE 0x44192A / 0x4413EC] 生日收卡：从目标玩家卡包/道具包选一项 =====
+
+namespace {
+
+// 面板落点（原版 sub_44192A blitElementFullscreen (14,70)/(14,270)）
+constexpr int kGiftPanelX = 14;
+constexpr int kGiftCardY = 70;
+constexpr int kGiftItemY = 270;
+// 命中（原版 sub_4413EC）：x∈[19,419)；卡 y∈[75,243)、道具 y∈[275,443)
+constexpr int kGiftHitX0 = 19;
+constexpr int kGiftHitX1 = 419;
+constexpr int kGiftCardHitY0 = 75;
+constexpr int kGiftCardHitY1 = 243;
+constexpr int kGiftItemHitY0 = 275;
+constexpr int kGiftItemHitY1 = 443;
+// 高亮（原版 highlightRect）：l=80i+20 / t=56j+76（卡）或 +276（道具），78×54
+constexpr int kGiftHiW = 78;
+constexpr int kGiftHiH = 54;
+
+struct GiftSelectState {
+    Application* app = nullptr;
+    const UiImage* sheet = nullptr;
+    int target = 0;
+    bool hasItems = false;
+    uint8_t itemMap[15] = {};
+    int pressed = 0;      // 0=未选；卡 id 或 0x8000|道具 id
+    int pressedSlot = -1; // 高亮槽
+    bool pressedItem = false;
+};
+
+bool targetHasItems(const GameState& st, int target) {
+    for (int i = 0; i < 13; ++i) {
+        if (st.itemStock[15 * target + i] != 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void renderGiftSelect(GiftSelectState& s) {
+    drawCardBagAt(*s.app, *s.sheet, s.target, kGiftPanelX, kGiftCardY);
+    if (s.hasItems) {
+        drawItemBagAt(*s.app, *s.sheet, s.target, kGiftPanelX, kGiftItemY, s.itemMap);
+    }
+    // [RE 0x4413EC] highlightRect 按下下沉（卡区 +76 / 道具区 +276）
+    if (s.pressedSlot >= 0) {
+        const int l = 20 + kHitW * (s.pressedSlot % 5);
+        const int t = (s.pressedItem ? 276 : 76) + kHitH * (s.pressedSlot / 5);
+        pressDown(s.app->surface(), l, t, kGiftHiW, kGiftHiH, 1, kChannelHalf);
+    }
+}
+
+int giftHitSlot(const GiftSelectState& s, int x, int y) {
+    if (x < kGiftHitX0 || x >= kGiftHitX1) {
+        return -1;
+    }
+    if (y >= kGiftCardHitY0 && y < kGiftCardHitY1) {
+        return 5 * ((y - kGiftCardHitY0) / kHitH) + (x - kGiftHitX0) / kHitW;
+    }
+    if (s.hasItems && y >= kGiftItemHitY0 && y < kGiftItemHitY1) {
+        return 5 * ((y - kGiftItemHitY0) / kHitH) + (x - kGiftHitX0) / kHitW;
+    }
+    return -1;
+}
+
+bool giftSelectHandler(const SDL_Event* event, void* user) {
+    auto& s = *static_cast<GiftSelectState*>(user);
+    GameState& st = s.app->gameState();
+    if (event == nullptr) {
+        renderGiftSelect(s);
+        return true;
+    }
+    switch (event->type) {
+        case SDL_EVENT_MOUSE_BUTTON_DOWN: {
+            if (event->button.button == SDL_BUTTON_RIGHT ||
+                event->button.button == SDL_BUTTON_MIDDLE) {
+                s.app->audio().playEffect(4); // g_uiSoundCancel
+                s.app->events().requestExit(0);
+                return true;
+            }
+            if (event->button.button != SDL_BUTTON_LEFT) {
+                return true;
+            }
+            const int x = static_cast<int>(event->button.x);
+            const int y = static_cast<int>(event->button.y);
+            const int slot = giftHitSlot(s, x, y);
+            if (slot < 0 || slot >= 15) {
+                return true;
+            }
+            const bool item = (y >= kGiftItemHitY0);
+            const int id = item ? s.itemMap[slot] : st.cardState60[15 * s.target + slot];
+            if (id == 0) {
+                return true;
+            }
+            s.pressed = item ? (0x8000 | id) : id;
+            s.pressedSlot = slot;
+            s.pressedItem = item;
+            s.app->audio().playEffect(1); // g_uiSoundClick
+            renderGiftSelect(s);
+            return true;
+        }
+        case SDL_EVENT_MOUSE_BUTTON_UP: {
+            if (event->button.button != SDL_BUTTON_LEFT) {
+                return true;
+            }
+            if (s.pressed != 0) { // [RE 0x4413EC] WM_LBUTTONUP → postModalExit(选择)
+                const int r = s.pressed;
+                s.pressed = 0;
+                s.pressedSlot = -1;
+                renderGiftSelect(s);
+                s.app->events().requestExit(r);
+            }
+            return true;
+        }
+        default:
+            return true;
+    }
+}
+
+} // namespace
+
+int selectCardOrItemFromPlayerDialog(Application& app, int targetPlayer) {
+    GameState& st = app.gameState();
+    if (targetPlayer < 0 || targetPlayer >= 4) {
+        return 0;
+    }
+    UiImage sheet;
+    if (auto blob = st.panel.read(11)) { // [RE 0x44192A] sub_450441(panel, 11)
+        sheet.load(std::move(*blob));
+    }
+    if (sheet.frameCount() < 2) {
+        RICH4_LOGW("selectCardOrItem: panel.mkf[11] unavailable (RE 0x44192A)");
+        return 0;
+    }
+    GiftSelectState s;
+    s.app = &app;
+    s.sheet = &sheet;
+    s.target = targetPlayer;
+    s.hasItems = targetHasItems(st, targetPlayer);
+    RICH4_LOGI("selectCardOrItem: target=%d items=%d (RE 0x44192A)", targetPlayer, s.hasItems);
+    return runModal(app, &giftSelectHandler, &s, 0);
+}
+
+// [RE 0x44476A] 嫁祸卡目标选择（a2=0, a3=0：直接选目标，AI 自动）
+int passOnCardDialog(Application& app, int user) {
+    GameState& st = app.gameState();
+    if (user < 0 || user >= 4) {
+        return -1;
+    }
+    int target = -1;
+    char text[160];
+    if (st.players[user].alive != 1) {
+        // AI：欠款最多者（无则随机存活无状态者）[RE 0x44476A AI 分支]
+        target = findMaxCreditor(st, user);
+        if (target == -1) {
+            target = pickRandomActiveTarget(st, user);
+        }
+        if (target == -1) {
+            return -1;
+        }
+        std::snprintf(text, sizeof text, "%s\n\n嫁禍卡生效！", playerNameNoSpace(st, user).c_str());
+        showCardGet(app, 19, text); // [RE 0x44476A sub_441F73(19,...)]
+        std::snprintf(text, sizeof text, "嫁禍給%s！", playerNameNoSpace(st, target).c_str());
+        showMessage(app, text, 1500); // [RE 0x44476A showMessage]
+    } else {
+        int ids[8];
+        int n = 0;
+        for (int i = 0; i < st.playerCount && i < 8; ++i) {
+            if (i != user && st.players[i].alive != 0) {
+                ids[n++] = i;
+            }
+        }
+        if (n == 0) {
+            return -1;
+        }
+        std::snprintf(text, sizeof text, "%s\n\n嫁禍卡生效！", playerNameNoSpace(st, user).c_str());
+        showCardGet(app, 19, text); // [RE 0x44476A sub_441F73(19,...)]
+        if (n == 1) {
+            std::snprintf(text, sizeof text, "是否嫁禍給%s？", // [RE 0x46534E]
+                          playerNameNoSpace(st, ids[0]).c_str());
+            if (!confirmDialog(app, text, 220, 320)) { // [RE 0x44476A askDialog]
+                return -1;
+            }
+            target = ids[0];
+        } else {
+            target = selectPlayerDialog(app, ids, n, "請選擇嫁禍對象..."); // [RE 0x46535D]
+            if (target == -1) {
+                return -1;
+            }
+        }
+    }
+    cardBagRemove(st, user, 19); // [RE 0x44476A sub_441343(a1,19)]
+    RICH4_LOGI("passOnCard: user=%d -> target=%d (RE 0x44476A)", user, target);
+    return target;
 }
 
 }  // namespace rich4
