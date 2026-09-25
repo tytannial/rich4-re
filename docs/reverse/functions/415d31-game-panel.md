@@ -9,7 +9,7 @@
 | 调用者 | `0x417E26` gameWndProc WM_PAINT 分支 |
 | 被调用 | `0x4563F5` blitElementFullscreen、`0x456418` blitElement、`0x44F9D8` setFont、`0x44FABC` drawText、`0x452793` 金额格式化 |
 | 重写符号 | `src/app/game_panel.cpp` `renderGamePanel`（drawTopBar/drawPlayerBar/drawPlayerInfoPanel/drawMiniMap/drawCalendar） |
-| 状态 | 已实现（布局 2 完整；布局 0/1 玩家信息页签简化） |
+| 状态 | 已实现（布局 0/1/2 完整；物價指數、4 页签统计与切换、页签点击均已还原） |
 
 ## 功能
 
@@ -61,8 +61,13 @@
 - **颜色**：原版 `1052688`=0x101010（深灰）、`16711680`=0xFF0000（红）。
 - **文本坐标**：drawText 的 align 0 左上 / 1 右上 / 2 居中（与原版一致）。
 - **差异**：
-  - `sub_415F69` 的 4 页签（資金/地產/股票/其他）统计与切换阶段 2 接入，
-    当前用简化的现金/存款/总资产。
+  - ~~`sub_415F69` 的 4 页签（資金/地產/股票/其他）统计与切换阶段 2 接入~~ →
+    ✅ 已完整（4 页签统计 @(600,102/166/230) + 页签点击 0x4182FA，见 `query_dialog.cpp`/
+    `ui-controls.md` §27）。
+  - 事件槽回合（`currentPlayer` 4..7）NPC 面板分支（原版帧 5/6 + NPC 名 + 棋子）未实现
+    （重写 `drawPlayerInfoPanel`/`drawPlayerBar` 直接 return）；`currentPlayer==8`
+    （機器娃娃虚拟槽）已还原：面板/玩家条沿用发起玩家 `byte_498E70`（`workerPlayer`，
+    0x416118/0x4167F4）。
   - `sub_416E6D` 小地图已使用 `sub_40A4E1` 叠加标记后的工作副本
     （`dword_48BADC`，见 map_render.cpp `buildMiniMapMarks`）；**每帧重建**以随物件变化更新
     （原版在 22 处变化点调用）；玩家标记帧 6、大地图帧 5 已对齐。
@@ -70,14 +75,42 @@
     箭头按下态复用 `pendingAction`（对应原版 `byte_48BE28`）。
   - 小地图右键取消手动视角（`dword_48BE18=0`）见 game_loop.cpp `handleRightButtonUp`；
     左键抬起无条件结束拖拽（`byte_48BE29=0`）见 `handleLeftButtonUp`。
-  - 原版 `dword_475110` 脏区标志（`&1/2/4/8/10`）→ 阶段 1 每 tick 全量重绘。
+  - 原版 `dword_475110` 脏区标志 → 重写每 tick 全量重绘。位语义（`sub_4192F7` 逐位局部 blit
+    后清位，`0x1F` 全屏；`sub_41906A(1)` 全屏重绘并清零）：bit0 工具条 (0,0)-(440,40)、
+    bit1 地图 (0,40)-(440,480)、bit2 玩家条 (440,0)-(640,80)、bit3 小地图 (440,80)-(640,280)、
+    bit4 日历 (440,280)-(640,480)；`drawPlayerInfoPanelFull/Slim` 入口条件分别查 `&0xC`/`&4`。
   - 日历：三显示效果（大数字普通 / 大数字节日背景 / 月历网格）已实现；节日表 `kHoliday[8][24][5]`
     由 `tools/gen_map_tables.py` 从 `byte_47FF4A..` 提取（type 0=固定月日、2=第N个星期X；
     type 1 浮动节日依赖 `dword_47639C` 暂未实现）；节日背景为 RAW 200x200（`decodeRawBitmap`）。
   - 大地图对话框（`sub_40A801`）暂未叠加物件标记（`sub_40A4E1(1)`）。
+
+## 物價指數显示核对（2026-09-25）
+
+> 帮助 `[HELP 5]`；右侧完整面板（布局 0/1）的物價指數文字，重写 `game_panel.cpp`
+> `drawPlayerInfoPanel`。核对结论：**与原版逐项一致**。
+
+- **绘制链（0x415F69）**：`blitElementFullscreen(背景帧 = panel.mkf[0] 帧 tab @440,0)` →
+  `setTextFont(12, 0x101010, 0, style=2(粗体), spacing=1)` @0x416165 →
+  `sprintf("物價指數  %d", g_moneyMul)` @0x41617e → `drawText(450, 260, align=0)` @0x416199。
+- **格式串池 0x4638F5**（BIG5 实测，共享）：`物價指數  %d` / `%d天` / `%d月` / `連鎖店` /
+  `×%d` / `餘股:%d` / `現  金` / `存  款` / `總資產`。
+- **显示条件**：入口 `g_panelLayout != 2 && (dword_475110 & 0xC) != 0xC`，且在
+  `currentPlayer < g_playerCount || currentPlayer == 8` 分支内；**任何 tab 都绘制**（位于
+  页签 switch 之前）。布局 2 的玩家条（`drawPlayerInfoPanelSlim` 0x4166F8）**不含**此文字。
+- **`currentPlayer == 8`（機器娃娃虚拟槽）**：原版三个函数均取
+  `byte_498E70`（`workerPlayer`）作为实际玩家——完整面板 0x416118、玩家条 0x4167F4、
+  `nextPlayer` 0x418EDA；重写已还原（`drawPlayerInfoPanel` / `drawPlayerBar`）。
+- **刷新时机**：原版由 `dword_475110` 脏区位驱动（bit2 玩家条区 + bit3 小地图区 = `0xC`），
+  `sub_4192F7` 局部 blit 后清位；重写逐帧全量重绘，数值每日 `updateMoneyIndex`
+  （0x423ACF，`advanceDay` 内）更新后立即生效，无可见差异。
 
 ## 验证方式
 
 `--shot` 截图布局 2：顶部 11 按钮、玩家条（头像/名字/现金/存款）、
 小地图（台湾 + 玩家标记 + 白色当前框 + 左右旋转箭头）、日历（1998 年 1 月，1 号红色）。
 `--game-drag` 拖拽小地图后显示红色视野框；`--game-rclick` 小地图右键回到当前玩家视角。
+
+物價指數核对（2026-09-25）：设为布局 0/1（设置 → 显示单选，`settings[5]`）后右侧完整面板
+(450,260) 应显示「物價指數  N」；`Ctrl+7` 加现金 / `Ctrl+Shift+D` 过天后数字上升（只升不降）。
+機器娃娃：`Ctrl+Shift+F` 发全道具 → 道具栏使用機器娃娃（虚拟槽 8）期间，布局 0/1 完整面板
+与布局 2 玩家条均应显示**发起玩家**资料（`workerPlayer`），面板不消失、玩家不错位。

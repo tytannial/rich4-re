@@ -80,7 +80,8 @@ void drawTopBar(Application& app) {
 }
 
 // [RE 0x4166F8] 玩家信息条（布局 2，440,0-640,80；panel.mkf[0] 帧 4 = 200x80）
-// 依据: 0x4166F8 反编译; dword_48BE0C + 60 → 帧 4（+12 主头 + 12*4）
+// 依据: 0x4166F8 反编译; dword_48BE0C + 60 → 帧 4（+12 主头 + 12*4）；
+//   currentPlayer==8（機器娃娃虚拟槽）→ 沿用发起玩家 byte_498E70（workerPlayer，0x4167F4）
 void drawPlayerBar(Application& app) {
     GameState& state = app.gameState();
     Surface& dst = app.surface();
@@ -93,7 +94,11 @@ void drawPlayerBar(Application& app) {
     if (v1 >= state.playerCount && v1 != 8) {
         return;
     }
-    const int idx = (v1 == 8) ? 0 : v1;
+    // [RE 0x4167F4] 機器娃娃虚拟槽 8：面板沿用发起玩家 byte_498E70（workerPlayer）
+    const int idx = (v1 == 8) ? static_cast<int>(state.workerPlayer) : v1;
+    if (idx < 0 || idx >= state.playerCount) {
+        return;
+    }
     const Player& p = state.players[idx];
 
     // 颜色条 + 棋子图标
@@ -130,14 +135,19 @@ void drawPlayerBar(Application& app) {
 //     0 資金 = 現金/存款/總資產（"$"+千分位）；1 地產 = 土地(estate+corp)/連鎖店/設施；
 //     2 股票 = 總市值(Σ股数×现价)/成本(Σ股数×均价)/經營權家数；3 其他 = 點券/貸款/保險期
 //     （"%d天"）+ 貸款剩餘天數 @ (500,146) font12
-// 差异: 事件槽回合（currentPlayer≥玩家数）NPC 面板分支待 P5；脏区标志 dword_475110&0xC 忽略（逐帧重绘）
+// 差异: 事件槽回合（currentPlayer 4..7）NPC 面板分支待 P5；currentPlayer==8（機器娃娃虚拟槽）
+//   沿用 workerPlayer（byte_498E70，0x416118）；脏区标志 dword_475110&0xC 忽略（逐帧重绘）
 void drawPlayerInfoPanel(Application& app) {
     GameState& state = app.gameState();
     Surface& dst = app.surface();
     if (state.panelFrame0.frameCount() <= 0) {
         return;
     }
-    const int v1 = state.currentPlayer;
+    int v1 = state.currentPlayer;
+    // [RE 0x416118] 機器娃娃虚拟槽 8：完整面板沿用发起玩家 byte_498E70（workerPlayer）
+    if (v1 == 8) {
+        v1 = static_cast<int>(state.workerPlayer);
+    }
     if (v1 < 0 || v1 >= state.playerCount) {
         return; // 事件槽分支（帧 6 + NPC 名 + 棋子外观）待 P5
     }
@@ -147,7 +157,8 @@ void drawPlayerInfoPanel(Application& app) {
         blitElementOpaque(dst, state.panelFrame0.frame(tab), 440, 0);
     }
     char buf[32];
-    // 物价指数
+    // [RE 0x416165/0x41617e/0x416199] 物價指數：font12/0x101010/style2(spacing1)，格式串池 0x4638F5
+    //   「物價指數  %d」@ (450,260) align0；任何 tab 均显示（layout 2 玩家条不含）
     app.text().setFont(12, kTextDark, 0, 2, 1);
     std::snprintf(buf, sizeof(buf), "物價指數  %d", state.moneyMul);
     app.text().drawText(dst, buf, 450, 260, 0);

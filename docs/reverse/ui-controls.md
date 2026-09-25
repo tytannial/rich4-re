@@ -568,7 +568,9 @@ UI 音效与游戏音效槽**是两套**，勿混：
   15+73i+20) font18（当前页 0x101010 / 其他 0x404040）；内容数值 @ (600,102/166/230) 右上对齐
   （font18 沿用页签循环最后设置）：資金=現金/存款/總資產、地產=土地(estate+corp)/連鎖店/設施、
   股票=總市值/成本(playerAvgCost)/經營権家数、其他=點券/貸款/保險期；物价指数
-  「物價指數  %d」@ (450,260) font12。
+  「物價指數  %d」@ (450,260) font12（全局 `g_moneyMul`，**任何 tab 均显示**，位于页签
+  switch 之前；布局 2 玩家条不含此文字；`currentPlayer==8` 機器娃娃虚拟槽时面板/玩家条
+  沿用 `workerPlayer`；精确核对见 `415d31-game-panel.md`「物價指數显示核对」）。
 - **重写位置**：`src/app/query_dialog.cpp` `queryDialog`（工具条 case 6 接入 `game_loop.cpp`）、
   `src/app/game_panel.cpp` `drawPlayerInfoPanel` + `game_loop.cpp` `handleLeftButtonDown`
   页签命中。
