@@ -476,10 +476,11 @@ struct GameState {
     // [RE 0x49915C] byte_49915C / g_playerCards 玩家**道具库存**（4 × 15 槽，索引 = 道具 id 1..9，
     //   每槽数量上限 9；givePlayerCard 0x445A4D 写/ takePlayerCard 0x445AA2 减；原误名 cardPool60）
     uint8_t itemStock[60] = {};
-    uint8_t cardShuffle[36] = {};    // [RE 0x499090] g_miscTable36B
-    uint8_t misc37[37] = {};         // [RE 0x496B38] g_miscTable37
-    int32_t cardShufflePos = 0;      // [RE 0x4990E0] dword_4990E0
-    int32_t misc37Pos = 0;           // [RE 0x4990B4] dword_4990B4
+    // [RE 0x499090] g_newsOrder **新闻事件顺序表**（36 项，newGameInit 洗牌；newsEvent 0x44B6DF 抽取）
+    uint8_t newsOrder[36] = {};
+    uint8_t misc37[37] = {};         // [RE 0x496B38] g_miscTable37 命运事件表（固定顺序）
+    int32_t newsPos = 0;             // [RE 0x4990E0] g_newsPos 当前新闻索引（0..35 循环）
+    int32_t misc37Pos = 0;           // [RE 0x4990B4] dword_4990B4 命运索引
     // [RE 0x4990B8] g_miscTable36A 乐透号码归属（36 号，0=未售，N=玩家 N-1；
     //   投注 sub_4315CC/42F7FC 写、开奖 431712 读、破产 sub_40CD87 清该玩家号）
     uint8_t lotteryNumbers[36] = {};

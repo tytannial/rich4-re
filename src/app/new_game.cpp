@@ -328,10 +328,10 @@ bool newGameInit(Application& app, bool mode1) {
     refreshBankStockShares(app); // [RE 0x42915A] 初始交易量
     // 注: specPt 初始化与股票→specPt 映射在 loadMap（parseMapDat）之后执行（见下方）
 
-    // [RE 0x448B81/0x44BAEA] 卡片/事件洗牌
-    shuffleIndices(state.cardShuffle, 36);
+    // [RE 0x448B81/0x44BAEA] 新闻/命运事件顺序洗牌
+    shuffleIndices(state.newsOrder, 36);
     shuffleIndices(state.misc37, 37);
-    state.cardShufflePos = 0;
+    state.newsPos = 0;
     state.misc37Pos = 0;
 
     RICH4_LOGI("new game: map=%d mode=%d players=%d humans=%d travel=%d money=%d", state.mapIndex,

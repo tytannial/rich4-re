@@ -13,6 +13,7 @@
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
 #include "game/app/month_settle.h"
+#include "game/app/news_dialog.h"
 #include "game/app/object_tip.h"
 #include "game/app/query_dialog.h"
 #include "game/app/shop_dialog.h"
@@ -77,6 +78,11 @@ bool handleDebugKey(Application& app, int code, bool shift) {
         }
         // ===== Ctrl+Shift+字母：难测机制快捷构造 =====
         switch (code) {
+            case 'a': { // [NEW] 触发新闻（newsEvent 0x44B6DF：抽下一条可触发事件，阻塞 2400ms）
+                newsDebugFire(app, -1);
+                renderGameFrame(app);
+                return true;
+            }
             case 'g': { // 瞬移到指向地块并立即触发落地结算（landingEvent）
                 const uint16_t id = pointedObject(app);
                 if (id == 0) {

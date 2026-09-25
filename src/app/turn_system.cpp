@@ -29,6 +29,7 @@
 #include "game/app/message_dialog.h"
 #include "game/app/minigame.h"
 #include "game/app/month_settle.h"
+#include "game/app/news_dialog.h"
 #include "game/app/roulette_dialog.h"
 #include "game/app/shop_dialog.h"
 #include "game/app/spec_pt_dialog.h"
@@ -1363,6 +1364,13 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                                                10, 16, 16, 16, 16, 10, 10, 10};
     if (cellType >= 2 && cellType <= 16) {
         app.audio().playEffectSlot(kCellTypeSound[cellType]);
+    }
+    if (cellType == 2) {
+        // [RE 0x41B11E] case 2 新聞格：newsEvent（0x44B6DF）全屏事件，
+        //   panel.mkf[66] + 插画 data.mkf[441+idx] + 2400ms 阻塞；返回 0x80
+        RICH4_LOGI("landingEvent: case 2 新聞格 cellEnt=%u cur=%d (RE 0x41982D)", cellEntId, p);
+        newsEvent(app);
+        return 0x80;
     }
     if (cellType == 4) {
         // [RE 0x41B132→0x43D304] case 4 監獄格：保释面板（人类头像选择 / AI 按个性自动保释）
