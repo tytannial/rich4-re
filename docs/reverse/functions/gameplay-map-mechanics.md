@@ -255,7 +255,9 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
 - [x] 連鎖店收費（`estateRouteRent` 的 type≠0 分支：數量×2000，不并入路段联合计算）`[HELP 21]`
 - [x] **收租联动高亮**（`highlightBlink` 0x451985 + `markPickBuffer` 0x456C0A）：收租时标记联动组
       （住宅=同 owner+同名；连锁店=同 owner+type≠0 跨街道）→ 标记数>1 播放 16 帧亮度闪烁
-      （`g_highlightLut` 0x476380，30ms/帧 + 400ms 停留）；重写用 `mapHitRegions` 区域做 RGB555 亮度偏移，
+      （`g_highlightLut` 0x476380，30ms/帧 + 400ms 停留）；重写 `captureHighlightShapes` 从
+      `mapHitRegions` 提取原版 `g_pickMask` 形状快照（estate 帧 0/1、corp 帧 2/3，落点 y−40）
+      → `drawEstateHighlight` 做 RGB555 亮度偏移（快照语义 = 原版 pickBuffer，拆除后仍亮），
       **阻塞播放（先闪烁、结束后才弹收费提示，对齐原版时序）**
 - [x] **case 3 触发条件对齐**（0x448A7E）：`(travel & 0x83) == 3`（**临时载具计时中**）才面向/停留——
       普通步行/機車/汽車（travel=0/1/2）不触发（重写此前无条件面向 → 已修，收过路费不再转向）；

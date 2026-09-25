@@ -194,8 +194,9 @@ return g_moneyMul * 总和
   - 循环后 `sub_4528B9(400)` 停留（最后一帧偏移 0 = 正常画面）
 - **重写**：`startRouteHighlight`（turn_system.cpp）收集联动组 → `playHighlightBlink` **阻塞播放**
   （16 帧 × 30ms + 400ms，逐帧 `renderGameFrame` + `renderFrame` present）→ **闪烁结束后**才弹收费
-  提示（对齐原版 `sub_451985` 在 `showMessage` 之前完成的时序）；`drawEstateHighlight`（map_render.cpp）
-  按 `highlightFrame` 对 `mapHitRegions` 的 estate 区域/像素掩码做 RGB555 亮度偏移（8bit 量 >>2）；
+  提示（对齐原版 `sub_451985` 在 `showMessage` 之前完成的时序）；`captureHighlightShapes`
+  （map_render.cpp）从 `mapHitRegions` 提取原版 `g_pickMask` 形状快照（拾取缓冲写入形状），
+  `drawEstateHighlight` 按 `highlightFrame` 对快照做 RGB555 亮度偏移（8bit 量 >>2）；
   `Ctrl+9` 可一键把联动组归当前回合玩家（测试用）
 - **收费提示金额** = 神明调整**前**的联合租金（原版 `sprintf(...v8...)` 在 `sub_41D709` 之前）；
   神明调整后金额用于转账与 `estate+44`（与原版一致）

@@ -7,7 +7,7 @@
 > 状态（2026-09-26）：✅ **已实现**（`src/app/news_dialog.cpp` + `include/game/app/news_dialog.h`；
 > `newsEvent`/`newsEventCheck` 36 条/`g_newsFuncs` 36 效果全实现；调试 `Ctrl+Shift+A`）。
 > 未做：**拍卖 idx 7**（`sub_43BDE5` 桩，下一轮）、语音 `sub_44EF41` / 浮动数字 `sub_44F354`
-> （`TODO(P4)`）、corp 单块高亮（重写联动高亮机制仅支持 estate，`blinkHighlight` 跳过 corp）。
+> （`TODO(P4)`）。高亮（estate+corp）已按原版 `g_pickMask` 形状修复（2026-09-26，见 §7）。
 
 ## 0. 总览
 
@@ -215,13 +215,25 @@ newsEvent:
   - `kNewsTexts[36]` / `kNewsTitles[6]` / `kNewsTitleClass[36]` / `kNewsFuncs[36]`；
   - 事件私有目标存 `NewsCtx.targetObjId`/`targetParam`（对应原版 `g_newsTarget`/`g_newsParam`）。
 - 辅助：`focusView`/`resetView`（视口对准/复位，`manualView`）、`newsWait`（音频续喂延时）、
-  `forceHotelCheckout`（0x40DFFA）、`blinkHighlight`（填 `highlightEstates` → `playHighlightBlink`）。
+  `forceHotelCheckout`（0x40DFFA）、`blinkHighlight`（estate/corp 列表 → `playHighlightBlink`）、
+  `blinkSingleObj`（单块，原版 markPickBuffer(单块)）。
 - `GameState.cardShuffle/cardShufflePos` → `newsOrder/newsPos`（存档偏移不变）；
   `landingEvent` case 2 → `newsEvent(app); return 0x80;`
 - `stockNewsApply`（0x429040）实现于 `stock_system.cpp`：`stockNews` 高 4 位 = 涨（+10）、
   否则跌（-10）→ `stockPriceUpdate(昨收, 动量)` → 现价 + 历史（`turnCounter-1` 环形槽）。
-- 差异：语音/浮动数字 TODO(P4)；idx 7 拍卖桩；corp 单块高亮跳过；`sub_41D433` 面板刷新省略
+- 差异：语音/浮动数字 TODO(P4)；idx 7 拍卖桩；`sub_41D433` 面板刷新省略
   （重写每帧全量重绘）。
+- **实机修正（2026-09-26）**：
+  ① 高亮恢复原版形状/落点——原版 `rebuildPickBuffer` 0x409B18 用 `g_pickMask`（=map.mkf[26]）
+  **estate 帧 `(8-rot-dir)&1`（0/1）、corp 帧 `+2`（2/3）**，落点 `(drawListX, drawListY-40)`；
+  重写拾取为体感改用帧 4（51×51 圆）且漏了 -40 → 亮斑偏下压道路、形状过小；
+  现 `mapHitRegions` 另存 `hl*`（原版形状/锚点），`captureHighlightShapes` 提取
+  `highlightShapes` 快照（原版 pickBuffer 语义：启动时固定，拆除后仍亮——新闻 idx 19/21）；
+  corp 单块高亮同步支持（`highlightCorps`）。
+  ② 银行停留「暫停放款」提示 8000→**1500ms**（原版 0x800005DC = 1500+左移 100px，
+  旧文档误读 8000；重写 showMessage 不支持负值左移，故传正 1500）。
+  ③ 扣钱类新闻（三税/罚款）**不走**神明调整：原版 `sub_41D2C6` 纯转账、`newsEvt11/12/13/30-35`
+  调用链无 `sub_41D709`；重写 `transferMoney` 同样无神明逻辑（神明只作用于过路费/设施收费）。
 
 ## 8. 待深入清单
 
