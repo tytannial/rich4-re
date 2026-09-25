@@ -104,7 +104,7 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
 | 13 | 卡片 | 25 | 25 | 16 | 0x41B302：FLC 536 + `sub_441E12` 赠卡池抽卡（卡包 15 槽）+ `"得到%s！"`（0x463AA8） | ✅ |
 | 14 | 銀行 | 27 | 35 | 10 | 0x41B396：`sub_4379C9` → `g_sceneRequest==0` 时 `sub_436668(cellEntId)` | ✅（`bank-system.md`） |
 | 15 | 百貨公司 | 29 | 27 | 10 | 0x41B3B9：`sub_42E931(objId)`（卡片/道具店；实参 = cellEnt+32 special 6000+n） | ✅ |
-| 16 | 魔法屋 | 31 | 38 | 10 | 0x41B3CB：`sub_43380A` | ❌ |
+| 16 | 魔法屋 | 31 | 38 | 10 | 0x41B3CB：`magicHouseVisit` 0x43380A | ✅ 2026-09-26 |
 
 **三套顺序互不相同，重写时勿混用**：
 
@@ -207,7 +207,7 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
 | `lotteryVisit` | 樂透（投注/开奖） | 0x4315CC | ✅ 2026-09-25 |
 | `sub_4379C9` / `sub_436668` | 銀行 UI / 停留银行处理 | 0x4379C9 / 0x436668 | ❌ |
 | `sub_42E931` | 百貨公司（卡片店/道具店） | 0x42E931 | ❌ |
-| `sub_43380A` | 魔法屋 | 0x43380A | ❌ |
+| `magicHouseVisit` | 魔法屋 | 0x43380A | ✅ `magic_house_dialog.cpp`（2026-09-26，含拍卖 `auction_dialog.cpp` 0x43BDE5，`43380a-magic-house.md`/`43bde5-auction.md`） |
 
 ## 5. 推进清单（验收检查表）
 
@@ -316,7 +316,7 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
 > 研究详情见 **`41982d-p2-events.md`**（各 case 的处理函数、数据结构、实现顺序与待深入清单）。
 > 进度：**得點券 ✅ / 卡片格 ✅ / 監獄·醫院 ✅（2026-09-23）/ 銀行·樂透·小游戏·百貨 ✅ /
 > 新聞 ✅（2026-09-26，`44b6df-news-events.md`；拍卖 idx 7 下一轮）**；
-> 剩余 = 魔法屋（16）。
+> 剩余 = 无（魔法屋 16 ✅ 2026-09-26）。
 
 - [x] case 10/11/12 得點券（FLC 537 阻塞播放（透明=索引 0）+ showMessage + 50/30/10 點券；
       语音 P4）：`playEventFlc` + `landingEvent` case 10/11/12 + `drawEventFlcFrame`（详见 `41982d-p2-events.md` §2）
@@ -339,7 +339,7 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
 - [x] case 6 企鵝挖寶 / case 8 喜從天降**交互版** ✅ 2026-09-25（`miniGameDigRun`/
       `miniGameMoneyRun`，`minigame_dialog.cpp`；细节 `41982d-p2-events.md` §6）
 - [x] case 9 樂透（`lotteryVisit`，每月 15 号开奖——先分红后乐透；`lottery-system.md`）
-- [ ] case 14/15/16 銀行/百貨公司/魔法屋（`sub_4379C9`/`sub_42E931`/`sub_43380A`）
+- [x] case 14/15/16 銀行/百貨公司/魔法屋（`sub_4379C9`/`sub_42E931`/`sub_43380A`）—— 魔法屋 ✅ 2026-09-26（`43380a-magic-house.md` + `43bde5-auction.md`）
 - [ ] case 1 公園 = default（无事件）—— 确认与重写返回一致
 - [ ] 验收：逐类型实机触发核对（帮助页 23..38 可对照表现）
 

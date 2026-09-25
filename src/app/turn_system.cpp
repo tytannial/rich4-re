@@ -26,6 +26,7 @@
 #include "game/app/item_lines.h"
 #include "game/app/jail_dialog.h"
 #include "game/app/lottery.h"
+#include "game/app/magic_house_dialog.h"
 #include "game/app/map_objects.h"
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
@@ -1505,6 +1506,13 @@ int landingEvent(Application& app, uint16_t cellEntId) {
     if (cellType == 9) {
         // [RE 0x41B17A] case 9 樂透：人类投注界面（sub_4315CC→sub_42F7FC）/ AI 自动投注
         lotteryVisit(app);
+        return 0x80;
+    }
+    if (cellType == 16) {
+        // [RE 0x41B3CB] case 16 魔法屋：女巫随机条件 + 玩家选惩罚（0x43380A，
+        //   见 magic_house_dialog.cpp / 43380a-magic-house.md）
+        RICH4_LOGI("landingEvent: case 16 魔法屋 cellEnt=%u cur=%d (RE 0x41982D)", cellEntId, p);
+        magicHouseVisit(app);
         return 0x80;
     }
     if (cellType >= 6 && cellType <= 8) {

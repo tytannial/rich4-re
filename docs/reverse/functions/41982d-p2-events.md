@@ -23,7 +23,7 @@
 | 13 | 卡片 | 13 | 0x41B302（`sub_441E12` 抽卡） | ✅ 已实现 |
 | 14 | 銀行 | 14 | `sub_4379C9`（UI）+ `sub_436668`（停留） | ✅ 全链已实现（柜员机/停留主UI/週轉/催收/月度结息/15 号分红，2026-09-23；见 `bank-system.md`） |
 | 15 | 百貨公司 | 15 | `sub_42E931`（商店） | ✅ 2026-09-25（`42e931-department-store.md`） |
-| 16 | 魔法屋 | 16 | `sub_43380A` | 🟡 入口已明 |
+| 16 | 魔法屋 | 16 | `sub_43380A` | ✅ 2026-09-26（`43380a-magic-house.md`） |
 
 ## 1. case 4 監獄 / case 5 醫院
 
@@ -633,11 +633,15 @@ case 14:
 - 买卖公式：买 10×价 / 卖 1×价（点券 90% 就近舍入）累加 `specPt.fund/+44`
 - 详见 **`42e931-department-store.md`**（重写 `src/app/shop_dialog.cpp`）
 
-## 10. case 16 魔法屋（`sub_43380A`，入口已明）
+## 10. case 16 魔法屋（`magicHouseVisit` 0x43380A，**✅ 2026-09-26**）
 
-- `runModal` + `sub_431CAA`（施法界面）+ `sub_431842`；文本 `"%s\n\n%s"`（0x464842）
-- 帮助 `[HELP 38]`：女巫水晶球按条件施法，玩家决定惩罚对象
-- 待深入：施法条件表、惩罚效果（`sub_431CAA` 内部）
+- 详见 **`43380a-magic-house.md`** + **`43bde5-auction.md`**（重写 `src/app/magic_house_dialog.cpp` +
+  `src/app/auction_dialog.cpp`；调试 `Ctrl+Shift+0`）。
+- 人类：panel[18/19/20] 施法 UI（100ms 状态机 1..8，#0037..#0041 五段浮字 + 随机条件 +
+  12 惩罚图标径向选择 RAW pick + 确认罩 + FLC 退出）；AI：条件+惩罚双随机（排除 6 自肥/11 拍卖）。
+- 惩罚执行 0x431CAA 对目标名单（0x431842 条件选 ≤4 人）逐一：變賣卡片/命運三張/坐牢三天/
+  原地停留/存現金/就地加蓋(FLC553)/得卡片/向後轉/變賣道具/拆除(FLC529)/住院三天/拍賣當格。
+- 拍卖面板 0x43BDE5 同步实现（新闻 idx 7 激活）；#0042/#0043 死神召唤属投降流程 sub_433088（待做）。
 
 ## 11. 实现建议与数据缺口
 
@@ -684,5 +688,6 @@ case 14:
 - [x] `sub_439BFA` / `sub_437E61`（月初结息）—— 已实现（`month_settle_dialog.cpp`，2026-09-23）
 - [x] `sub_42BA97` / `sub_42B3EB`（15 号分红）—— 已实现（`dividend_dialog.cpp`，2026-09-23）
 - [x] `sub_42D272` / `sub_42D237`（百货商店 UI + 商品表）—— 2026-09-25 完成，见 `42e931-department-store.md`
-- [ ] `sub_431CAA` / `sub_431842`（魔法屋施法）
+- [x] `sub_431CAA` / `sub_431842`（魔法屋施法）—— **2026-09-26 完成**（applyMagicPenalty/
+      magicSelectTargets；含拍卖 0x43BDE5/0x43A2DD/0x439F0D 全链，见 `43380a-magic-house.md`/`43bde5-auction.md`）
 - [x] `lotteryVisit`（乐透投注）+ `lotteryDrawMeeting`（15 号开奖链路）—— 已实现（`lottery_dialog.cpp`，2026-09-25）

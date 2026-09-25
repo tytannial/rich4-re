@@ -67,6 +67,11 @@
 | `Ctrl+Shift+R` | **乐透保送中奖** | 清空号码表 → 当前玩家 11 注（>10 → 开奖从已售号随机 = 必中）→ 奖金池注入 3000 → 立即弹开奖界面（中奖演出 + 奖金入现金） |
 | `Ctrl+Shift+F` | **发放全部 13 种道具** | 当前回合玩家每种 ×2（`givePlayerItem`；id1..8 受礼物池限制）→ 开工具条「道具」按钮（case7）使用 |
 | `Ctrl+Shift+Y` | **dump cellTable** | 活动槽 type/ent/life/owner/fly + 玩家附身/挂件/luckA/B/C + 礼物池/道具库存（每玩家 itemStock 13 项 + travel/dice），日志诊断刷新轮替 |
+| `Ctrl+Shift+A` | **触发新闻** | `newsDebugFire`（newsEvent 0x44B6DF：抽下一条可触发事件，阻塞 2400ms）；事件后自动补回合推进（0x40DEFE） |
+| `Ctrl+Shift+Z` | **触发命运** | `fateDebugFire`（fateEvent 0x44DB81：抽下一条可触发事件）；事件后自动补回合推进 |
+| `Ctrl+Shift+0` | **触发魔法屋** | `magicHouseVisit`（0x43380A：人类=施法 UI 选惩罚 / AI=随机；惩罚含坐牢/住院/拍卖，后自动补回合推进） |
+| `Ctrl+Shift+6` | **发免罪卡** | `giveCardToBag(21)`（测惩罚类事件自动免罪 0x444BB2） |
+| `Ctrl+Shift+7` | **发嫁祸卡** | `giveCardToBag(19)`（测惩罚转移选人 0x44476A） |
 
 拾取与右键物件提示同一套：鼠标位置 → `pickMapObject`（复用渲染期 `mapHitRegions`，
 含 SPR 像素掩码精确命中）。日志前缀 `debug:`。
@@ -254,7 +259,9 @@
   舊稱「建造菜單」的 tool bar case 6 实为查詢面板，无建造动作，见 `ui-controls.md` §27）。
 - 不修改 `dword_496BB4` 欠款矩阵（重写未建模，见任务 D 说明）。
 - 联动高亮不含**同盟地块**（`g_playerAlly`，P4）。
-- 事件格已实现得點券/卡片格/監獄·醫院（含开局默认在押 NPC 的面板）/新聞/命運/小游戏；監獄·醫院 NPC 格的
-  **保释释放流程**（`releaseJailNpc`/`releaseHospitalNpc` 事件槽建模）待 P5；魔法屋尚未实现（P2 进行中；
+- 事件格已实现得點券/卡片格/監獄·醫院（含开局默认在押 NPC 的面板）/新聞/命運/小游戏/魔法屋；
+  監獄·醫院 NPC 格的**保释释放流程**（`releaseJailNpc`/`releaseHospitalNpc` 事件槽建模）待 P5；
   **新聞 ✅ 2026-09-26**，调试 `Ctrl+Shift+A`；**命運 ✅ 2026-09-26**，调试 `Ctrl+Shift+z`
-  （49 效果 + 幸运判定 + 免罪/嫁祸/生日选卡）；**小游戏 case 6/7/8 ✅ 2026-09-25**，`Ctrl+Shift+G` 踩格即玩）。
+  （49 效果 + 幸运判定 + 免罪/嫁祸/生日选卡）；**小游戏 case 6/7/8 ✅ 2026-09-25**，`Ctrl+Shift+G` 踩格即玩；
+  **魔法屋 ✅ 2026-09-26**，调试 `Ctrl+Shift+0`（施法 UI + 12 惩罚 + 拍卖面板 auction_dialog.cpp，
+  新闻 idx 7 同步激活）。

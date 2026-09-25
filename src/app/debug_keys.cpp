@@ -10,6 +10,7 @@
 #include "game/app/game_loop.h"
 #include "game/app/fate_event.h"
 #include "game/app/lottery.h"
+#include "game/app/magic_house_dialog.h"
 #include "game/app/map_objects.h"
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
@@ -114,6 +115,12 @@ bool handleDebugKey(Application& app, int code, bool shift) {
             case 'z': { // [NEW] 触发命运（fateEvent 0x44DB81：抽下一条可触发事件，阻塞 1600+800ms）
                 fateDebugFire(app, -1);
                 debugAdvanceIfIncapacitated(app); // 事件导致当前玩家入院/坐牢/出国 → 补回合推进
+                renderGameFrame(app);
+                return true;
+            }
+            case '0': { // [NEW] 触发魔法屋（magicHouseVisit 0x43380A：条件施法 + 选惩罚）
+                magicHouseVisit(app);
+                debugAdvanceIfIncapacitated(app); // 惩罚可能送当前玩家进监狱/医院 → 补回合推进
                 renderGameFrame(app);
                 return true;
             }
