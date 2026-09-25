@@ -272,12 +272,16 @@ void forceHotelCheckout(GameState& st) {
 }
 
 // [RE 0x451985] 地块高亮闪烁：填列表（estate/corp）→ highlightFrame=0 → 阻塞播放
-// 注：原版调用点直接 highlightBlink（无 >1 判定），单块也播
+// 注：原版调用点直接 highlightBlink（无 >1 判定），单块也播；
+//   显示路径与收租**完全复用**：playHighlightBlink（turn_system.cpp）→
+//   captureHighlightShapes → drawEstateHighlight（map_render.cpp，每帧 renderGameFrame 调用）
 void blinkHighlight(Application& app) {
     GameState& st = app.gameState();
     if (st.highlightEstates.empty() && st.highlightCorps.empty()) {
         return;
     }
+    RICH4_LOGI("news highlight: estates=%zu corps=%zu (RE 0x451985)", st.highlightEstates.size(),
+               st.highlightCorps.size());
     st.highlightFrame = 0;
     playHighlightBlink(app);
 }
@@ -292,6 +296,7 @@ void blinkSingleObj(Application& app, int objId) {
     } else if (objId > 4000 && objId < 6000) {
         st.highlightCorps.push_back(objId - 4000);
     }
+    RICH4_LOGI("news highlight single: objId=%d (RE 0x451985)", objId);
     blinkHighlight(app);
 }
 
