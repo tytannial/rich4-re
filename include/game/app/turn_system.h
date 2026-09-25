@@ -81,6 +81,13 @@ bool restoreTurnSnapshot(Application& app, int p);
 //   返回 bit0=成功、bit7=封顶（到达最高等级）；機器工人（id9）直接复用（定义见 turn_system.cpp）
 int angelUpgrade(Application& app, uint16_t objId);
 
+// [RE 0x419A67] startRouteHighlight：收租联动高亮收集（同 owner 同名 estate / 连锁店）
+void startRouteHighlight(GameState& st, const Estate& es);
+
+// [RE 0x451985] playHighlightBlink：阻塞播放联动闪烁（16 帧 + 400ms 停留；
+//   调用前需填 st.highlightEstates 且 st.highlightFrame=0；定义见 turn_system.cpp）
+void playHighlightBlink(Application& app);
+
 // [RE 0x45144F] playEventFlc：阻塞播放 data.mkf[mkfIndex] FLC（定义见 turn_system.cpp；
 //   事件格/神明插图共用；soundId<0 无声；freeze=true 播完冻结末帧至下次全量重绘；
 //   switchFrame = 原版 flcOpen flags BYTE2 场景切换帧 [RE 0x450CED]：>0 保帧播放

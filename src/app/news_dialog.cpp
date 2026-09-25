@@ -19,8 +19,13 @@
 #include <string>
 #include <vector>
 
+#include "game/app/economy.h"
 #include "game/app/event_stack.h"
+#include "game/app/game_loop.h"
+#include "game/app/map_objects.h"
+#include "game/app/turn_system.h"
 #include "game/application.h"
+#include "game/core/encoding.h"
 #include "game/core/log.h"
 #include "game/game_state.h"
 #include "game/render/blit.h"
@@ -103,6 +108,9 @@ struct NewsCtx {
     int eventIdx = -1;
     int startMs = 0;
     bool phase1Done = false;
+    // 原版临时全局 dword_48C59C / dword_48C5A0 的事件私有存储（phase0 填、phase1 用）
+    int targetObjId = 0; // 地块 objId / estate 索引 / 玩家索引
+    int targetParam = 0; // 业主+1 / 奖金金额 / 坐标打包
 };
 
 // ===== 绘制辅助 =====
@@ -149,6 +157,377 @@ void drawNewsBase(NewsCtx& ctx) {
     // [RE 0x44B7AF] drawText(panel, g_newsTitles[g_newsTitleClass[v1]], 24, 8)
     app.text().setFont(28, 0xF0F0F0, 0x101010, 3, 0); // [RE setTextFont(28, 0xF0F0F0, 0x101010, 3, 0)]
     app.text().drawText(dst, kNewsTitles[kNewsTitleClass[ctx.eventIdx]], 24, 8, 0);
+}
+
+// ===== 破坏类辅助（idx 4/5/14/15/18-21；原版 g_newsTarget 复用见研究文档 §0）=====
+
+// 有建筑地块 objId（estate level!=0 / corp sub!=0）
+std::vector<int> collectBuiltObjIds(const GameState& st) {
+    std::vector<int> out;
+    for (size_t i = 1; i < st.estates.size(); ++i) {
+        if (st.estates[i].level != 0) {
+            out.push_back(static_cast<int>(i) + 2000);
+        }
+    }
+    for (size_t i = 1; i < st.corps.size(); ++i) {
+        if (st.corps[i].sub != 0) {
+            out.push_back(static_cast<int>(i) + 4000);
+        }
+    }
+    return out;
+}
+
+// 全部地块 objId（estate + corp）
+std::vector<int> collectAllObjIds(const GameState& st) {
+    std::vector<int> out;
+    for (size_t i = 1; i < st.estates.size(); ++i) {
+        out.push_back(static_cast<int>(i) + 2000);
+    }
+    for (size_t i = 1; i < st.corps.size(); ++i) {
+        out.push_back(static_cast<int>(i) + 4000);
+    }
+    return out;
+}
+
+// 有建筑 estate 索引（idx 15 专用：原版只收集 estate，不含 corp）
+std::vector<int> collectBuiltEstateIndices(const GameState& st) {
+    std::vector<int> out;
+    for (size_t i = 1; i < st.estates.size(); ++i) {
+        if (st.estates[i].level != 0) {
+            out.push_back(static_cast<int>(i));
+        }
+    }
+    return out;
+}
+
+int pickRandom(const std::vector<int>& list) {
+    return list.empty() ? 0 : list[static_cast<size_t>(std::rand()) % list.size()];
+}
+
+std::string estateNameUtf8(const Estate& es) {
+    return big5ToUtf8(es.name, sizeof(es.name));
+}
+
+std::string corpNameUtf8(const Corp& cp) {
+    return big5ToUtf8(reinterpret_cast<const char*>(cp.pad4), sizeof(cp.pad4));
+}
+
+std::string objNameUtf8(const GameState& st, int objId) {
+    if (objId > 2000 && objId < 4000 && objId - 2000 < static_cast<int>(st.estates.size())) {
+        return estateNameUtf8(st.estates[objId - 2000]);
+    }
+    if (objId > 4000 && objId < 6000 && objId - 4000 < static_cast<int>(st.corps.size())) {
+        return corpNameUtf8(st.corps[objId - 4000]);
+    }
+    return {};
+}
+
+int objOwner(const GameState& st, int objId) {
+    if (objId > 2000 && objId < 4000 && objId - 2000 < static_cast<int>(st.estates.size())) {
+        return st.estates[objId - 2000].owner;
+    }
+    if (objId > 4000 && objId < 6000 && objId - 4000 < static_cast<int>(st.corps.size())) {
+        return st.corps[objId - 4000].owner;
+    }
+    return 0;
+}
+
+// [RE 0x41D476] refreshGameUi(x, y, 2)：视口对准目标并全量重绘（收租/破坏共用）
+void focusView(Application& app, int x, int y) {
+    GameState& st = app.gameState();
+    st.manualView = true;
+    st.viewSmoothX = x;
+    st.viewSmoothY = y;
+    st.viewScrolling = false;
+    renderGameFrame(app);
+    app.renderFrame();
+}
+
+// [RE 0x41D546] 视口复位（还原主循环居中玩家）
+void resetView(Application& app) {
+    GameState& st = app.gameState();
+    st.manualView = false;
+    renderGameFrame(app);
+    app.renderFrame();
+}
+
+// [RE 0x4528B9] 阻塞延时（音频续喂；阶段 1 内 300/500ms 停顿）
+void newsWait(Application& app, int ms) {
+    for (int t = 0; t < ms; t += 5) {
+        app.audio().update();
+        SDL_Delay(5);
+    }
+}
+
+// [RE 0x40DFFA forceHotelCheckout] 地产/设施拆除：住宿中玩家状态 BYTE0=0x80（强制退房）
+void forceHotelCheckout(GameState& st) {
+    for (int i = 0; i < st.playerCount; ++i) {
+        if (st.players[i].alive != 0 && (st.players[i].stateFlags & 0xFFu) != 0) {
+            st.players[i].stateFlags = (st.players[i].stateFlags & 0xFFFFFF00u) | 0x80u;
+        }
+    }
+}
+
+// [RE 0x451985] 同名（同路段）estate 高亮闪烁：填列表 → highlightFrame=0 → 阻塞播放
+// 注：原版调用点直接 highlightBlink（无 >1 判定），单块也播
+void blinkHighlight(Application& app) {
+    GameState& st = app.gameState();
+    if (st.highlightEstates.empty()) {
+        return;
+    }
+    st.highlightFrame = 0;
+    playHighlightBlink(app);
+}
+
+// 破坏类事件阶段 1 公共：视口对准 + 输出对象坐标（expireAssets 范围中心）
+void focusObjId(Application& app, int objId, int& outX, int& outY) {
+    getObjectPosition(app.gameState(), objId, outX, outY);
+    focusView(app, outX, outY);
+}
+
+// [RE 0x44913D] idx 4：外星人攻打地球
+void evt04_alienAttack(NewsCtx& ctx, int phase) {
+    Application& app = *ctx.app;
+    GameState& st = app.gameState();
+    if (phase == 0) {
+        drawEffectText(ctx, kNewsTexts[4], 310);
+        return;
+    }
+    const int objId = pickRandom(collectBuiltObjIds(st));
+    if (objId == 0) {
+        return;
+    }
+    int x = 0;
+    int y = 0;
+    focusObjId(app, objId, x, y);
+    // [RE 0x44922D] expireAssets(100, 38, 1, -1)：半径 100、estate+corp+事件槽、归公
+    expireAssets(app, x, y, 100, 38, 1, -1);
+    playEventFlc(app, 531, 0, 40, 86, false, 0x18); // [RE 0x44925B flags 0x180001]
+    for (int j = 0; j < st.playerCount; ++j) {
+        if ((st.players[j].alive & 0x40) != 0) {
+            hospitalizePlayer(app, j, 3); // [RE 0x449285] 消失中玩家住院 3 天
+        }
+    }
+    resetView(app); // [RE 0x449290] sub_41D546
+}
+
+// [RE 0x4492A0] idx 5：外星怪獸襲擊%s 摧毀建築一棟
+void evt05_monsterDestroy(NewsCtx& ctx, int phase) {
+    Application& app = *ctx.app;
+    GameState& st = app.gameState();
+    if (phase == 0) {
+        const int objId = pickRandom(collectBuiltObjIds(st));
+        ctx.targetObjId = objId;
+        ctx.targetParam = objOwner(st, objId);
+        char text[192];
+        std::snprintf(text, sizeof(text), kNewsTexts[5], objNameUtf8(st, objId).c_str());
+        drawEffectText(ctx, text, 310);
+        return;
+    }
+    if (ctx.targetObjId == 0) {
+        return;
+    }
+    int x = 0;
+    int y = 0;
+    focusObjId(app, ctx.targetObjId, x, y);
+    demolishAtObjId(app, ctx.targetObjId, 1); // [RE 0x44944F]
+    playEventFlc(app, 539, 0, 40, 84, false, 0x20); // [RE 0x44947D flags 0x200001]
+    // [TODO P4] 业主台词 sub_44EF41(targetParam-1, 2, off_480856[char*27+(rand&1)])
+    resetView(app);
+}
+
+// [RE 0x44A220] idx 14：%s房屋鬧鬼 地價下跌３０％
+void evt14_haunted(NewsCtx& ctx, int phase) {
+    Application& app = *ctx.app;
+    GameState& st = app.gameState();
+    if (phase == 0) {
+        const int objId = pickRandom(collectAllObjIds(st));
+        ctx.targetObjId = objId;
+        char text[192];
+        std::snprintf(text, sizeof(text), kNewsTexts[14], objNameUtf8(st, objId).c_str());
+        drawEffectText(ctx, text, 310);
+        return;
+    }
+    const int objId = ctx.targetObjId;
+    if (objId > 2000 && objId < 4000) {
+        Estate& es = st.estates[objId - 2000];
+        focusView(app, es.x, es.y);
+        st.highlightEstates.clear();
+        for (size_t i = 1; i < st.estates.size(); ++i) {
+            Estate& e = st.estates[i];
+            if (std::strncmp(e.name, es.name, sizeof(es.name)) == 0) {
+                st.highlightEstates.push_back(static_cast<int>(i));
+                // [RE dbl_46561C = 0.7] 同路段每块 +28 ×0.7
+                e.priceAdd = static_cast<uint16_t>(static_cast<int>(e.priceAdd * 0.7));
+            }
+        }
+        blinkHighlight(app);
+        resetView(app);
+    } else if (objId > 4000 && objId < 6000) {
+        Corp& cp = st.corps[objId - 4000];
+        focusView(app, cp.x, cp.y);
+        // [RE 0x44A6B6 共享段] +34 buildPrice ×0.7
+        cp.buildPrice = static_cast<uint16_t>(static_cast<int>(cp.buildPrice * 0.7));
+        // [差异] 原版此分支 markPickBuffer(corp) 单块高亮：重写高亮机制仅支持 estate（跳过）
+        resetView(app);
+    }
+}
+
+// [RE 0x44A453] idx 15：%s一處民宅瓦斯爆炸 房屋失火
+void evt15_gasExplosion(NewsCtx& ctx, int phase) {
+    Application& app = *ctx.app;
+    GameState& st = app.gameState();
+    if (phase == 0) {
+        const int idx = pickRandom(collectBuiltEstateIndices(st));
+        ctx.targetObjId = idx;
+        char text[192];
+        std::snprintf(text, sizeof(text), kNewsTexts[15],
+                      idx ? estateNameUtf8(st.estates[idx]).c_str() : "");
+        drawEffectText(ctx, text, 310);
+        return;
+    }
+    const int idx = ctx.targetObjId;
+    if (idx <= 0 || idx >= static_cast<int>(st.estates.size())) {
+        return;
+    }
+    const Estate& es = st.estates[idx];
+    focusView(app, es.x, es.y);
+    demolishAtObjId(app, idx + 2000, 0); // [RE 0x44A543] 降一级
+    playEventFlc(app, 527, 0, 40, 87, false, 5); // [RE 0x44A571 flags 0x50001]
+    newsWait(app, 300);                          // [RE 0x44A587]
+    // [TODO P4] 业主台词 sub_44EF41(owner-1, 2, off_480856[...])
+    resetView(app);
+}
+
+// [RE 0x44A6E0] idx 18：%s強烈地震房屋倒塌
+void evt18_earthquake(NewsCtx& ctx, int phase) {
+    Application& app = *ctx.app;
+    GameState& st = app.gameState();
+    if (phase == 0) {
+        const int objId = pickRandom(collectAllObjIds(st));
+        ctx.targetObjId = objId;
+        char text[192];
+        std::snprintf(text, sizeof(text), kNewsTexts[18], objNameUtf8(st, objId).c_str());
+        drawEffectText(ctx, text, 310);
+        return;
+    }
+    const int objId = ctx.targetObjId;
+    if (objId > 2000 && objId < 4000) {
+        Estate& es = st.estates[objId - 2000];
+        focusView(app, es.x, es.y);
+        st.highlightEstates.clear();
+        for (size_t i = 1; i < st.estates.size(); ++i) {
+            Estate& e = st.estates[i];
+            if (std::strncmp(e.name, es.name, sizeof(es.name)) != 0) {
+                continue;
+            }
+            st.highlightEstates.push_back(static_cast<int>(i));
+            if (e.level != 0) {
+                --e.level; // [RE 0x44A84E] 同路段每块降一级
+                if (e.type != 0) {
+                    e.level = 0;
+                    e.type = 0;
+                }
+            }
+        }
+        blinkHighlight(app);
+        resetView(app);
+        newsWait(app, 500); // [RE 0x44A906]
+    } else if (objId > 4000 && objId < 6000) {
+        Corp& cp = st.corps[objId - 4000];
+        focusView(app, cp.x, cp.y);
+        if (cp.sub != 0) {
+            --cp.sub; // [RE 0x44A8E6]
+            if (cp.sub == 0) {
+                cp.type = 0;
+                forceHotelCheckout(st); // [RE 0x44A8EE sub_40DFFA]
+            }
+        }
+        // [差异] 原版单块 corp 高亮：重写机制仅支持 estate（跳过）
+        resetView(app);
+        newsWait(app, 500);
+    }
+}
+
+// [RE 0x44A91E] idx 19：%s山洪爆發土地流失
+void evt19_flood(NewsCtx& ctx, int phase) {
+    Application& app = *ctx.app;
+    GameState& st = app.gameState();
+    if (phase == 0) {
+        const int objId = pickRandom(collectAllObjIds(st));
+        ctx.targetObjId = objId;
+        ctx.targetParam = objOwner(st, objId);
+        char text[192];
+        std::snprintf(text, sizeof(text), kNewsTexts[19], objNameUtf8(st, objId).c_str());
+        drawEffectText(ctx, text, 310);
+        return;
+    }
+    if (ctx.targetObjId == 0) {
+        return;
+    }
+    int x = 0;
+    int y = 0;
+    focusObjId(app, ctx.targetObjId, x, y);
+    demolishAtObjId(app, ctx.targetObjId, 1); // [RE 0x44AAAF] 夷平归公
+    st.highlightEstates.clear();
+    if (ctx.targetObjId < 4000) {
+        st.highlightEstates.push_back(ctx.targetObjId - 2000);
+    }
+    blinkHighlight(app);
+    resetView(app);
+    newsWait(app, 300); // [RE 0x44AACA]
+    // [TODO P4] 业主台词 sub_44EF41(targetParam-1, 2, ...)
+}
+
+// [RE 0x44AB2C] idx 20：超級颱風侵襲%s 多處房屋受損
+void evt20_typhoon(NewsCtx& ctx, int phase) {
+    Application& app = *ctx.app;
+    GameState& st = app.gameState();
+    if (phase == 0) {
+        const int objId = pickRandom(collectAllObjIds(st));
+        ctx.targetObjId = objId;
+        char text[192];
+        std::snprintf(text, sizeof(text), kNewsTexts[20], objNameUtf8(st, objId).c_str());
+        drawEffectText(ctx, text, 310);
+        return;
+    }
+    if (ctx.targetObjId == 0) {
+        return;
+    }
+    int x = 0;
+    int y = 0;
+    focusObjId(app, ctx.targetObjId, x, y);
+    // [RE 0x44AC43] expireAssets(100, 6, 0, -1)：半径 100、estate+corp、降级
+    expireAssets(app, x, y, 100, 6, 0, -1);
+    playEventFlc(app, 534, 0, 40, 89, false, 8); // [RE 0x44AC71 flags 0x80001]
+    newsWait(app, 500);                          // [RE 0x44AC87]
+    resetView(app);
+}
+
+// [RE 0x44AC99] idx 21：龍捲風侵襲%s 摧毀房屋一棟
+void evt21_tornado(NewsCtx& ctx, int phase) {
+    Application& app = *ctx.app;
+    GameState& st = app.gameState();
+    if (phase == 0) {
+        const int objId = pickRandom(collectAllObjIds(st));
+        ctx.targetObjId = objId;
+        ctx.targetParam = objOwner(st, objId);
+        char text[192];
+        std::snprintf(text, sizeof(text), kNewsTexts[21], objNameUtf8(st, objId).c_str());
+        drawEffectText(ctx, text, 310);
+        return;
+    }
+    if (ctx.targetObjId == 0) {
+        return;
+    }
+    int x = 0;
+    int y = 0;
+    focusObjId(app, ctx.targetObjId, x, y);
+    demolishAtObjId(app, ctx.targetObjId, 0); // [RE 0x44ADFE] 降一级
+    playEventFlc(app, 535, 0, 40, 88, false, 8); // [RE 0x44AE2C flags 0x80001]
+    newsWait(app, 300);                          // [RE 0x44AE42]
+    // [TODO P4] 业主台词 sub_44EF41(targetParam-1, 2, ...)
+    resetView(app);
 }
 
 // ===== newsEventCheck 触发判定（0x448BE2，36 条；详见研究文档 §1）=====
@@ -501,8 +880,8 @@ const NewsPhaseFn kNewsFuncs[36] = {
     /* 01 */ evt01_jailExtend,
     /* 02 */ evt02_hospitalFree,
     /* 03 */ evt03_hospitalExtend,
-    /* 04 */ evtStub,
-    /* 05 */ evtStub,
+    /* 04 */ evt04_alienAttack,
+    /* 05 */ evt05_monsterDestroy,
     /* 06 */ evtStub,
     /* 07 */ evtStub,
     /* 08 */ evtStub,
@@ -511,14 +890,14 @@ const NewsPhaseFn kNewsFuncs[36] = {
     /* 11 */ evtStub,
     /* 12 */ evtStub,
     /* 13 */ evtStub,
-    /* 14 */ evtStub,
-    /* 15 */ evtStub,
+    /* 14 */ evt14_haunted,
+    /* 15 */ evt15_gasExplosion,
     /* 16 */ evt16_rainRest,
     /* 17 */ evt17_trafficStop,
-    /* 18 */ evtStub,
-    /* 19 */ evtStub,
-    /* 20 */ evtStub,
-    /* 21 */ evtStub,
+    /* 18 */ evt18_earthquake,
+    /* 19 */ evt19_flood,
+    /* 20 */ evt20_typhoon,
+    /* 21 */ evt21_tornado,
     /* 22 */ evt22_bankRun,
     /* 23 */ evtStub,
     /* 24 */ evtStub,
