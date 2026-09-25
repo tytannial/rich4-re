@@ -38,6 +38,7 @@ __pycache__/
 /rich4_R.exe
 /SDL3.dll
 build.cmd
+run_debug.cmd
 
 # 运行时日志（实机诊断回传用，见 src/core/log.cpp）
 /rich4.log
