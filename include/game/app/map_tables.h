@@ -61,6 +61,21 @@ extern const uint8_t kMonthFrame[12];
 extern const int32_t kMiniMapY[4];
 // [RE 0x475274] off_475274 玩家信息页签文本
 extern const char* const kTabText[4];
+
+// [RE 0x47540C] off_47540C 查詢面板 3 页签名（資產清單/地產清單/股票清單）
+extern const char* const kQueryPageNames[3];
+// [RE 0x4753D4] off_4753D4 地產清單 5 子页签名（全 部/住宅區/商業區/房 屋/連鎖店）
+extern const char* const kQuerySubPageNames[5];
+// [RE 0x475418] off_475418 資產清單 12 字段名（現金/存款/貸款/總資產/股 票/點 卷/
+//   保險期/企 業/土 地/連鎖店/房 屋/設 施）
+extern const char* const kQueryFieldNames[12];
+// [RE 0x4753E8] off_4753E8 地產清單 5 列头（地點/開發狀況/價 格/收 費/租 期）
+extern const char* const kQueryLandCols[5];
+// [RE 0x475448] off_475448 股票清單 3 列头（股票名稱/持有張數/總 市 價）
+extern const char* const kQueryStockCols[3];
+// [RE 0x475464] dword_475464 携带神明槽+1 → panel.mkf[9] 图标帧号
+//   （1..10→13..22、12→23、15..17→24；0 = 无图标）
+extern const int kGodIconFrame[19];
 // [RE 0x47511C] off_47511C 月份名/星期名
 extern const char* const kWeekdayNames[7];
 // [RE 0x47ED76] off_47ED76 物件/神明名（19 项，cellTable 类型 0..18）

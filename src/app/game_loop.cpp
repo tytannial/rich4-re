@@ -14,6 +14,7 @@
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
 #include "game/app/object_tip.h"
+#include "game/app/query_dialog.h"
 #include "game/app/save_dialog.h"
 #include "game/app/settings_dialog.h"
 #include "game/app/stock_market_dialog.h"
@@ -180,6 +181,10 @@ void handleTopBarButton(Application& app, int index) {
         case 5:
             // [RE 0x417D65] case 5: sub_40A9BD（大地图）
             mapDialog(app);
+            break;
+        case 6:
+            // [RE 0x424492] case 6: queryDialog（查詢面板：資產/地產/股票清單，[HELP 16]）
+            queryDialog(app);
             break;
         case 7:
             // [RE 0x447D97] case 7: itemPanelFlow（道具栏）

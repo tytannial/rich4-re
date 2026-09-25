@@ -117,6 +117,11 @@ struct Player {
     uint8_t vehicleRestore = 0;  // 工程车暂存原载具 travel
     uint8_t diceRestore = 1;     // 工程车暂存原骰子数
     uint8_t pad103 = 0;          // +103
+    // [RE 0x48BE24] dword_48BE24 每玩家右側资讯面板页签（0=資金 1=地產 2=股票 3=其他；
+    //   0x417E26 点击 x∈[616,640) y∈[0,280) 时 = y/70 并重绘；0x4C 查詢面板复用同值）
+    // 依据: 0x418313..0x418355（tab = y/70 → dword_48BE24[cur] = tab）；
+    //       0x415F69 case 分派读该值；独立运行时全局数组，不入存档
+    uint8_t panelTab = 0;
 };
 
 // MAPDAT 五表（docs/formats/mapdat.md）；原版各表 index 0 保留
