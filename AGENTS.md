@@ -35,6 +35,11 @@
   鼠标控娃娃接财神钱袋，云投炸弹=爆炸 FLC 即终+评级表情，panel[92..99/100+ch]+data[526]）；
   AI/动画关走原版共享 else 0x415457——随机 50..69 点券 + "得點券%d點" +
   台词 `kValueLines[char][rand&1]`；四大恶人忽略；细节 `41982d-p2-events.md` §6）；
+  **新聞 case 2 ✅ 2026-09-26**（`news_dialog.cpp`：`newsEvent` 0x44B6DF——panel[66] SMP 440×480
+  画布 + data[441+idx] 388×251 插画 + 6 类标题 + 2400ms 阶段机；`newsEventCheck` 0x448BE2 36 条判定
+  + `g_newsFuncs` 36 效果全实现（监狱医院/灾害破坏/三税/排行/股价停牌/超贷坐牢/公司罚款）；
+  `stockNewsApply` 0x429040 入 `stock_system.cpp`；**拍卖 idx 7 桩另开一轮**、语音/浮动数字 P4、
+  corp 单块高亮差异；详见 `44b6df-news-events.md`；调试 `Ctrl+Shift+A`）；
   事件格 FLC 阻塞播放模板 `playEventFlc` + `drawEventFlcFrame` +
 `showCardGet` + `jailPlayer`/`hospitalizePlayer`/`insurancePayout`；面板底座
 `FloatMessage`/语音 `playVoice`/音乐栈见 `ui-controls.md` §25）。
@@ -74,7 +79,8 @@ damagePlayer/demolish/givePlayerItem）；`economy.cpp` deleteMapObject **配对
 
 - P2 事件格实现（研究已完成，见 `41982d-p2-events.md`；**得點券/卡片格/監獄/醫院/銀行 ✅
   2026-09-23**（银行全链含週轉/催收/月度结息/15 号分红）；**小游戏 case 6/7/8 ✅ 2026-09-25**
-  （`minigame_dialog.cpp` 三游戏交互版+兜底，实机验证通过），继续：物價面板 → 新聞/命運 → 魔法屋；
+  （`minigame_dialog.cpp` 三游戏交互版+兜底，实机验证通过）；**新聞 case 2 ✅ 2026-09-26**
+  （36 判定+36 效果；拍卖 idx 7 桩另开一轮；`44b6df-news-events.md`），继续：命運 → 魔法屋；
   面板底座 `ui-controls.md` §25，事件槽 NPC 路面行走待 P5）
 - **P2 樂透（case 9）✅ 2026-09-25**：`lottery_dialog.cpp` + `lottery.h`——投注界面
   （0x42F7FC：9×4 网格选号/红圈帧 7/已售 -10 变暗/panel[14] FLC 循环/装饰闪烁/钱不足链；AI

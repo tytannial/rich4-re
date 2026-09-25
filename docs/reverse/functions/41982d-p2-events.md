@@ -9,7 +9,7 @@
 | type | 名称 | case | 处理函数 | 研究状态 |
 |------|------|------|---------|---------|
 | 1 | 公園 | 1 = default | —（无事件） | 已实现（返回 0x80） |
-| 2 | 新聞 | 2 | `newsEvent`（36 事件表） | ✅ 结构已明 |
+| 2 | 新聞 | 2 | `newsEvent`（36 事件表） | ✅ 已实现 2026-09-26（`news_dialog.cpp`；36 判定+36 效果；拍卖 idx 7 桩；详见 `44b6df-news-events.md`） |
 | 3 | 命運 | 3 | `fateEvent`（37 事件表） | ✅ 结构已明 |
 | 4 | 監獄 | 4 | `jailBailDialog`（门外保释） | ✅ 保释面板（人類 UI+AI）；NPC 格占位待 P5 |
 | 5 | 醫院 | 5 | `hospitalVisitDialog`（门外辦理出院） | ✅ 出院面板（阶段机+护士动画）；NPC 格占位待 P5 |
@@ -386,6 +386,12 @@ sub_44F230(currentPlayer, byte_47FDEF[v*8]) // 卡片获得语音（P4）
 - 重写：`turn_system.cpp` `drawFreeCard`/`giveCardToBag`/`cardBag*` + `showCardGet`（runModal 模态）
 
 ## 4. case 2 新聞（`newsEvent`，36 事件）
+
+> **实现状态（2026-09-26）**：✅ 全 36 条已实现（`src/app/news_dialog.cpp` + `include/game/app/news_dialog.h`）：
+> `newsEvent` 主循环 / `newsEventCheck` 36 判定 / `g_newsFuncs` 36 效果（排名·三税·灾害·股价停牌·
+> 超贷坐牢·公司罚款）；panel[66] 画布 + data[441+idx] 插画 + 6 类标题 + 2400ms 阶段机；调试 `Ctrl+Shift+A`。
+> **拍卖 idx 7 桩**（`sub_43BDE5` 下一轮）、语音 `sub_44EF41`/浮动数字 `sub_44F354` → `TODO(P4)`。
+> **完整研究与逐条笔记见 `44b6df-news-events.md`**；以下为早期简化记录（部分细节以新文档为准）。
 
 ```
 dword_48C5AC = panel.mkf[66]               // 新闻界面框架（388x251）

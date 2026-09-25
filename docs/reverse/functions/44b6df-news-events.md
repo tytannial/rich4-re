@@ -4,8 +4,10 @@
 > 36 条事件效果函数逐条笔记、资源与重写实现要点。判定表以**反汇编**为准（Hex-Rays 分支曾整体读岔）。
 > 入口/分派见 `gameplay-map-mechanics.md` §3；case 2..16 总览见 `41982d-p2-events.md`。
 >
-> 状态（2026-09-26）：研究完成；实现见 `src/app/news_dialog.cpp`（提交 2..5）。
-> 拍卖（idx 7 `sub_43BDE5`）另开一轮；语音 `sub_44EF41` / 浮动数字 `sub_44F354` → `TODO(P4)`。
+> 状态（2026-09-26）：✅ **已实现**（`src/app/news_dialog.cpp` + `include/game/app/news_dialog.h`；
+> `newsEvent`/`newsEventCheck` 36 条/`g_newsFuncs` 36 效果全实现；调试 `Ctrl+Shift+A`）。
+> 未做：**拍卖 idx 7**（`sub_43BDE5` 桩，下一轮）、语音 `sub_44EF41` / 浮动数字 `sub_44F354`
+> （`TODO(P4)`）、corp 单块高亮（重写联动高亮机制仅支持 estate，`blinkHighlight` 跳过 corp）。
 
 ## 0. 总览
 
@@ -203,19 +205,23 @@ newsEvent:
 `0x44972A`（epilogue）、`0x4499C1`（idx 8 奖励显示行）、`0x44A01E`（税费返回）、
 `0x44B3AD`（specPt 罚款 sprintf 段）、`0x44B3E7`（股价跌 3 段）、`0x44B402`（stockNewsApply 调用）。
 
-## 7. 重写实现要点
+## 7. 重写实现要点（已实现 2026-09-26）
 
-- 新文件 `src/app/news_dialog.cpp` + `include/game/app/news_dialog.h`：
-  - `newsEvent(Application&)`：加载面板 → 抽事件 → 绘制 → `phase0` → 全屏 + 2400ms pumpEvents → `phase1` → 释放；
+- `src/app/news_dialog.cpp` + `include/game/app/news_dialog.h`：
+  - `newsEvent(Application&)`：加载 panel[66] → 抽事件（`newsOrder`/`newsPos`，未触发 ++pos 继续，
+    36 次防御）→ `runModal` 绘制（panel 帧 0 不透明 + 插画 (25,44) + 标题 (24,8)）→ 效果(0)
+    → 2400ms → 效果(1) → `requestExit`（返回 0x80）；
   - `newsEventCheck(const GameState&, int idx)` 36 条（§1）；
-  - `NewsEvent { const char* text; uint8_t titleClass; void (*phase0)(Application&); void (*phase1)(Application&); } g_newsEvents[36]`；
-  - 效果函数内直接操作面板画布（重写提供 `NewsFrame&`，含 `drawText/blitPiece`），照抄原版阶段划分。
-- 事件临时全局：`g_newsTarget`/`g_newsParam` 对应原版 `dword_48C59C`/`dword_48C5A0`，可放 `GameState` 或文件静态（不入存档）。
-- 文本表：从 exe 0x465424 起 36 条 BIG5 → UTF-8（注意保留 `%s/%d` 格式）。
-- `cardShuffle/cardShufflePos` → `newsOrder/newsPos`（`game_state.h`/`new_game.cpp`/`save_data.cpp`）。
-- `landingEvent` case 2 → `newsEvent(app); return 0x80;`
-- 调试键 `Ctrl+Shift+A`：触发下一条/指定 idx 新闻。
-- `TODO(P4)`：语音、浮动数字、卡片分支；`TODO(拍卖)`：idx 7。
+  - `kNewsTexts[36]` / `kNewsTitles[6]` / `kNewsTitleClass[36]` / `kNewsFuncs[36]`；
+  - 事件私有目标存 `NewsCtx.targetObjId`/`targetParam`（对应原版 `g_newsTarget`/`g_newsParam`）。
+- 辅助：`focusView`/`resetView`（视口对准/复位，`manualView`）、`newsWait`（音频续喂延时）、
+  `forceHotelCheckout`（0x40DFFA）、`blinkHighlight`（填 `highlightEstates` → `playHighlightBlink`）。
+- `GameState.cardShuffle/cardShufflePos` → `newsOrder/newsPos`（存档偏移不变）；
+  `landingEvent` case 2 → `newsEvent(app); return 0x80;`
+- `stockNewsApply`（0x429040）实现于 `stock_system.cpp`：`stockNews` 高 4 位 = 涨（+10）、
+  否则跌（-10）→ `stockPriceUpdate(昨收, 动量)` → 现价 + 历史（`turnCounter-1` 环形槽）。
+- 差异：语音/浮动数字 TODO(P4)；idx 7 拍卖桩；corp 单块高亮跳过；`sub_41D433` 面板刷新省略
+  （重写每帧全量重绘）。
 
 ## 8. 待深入清单
 
