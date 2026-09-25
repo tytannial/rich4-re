@@ -519,9 +519,12 @@ void renderMap(Application& app, int centerX, int centerY) {
                                        hfView.width, hfView.height, it.id,
                                        it.hitSpr ? it.hitSpr : nullptr,
                                        it.hitSpr ? it.hitFrame : 0, it.x, it.y});
-        // [RE 0x409B18] 高亮形状 = 原版 pickBuffer 写入形状：estate g_pickMask 帧 (8-rot-dir)&1、
-        //   corp 帧 ((8-rot-dir)&1)+2，落点 = (drawListX, drawListY-40)
-        //   （重写拾取体感改用帧 4，此处单独记录供 highlightBlink 使用）
+        // [RE 0x409B18/0x451985] 原版 pickBuffer 是**地图区局部坐标**：写入端
+        //   writePickBuffer(..., g_drawListX, g_drawListY - 40)（屏幕→pickBuffer 的 -40 换算，
+        //   因 pickBuffer (0,0) = 屏幕 (0,40)），回贴端 highlightBlink 把缓冲画到 backbuffer
+        //   +40 行（+40 抵消）→ 最终屏幕落点 = (drawListX - offX, drawListY - offY)，与建筑绘制
+        //   实参一致。重写直接画屏幕坐标（drawEstateHighlight 逐像素），**锚点须用 it.y**，
+        //   不能再 -40（否则高亮整体上移 40px≈1 格，2026-09-26 实机截图定位）。
         {
             GameState::MapHitRegion& hit = state.mapHitRegions.back();
             if (it.id > 2000 && it.id < 4000 &&
@@ -530,14 +533,14 @@ void renderMap(Application& app, int centerX, int centerY) {
                 hit.hlShape = &state.flagTiles;
                 hit.hlFrame = (8 - (state.mapRotation + es.dir)) & 1;
                 hit.hlAnchorX = it.x;
-                hit.hlAnchorY = it.y - 40;
+                hit.hlAnchorY = it.y;
             } else if (it.id > 4000 && it.id < 6000 &&
                        static_cast<size_t>(it.id - 4000) < state.corps.size()) {
                 const Corp& cp = state.corps[it.id - 4000];
                 hit.hlShape = &state.flagTiles;
                 hit.hlFrame = ((8 - (state.mapRotation + cp.dir)) & 1) + 2;
                 hit.hlAnchorX = it.x;
-                hit.hlAnchorY = it.y - 40;
+                hit.hlAnchorY = it.y;
             }
         }
         const UiFrameView& f = it.spr->frame(it.frame);

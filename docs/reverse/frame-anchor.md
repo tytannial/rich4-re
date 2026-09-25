@@ -103,6 +103,30 @@ panel[63] 头像帧 5..20、panel[65] 头像帧 14..29、panel[64] 标记帧 0..
 **直接用格坐标实参**（`blitElement(dst, f, x, y)`），blit 内部按 offset 定位。
 曾误加 `- f.offsetX/offsetY` 造成双重补偿，已回退（2026-09-23）。
 
+### 5.3 收租联动高亮整体上移 40px（pickBuffer 坐标系陷阱，2026-09-26）
+
+**症状**：过路费（收租联合租金）闪烁的高亮菱形比建筑整体偏上约 40px（≈1 格）；新闻破坏类、
+命运 id0/1 的单块高亮同路径。
+
+**原版证据链**：
+- 写入端 `rebuildPickBuffer 0x409B18` 物件高亮：
+  `writePickBuffer(g_pickBuffer, g_pickMask+12+12*帧, g_drawListX, g_drawListY - 40, id)`；
+  `writePickBuffer 0x456A1C` 落点 = `(x - offX, y - offY)`。
+- 回贴端 `highlightBlink 0x451985`：
+  `dst = backbuffer + 40 行`、`blitHighlightedMap(dst, backbuffer+51200, g_pickBuffer, 440, 440,
+  lut)` → **pickBuffer (0,0) = 屏幕 (0,40)**（地图区 440×440 = 480−40 工具条高度）。
+- 所以写入的 `-40` 是"屏幕 → pickBuffer 局部坐标"换算，回贴 `+40` 抵消；
+  **最终屏幕落点 = `(drawListX - offX, drawListY - offY)`**，与建筑绘制实参完全一致
+  （建筑 blit 同用 `g_drawListX/Y`，见 0x40988E 绘制循环）。
+
+**重写 bug**：`captureHighlightShapes` 直接生成屏幕坐标给 `drawEstateHighlight` 逐像素绘制，
+却沿用了 `it.y - 40` → 高亮整体上移 40px。
+**修复**：`map_render.cpp` 的 `hlAnchorY = it.y`（去掉 -40；x 无需换算，pickBuffer 与屏幕
+x 相同）。
+
+**教训**：从原版抄坐标常量前先确认**坐标系**（pickBuffer 局部 / 屏幕 / 世界投影）。
+`-40`/`+40` 这类常数很可能是坐标系换算而非美术偏移。
+
 ## 6. 已扫描清单：Panel.mkf 非零 offset 帧（2026-09-23）
 
 > 用途：了解哪些帧是"锚点帧"（实参 ≠ 最终落点），排查时优先核对；
