@@ -443,10 +443,19 @@ void bankVisitDialog(Application& app) {
             RICH4_LOGW("bankVisit: panel.mkf[24] frames %zu < 30", sheet.frameCount());
             return;
         }
+        // [RE 0x436FDD → 0x408] 暫停放款提示：原版在面板绘制后叠加（0x401 画面板 → Post 0x408
+        //   showMessage）；实机反馈要求提示先独立显示（此时屏幕上仍是地图场景），提示消失后
+        //   再弹存取款面板 —— 差异: 与原版叠加显示不同（体验调整 2026-09-26）。
+        if (pl.bankFinanceFlags != 0) {
+            char text[64];
+            std::snprintf(text, sizeof(text), "銀行暫停放款\n\n還剩%d天！",
+                          (pl.bankFinanceFlags & 0x7F) + 1); // [RE 0x464BD4]
+            showMessage(app, text, 1500);
+        }
         VisitCtx ui;
         ui.app = &app;
         ui.sheet = &sheet;
-        // [RE 0x436FDD] 暫停放款中（bankFinanceFlags 非 0）→ 现金模式 + 消息
+        // [RE 0x436FDD] 暫停放款中（bankFinanceFlags 非 0）→ 现金模式
         ui.mode = pl.bankFinanceFlags != 0 ? 1 : 0;
         ui.limit = ui.mode != 0 ? pl.cash : pl.bank;
         std::snprintf(ui.amount, sizeof(ui.amount), "0");
@@ -456,12 +465,6 @@ void bankVisitDialog(Application& app) {
         ui.bgY = kVisitY;
         saveRegion(ui.bg, app.surface(), ui.bgX, ui.bgY, ui.bgW, ui.bgH);
         redrawVisit(ui);
-        if (pl.bankFinanceFlags != 0) {
-            char text[64];
-            std::snprintf(text, sizeof(text), "銀行暫停放款\n\n還剩%d天！",
-                          (pl.bankFinanceFlags & 0x7F) + 1); // [RE 0x464BD4]
-            showMessage(app, text, 1500);
-        }
         RICH4_LOGI("bank visit: player %d mode %d limit %d (RE 0x4379C9)", p, ui.mode, ui.limit);
         // [RE 0x4370BA/0x43714D] cursorSelect(27,1,0) 面板交互光标；退出恢复默认箭头 41
         app.cursor().select(27, 1, 0);
