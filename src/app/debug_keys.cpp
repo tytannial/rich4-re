@@ -13,6 +13,7 @@
 #include "game/app/map_tables.h"
 #include "game/app/month_settle.h"
 #include "game/app/object_tip.h"
+#include "game/app/query_dialog.h"
 #include "game/app/stock_market_dialog.h"
 #include "game/app/stock_system.h"
 #include "game/app/turn_system.h"
@@ -217,6 +218,11 @@ bool handleDebugKey(Application& app, int code, bool shift) {
             case 'm': // 打开股市面板（测试 0x42B58F）
                 if (st.gameLoopActive) {
                     stockMarketDialog(app);
+                }
+                return true;
+            case 'q': // 打开查詢面板（测试 0x424492/0x423CF3：資產/地產/股票清單）
+                if (st.gameLoopActive) {
+                    queryDialog(app);
                 }
                 return true;
             case 'k': { // 买入指向 specPt 的股票 100 股（测试控股/经营権转移）

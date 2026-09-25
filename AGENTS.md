@@ -22,8 +22,9 @@
 **商業用地 corp 全流程 ✅**（购地/建设施 `selectFacilityDialog`/升级/他人收费/旅館住宿，
 `facility_dialog.cpp`+`roulette_dialog.cpp`）、**行業設施點 specPt 收费 ✅**（6 公式 + 公库 `fund`）、
 **连锁店 ✅**（改建卡 0x44309B + `Ctrl+4`）；Debug 工具（Ctrl+1..9 + Ctrl+Shift 扩展）✅、
-大地图填色 ✅、买地面板背景 ✅；**仅剩建造菜单 ❌**（任务 F，`sub_423B3B/4225A3/423CF3`
-已调研，**入口已确认 = 工具条 case 6（`sub_424492`→`sub_423CF3`）**）；**P2 事件格推进中**
+大地图填色 ✅、买地面板背景 ✅；**查詢面板 ✅（2026-09-25，旧称"建造菜单"为误：工具条 case 6
+`sub_424492`→`sub_423CF3` = 帮助 idx 16 資產/地產/股票清單，无建造动作；`query_dialog.cpp` +
+右侧資訊面板 4 页签 `game_panel.cpp`，见 `ui-controls.md` §27）**；**P2 事件格推进中**
 （得點券 case 10/11/12 ✅、卡片格 case 13 ✅、監獄/醫院 case 4/5 ✅ 含保释·出院面板+护士动画
 + **开局默认在押 NPC**（小偷·強盜/流氓·間諜，0x40734F）+ **NPC 释放动画**（panel[64] 全身像
 + 答谢消息，0x43CFDB/0x43DE4C；事件槽路面行走待 P5）；事件格 FLC 阻塞播放模板 `playEventFlc` + `drawEventFlcFrame` +
@@ -66,9 +67,10 @@ damagePlayer/demolish/givePlayerItem）；`economy.cpp` deleteMapObject **配对
 - P2 事件格实现（研究已完成，见 `41982d-p2-events.md`；**得點券/卡片格/監獄/醫院/銀行 ✅
   2026-09-23**（银行全链含週轉/催收/月度结息/15 号分红），继续：物價面板 → 新聞/命運 → 小游戏/樂透/百貨/魔法屋；
   面板底座 `ui-controls.md` §25，事件槽 NPC 路面行走待 P5）
-- 任务 F 建造菜单（大地块特殊建筑外观 + 5 页签；**入口已确认 = 工具条 case 6
-  `sub_424492`→`sub_423CF3`**；`g_miscTable336` 建造队列每日计数 sub_428475 待接入）
-- 经济系统剩余：物價指數面板显示（idx 5）、股市交易市场/挂单；**P4 卡片栏/道具栏 UI ✅（2026-09-24，工具条 case7/8 `useCardDialog` 0x441BAA / `itemBagDialog` 0x447D97，panel.mkf[11] 5×3 网格 + `cardRebuildEffect`/神符；改建/请神/送神卡可用，其余 27 卡效果 stub，见 `441baa-inventory-panels.md`）；13 道具效果全实现 ✅（2026-09-25，`item_effects.cpp`：气泡台词/目标选择模态/expireAssets/遥控骰子/娃娃槽8/时光机快照，逐道具见 `item-effects.md`）**
+- ~~任务 F 建造菜单~~ ✅ 2026-09-25 订正为**查詢面板**（资产/地产/股票清單 + 右侧面板 4 页签；
+  工具条 case 6 `sub_424492`→`sub_423CF3`；旧称"建造队列"的 `g_miscTable336`/`sub_428475`
+  实为股票交易委托队列，归交易系统待办）
+- 经济系统剩余：股市交易市场/挂单；**P4 卡片栏/道具栏 UI ✅（2026-09-24，工具条 case7/8 `useCardDialog` 0x441BAA / `itemBagDialog` 0x447D97，panel.mkf[11] 5×3 网格 + `cardRebuildEffect`/神符；改建/请神/送神卡可用，其余 27 卡效果 stub，见 `441baa-inventory-panels.md`）；13 道具效果全实现 ✅（2026-09-25，`item_effects.cpp`：气泡台词/目标选择模态/expireAssets/遥控骰子/娃娃槽8/时光机快照，逐道具见 `item-effects.md`）**
 - AI 决策：AI 买地 ✅（`sub_41D7D4`，2026-09-23）；`alive & 6` 电脑/托管自动行动
   （`landingEvent` 0x41982D 回合主流程）
 - 存档完整恢复：`loadGameFromSlot` 目前仅恢复地图/模式/玩家数

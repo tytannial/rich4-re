@@ -218,7 +218,8 @@
 
 - 卡片系统完整流程（选卡 UI/卡片消耗/`useCardFlow`）留 P4；`Ctrl+4` 只提供调试直调
   （estate `type^=1` / corp `selectFacilityDialog(1)` 均已接入）。
-- 大地块（`estate.type != 0`）不能通过升级分支加盖，应走**建造菜单**（任务 F，未实现）。
+- 大地块（`estate.type != 0` = 连锁店）不能通过升级分支加盖，应走**改建卡**（`Ctrl+4`；
+  舊稱「建造菜單」的 tool bar case 6 实为查詢面板，无建造动作，见 `ui-controls.md` §27）。
 - 不修改 `dword_496BB4` 欠款矩阵（重写未建模，见任务 D 说明）。
 - 联动高亮不含**同盟地块**（`g_playerAlly`，P4）。
 - 事件格已实现得點券/卡片格/監獄·醫院（含开局默认在押 NPC 的面板）；監獄·醫院 NPC 格的
