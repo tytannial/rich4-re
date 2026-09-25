@@ -23,6 +23,7 @@
 #include "game/app/event_stack.h"
 #include "game/app/game_loop.h"
 #include "game/app/map_objects.h"
+#include "game/app/stock_system.h"
 #include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/encoding.h"
@@ -111,6 +112,7 @@ struct NewsCtx {
     // 原版临时全局 dword_48C59C / dword_48C5A0 的事件私有存储（phase0 填、phase1 用）
     int targetObjId = 0; // 地块 objId / estate 索引 / 玩家索引
     int targetParam = 0; // 业主+1 / 奖金金额 / 坐标打包
+    int32_t taxAmounts[4] = {}; // idx 11-13 每玩家税额（原版 dword_48C59C 数组）
 };
 
 // ===== 绘制辅助 =====
@@ -530,6 +532,337 @@ void evt21_tornado(NewsCtx& ctx, int phase) {
     resetView(app);
 }
 
+// ===== 奖励/税务/公司类辅助（idx 8-13、30-35）=====
+
+// [RE sub_452946] 玩家名去空格（sprintf 用；原版 g_players[26*p] BIG5）
+std::string playerNameNoSpace(const GameState& st, int p) {
+    std::string out;
+    if (p < 0 || p >= 9 || st.players[p].name == nullptr) {
+        return out;
+    }
+    for (const char* q = st.players[p].name; *q != '\0'; ++q) {
+        if (*q != ' ') {
+            out += *q;
+        }
+    }
+    return out;
+}
+
+std::string specPtNameUtf8(const SpecPt& sp) {
+    return big5ToUtf8(reinterpret_cast<const char*>(sp.pad4), sizeof(sp.pad4));
+}
+
+// 各玩家有主地块数（estate + corp；索引 0..3 = 玩家 0..3）
+void countOwnedAssets(const GameState& st, int counts[4]) {
+    for (int i = 0; i < 4; ++i) {
+        counts[i] = 0;
+    }
+    for (size_t i = 1; i < st.estates.size(); ++i) {
+        const uint8_t o = st.estates[i].owner;
+        if (o >= 1 && o <= 4) {
+            ++counts[o - 1];
+        }
+    }
+    for (size_t i = 1; i < st.corps.size(); ++i) {
+        const uint8_t o = st.corps[i].owner;
+        if (o >= 1 && o <= 4) {
+            ++counts[o - 1];
+        }
+    }
+}
+
+// [RE 0x41D433] 原版 sub_41D433 = 临时切换 currentPlayer 刷新右侧信息面板；
+//   重写每帧全量重绘面板，金额更新下一帧自动可见（无需显式刷新）
+
+// idx 8/9/10 共用阶段 1：对准玩家 → 入现金（浮动数字 TODO P4）
+void rewardPlayerPhase1(NewsCtx& ctx) {
+    Application& app = *ctx.app;
+    GameState& st = app.gameState();
+    const int p = ctx.targetObjId;
+    if (p < 0 || p >= 4) {
+        return;
+    }
+    focusView(app, st.players[p].spriteX, st.players[p].spriteY);
+    addMoney(app, p, ctx.targetParam, true); // [RE 0x449A5C cash=true]
+    // [TODO P4] 浮动数字 sub_44F354(p, amount)
+    resetView(app);
+}
+
+// idx 11-13 逐玩家金额行（原版 setTextFont(24) + "%s繳交%d元" @ y=346 起每行 32）
+void drawTaxLines(NewsCtx& ctx) {
+    Application& app = *ctx.app;
+    GameState& st = app.gameState();
+    app.text().setFont(24, 0xF0F0F0, 0x101010, 3, 0);
+    int y = 346;
+    for (int j = 0; j < st.playerCount; ++j) {
+        if (st.players[j].alive == 0 || ctx.taxAmounts[j] == 0) {
+            continue;
+        }
+        char line[128];
+        std::snprintf(line, sizeof(line), "%s繳交%d元", playerNameNoSpace(st, j).c_str(),
+                      ctx.taxAmounts[j]);
+        app.text().drawText(app.surface(), line, 24, y, 0);
+        drawPiece(ctx, j, kPieceFramePenalty, y + 12);
+        y += 32;
+    }
+}
+
+// idx 11-13 共用阶段 1：缴税入银行（原版 g_sceneRequest 中断守卫）
+void taxPhase1(NewsCtx& ctx) {
+    Application& app = *ctx.app;
+    GameState& st = app.gameState();
+    for (int i = 0; i < st.playerCount && st.sceneRequest == 0; ++i) {
+        if (st.players[i].alive != 0 && ctx.taxAmounts[i] != 0) {
+            transferMoney(app, i, -1, ctx.taxAmounts[i], 0); // [RE 0x449DDB] 入银行
+        }
+    }
+}
+
+// 公司资金变动 + 股价新闻（idx 30-34；原版共享段 0x44B3AD/0x44B3E7）
+void applySpecPtChange(NewsCtx& ctx, int32_t delta, uint8_t newsValue, int textIdx) {
+    Application& app = *ctx.app;
+    GameState& st = app.gameState();
+    const int count = static_cast<int>(st.specPts.size()) - 1;
+    if (count <= 0) {
+        return;
+    }
+    SpecPt& sp = st.specPts[std::rand() % count + 1];
+    char text[192];
+    std::snprintf(text, sizeof(text), kNewsTexts[textIdx], specPtNameUtf8(sp).c_str());
+    drawEffectText(ctx, text, 310);
+    sp.fund += delta;     // [RE +40]
+    sp.fundPaid += delta; // [RE +44]
+    if (sp.stockNo < 12) {
+        st.stockNews[sp.stockNo] = newsValue;
+        stockNewsApply(app, sp.stockNo + 1); // [RE sub_429040(stockNo+1)]
+    }
+}
+
+// [RE 0x4498B3] idx 8：公開表揚第一大地主\n%s獲得%d元獎勵
+void evt08_topLandlord(NewsCtx& ctx, int phase) {
+    GameState& st = ctx.app->gameState();
+    if (phase != 0) {
+        rewardPlayerPhase1(ctx);
+        return;
+    }
+    int counts[4];
+    countOwnedAssets(st, counts);
+    int best = 0;
+    int bestP = 0;
+    for (int p = 0; p < st.playerCount; ++p) {
+        if (st.players[p].alive != 0 && best < counts[p]) {
+            best = counts[p];
+            bestP = p;
+        }
+    }
+    ctx.targetObjId = bestP;
+    ctx.targetParam = 10000 * st.moneyMul; // [RE 0x4499AE]
+    char text[192];
+    std::snprintf(text, sizeof(text), kNewsTexts[8], playerNameNoSpace(st, bestP).c_str(),
+                  ctx.targetParam);
+    drawEffectText(ctx, text, 310);
+    drawPiece(ctx, bestP, kPieceFrameRelease, 328);
+}
+
+// [RE 0x449A8A] idx 9：公開補助土地最少者\n%s獲得%d元補助
+void evt09_landSubsidy(NewsCtx& ctx, int phase) {
+    GameState& st = ctx.app->gameState();
+    if (phase != 0) {
+        rewardPlayerPhase1(ctx);
+        return;
+    }
+    int counts[4];
+    countOwnedAssets(st, counts);
+    int best = 10000; // [RE 0x449B17] 初值
+    int bestP = 0;
+    for (int p = 0; p < st.playerCount; ++p) {
+        if (st.players[p].alive != 0 && best > counts[p]) {
+            best = counts[p];
+            bestP = p;
+        }
+    }
+    ctx.targetObjId = bestP;
+    ctx.targetParam = 5000 * st.moneyMul; // [RE 0x449B84]
+    char text[192];
+    std::snprintf(text, sizeof(text), kNewsTexts[9], playerNameNoSpace(st, bestP).c_str(),
+                  ctx.targetParam);
+    drawEffectText(ctx, text, 310);
+    drawPiece(ctx, bestP, kPieceFrameRelease, 328);
+}
+
+// [RE 0x449B9C] idx 10：公開表揚股市第一大戶\n%s獲得%d元獎勵
+void evt10_topShareholder(NewsCtx& ctx, int phase) {
+    GameState& st = ctx.app->gameState();
+    if (phase != 0) {
+        rewardPlayerPhase1(ctx);
+        return;
+    }
+    int totals[4] = {};
+    for (int p = 0; p < st.playerCount; ++p) {
+        if (st.players[p].alive == 0) {
+            continue;
+        }
+        for (int s = 0; s < 12; ++s) {
+            totals[p] += st.playerShares[p][s];
+        }
+    }
+    int best = 0; // [RE 0x449BFB]
+    int bestP = 0;
+    for (int p = 0; p < st.playerCount; ++p) {
+        if (st.players[p].alive != 0 && best < totals[p]) {
+            best = totals[p];
+            bestP = p;
+        }
+    }
+    ctx.targetObjId = bestP;
+    ctx.targetParam = 10000 * st.moneyMul; // [RE 0x449C64]
+    char text[192];
+    std::snprintf(text, sizeof(text), kNewsTexts[10], playerNameNoSpace(st, bestP).c_str(),
+                  ctx.targetParam);
+    drawEffectText(ctx, text, 310);
+    drawPiece(ctx, bestP, kPieceFrameRelease, 328);
+}
+
+// [RE 0x449C7C] idx 11：所有人繳交所得稅５％（现金 × 0.05 → 入银行）
+void evt11_incomeTax(NewsCtx& ctx, int phase) {
+    GameState& st = ctx.app->gameState();
+    if (phase != 0) {
+        taxPhase1(ctx);
+        return;
+    }
+    drawEffectText(ctx, kNewsTexts[11], 310);
+    for (int j = 0; j < st.playerCount; ++j) {
+        if (st.players[j].alive == 0) {
+            continue;
+        }
+        // [RE dbl_4655A4 = 0.05] (int)(现金 × 0.05)
+        ctx.taxAmounts[j] =
+            static_cast<int32_t>(static_cast<double>(st.players[j].cash) * 0.05);
+    }
+    drawTaxLines(ctx);
+}
+
+// [RE 0x449DE6] idx 12：所有人繳交地價稅５％（地产估值 × M × 0.05）
+void evt12_landTax(NewsCtx& ctx, int phase) {
+    GameState& st = ctx.app->gameState();
+    if (phase != 0) {
+        taxPhase1(ctx);
+        return;
+    }
+    drawEffectText(ctx, kNewsTexts[12], 310);
+    for (int j = 0; j < st.playerCount; ++j) {
+        if (st.players[j].alive == 0) {
+            continue;
+        }
+        int32_t total = 0;
+        for (size_t i = 1; i < st.estates.size(); ++i) {
+            const Estate& e = st.estates[i];
+            if (e.owner == j + 1) {
+                total += e.priceAdd + static_cast<int32_t>(e.priceBase) * e.level;
+            }
+        }
+        for (size_t i = 1; i < st.corps.size(); ++i) {
+            const Corp& c = st.corps[i];
+            if (c.owner == j + 1) {
+                total += c.buildPrice + static_cast<int32_t>(c.feeTable[0]) * c.sub;
+            }
+        }
+        // [RE dbl_4655CC = 0.05] M × (int)(估值 × 0.05)
+        ctx.taxAmounts[j] = st.moneyMul * static_cast<int32_t>(total * 0.05);
+    }
+    drawTaxLines(ctx);
+}
+
+// [RE 0x44A029] idx 13：所有人繳交證交稅５％（持股市值 × M × 0.05）
+void evt13_stockTax(NewsCtx& ctx, int phase) {
+    GameState& st = ctx.app->gameState();
+    if (phase != 0) {
+        taxPhase1(ctx);
+        return;
+    }
+    drawEffectText(ctx, kNewsTexts[13], 310);
+    for (int j = 0; j < st.playerCount; ++j) {
+        if (st.players[j].alive == 0) {
+            continue;
+        }
+        double value = 0.0;
+        for (int s = 0; s < 12; ++s) {
+            if (st.playerShares[j][s] != 0) {
+                // [RE flt_496994 现价 = stocks[s][5]]
+                value += static_cast<double>(st.playerShares[j][s]) * st.stocks[s][5];
+            }
+        }
+        // [RE dbl_4655F4 = 0.05] M × (int)(市值 × 0.05)
+        ctx.taxAmounts[j] = st.moneyMul * static_cast<int32_t>(value * 0.05);
+    }
+    drawTaxLines(ctx);
+}
+
+// [RE 0x44B374] idx 30：%s工廠排放污水\n罰款10000元（-10000、股价跌 3）
+void evt30_pollutionFine(NewsCtx& ctx, int phase) {
+    if (phase == 0) {
+        applySpecPtChange(ctx, -10000, 3, 30);
+    }
+}
+
+// [RE 0x44B419] idx 31：%s海外投資\n獲利20000元（+20000、股价涨 48）
+void evt31_investGain(NewsCtx& ctx, int phase) {
+    if (phase == 0) {
+        applySpecPtChange(ctx, 20000, 48, 31);
+    }
+}
+
+// [RE 0x44B4A8] idx 32：%s海外投資\n虧損20000元（-20000、股价跌 4）
+void evt32_investLoss(NewsCtx& ctx, int phase) {
+    if (phase == 0) {
+        applySpecPtChange(ctx, -20000, 4, 32);
+    }
+}
+
+// [RE 0x44B53F] idx 33：%s違規開發山坡地\n罰款10000元（共享 idx 30 罚款段）
+void evt33_slopeFine(NewsCtx& ctx, int phase) {
+    if (phase == 0) {
+        applySpecPtChange(ctx, -10000, 3, 33);
+    }
+}
+
+// [RE 0x44B57D] idx 34：%s製造噪音公害\n罰款5000元（共享 idx 30 股价跌 3 尾）
+void evt34_noiseFine(NewsCtx& ctx, int phase) {
+    if (phase == 0) {
+        applySpecPtChange(ctx, -5000, 3, 34);
+    }
+}
+
+// [RE 0x44B5F5] idx 35：%s獲利調高一倍（fund×2、fundPaid += 2×旧、股价按旧额涨）
+void evt35_profitDouble(NewsCtx& ctx, int phase) {
+    if (phase != 0) {
+        return;
+    }
+    Application& app = *ctx.app;
+    GameState& st = app.gameState();
+    std::vector<int> list;
+    for (size_t i = 1; i < st.specPts.size(); ++i) {
+        if (st.specPts[i].fund > 10000) {
+            list.push_back(static_cast<int>(i));
+        }
+    }
+    if (list.empty()) {
+        return;
+    }
+    SpecPt& sp = st.specPts[list[static_cast<size_t>(std::rand()) % list.size()]];
+    char text[192];
+    std::snprintf(text, sizeof(text), kNewsTexts[35], specPtNameUtf8(sp).c_str());
+    drawEffectText(ctx, text, 310);
+    const int32_t old = sp.fund;
+    sp.fund = 2 * old;       // [RE 0x44B695]
+    sp.fundPaid += 2 * old;  // [RE 0x44B698]
+    if (sp.stockNo < 12) {
+        // [RE 0x44B6C0] stockNews = 16 × (旧额/10000)
+        st.stockNews[sp.stockNo] = static_cast<uint8_t>(16 * (old / 10000));
+        stockNewsApply(app, sp.stockNo + 1);
+    }
+}
+
 // ===== newsEventCheck 触发判定（0x448BE2，36 条；详见研究文档 §1）=====
 
 bool anyJailed(const GameState& st) {
@@ -884,12 +1217,12 @@ const NewsPhaseFn kNewsFuncs[36] = {
     /* 05 */ evt05_monsterDestroy,
     /* 06 */ evtStub,
     /* 07 */ evtStub,
-    /* 08 */ evtStub,
-    /* 09 */ evtStub,
-    /* 10 */ evtStub,
-    /* 11 */ evtStub,
-    /* 12 */ evtStub,
-    /* 13 */ evtStub,
+    /* 08 */ evt08_topLandlord,
+    /* 09 */ evt09_landSubsidy,
+    /* 10 */ evt10_topShareholder,
+    /* 11 */ evt11_incomeTax,
+    /* 12 */ evt12_landTax,
+    /* 13 */ evt13_stockTax,
     /* 14 */ evt14_haunted,
     /* 15 */ evt15_gasExplosion,
     /* 16 */ evt16_rainRest,
@@ -906,12 +1239,12 @@ const NewsPhaseFn kNewsFuncs[36] = {
     /* 27 */ evtStub,
     /* 28 */ evtStub,
     /* 29 */ evtStub,
-    /* 30 */ evtStub,
-    /* 31 */ evtStub,
-    /* 32 */ evtStub,
-    /* 33 */ evtStub,
-    /* 34 */ evtStub,
-    /* 35 */ evtStub,
+    /* 30 */ evt30_pollutionFine,
+    /* 31 */ evt31_investGain,
+    /* 32 */ evt32_investLoss,
+    /* 33 */ evt33_slopeFine,
+    /* 34 */ evt34_noiseFine,
+    /* 35 */ evt35_profitDouble,
 };
 
 // ===== 模态流程 =====

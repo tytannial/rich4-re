@@ -161,6 +161,35 @@ void stockTick(Application& app) {
     RICH4_LOGI("stockTick: market=%d turn=%d (RE 0x4291D6)", st.marketIndex, st.turnCounter);
 }
 
+// [RE 0x429040] stockNewsApply
+// 依据: 0x429040 反编译; 新闻设置 byte_496987[36*股] 后立即调用（全部 12 支或单支）：
+//   高 4 位 != 0 → 动量 flt_49699C = +10.0 否则 -10.0 → 现价 = stockPriceUpdate(昨收, 动量)
+//   → g_stockHistory[144*股 + (turnCounter-1 环形)] 记录；byte_496987 == 0 的股票跳过。
+//   与 stockTick 的差异：本函数不做"昨收 = 现价"，直接以既有昨收计算（新闻当日冲击）。
+void stockNewsApply(Application& app, int stock) {
+    GameState& st = app.gameState();
+    const int slot = (st.turnCounter - 1 + 144) % 144;
+    const auto applyOne = [&st, slot](int i) {
+        if (st.stockNews[i] == 0) {
+            return;
+        }
+        st.stocks[i][7] = ((st.stockNews[i] & 0xF0) != 0) ? 10.0f : -10.0f;
+        st.stocks[i][5] = stockPriceUpdate(st.stocks[i][4], st.stocks[i][7]);
+        st.stockHistory[i][slot] = *reinterpret_cast<int32_t*>(&st.stocks[i][5]);
+    };
+    if (stock != 0) {
+        const int i = stock - 1;
+        if (i >= 0 && i < 12) {
+            applyOne(i);
+        }
+    } else {
+        for (int i = 0; i < 12; ++i) {
+            applyOne(i);
+        }
+    }
+    RICH4_LOGI("stockNewsApply: stock=%d slot=%d (RE 0x429040)", stock, slot);
+}
+
 // [RE 0x4294D5] updateSpecPtControl
 // 依据: 0x4294D5 反编译; ① 从 shareholders[4] 移除该玩家（memmove 压缩）；
 //   ② 若持股 > 0：从索引 2 倒序比较（空位跳过、持股 >= 我则停、否则后移）→ 插入；

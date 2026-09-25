@@ -10,6 +10,11 @@ class Application;
 //   休市（stockMarketClosed || isSpecialDate）时直接返回，不推进行情/历史
 void stockTick(Application& app);
 
+// [RE 0x429040] stockNewsApply：新闻对股价的冲击立即应用（stock==0 全部 12 支，
+//   否则第 stock-1 支）：stockNews[i] 高 4 位 != 0 → 动量 +10 否则 -10 →
+//   现价 = stockPriceUpdate(昨收, 动量) + 写历史（turnCounter-1 环形槽）
+void stockNewsApply(Application& app, int stock);
+
 // [RE 0x428CAF] refreshStockSpecPtMap：按 specPt.index 反查股票→specPt 映射
 //   （loadMapData 调用；仅对已有映射的上市公司股票生效）
 void refreshStockSpecPtMap(Application& app);
