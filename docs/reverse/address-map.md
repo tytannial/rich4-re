@@ -2,7 +2,7 @@
 
 > 由 `python tools/re_map.py` 自动生成，勿手改。
 
-## RE 映射（217 条）
+## RE 映射（220 条）
 
 | 地址 | 原符号 | 重写位置 | 依据 |
 |------|--------|----------|------|
@@ -69,8 +69,10 @@
 | `0x411B53` | settingsDialog | `src/app/settings_dialog.cpp:441` | 0x411B53 反编译; dword_48BB58 = page; sub_450441(data.mkf, 3); 对话框居中 (320 - 帧0宽/2, 240 - 帧0高/2); runModal(sub_4103A3) |
 | `0x411E8F` | loadConfig | `include/game/app/date_dialog.h:15` | 0x411F21 dos_getdate; 年<0x7CE(1998)→1998-1-1, 年>0x7DA(2010)→2010-1-1， 否则系统日期；0x411A7C 尾跳转写 dword_497160（不写 dword_48BB50） |
 | `0x411E8F` | 读取 | `src/app/game_init.cpp:40` | 0x411E8F CFG 存在时读 16B 设置 + 56B 键位；不存在时设置区保留默认值 （byte_497158=1, 497159=1, 49715A=4, 49715B=4, 49715C=1, 49715D=1） CFG 第 8..11 字节（byte_497158+8）与 dword_497160 重叠，但读取后即被 尾部 dos_getdate 钳位值覆盖（0x411F21..0x411A7C），不落回 settings[8..11] |
-| `0x415457` | miniGameVisit | `src/app/minigame_dialog.cpp:397` | 0x415215/0x4154DC/0x4155FC 反编译；门控 0x41523A/0x4154FA/0x41561A （alive==1 && byte_497159=settings[1] 動畫過程 → 交互版）；共享 else 0x415457 （rand()%20+50 + showMessage kFmtMiniPoints"得點券%d點" 2000ms + 台词 sub_44EF41(off_48084A=kValueLines 列 rand&1)） |
-| `0x4154DC` | miniGameBalloonsRun | `src/app/minigame_dialog.cpp:365` | 0x4154DC 反编译（门控 0x4154FA、资源 panel[78 标题 FLC/79 数字/91 场景]、 音效表 g_balloonSoundTable={19,20,21}、musicPlayScene(11)、runModal balloonWndProc 0x414BBC 100ms）；玩法细节见本文件头注释与 docs/reverse/functions/41982d-p2-events.md §6 |
+| `0x415215` | miniGameDigRun | `src/app/minigame_dialog.cpp:602` | 0x415215 反编译（资源 panel[78/79/80..90]、音效表 g_digSoundTable、 musicPlayScene(12)、runModal digWndProc 0x414858 100ms）；玩法见 §6 |
+| `0x415457` | miniGameVisit | `src/app/minigame_dialog.cpp:1321` | 0x415215/0x4154DC/0x4155FC 反编译；门控 0x41523A/0x4154FA/0x41561A （alive==1 && byte_497159=settings[1] 動畫過程 → 交互版）；共享 else 0x415457 （rand()%20+50 + showMessage kFmtMiniPoints"得點券%d點" 2000ms + 台词 sub_44EF41(off_48084A=kValueLines 列 rand&1)） |
+| `0x4154DC` | miniGameBalloonsRun | `src/app/minigame_dialog.cpp:1289` | 0x4154DC 反编译（门控 0x4154FA、资源 panel[78/79/91]、音效表 g_balloonSoundTable={19,20,21}、musicPlayScene(11)、runModal balloonWndProc 0x414BBC 100ms）；玩法细节见 docs/reverse/functions/41982d-p2-events.md §6 |
+| `0x4155FC` | miniGameMoneyRun | `src/app/minigame_dialog.cpp:1001` | 0x4155FC 反编译（资源 panel[78/79/92..99/100+char]、data[526]、 musicPlayScene(10)、runModal moneyWndProc 0x414FCD 50ms；音效表空=静音 quirk） |
 | `0x415872` | playIntro | `src/app/new_game.cpp:527` | 0x415872 反编译; JUMP.MKF 45/46 资源 + sub_451677 播放 AVI （AIRPLANE.AVI 或 off_4750E8[地图索引]） 差异: AVI 播放依赖 MCI，SDL 侧暂无替代（跳过） |
 | `0x415D31` | 顶部工具条（panel.mkf[1]） | `src/app/game_panel.cpp:62` | 帧 0 背景 blit 到 (0,0); 11 个按钮帧 1+i 画在 (40*i+20, 20); 高亮帧 12+i（dword_48BDE4 为高亮索引） （原版 (u16*)dword_475118 + 6*i + 12 → 帧 i+1；+78 → 帧 i+12） |
 | `0x415F69` | 玩家信息面板（布局 | `src/app/game_panel.cpp:123` | 0x415F69 反编译; 背景帧 = panel.mkf[0] 帧 panelTab（dword_48BE24[玩家]）； 物价指数 "物價指數  %d" @ (450,260) font12； 4 页签资金/地產/股票/其他 @ (627, 35/108/181/254) font18（当前页 0x101010 / 其他 0x404040）； 色条 fillRect(523,57,86,12,0)+fillRect(522,56,86,12,玩家色)、棋子 @ (482,40)、 同盟头像 pieceSprites[ally-1] 帧 2 @ (524,64)、玩家名 @ (564,40) font22； 内容 font18 数值 @ (600, 102/166/230) 右上对齐： 0 資金 = 現金/存款/總資產（"$"+千分位）；1 地產 = 土地(estate+corp)/連鎖店/設施； 2 股票 = 總市值(Σ股数×现价)/成本(Σ股数×均价)/經營權家数；3 其他 = 點券/貸款/保險期 （"%d天"）+ 貸款剩餘天數 @ (500,146) font12 差异: 事件槽回合（currentPlayer≥玩家数）NPC 面板分支待 P5；脏区标志 dword_475110&0xC 忽略（逐帧重绘） |
@@ -187,6 +189,7 @@
 | `0x45620F` | sub_45620F | `include/game/render/blit.h:38` | 0x45620F 用 memset32 画上下边、循环画左右边的空心矩形（颜色经 convertColor） 用于存档槽悬停高亮（0xFFFF00）与地图选择框 |
 | `0x45663E` | blitSpriteFrame | `include/game/render/blit.h:43` | 0x45663E 反编译; 帧头 = 资源基址 + 12 + 12*帧号; 调色板 = 基址 + data_offset; 8bit 索引像素经调色板取色, 索引 0 透明; 目标 = (x - offsetX, y - offsetY) 裁剪 640x480 用于选人界面底部玩家角色动画（JUMP.MKF 角色 SPR） |
 | `0x456770` | sub_456770 | `include/game/render/blit.h:49` | 0x456770 反编译; 帧头 12 字节 {w,h,offX,offY,size}, 8bit 索引 + 调色板, 目标 = (x - offX, y - offY), 裁剪到 dword_4861B8/C0/BC/C4 用于游戏内地图精灵（棋子/住宅用地/商業用地/行業設施點/事件格） |
+| `0x4568C2` | SPR | `src/app/minigame_dialog.cpp:68` | 0x4568C2 反编译（目标矩形 = (x-offX, y-offY, scale*w>>16, scale*h>>16)， 源步长 = 65536²/scale 定点累加，8bit 索引查调色板，0 透明，全裁剪返回 false） |
 | `0x45709C` | start | `src/main.cpp:15` | 0x45709C 为 CRT 入口 thunk（jmp sub_458CED）; sub_458CED 初始化 CRT 后调用 WinMain(GetModuleHandleA(0), 0, lpCmdLine, 10)（迁移: CRT 启动 + WinMain → 标准 main(argc, argv); lpCmdLine → --game <dir> 参数） |
 | `0x46CAD8` | nIDEvent | `include/game/app/event_stack.h:58` | 栈顶索引; 0x4018E7 中 ++nIDEvent 压栈、--nIDEvent 出栈 |
 | `0x46CAFC` | byte_46CAFC | `include/game/game_state.h:279` | WinMain case 0/4 调 sub_406DE7(byte_46CAFC)；进入游戏后置 1， 再次进入时 lParam!=0 → 0x406DE7 保留上次选人配置并自动確定 |

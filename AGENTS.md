@@ -30,8 +30,11 @@
 + 答谢消息，0x43CFDB/0x43DE4C；事件槽路面行走待 P5）；  **小游戏 case 6/7/8 ✅ 2026-09-25**
   （`minigame_dialog.cpp` `miniGameVisit`：**case 7 七彩氣球交互版 ✅**（0x4154DC：15s 射气球，
   分值/×2/÷2/? 随机效果/诱饵球，panel[78/79/91]+枪光标+音效 19/20/21+音乐场景 11）；
-  case 6/8 与 AI/动画关走原版共享 else 0x415457——随机 50..69 点券 + "得點券%d點" +
-  台词 `kValueLines[char][rand&1]`；四大恶人忽略；框架/公式/资源已沉淀 `41982d-p2-events.md` §6）；
+  **case 6 企鵝挖寶 ✅**（0x415215：15s 9×9 埋宝 8 方向企鹅行走，5 类宝物计分+火煤球即终+
+  结局动画，panel[80..90]+RAW 掩码[81]+冰屋遮挡）；**case 8 喜從天降 ✅**（0x4155FC：18s
+  鼠标控娃娃接财神钱袋，云投炸弹=爆炸 FLC 即终+评级表情，panel[92..99/100+ch]+data[526]）；
+  AI/动画关走原版共享 else 0x415457——随机 50..69 点券 + "得點券%d點" +
+  台词 `kValueLines[char][rand&1]`；四大恶人忽略；细节 `41982d-p2-events.md` §6）；
   事件格 FLC 阻塞播放模板 `playEventFlc` + `drawEventFlcFrame` +
 `showCardGet` + `jailPlayer`/`hospitalizePlayer`/`insurancePayout`；面板底座
 `FloatMessage`/语音 `playVoice`/音乐栈见 `ui-controls.md` §25）。

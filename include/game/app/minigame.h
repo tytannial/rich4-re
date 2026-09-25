@@ -8,11 +8,12 @@ class Application;
 //   （landingEvent case 6/7/8 = 企鵝挖寶/七彩氣球/喜從天降；调用点 0x41B146/0x41B15E/
 //   0x41B16C，返回 ax → g_playerPoints[104*cur] += ax，0x41B152）：
 //   原版门控 `g_playerAlive[cur]==1 && byte_497159`（=settings[1] 动画过程）：
-//   人类+动画开 → runModal 交互小游戏（逐游戏接入中，见 src/app/minigame_dialog.cpp 头注释）；
+//   人类+动画开 → runModal 交互小游戏（三游戏均已接入：miniGameDigRun/
+//   miniGameBalloonsRun/miniGameMoneyRun，见 src/app/minigame_dialog.cpp）；
 //   否则 → 共享 else 0x415457：score = rand()%20+50（50..69）→
 //   showMessage("得點券%d點", 2000)（0x463797，cp950 复核）→ 台词 sub_44EF41(p,0,
-//   off_48084A[char*27+(rand&1)] = kValueLines[char][rand&1]）。
-//   当前未接入交互版的三种游戏，人类玩家同走 else 兜底（与原版"动画关闭"行为一致）。
+//   off_48084A[char*27 + (rand&1)] = kValueLines[char][rand&1]）。
+//   资源加载失败时人类也回落 else。
 // 差异: 四大恶人（事件槽 4..7）按项目决策直接忽略（原版 NPC 亦随机得分）。
 void miniGameVisit(Application& app, int cellType);
 

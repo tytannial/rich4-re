@@ -642,10 +642,18 @@ UI 音效与游戏音效槽**是两套**，勿混：
   复原最终画面（详见 `lottery-system.md` §7）。
 
 
-## 30. 小游戏全屏模态（0x4154DC 系；数字字形条 + 大字结算 + 标题 FLC + 枪光标）
+## 30. 小游戏全屏模态（0x4154DC 系；数字字形条 + 大字结算 + 标题 FLC + 游戏光标）
 
 - **用途**：特殊地点 case 6/7/8 三种小游戏（企鵝挖寶/七彩氣球/喜從天降）共用范式；
-  100/100/50ms tick 全屏 640×480 模态。首个使用者 `miniGameBalloonsRun`（2026-09-25）。
+  100/100/50ms tick 全屏 640×480 模态。三游戏已全部接入（`miniGameDigRun`/
+  `miniGameBalloonsRun`/`miniGameMoneyRun`，2026-09-25）。
+- **SPR 缩放 blit（[RE 0x4568C2]）**：16.16 定点 scale（65536=1.0x），目标
+  (x-offX, y-offY, scale*w>>16, scale*h>>16)，源步长 65536²/scale 累加、8bit 索引查
+  调色板、0 透明、全裁剪返回 false（接钱钱袋 0.5x→1.0x 透视）；重写 `blitSprScaled`。
+- **RAW 资源两种**：panel[81] 点击掩码 = 640×480 **8bit**（值=row*9+col，直接字节索引）；
+  panel[92] 背景 = 640×480 **RGB555**（memcpy 铺满）。
+- **鼠标跟随（[RE 0x4135F4]）**：`SDL_GetMouseState` 直接取位（原版 GetCursorPos +
+  边缘回卷 quirk 语义=钳位，SDL 窗口内天然满足）；10px/tick、死区 ±8、dir 不清零。
 - **资源**：**panel.mkf[79]** = 数字字形 SMP 20 帧——帧 0..9 小数字（HUD 用，步进 20px）、
   帧 10..19 大数字（结算大字，字宽 66）；**panel.mkf[78]** = 标题 FLC（640×480，25 帧，
   三小游戏共用，透明 @(0,0) 叠加）；游戏场景图各自 panel[80..99]/[100+char]。
