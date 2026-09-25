@@ -28,6 +28,7 @@ void FloatMessage::setup(const UiImage& elem, int frame, int x, int y, int textD
 //   setFont(20, color, shadow, shadow?3:2, 1) → drawText 居中（+文字偏移）→ 计时
 void FloatMessage::show(Application& app, const char* text) {
     Surface& dst = app.surface();
+    m_text = text != nullptr ? text : "";
     const UiFrameView& fr = m_elem->frame(m_frame);
     m_bgX = m_x - fr.offsetX;
     m_bgY = m_y - fr.offsetY;
@@ -78,6 +79,23 @@ void FloatMessage::finish(Application& app) {
     app.audio().stopVoice();
     m_startMs = 0;
     restore(app);
+}
+
+// 消息进行中重绘（面板全量重绘后调用）：只画板与文字，不重置计时；
+//   跳过 '#NNNN' 前缀，避免 drawText 重复触发语音（原版消息期间面板不重绘，无此问题）
+void FloatMessage::redraw(Application& app) {
+    if (m_startMs == 0 || m_elem == nullptr) {
+        return;
+    }
+    Surface& dst = app.surface();
+    const UiFrameView& fr = m_elem->frame(m_frame);
+    blitElement(dst, fr, m_x, m_y, false);
+    app.text().setFont(20, m_color, m_shadow, m_shadow != 0 ? 3 : 2, 1);
+    const char* t = m_text.c_str();
+    if (t[0] == '#') {
+        t += 5;
+    }
+    app.text().drawText(dst, t, m_bgX + m_dx + fr.width / 2, m_bgY + m_dy + fr.height / 2, 4);
 }
 
 void FloatMessage::restore(Application& app) {

@@ -29,6 +29,7 @@
 #include "game/app/message_dialog.h"
 #include "game/app/month_settle.h"
 #include "game/app/roulette_dialog.h"
+#include "game/app/shop_dialog.h"
 #include "game/app/spec_pt_dialog.h"
 #include "game/app/stock_system.h"
 #include "game/app/target_select_dialog.h"
@@ -1425,6 +1426,15 @@ int landingEvent(Application& app, uint16_t cellEntId) {
         showCardGet(app, cardId, text);                                    // [RE 0x441F73]
         // [RE 0x44F230] 卡片获得语音 byte_47FDEF[cardId*8]：P4 语音系统
         RICH4_LOGI("landingEvent: card cell -> %s (RE 0x41982D case 13)", text);
+        return 0x80;
+    }
+    if (cellType == 15) {
+        // [RE 0x41B3B9] case 15 百貨公司：卡片店/道具店（0x42E931，见 shop_dialog.cpp）
+        //   实参 = cellEnt+32 objId（special，6000+n；landingEvent 0x419854），非数组下标
+        //   自家 → 董事长赠礼；人类 → 商店 UI；AI → 自动买卖；营业额入 specPt.fund/+44
+        RICH4_LOGI("landingEvent: case 15 百貨公司 cellEnt=%u objId=%u cur=%d (RE 0x41982D)",
+                   cellEntId, objId, p);
+        shopDialog(app, static_cast<int>(objId));
         return 0x80;
     }
     if (cellType == 9) {

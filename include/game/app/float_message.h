@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 #include <vector>
 
 namespace rich4 {
@@ -30,6 +31,9 @@ public:
     bool advance(Application& app);
     // [RE 0x44EE18(1)] 立即结束（点击跳过：停语音 + 恢复背景）
     void finish(Application& app);
+    // [RE 0x44ECB6 重复绘制] 消息进行中重绘板与文字（面板每帧全量重绘后调用，重置计时；
+    //   跳过 '#NNNN' 前缀避免重复播放语音）。不动画的面板可不调用
+    void redraw(Application& app);
     // [RE 0x44EF3B] 消息进行中（面板据此屏蔽悬停/点击）
     bool active() const { return m_startMs != 0; }
 
@@ -44,6 +48,7 @@ private:
     int m_dy = 0;
     uint32_t m_color = 0;
     uint32_t m_shadow = 0;
+    std::string m_text; // 当前消息文本（redraw 复用）
     // 保存的背景（原版 saveBackground word_46CAEC / 释放 sub_456E11）
     std::vector<uint16_t> m_bg;
     int m_bgX = 0;

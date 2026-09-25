@@ -15,6 +15,7 @@
 #include "game/app/month_settle.h"
 #include "game/app/object_tip.h"
 #include "game/app/query_dialog.h"
+#include "game/app/shop_dialog.h"
 #include "game/app/stock_market_dialog.h"
 #include "game/app/stock_system.h"
 #include "game/app/turn_system.h"
@@ -188,6 +189,25 @@ bool handleDebugKey(Application& app, int code, bool shift) {
                     bankStayDialog(app, cellId);
                 } else {
                     RICH4_LOGW("debug: Ctrl+Shift+U no bank cellEnt (specPt %d)", bankIdx);
+                }
+                return true;
+            }
+            case 'w': { // 打开百貨公司商店（0x42E931；扫描事件格 cellType 15，配合 Ctrl+1 改 owner 测赠礼）
+                int shopCell = -1;
+                uint16_t shopObjId = 0;
+                for (size_t c = 0; c < st.cellEnts.size(); ++c) {
+                    if ((st.cellEnts[c].occMask & 0xFF) == 15) {
+                        shopCell = static_cast<int>(c);
+                        shopObjId = st.cellEnts[c].special;
+                        break;
+                    }
+                }
+                if (shopCell >= 0 && shopObjId > 6000 && shopObjId < 8000) {
+                    RICH4_LOGI("debug: Ctrl+Shift+W open shop specPt=%d cellEnt=%d owner=%d cur=%d",
+                               shopObjId - 6000, shopCell, st.specPts[shopObjId - 6000].owner, cur);
+                    shopDialog(app, shopObjId);
+                } else {
+                    RICH4_LOGW("debug: Ctrl+Shift+W no department store cell (cellType 15)");
                 }
                 return true;
             }

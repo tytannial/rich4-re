@@ -486,7 +486,9 @@ struct GameState {
 
     uint32_t miscTable80[10][2] = {}; // [RE 0x498E28] g_miscTable80
     // [RE 0x497320] byte_497320 **礼物卡池**（8 种可赠卡库存；drawGiftCard 0x445ADA 展开随机抽；
-    //   死神没收卡片 0x445B3F 归还；kMisc8Init 初值）
+    //   死神没收卡片 0x445B3F 归还；kMisc8Init 初值。其中 [4]/[5]（0x497324/25）兼作
+    //   机车/汽车回收槽：damagePlayer 0x40CD3B/43 载具损毁 ++、newGameInit 初始载具 --、
+    //   百货 AI 0x42F1B1/0x42F211 购买条件）
     uint8_t misc8A[8] = {};
     // [RE 0x497321] byte_497321..23 路障/地雷/定時炸彈 回收计数（deleteMapObject 0x40E14D
     //   删除对应类型 +1；[TODO P4] 消耗点未定位——放置函数 0x446BAA/446C88/446D69 仅扣
