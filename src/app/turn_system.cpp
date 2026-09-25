@@ -1445,8 +1445,8 @@ int landingEvent(Application& app, uint16_t cellEntId) {
     }
     if (cellType >= 6 && cellType <= 8) {
         // [RE 0x41B146/0x41B15E/0x41B16C] case 6/7/8 企鵝挖寶/七彩氣球/喜從天降
-        //   （0x415215/0x4154DC/0x4155FC）：交互小游戏逐游戏接入中，当前全员走
-        //   原版共享 else(0x415457) 兜底得分（rand()%20+50 点券）；四大恶人忽略。
+        //   （0x415215/0x4154DC/0x4155FC）：人类+動畫過程开 → 交互小游戏；否则原版
+        //   共享 else(0x415457) 兜底得分（rand()%20+50 点券）；四大恶人忽略。
         //   见 minigame.h / docs/reverse/functions/41982d-p2-events.md §6
         miniGameVisit(app, cellType);
         return 0x80;

@@ -73,7 +73,8 @@ damagePlayer/demolish/givePlayerItem）；`economy.cpp` deleteMapObject **配对
 **M2 待办**（详见 `docs/reverse/functions/` 各档案「差异」段，按选定路线排序）：
 
 - P2 事件格实现（研究已完成，见 `41982d-p2-events.md`；**得點券/卡片格/監獄/醫院/銀行 ✅
-  2026-09-23**（银行全链含週轉/催收/月度结息/15 号分红），继续：物價面板 → 新聞/命運 → 小游戏/魔法屋；
+  2026-09-23**（银行全链含週轉/催收/月度结息/15 号分红）；**小游戏 case 6/7/8 ✅ 2026-09-25**
+  （`minigame_dialog.cpp` 三游戏交互版+兜底，实机验证通过），继续：物價面板 → 新聞/命運 → 魔法屋；
   面板底座 `ui-controls.md` §25，事件槽 NPC 路面行走待 P5）
 - **P2 樂透（case 9）✅ 2026-09-25**：`lottery_dialog.cpp` + `lottery.h`——投注界面
   （0x42F7FC：9×4 网格选号/红圈帧 7/已售 -10 变暗/panel[14] FLC 循环/装饰闪烁/钱不足链；AI

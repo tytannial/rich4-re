@@ -255,4 +255,4 @@
 - 不修改 `dword_496BB4` 欠款矩阵（重写未建模，见任务 D 说明）。
 - 联动高亮不含**同盟地块**（`g_playerAlly`，P4）。
 - 事件格已实现得點券/卡片格/監獄·醫院（含开局默认在押 NPC 的面板）；監獄·醫院 NPC 格的
-  **保释释放流程**（`releaseJailNpc`/`releaseHospitalNpc` 事件槽建模）待 P5；新聞/命運/小游戏等尚未实现（P2 进行中）。
+  **保释释放流程**（`releaseJailNpc`/`releaseHospitalNpc` 事件槽建模）待 P5；新聞/命運/魔法屋尚未实现（P2 进行中；**小游戏 case 6/7/8 ✅ 2026-09-25**，`Ctrl+Shift+G` 踩格即玩）。
