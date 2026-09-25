@@ -467,8 +467,13 @@ AI/托管/动画关闭 → else。当前人类亦走 else（交互版未接入�
 ### 交互小游戏框架（2026-09-25 会话逆向，实现时直接照此）
 
 **公共流程**（三游戏同构）：门控 → `audioRegisterEffects(表)` → 载 Panel.mkf 资源 →
-初始化 → `musicPlayScene` 压栈 → `runModal(WndProc)` → `musicStackPopRestore` →
-卸音效（`sub_454240`）→ 释放资源（`sub_456E11`）→ 返回 `dword_48BCEC` 得分。
+初始化布局 → `musicPlayScene(场景)` 压栈 → `runModal(WndProc)` → `musicStackPopRestore` →
+卸音效（`sub_454240`）→ 释放资源（`sub_456E11`）→ 返回 `g_miniScore` 得分。
+**开场计数缩短 quirk（2026-09-25 实机订正）**：0x401 设 intro=99，但 **WM_PAINT(0xF)
+分支立即把 99 降为 5（氣球 0x414FB3）/ 10（接钱 0x4151F1，50ms）**——首次 InvalidateRect
+即触发，实际开场仅 ~0.5s 就出标题 FLC；挖寶 intro=10 无缩短。
+**大字/HUD 数字 = 色键 blit**（`sub_456418` 是 `0x455C52 blitElement` 薄封装，**非不透明**；
+误用 opaque 会出现黑底方块）。
 - 共享全局块（游戏局部状态，重写收进 struct）：`dword_48BCEC`=得分、`byte_48BD58`=阶段
   （0 进行/1 请求结束/2 结算中）、`dword_48BD2C`=倒计时、`dword_48BBB4/BBB8/BBBC/BBC0`=四类计数。
 - WndProc 消息：`0x400` WM_USER 进入（设倒计时 + 开场计数 99 + SetTimer）→ `0x401`→`0x404`
@@ -503,8 +508,12 @@ AI/托管/动画关闭 → else。当前人类亦走 else（交互版未接入�
   - **type1 = 火煤球**（panel[86] 橙色火球 6 帧；数量 3）：挖到 → 黑化动画 15 tick →
     **直接结束**（音 15，不加分）；type2..5 → 计数++（音 16/17/17/18，表 byte_475051）+
     宝物展示 7 tick。
-  - 行走 = **8 方向×4 帧**（panel[82] 32 帧；方向公式 [RE 0x4126BF]：dcx<0→3-dr、
-    dcx==0→dr<=0?5:1、dcx>0→(dr+7)&7）；挖掘同 8×4（panel[83]）；4 tick/格。
+  - 行走 = **8 方向×4 帧**（panel[82] 32 帧；方向公式**以 0x412658 反汇编为准**
+    （Hex-Rays 把 jle/jnz 分支条件解析反了，照抄反编译会**倒退走路**）：
+    `col差>0 → 3-row差；col差==0 → row差>0?1:5；col差<0 → (row差+7)&7`；
+    帧表语义（看图）0=下 1=右下 2=右 3=右上 4=上 5=左上 6=左 7=左下；挖掘同 8×4（panel[83]）；4 tick/格。
+  - **记忆游戏规则**：宝物堆仅在开场（intro+标题 FLC 期间）显示，0x405 `digInitDraw(0)`
+    重铺背景后**堆全部消失**，玩家凭记忆选格挖。
   - 结局动画 panel[84]（>55，音 13 循环）/panel[85]（<40，音 14 循环）各 4 轮；
     40..55 = 站立 15 tick（case6）。
   - 点击掩码 **panel[81] = RAW 640×480 8bit**（值=row*9+col，直接按字节索引）。
@@ -512,11 +521,15 @@ AI/托管/动画关闭 → else。当前人类亦走 else（交互版未接入�
   - 结算期（gamePhase==2）点击 → 倒计时置 1 跳过（原版 quirk）。
 
 **case 7 七彩氣球 ✅ 交互版 2026-09-25**（`minigame_dialog.cpp` `miniGameBalloonsRun`，
-100ms×150 tick=15s；开场等待 99 tick → panel[78] 标题 FLC → cursorSelect(9,3,5) 枪光标）：
+100ms×150 tick=15s；开场等待（intro 99，**首次 WM_PAINT 降为 5**，0x414FB3）→
+panel[78] 标题 FLC → cursorSelect(9,3,5) 枪光标）：
 - 气球数组 `g_balloons[4i]`（i<16）：+0 x（0=空槽）、+2 y、+4 类型：
   0..8=分值 type+1（0..4 大气球/5..8 小气球）、**9**=分×2、**10**=分÷2、
   **11**=随机效果、**60**(0x3C)=已破（每 tick 高 nibble -0x10，3 tick 爆裂帧后清槽）、
   **0x80**=诱饵气球（特殊表哨兵，高 nibble≠0 → 静止不可点、8 tick 消失、画帧 1）。
+- **绘制裁剪 y<387（2026-09-25 实机订正）**：原版气球画布带 clip rect（sky 区
+  0..387）——气球从底部木条面板**后面**升起进入视野（初生 y=420 不可见）；
+  重写 `drawBalloon` 用 `blitElementRegion` 限高 387-top 等价；顶部完全出界才清槽。
 - **[RE 0x414BBC]** 点击命中盒：type≥6 → x±18/y±26；否则 x±22/y±30；**按下与抬起各射
   一枪**（0x201/0x203 同处理，原版 quirk）；一次射击可命中多个；音效单 buffer 语义
   （命中 21/miss 20 取最后处理者）。结算：0..8 → `分 += type+1`（cap 999）；9 → `分×=2`；
@@ -565,7 +578,8 @@ AI/托管/动画关闭 → else。当前人类亦走 else（交互版未接入�
     `gamePhase=1`（钱袋全落 → 结算，评级跳过=4）。
   - 评级表情（[RE 0x4150ED]）：>=60→3 / >=50→2 / >=40→0 / <40→1（panel[100+ch] 帧 0..4）。
   - 音效：原版 `audioRegisterEffects(g_moneySoundTable=-1 空表)` 且 0x4750CF/0x4750D7
-    句柄未初始化 → **实际静音（quirk照抄，重写不播）**。
+    句柄未初始化 → **实际静音（作者未完成）**。2026-09-25 实机反馈补全：
+    云投弹 = `playEffect(19)`（「噗」投掷音）、接炸弹 = `playEffect(82)`（爆炸音，同地雷）。
   - 原版 0x401 的 sub_41473B 会跑一次完整 tick（财神先走一步）→ 重写省略（无观感差）。
 
 ## 7. case 9 樂透 ✅ 2026-09-25

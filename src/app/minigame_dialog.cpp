@@ -113,13 +113,14 @@ bool blitSprScaled(Surface& dst, const UiImage& spr, int frame, int x, int y, ui
 }
 
 // [RE 0x414789] 结算大字：得分 "%d"，每位 = panel[79] 帧 10+d，x=353-66*len/2，y=150
+// 依据: 原版 sub_456418 = 0x455C52 blitElement 薄封装（**色键透明**，非不透明）
 void drawBigScore(Surface& dst, const UiImage& digits, int score) {
     char buf[8];
     std::snprintf(buf, sizeof(buf), "%d", score);
     const int len = static_cast<int>(std::strlen(buf));
     int x = 353 - 66 * len / 2;
     for (int i = 0; i < len; ++i) {
-        blitElementOpaque(dst, digits.frame(10 + buf[i] - '0'), x, 150);
+        blitElement(dst, digits.frame(10 + buf[i] - '0'), x, 150, false);
         x += 66;
     }
 }
@@ -161,10 +162,10 @@ void blitFlcFrame(Surface& dst, const FliDecoder& flc, int x, int y, bool transp
     }
 }
 
-// HUD 数字（panel[79] 帧 0..9）
+// HUD 数字（panel[79] 帧 0..9；原版 sub_456418 = 色键 blitElement）
 void drawHudNumber(Surface& dst, const UiImage& digits, const char* buf, const int* xs, int n) {
     for (int i = 0; i < n; ++i) {
-        blitElementOpaque(dst, digits.frame(buf[i] - '0'), xs[i], 421);
+        blitElement(dst, digits.frame(buf[i] - '0'), xs[i], 421, false);
     }
 }
 
@@ -330,12 +331,15 @@ void digTick(DigCtx& ui) {
     case 1:  // 火煤球：站立 3 tick → 黑化，共 15 tick → 结束（计数在下方共享块）
         break;
     case 2: {  // 行走（4 tick/格）
+        // 方向公式以 0x412658 反汇编为准（Hex-Rays 条件翻转 quirk）：
+        //   col差>0 → 3-row差；col差==0 → row差>0?1:5；col差<0 → (row差+7)&7
+        //   帧表 0=下 1=右下 2=右 3=右上 4=上 5=左上 6=左 7=左下（看图确认）
         const int dcx = static_cast<int>(ui.nextX) - static_cast<int>(ui.posX);
         const int dr = static_cast<int>(ui.nextY) - static_cast<int>(ui.posY);
-        if (dcx < 0) {
+        if (dcx > 0) {
             ui.dir = 3 - dr;
         } else if (dcx == 0) {
-            ui.dir = dr <= 0 ? 5 : 1;
+            ui.dir = dr > 0 ? 1 : 5;
         } else {
             ui.dir = (dr + 7) & 7;
         }
@@ -431,9 +435,11 @@ void digTick(DigCtx& ui) {
 void drawDig(DigCtx& ui) {
     Surface& dst = ui.app->surface();
     blitElementOpaque(dst, ui.board.frame(0), 0, 0);
+    // 宝物堆只在开场（intro + 标题 FLC）显示——**记忆游戏**：ready go 后堆消失，
+    // 玩家凭记忆选格（[RE 0x4148B2 0x405 → digInitDraw(0) 重铺背景不画堆]）
     for (int r = 0; r < 9; ++r) {
         for (int c = 0; c < 9; ++c) {
-            if (ui.cellType[r][c] != 0) {
+            if (ui.cellType[r][c] != 0 && ui.uiState < 2) {
                 blitElement(dst, ui.board.frame(ui.cellType[r][c] + 3), kDigCells[r][c].x,
                             kDigCells[r][c].y, false);
             } else if (ui.dug[r][c]) {
@@ -489,14 +495,14 @@ void drawDig(DigCtx& ui) {
     std::snprintf(buf, sizeof(buf), "%03d", ui.countdown);
     static const int kTimeX[3] = {49, 69, 94};
     drawHudNumber(dst, ui.digits, buf, kTimeX, 3);
-    blitElementOpaque(dst, ui.digits.frame(0), 114, 421);
+    blitElement(dst, ui.digits.frame(0), 114, 421, false);
     struct { int v; int x0; int x1; } rows[4] = {
         {ui.cnt[5], 185, 205}, {ui.cnt[3], 276, 296}, {ui.cnt[4], 367, 387}, {ui.cnt[2], 458, 478},
     };
     for (auto& r : rows) {
         std::snprintf(buf, sizeof(buf), "%02d", r.v);
-        blitElementOpaque(dst, ui.digits.frame(buf[0] - '0'), r.x0, 421);
-        blitElementOpaque(dst, ui.digits.frame(buf[1] - '0'), r.x1, 421);
+        blitElement(dst, ui.digits.frame(buf[0] - '0'), r.x0, 421, false);
+        blitElement(dst, ui.digits.frame(buf[1] - '0'), r.x1, 421, false);
     }
     const int score = digScore(ui);
     std::snprintf(buf, sizeof(buf), "%03d", score);
@@ -659,7 +665,8 @@ const uint8_t kRichFrames[6][6] = {
     {11, 10, 9, 8, 7, 0}, {12, 13, 14, 15, 17, 18}, {12, 13, 14, 16, 17, 18},
 };
 constexpr int kMoneyCountdown = 360;  // [RE 0x41500F] 50ms×360 = 18s
-constexpr int kMoneyIntro = 99;
+// [RE 0x415019/0x4151F1] 开场计数 99，但首次 WM_PAINT 即降为 10（≈0.5s 后出标题 FLC）
+constexpr int kMoneyIntro = 10;
 
 struct MoneyBag {
     int16_t x = 0;     // 0=空槽
@@ -751,6 +758,9 @@ void moneyTick(MoneyCtx& ui, bool runLogic) {
             if (bx > left && bx < left + fr.width && b.y > top && b.y < top + fr.height &&
                 !ui.boomActive) {
                 if (type == 4) {  // [RE 0x4133D7] 炸弹 → 爆炸 FLC + 结束
+                    // 原版此处 audioStop(0x4750CF)/audioPlay(0x4750D7) 句柄未注册=静音，
+                    // 补全语义：爆炸音 Effect.mkf[82]（同地雷爆炸）
+                    ui.app->audio().playEffect(82);
                     ui.dollDir = 0;
                     ui.dollExpr = 4;
                     ui.gamePhase = 1;
@@ -827,6 +837,8 @@ void moneyTick(MoneyCtx& ui, bool runLogic) {
     } else {
         ++ui.cloudFrame;
         if (ui.cloudFrame == 8 && !ui.boomActive) {
+            // 原版 audioPlayEffect(空表句柄)=静音（作者未完成），补全投掷音
+            ui.app->audio().playEffect(19);  // Effect.mkf[19]「噗」投掷音
             moneySpawn(ui, ui.cloudX, true);
         }
         if (ui.cloudFrame == 12) {
@@ -908,11 +920,11 @@ void drawMoney(MoneyCtx& ui, bool runLogic) {
     std::snprintf(buf, sizeof(buf), "%03d", ui.countdown >> 1);  // 50ms tick → 秒
     static const int kTimeX[3] = {49, 69, 94};
     drawHudNumber(dst, ui.digits, buf, kTimeX, 3);
-    blitElementOpaque(dst, ui.digits.frame(0), 114, 421);
+    blitElement(dst, ui.digits.frame(0), 114, 421, false);
     for (int r = 0; r < 4; ++r) {
         std::snprintf(buf, sizeof(buf), "%02d", ui.cnt[r]);
-        blitElementOpaque(dst, ui.digits.frame(buf[0] - '0'), 185 + r * 91, 421);
-        blitElementOpaque(dst, ui.digits.frame(buf[1] - '0'), 205 + r * 91, 421);
+        blitElement(dst, ui.digits.frame(buf[0] - '0'), 185 + r * 91, 421, false);
+        blitElement(dst, ui.digits.frame(buf[1] - '0'), 205 + r * 91, 421, false);
     }
     const int score = moneyScore(ui);
     std::snprintf(buf, sizeof(buf), "%03d", score);
@@ -1052,7 +1064,8 @@ int miniGameMoneyRun(Application& app) {
 // ==================== 七彩氣球（case 7）====================
 
 constexpr int kBalloonCountdown = 150;  // [RE 0x414C1D] 100ms×150 = 15s
-constexpr int kBalloonIntro = 99;       // [RE 0x414C27] 开场等待 tick
+// [RE 0x414C27/0x414FB3] 开场计数 99，但首次 WM_PAINT 即降为 5（≈0.5s 后出标题 FLC）
+constexpr int kBalloonIntro = 5;
 constexpr int kSfxBalloonNew = 19;      // [RE 0x41307B] 新气球
 constexpr int kSfxBalloonMiss = 20;     // [RE 0x414F14] 未命中
 constexpr int kSfxBalloonHit = 21;      // [RE 0x414E13] 命中
@@ -1198,16 +1211,26 @@ void balloonClick(BalloonCtx& ui, int mx, int my) {
 void drawBalloon(BalloonCtx& ui) {
     Surface& dst = ui.app->surface();
     blitElementOpaque(dst, ui.scene.frame(0), 0, 0);
+    // [RE 0x412FCE] 原版气球画布裁剪 rect y<387（sky 区）——气球从底部面板**后面**
+    //   升起进入视野；顶部完全出界清槽（0x41315B blitElementToCanvas 返回非 0）
     bool anyAlive = false;
     for (int i = 0; i < 16; ++i) {
         Balloon& b = ui.balloons[i];
         if (b.x == 0) {
             continue;
         }
-        if (blitElement(dst, ui.scene.frame((b.type & 0xF) + 1), b.x, b.y, false)) {
+        const UiFrameView& fr = ui.scene.frame((b.type & 0xF) + 1);
+        const int top = b.y - fr.offsetY;
+        if (top >= 387) {
+            anyAlive = true;  // 还在面板后面升起，不可见但存活
+            continue;
+        }
+        const int hh = top < 0 ? fr.height + top : (387 - top < fr.height ? 387 - top : fr.height);
+        if (hh > 0 &&
+            blitElementRegion(dst, fr, b.x, b.y, 0, top < 0 ? -top : 0, fr.width, hh, false)) {
             anyAlive = true;
-        } else {
-            b.x = 0;
+        } else if (top + fr.height <= 0) {
+            b.x = 0;  // 完全飞出顶部
         }
     }
     if (!anyAlive && ui.gamePhase == 1 && ui.state == 2) {
@@ -1217,7 +1240,7 @@ void drawBalloon(BalloonCtx& ui) {
     std::snprintf(buf, sizeof(buf), "%03d", ui.countdown);
     static const int kTimeX[3] = {49, 69, 94};
     drawHudNumber(dst, ui.digits, buf, kTimeX, 3);
-    blitElementOpaque(dst, ui.digits.frame(0), 114, 421);
+    blitElement(dst, ui.digits.frame(0), 114, 421, false);
     std::snprintf(buf, sizeof(buf), "%04d", ui.score);
     static const int kScoreX[4] = {529, 549, 569, 589};
     drawHudNumber(dst, ui.digits, buf, kScoreX, 4);

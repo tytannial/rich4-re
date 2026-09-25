@@ -244,6 +244,10 @@ python tools/re_map.py
   （特殊地点 16 类与帮助页逐项吻合，一次确定）。
 - **switch case 读跳转表**：`get_bytes` 读 jpt（如 `landingEvent` 的 `0x4197E9` 17 项）
   比反编译 switch 更直接，能精确定位每个 case 的代码地址与合并的 default。
+- **Hex-Rays 分支条件可能整体翻转**：`jle/jnz` 组合的 if/else 曾被解析反
+  （挖寶方向公式 0x412658：反编译 `dcx<=0→3-dr / dcx>0→(dr+7)&7`，反汇编实为
+  `dcx>0→3-dr / dcx<0→(dr+7)&7`，照抄导致**企鹅倒退走路**，2026-09-25 实机发现）。
+  凡"方向/对称/阈值比较"类分支，实现前用 `disasm` 核对原始跳转。
 - **指针表解码**：`off_XXXX`/`funcs_XXXX` 是指针数组，用 Python 读 exe 解码
   （VA→文件偏移 = `VA - 0x401A00`，BIG5 用 cp950；`get_string` 遇 BIG5 常失败）。
 - **IDA 串视图会截断 BIG5 格式串**：反编译显示 `"%s"` 的地址实际字节可能是
