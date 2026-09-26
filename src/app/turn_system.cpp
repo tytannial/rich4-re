@@ -2701,6 +2701,27 @@ static void checkLoanDue(Application& app, int p) {
     }
 }
 
+// [RE 0x40C78C] turnToAdjacentCell：向后转（朝向反向 + 重选来路格）；轉向卡(6)/魔法屋惩罚 7 复用。
+// 差异: 原版音效句柄 dword_4823F2 从未注册（静默）；NPC 分支（a1>=4 犯人表）P5。
+void turnToAdjacentCell(GameState& st, int p) {
+    Player& pl = st.players[p];
+    pl.dir = static_cast<uint8_t>((pl.dir + 4) & 7);
+    if (pl.cellEntId >= st.cellEnts.size()) {
+        return;
+    }
+    const CellEnt& ce = st.cellEnts[pl.cellEntId];
+    uint16_t cand[4];
+    int n = 0;
+    uint32_t mask = 0x40000000u;
+    for (int i = 0; i < 4; ++i, mask >>= 1) {
+        const uint16_t id = ce.exits[i];
+        if (id != 0 && (mask & ce.occMask) == 0 && id != pl.prevCellEnt) {
+            cand[n++] = id;
+        }
+    }
+    pl.prevCellEnt = n != 0 ? cand[std::rand() % n] : 0;
+}
+
 // [RE 0x41C84F] updatePlayerStates：回合开始状态倒计时（nextPlayer 切换玩家后调用）
 // 依据: 0x41C84F 反编译; 0x41C868 refreshBankStockShares / 0x41C86D sub_436A5A 贷款到期（alive 检查前）；
 //   BYTE0..BYTE3 编码 = 剩余天数（1..0x7F），bit7 = 结束标志：

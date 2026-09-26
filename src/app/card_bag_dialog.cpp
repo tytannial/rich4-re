@@ -4,6 +4,7 @@
 
 #include <cstdio>
 
+#include "game/app/card_effects.h"
 #include "game/app/confirm_dialog.h"
 #include "game/app/economy.h"
 #include "game/app/event_common.h"
@@ -151,9 +152,17 @@ int cardEffectBanish(Application& app) {
 // [RE 0x441CCD] g_cardEffectFuncs[id]() 分派。返回非 0 = 结束流程，0 = 重选
 int cardEffect(Application& app, int id) {
     switch (id) {
-        case 7:  return cardRebuildEffect(app);  // 改建卡 0x44309B
-        case 22: return cardEffectBanish(app);   // 送神符 0x444C45
-        case 23: return cardEffectInvite(app);   // 请神符 0x444E1A
+        case 1:  return cardEffectEqualRich(app);  // 均富卡 0x4420D8
+        case 2:  return cardEffectEqualPoor(app);  // 均貧卡 0x4421B4
+        case 3:  return cardEffectBuyLand(app);    // 購地卡 0x442325
+        case 6:  return cardEffectTurn(app);       // 轉向卡 0x442F4D
+        case 7:  return cardRebuildEffect(app);    // 改建卡 0x44309B
+        case 8:  return cardEffectAuction(app);    // 拍賣卡 0x443225
+        case 11: return cardEffectMonster(app);    // 怪獸卡 0x443917
+        case 12: return cardEffectDemolish(app);   // 拆除卡 0x443B0F
+        case 13: return cardEffectSteal(app);      // 搶奪卡 0x443E3D
+        case 22: return cardEffectBanish(app);     // 送神符 0x444C45
+        case 23: return cardEffectInvite(app);     // 请神符 0x444E1A
         default: return cardEffectStub(app, id);
     }
 }

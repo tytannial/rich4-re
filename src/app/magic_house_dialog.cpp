@@ -252,27 +252,6 @@ std::vector<int> magicSelectTargets(Application& app, int cond) {
 
 // ===== 惩罚执行（0x431CAA）=====
 
-// [RE 0x40C78C] turnToAdjacentCell：向后转（朝向反向 + 重选来路格）。
-// 差异: 原版音效句柄 dword_4823F2 从未注册（静默）；NPC 分支（a1>=4 犯人表）P5。
-void turnToAdjacentCell(GameState& st, int p) {
-    Player& pl = st.players[p];
-    pl.dir = static_cast<uint8_t>((pl.dir + 4) & 7);
-    if (pl.cellEntId >= st.cellEnts.size()) {
-        return;
-    }
-    const CellEnt& ce = st.cellEnts[pl.cellEntId];
-    uint16_t cand[4];
-    int n = 0;
-    uint32_t mask = 0x40000000u;
-    for (int i = 0; i < 4; ++i, mask >>= 1) {
-        const uint16_t id = ce.exits[i];
-        if (id != 0 && (mask & ce.occMask) == 0 && id != pl.prevCellEnt) {
-            cand[n++] = id;
-        }
-    }
-    pl.prevCellEnt = n != 0 ? cand[std::rand() % n] : 0;
-}
-
 // [RE 0x431CAA] applyMagicPenalty：对目标名单逐一执行惩罚 pen（entrant = 触发魔法屋玩家）
 void applyMagicPenalty(Application& app, int pen, const std::vector<int>& targets, int entrant) {
     GameState& st = app.gameState();

@@ -84,6 +84,10 @@ bool restoreTurnSnapshot(Application& app, int p);
 //   返回 bit0=成功、bit7=封顶（到达最高等级）；機器工人（id9）直接复用（定义见 turn_system.cpp）
 int angelUpgrade(Application& app, uint16_t objId);
 
+// [RE 0x40C78C] turnToAdjacentCell：向后转（朝向 +4、重选来路格）；
+//   轉向卡(6) 与魔法屋惩罚 7 复用（定义见 turn_system.cpp）；NPC 分支（a1>=4 犯人表）P5
+void turnToAdjacentCell(GameState& st, int p);
+
 // [RE 0x419A67] startRouteHighlight：收租联动高亮收集（同 owner 同名 estate / 连锁店）
 void startRouteHighlight(GameState& st, const Estate& es);
 
