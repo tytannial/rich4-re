@@ -47,7 +47,7 @@
 |-----|------|------|------|-------------|
 | 8 | LOAD | 读取游戏进度 | 🟡 | `loadDialog` ✅；`loadGameFromSlot` 仅恢复地图/模式/玩家数（P5 待补完整状态） |
 | 9 | SAVE | 储存游戏进度 | 🟡 | `saveDialog` + `save_data.cpp` 写入玩家/卡片/股票/物件表；读回未接入 |
-| 10 | 卡片 | 使用卡片（30 种，上限 10 张，额满舍弃） | 🟡 | 卡片栏 UI ✅（case8 `useCardDialog` 0x441BAA：15 槽网格/选卡/`showCardGet`/效果表分派）；**30 卡效果全实现 ✅ 2026-09-26**（档A/B/C，`card_effects.cpp`；被动 18復仇/19嫁祸/20免費/21免罪随惩罚·收费链；红黑卡选股 `stockPickDialog`；**AI/托管自动用卡链 ✅**（`ai_card.cpp` 0x41E69E + 目标表 `dword_475324`，回合开始 rand 用卡/道具）；见 `441baa-card-effects.md`）。数据结构/发卡计数已就绪 |
+| 10 | 卡片 | 使用卡片（30 种，上限 10 张，额满舍弃） | 🟡 | 卡片栏 UI ✅（case8 `useCardDialog` 0x441BAA：15 槽网格/选卡/`showCardGet`/效果表分派）；**30 卡效果全实现 ✅ 2026-09-26**（档A/B/C，`card_effects.cpp`；被动 18復仇/19嫁祸/20免費/21免罪随惩罚·收费链；红黑卡选股 `stockPickDialog`；**AI/托管自动用卡链 ✅**（`ai_card.cpp` 0x41E69E + 目标表 `dword_475324`，回合开始 rand 用卡/道具）；**角色台词 ✅**（`card_lines.cpp` 生成表 + `playCardLine`，含对方/受害者槽与语音前缀）；见 `441baa-card-effects.md`）。数据结构/发卡计数已就绪 |
 | 11 | 交易 | 公佈欄：玩家间公开交易房产/股票/卡片/道具 | ❌ | — |
 | 12 | 地圖 | 调整地图角度（旋转）、观察各角落 | ✅ | `mapDialog`（大地图）+ 小地图左右旋转箭头（`mapRotation`） |
 | 13 | 系統 | 速度/動畫過程/音樂/音效/自動存檔/重新遊戲/認輸投降/結束遊戲 | ✅ | `settings_dialog.cpp`（原始設定页 + 游戏内系统菜单页）；認輸投降为简化实现（出局+交棒，未接死神/魔法屋） |

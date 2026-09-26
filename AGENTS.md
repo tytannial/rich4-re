@@ -112,7 +112,7 @@ owner 停留 type4 逐级解锁选 1（`corp.sub` 门槛变暗）→ `researchIt
 - ~~任务 F 建造菜单~~ ✅ 2026-09-25 订正为**查詢面板**（资产/地产/股票清單 + 右侧面板 4 页签；
   工具条 case 6 `sub_424492`→`sub_423CF3`；旧称"建造队列"的 `g_miscTable336`/`sub_428475`
   实为股票交易委托队列，归交易系统待办）
-- 经济系统剩余：股市交易市场/挂单；**P4 卡片栏/道具栏 UI ✅（2026-09-24，工具条 case7/8 `useCardDialog` 0x441BAA / `itemBagDialog` 0x447D97，panel.mkf[11] 5×3 网格 + `cardRebuildEffect`/神符；改建/请神/送神卡可用，**卡片效果 30 卡全实现 ✅ 2026-09-26**（档A/B/C：`card_effects.cpp` + 被动 18復仇/19嫁祸/20免費/21免罪接入惩罚·收费链 `resolvePenaltyTarget`/`resolveFeePayer`；红黑卡选股 `stockPickDialog`；**AI/托管用卡链 ✅ `ai_card.cpp`**（0x41E69E 性格判定 + `dword_475324[31]` 目标表，`beginPlayerTurn` rand 触发）；逐卡见 `441baa-card-effects.md`）；13 道具效果全实现 ✅（2026-09-25，`item_effects.cpp`：气泡台词/目标选择模态/expireAssets/遥控骰子/娃娃槽8/时光机快照，逐道具见 `item-effects.md`）**
+- 经济系统剩余：股市交易市场/挂单；**P4 卡片栏/道具栏 UI ✅（2026-09-24，工具条 case7/8 `useCardDialog` 0x441BAA / `itemBagDialog` 0x447D97，panel.mkf[11] 5×3 网格 + `cardRebuildEffect`/神符；改建/请神/送神卡可用，**卡片效果 30 卡全实现 ✅ 2026-09-26**（档A/B/C：`card_effects.cpp` + 被动 18復仇/19嫁祸/20免費/21免罪接入惩罚·收费链 `resolvePenaltyTarget`/`resolveFeePayer`；红黑卡选股 `stockPickDialog`；**AI/托管用卡链 ✅ `ai_card.cpp`**（0x41E69E 性格判定 + `dword_475324[31]` 目标表，`beginPlayerTurn` rand 触发）；**角色台词 ✅**（`card_lines.cpp` 生成表 0x48123A + `playCardLine`）；逐卡见 `441baa-card-effects.md`）；13 道具效果全实现 ✅（2026-09-25，`item_effects.cpp`：气泡台词/目标选择模态/expireAssets/遥控骰子/娃娃槽8/时光机快照，逐道具见 `item-effects.md`）**
 - AI 决策：AI 买地 ✅（`sub_41D7D4`，2026-09-23）；`alive & 6` 电脑/托管自动行动
   （`landingEvent` 0x41982D 回合主流程）
 - 存档完整恢复：`loadGameFromSlot` 目前仅恢复地图/模式/玩家数
