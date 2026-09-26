@@ -135,7 +135,8 @@ void drawPlayerBar(Application& app) {
 //     0 資金 = 現金/存款/總資產（"$"+千分位）；1 地產 = 土地(estate+corp)/連鎖店/設施；
 //     2 股票 = 總市值(Σ股数×现价)/成本(Σ股数×均价)/經營權家数；3 其他 = 點券/貸款/保險期
 //     （"%d天"）+ 貸款剩餘天數 @ (500,146) font12
-// 差异: 事件槽回合（currentPlayer 4..7）NPC 面板分支待 P5；currentPlayer==8（機器娃娃虚拟槽）
+// 差异: 事件槽回合（currentPlayer 4..7）NPC 面板分支 ✅ 2026-09-26（帧 5 + kNpcNames + bailer 棋子）；
+//   currentPlayer==8（機器娃娃虚拟槽）
 //   沿用 workerPlayer（byte_498E70，0x416118）；脏区标志 dword_475110&0xC 忽略（逐帧重绘）
 void drawPlayerInfoPanel(Application& app) {
     GameState& state = app.gameState();

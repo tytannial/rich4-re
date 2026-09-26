@@ -16,7 +16,7 @@
 // 惩罚执行（applyMagicPenalty）：对目标名单逐一（≤4）：强制场景重绘（[RE 0x41906A]）→
 //   "玩家名\n\n惩罚名" showMessage → 效果（复用收租/神明/卡片/拍卖链）。
 // 差异: turnToAdjacentCell 原版音效句柄 dword_4823F2 从未注册（静默 quirk）；
-//   NPC（事件槽）转向分支 a1>=4 依赖犯人表 → P5 未建模。
+//   NPC（事件槽 4..7）不参与：惩罚目标选择过滤 p>=4（恶人不受魔法屋影响，见 498df0-event-slot-npc.md §5）。
 
 #include "game/app/magic_house_dialog.h"
 

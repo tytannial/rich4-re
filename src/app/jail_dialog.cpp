@@ -277,8 +277,7 @@ bool bailHandler(const SDL_Event* event, void* user) {
                 // [RE 0x43D7BF releaseJailNpc] 填犯人表 → 上路随机游走（行走/抓回链见 498df0）
                 releaseEventNpc(app, hit, true);
                 ui.npcReleased = true; // [RE 0x48C4C9]
-                RICH4_LOGI("jailBail: NPC %d released by %d, cost %d (event-slot walk TODO P5, "
-                           "RE 0x43CFDB)",
+                RICH4_LOGI("jailBail: NPC %d released by %d, cost %d (RE 0x43CFDB, walk 0x43D7BF)",
                            hit, st.currentPlayer, kBailCost[hit]);
             }
             return true;
@@ -373,9 +372,10 @@ void bailAi(Application& app) {
     showMessage(app, text, 1500);
     st.players[cur].points = static_cast<uint16_t>(pts - cost);
     if (target >= 4) {
-        RICH4_LOGI("bail AI: NPC %d released (P5 事件槽未建模, RE 0x43D580)", target);
-        // TODO(P5): releaseJailNpc 事件槽表 16B 记录 —— 行走/效果/回归链见 41982d-p2-events.md §1.7
+        // [RE 0x43D580] AI 保释 NPC：releaseJailNpc（事件槽记录 + 上路随机游走）
+        releaseEventNpc(app, target, true);
         st.jailFlags[target] = 0;
+        RICH4_LOGI("bail AI: NPC %d released by %d, cost %d (RE 0x43D580)", target, cur, cost);
         return;
     }
     // [RE 0x43D56E] 玩家释放：BYTE2 = 0x80 + 清标志（下回合走出恢复）
@@ -621,7 +621,7 @@ void doDischarge(HospCtx& ui) {
     } else {
         // [RE 0x43DC76..0x43DE4C] NPC 出院：panel[64] 帧 (i-4) @(420,450)（落点 = 实参 − offset）
         //   + 答谢消息（板帧1 @(200,200)，文本 dword_475BE2[i]）+ releaseHospitalNpc(i)
-        //   → byte_48C4F6=1（答谢播完退出）；事件槽记录/路面行走待 P5
+        //   → byte_48C4F6=1（答谢播完退出）
         ui.phase = kHNpcClean;
         const UiFrameView& nf = ui.npcMark->frame(i - 4 < ui.npcMark->frameCount() ? i - 4 : 0);
         ui.npcBgX = 420 - nf.offsetX;
@@ -635,8 +635,7 @@ void doDischarge(HospCtx& ui) {
         // [RE 0x43EE6E releaseHospitalNpc] 填犯人表 → 上路随机游走
         releaseEventNpc(app, i, false);
         ui.released = true;      // [RE 0x48C4F6]
-        RICH4_LOGI("hospital visit: NPC %d released by %d, cost %d (event-slot walk TODO P5, "
-                   "RE 0x43DE4C)",
+        RICH4_LOGI("hospital visit: NPC %d released by %d, cost %d (RE 0x43DE4C, walk 0x43EE6E)",
                    i, st.currentPlayer, kHospCost[i]);
     }
     st.players[st.currentPlayer].points =
@@ -829,9 +828,11 @@ void visitAi(Application& app) {
     showMessage(app, text, 1500);
     st.players[cur].points = static_cast<uint16_t>(pts - cost);
     if (target >= 4) {
-        RICH4_LOGI("hospital visit AI: NPC %d released (P5 事件槽未建模)", target);
-        // TODO(P5): releaseHospitalNpc 事件槽表 16B 记录 —— 行走/效果/回归链见 41982d-p2-events.md §1.7
+        // [RE 0x43EAA5] AI 办理 NPC 出院：releaseHospitalNpc（事件槽记录 + 上路随机游走）
+        releaseEventNpc(app, target, false);
         st.hospitalFlags[target] = 0;
+        RICH4_LOGI("hospital visit AI: NPC %d released by %d, cost %d (RE 0x43EAA5)", target, cur,
+                   cost);
         return;
     }
     st.players[target].stateFlags =

@@ -313,8 +313,9 @@ static void npcVillainPhase(Application& app, int p) {
 //   寶箱14（0x41B960 删+500点券）、路障16（0x41BAF9 路过删+强制停止）、
 //   地雷17（0x41BB0A 停留删+炸+住院3）、炸彈18（0x41BC2B 停留无挂件→挂身 life38）
 // 差异: 角色台词/语音 sub_44EF41（哭 off_4808A2/笑 off_48086A/路障等地雷台词 off_480D92..）
-//   与道具/卡片语音 sub_44F230 → [TODO P4]；事件槽 NPC（p≥4，小偷/強盜/流氓/間諜物件分支、
-//   word_498DEC 格）与工程车虚拟角色（p==8，拆除卡 0x446AFB 弹飞删除）→ [TODO P5/P4]；
+//   与道具/卡片语音 sub_44F230 → [TODO P4]；事件槽 NPC（p≥4：小偷/強盜/流氓/間諜物件分支 +
+//   LABEL_88 恶行 + 抓回）✅ 2026-09-26（见 498df0-event-slot-npc.md §2.6/§2.7/§2.8；
+//   工程车虚拟角色 p==8 拆除卡 0x446AFB 弹飞删除 → [TODO P4]）；
 //   乞丐施捨在原版为无条件检查（bankVisit 标志仅影响音效恢复）
 void onPlayerActionPhase(Application& app) {
     GameState& st = app.gameState();

@@ -510,7 +510,7 @@ bool teleportSourceValid(const GameState& st, int v40) {
 //   ② 房屋/设施目的地限**无主空地**；人物/神明/物品限**空道路或无主空地**（[HELP 94]
 //    "空道路/空地"；原版大菱形覆盖空地 → 不可选，[USER] 2026-09-26 放开空地：
 //    selectTargetDialog(allowEmptyLand) + resolveTeleportDest；有主/有建筑地块拒绝）
-// 差异（待补）: AI 目的地 sub_420EEE（P5）；事件槽玩家 4..7（P5）
+// 差异（待补）: AI 目的地 sub_420EEE（P5）；事件槽玩家 4..7 作为卡片/道具目标（P5，不影响四大恶人本体）
 int useItemTeleport(Application& app) {
     GameState& st = app.gameState();
     const int p = st.currentPlayer;
