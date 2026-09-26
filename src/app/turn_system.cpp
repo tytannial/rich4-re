@@ -408,16 +408,22 @@ void loadWalkResources(GameState& st, int p) {
         return;
     }
     if (p >= 4 && p < 8) {
-        // [RE 0x40B93B 事件槽 NPC] 行走资源 = data.mkf[4*p+364..367]（非角色 charIndex 系列）
+        // [RE 0x40B93B 事件槽 NPC] 行走资源 = data.mkf[4*p+364..367]（非角色 charIndex 系列）。
+        //   drawPiece/动画帧按 slot=2*state+group 取图（state 0停/1移动/2掷骰/3收租）：
+        //   走路组(group0) 用 travel 系 slot{0站,2走,4,6}，渡水组(group1) 用渡水系 slot{1,3走,5,7}；
+        //   NPC 无多载具，停格/收租态(slot4/6/5/7)复用站立(364)或渡水(366)静态帧——
+        //   否则每回合末进 state3 取未加载槽 → 棋子消失数帧=闪烁（2026-09-26 修）。
         const int i = p - 4;
         if (st.slotFlag5[i]) {
-            // 特殊/恶行动画组：slot0=4p+364, slot2=4p+367，动画组 5
+            // 特殊/恶行动画组：停格 364，移动 367
             if ((st.playerActionFlags[p] & 0x0F) != 5) {
                 releaseWalkResources(st, p, 0);
                 st.playerActionFlags[p] =
                     static_cast<uint8_t>((st.playerActionFlags[p] & 0xF0) | 5);
                 loadWalkRes(st, p, 0, static_cast<size_t>(4 * p + 364));
                 loadWalkRes(st, p, 2, static_cast<size_t>(4 * p + 367));
+                loadWalkRes(st, p, 4, static_cast<size_t>(4 * p + 364));
+                loadWalkRes(st, p, 6, static_cast<size_t>(4 * p + 364));
             }
             st.playerMoveGroup[p] = 0;
             if (st.playerMoveFrame[p]) {
@@ -426,35 +432,42 @@ void loadWalkResources(GameState& st, int p) {
             st.playerMoveFrame[p] = 0;
             return;
         }
-        const uint16_t cell = st.players[p].cellEntId;  // 真源=moveOneStep 推进的当前格（非释放时的 slotCell）
+        const uint16_t cell = st.players[p].cellEntId;  // 真源=moveOneStep 推进的当前格
         const bool road = cell > 0 && cell < st.cellEnts.size() &&
                           (st.cellEnts[cell].occMask & 0x80000000u) != 0;
         if (!road) {
-            // 普通路（cellEnt+39 最高位=0）→ 走路组 slot0=4p+364 / slot2=4p+365
+            // 普通走路组（cellEnt+39 最高位=0）：站0/6=364，走2=365，音效11
             if ((st.playerActionFlags[p] & 0x0F) != 1) {
                 releaseWalkResources(st, p, 0);
                 st.playerActionFlags[p] =
                     static_cast<uint8_t>((st.playerActionFlags[p] & 0xF0) | 1);
                 loadWalkRes(st, p, 0, static_cast<size_t>(4 * p + 364));
                 loadWalkRes(st, p, 2, static_cast<size_t>(4 * p + 365));
+                loadWalkRes(st, p, 4, static_cast<size_t>(4 * p + 364));
+                loadWalkRes(st, p, 6, static_cast<size_t>(4 * p + 364));
             }
             if (st.playerMoveGroup[p] == 1) {
                 st.playerMoveFrame[p] = 0;
             }
             st.playerMoveGroup[p] = 0;
+            st.moveSoundIndex = 11;  // [RE 0x40B93B NPC 普通路 dword_4749D4=11]
             return;
         }
-        // 走进状态（0x10）→ slot1=4p+366
+        // 渡水/走进组（bit31=1）：slot{1,3走,5,7}=366，音效15（坐船）
         if ((st.playerActionFlags[p] & 0x30) != 0x10) {
             releaseWalkResources(st, p, 1);
             st.playerActionFlags[p] =
                 static_cast<uint8_t>((st.playerActionFlags[p] & 0xCF) | 0x10);
+            loadWalkRes(st, p, 1, static_cast<size_t>(4 * p + 366));
             loadWalkRes(st, p, 3, static_cast<size_t>(4 * p + 366));
+            loadWalkRes(st, p, 5, static_cast<size_t>(4 * p + 366));
+            loadWalkRes(st, p, 7, static_cast<size_t>(4 * p + 366));
         }
         if (st.playerMoveGroup[p] == 0) {
             st.playerMoveFrame[p] = 0;
         }
         st.playerMoveGroup[p] = 1;
+        st.moveSoundIndex = 15;  // [RE 0x40B93B NPC 渡水 dword_4749D4=15]
         return;
     }
     if (p >= 8) {

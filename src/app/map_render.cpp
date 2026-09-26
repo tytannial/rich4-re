@@ -279,6 +279,16 @@ void renderMap(Application& app, int centerX, int centerY) {
         const UiImage* res = nullptr;
         if (slot >= 0 && slot < 13 && state.walkRes[j][slot].frameCount() > 0) {
             res = &state.walkRes[j][slot];
+        } else if (j >= 4 && j < 8) {
+            // 事件槽 NPC：目标 state×group 槽未载时回退同 group 的移动槽(slot2走/3渡水)再
+            //   站立槽(slot0/1)；pieceAnim[4..7] 从不加载，不可作 NPC 回退 → 否则棋子消失闪
+            const int mg = state.playerMoveGroup[j];
+            const int fbMove = 2 + mg;
+            if (state.walkRes[j][fbMove].frameCount() > 0) {
+                res = &state.walkRes[j][fbMove];
+            } else if (state.walkRes[j][mg].frameCount() > 0) {
+                res = &state.walkRes[j][mg];
+            }
         } else if (state.pieceAnim[j].frameCount() > 0) {
             res = &state.pieceAnim[j];
         }
