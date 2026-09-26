@@ -261,6 +261,12 @@ newsEvent:
   旧文档误读 8000；重写 showMessage 不支持负值左移，故传正 1500）。
   ③ 扣钱类新闻（三税/罚款）**不走**神明调整：原版 `sub_41D2C6` 纯转账、`newsEvt11/12/13/30-35`
   调用链无 `sub_41D709`；重写 `transferMoney` 同样无神明逻辑（神明只作用于过路费/设施收费）。
+  ④ **金额入账后右侧资金面板不刷新（2026-09-26）**：原版 `transferMoney 0x41D2C6` /
+  `addMoney 0x41D3F4` 尾对当前玩家调 `refreshPlayerPanelFor 0x41D433`（`g_modalDepth<=1`
+  立即重绘面板），且各效果函数尾部普遍有 `refreshGameUi`；重写只等模态退出后主循环重绘，
+  消息/动画叠加期间停留在旧值。修复：① `game_panel.cpp` 导出 `refreshPlayerPanelFor`
+  （depth 守卫+临时切 currentPlayer）；② 转账/加钱函数尾调用；③ `newsHandler`/`fateHandler`
+  相位1 效果执行后补 `renderGameFrame + renderFrame`。
 
 ## 8. 待深入清单
 

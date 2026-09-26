@@ -619,6 +619,26 @@ bool stockIsHoliday(const GameState& st) {
     return isSpecialDate(st, st.gameDate);
 }
 
+// [RE 0x41D433] refreshPlayerPanelFor：资金变化后立即重绘指定玩家面板
+// 依据: 0x41D433 反编译; `a1 <= 7 && g_modalDepth <= 1` 才执行——事件/消息模态内
+//   （depth>=2）跳过，等相位1/退出后的显式重绘（防把场景画到事件面板上）；
+//   临时切 g_currentPlayer 到目标玩家 → layout 2 用玩家条（0x4166F8）/
+//   其他布局用完整面板（0x415F69）→ 还原。transferMoney/addMoney 尾调用。
+void refreshPlayerPanelFor(Application& app, int player) {
+    GameState& st = app.gameState();
+    if (player < 0 || player > 7 || app.events().depth() > 1) {
+        return;
+    }
+    const int saved = st.currentPlayer;
+    st.currentPlayer = player;
+    if ((st.settings[5] & 3) == 2) {
+        drawPlayerBar(app);
+    } else {
+        drawPlayerInfoPanel(app);
+    }
+    st.currentPlayer = saved;
+}
+
 void renderGamePanel(Application& app) {
     // [RE 0x417E26] WM_PAINT 分支：顶部工具条 + 按 byte_49715D 布局
     const int layout = app.gameState().settings[5] & 3;

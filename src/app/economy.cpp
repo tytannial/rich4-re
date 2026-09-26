@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <vector>
 
+#include "game/app/game_panel.h"
 #include "game/app/map_objects.h"
 #include "game/app/turn_system.h"
 #include "game/application.h"
@@ -184,6 +185,11 @@ void transferMoney(Application& app, int from, int to, int32_t amount, int flags
     }
     RICH4_LOGI("transferMoney: %d -> %d amount %d paid %d flags %d (RE 0x41D2C6)", from, to, amount,
                paid, flags);
+    // [RE 0x41D2C6 尾] 付款方=当前玩家（0..8）且存活 → 立即重绘玩家面板
+    //   （0x41D433；内部 modalDepth<=1 守卫，事件模态内跳过）
+    if (from == st.currentPlayer && from >= 0 && from < 9 && st.players[from].alive != 0) {
+        refreshPlayerPanelFor(app, from);
+    }
 }
 
 // [RE 0x40DF69] addPlayerDebt：欠款矩阵累加 debt[creditor][debtor] += amount（clamp ≥0）

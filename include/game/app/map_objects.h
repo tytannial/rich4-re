@@ -50,6 +50,7 @@ int confiscateItems(Application& app, int player);
 int confiscateCards(Application& app, int player);
 
 // [RE 0x41D3F4] addMoney：入账（cash=true 现金否则银行）+ 本月意外之财统计
+// 尾：player==当前玩家 → refreshPlayerPanelFor（0x41D433，无模态时立即重绘面板）
 void addMoney(Application& app, int player, int32_t amount, bool cash);
 
 // [RE 0x40E2A2] showGodNarration：神明旁白（屏幕下方 28px 白字黑影，2400ms）

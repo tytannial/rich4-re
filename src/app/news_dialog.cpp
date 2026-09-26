@@ -1328,6 +1328,10 @@ bool newsHandler(const SDL_Event* event, void* user) {
             renderGameFrame(app);
             app.renderFrame();
             kNewsFuncs[ctx.eventIdx](ctx, 1); // [RE 0x44B875] funcs[v5](1)
+            // [RE 各效果函数尾部 refreshGameUi(0,0,1)] 数值/状态变化后主动重绘：
+            //   金额/税款/罚款入账后立即反映到右侧资金面板（实机反馈 2026-09-26）
+            renderGameFrame(app);
+            app.renderFrame();
             app.events().requestExit(0);
         }
         return true;

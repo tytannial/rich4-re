@@ -795,6 +795,10 @@ bool fateHandler(const SDL_Event* event, void* user) {
             renderGameFrame(app);
             app.renderFrame();
             fateApplyPhase1(ctx); // [RE funcs[idx](1)]
+            // [RE 各效果函数尾部 refreshGameUi(0,0,1)] 效果（转账/状态/保险消息）后主动重绘：
+            //   否则 800ms 尾部期间场景/右侧资金面板停留在变化前（实机反馈 2026-09-26）
+            renderGameFrame(app);
+            app.renderFrame();
         } else if (ctx.phase1Done && elapsed >= kFateShowMs + kFateTailMs) {
             app.events().requestExit(0);
         }

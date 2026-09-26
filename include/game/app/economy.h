@@ -17,6 +17,7 @@ int bitScanPlayer(uint32_t mask);
 // from 付给 to：from 0..7 玩家（flags&4 从银行扣，否则从现金扣，不足由另一账户补，
 // 仍不足 → 实付额裁剪 + 淘汰）；to -1 = 银行，0..7 = 玩家（flags&1 进现金），
 // >100 = 特殊点（索引 to-101）
+// 尾：from==当前玩家且存活 → refreshPlayerPanelFor（0x41D433，无模态时立即重绘面板）
 void transferMoney(Application& app, int from, int to, int32_t amount, int flags);
 
 // [RE 0x40DF69] addPlayerDebt（定义见 src/app/economy.cpp）

@@ -311,6 +311,13 @@ passOnCardDialog(p)：
   `sub_40C912` 显示 `(BYTE2&0x7F)+1`。即从触发回合数起第 X+1 次回合开始恢复行动
   （入狱当回合余下时间计入）。重写逐行一致，debug 直调补跳当回合同语义。
   见 `turn_system.cpp` jailPlayer 注释；**不做行为修改**。
+- **扣钱/加钱后右侧资金面板不刷新（2026-09-26）**：原版命运各效果函数 phase1 普遍调用
+  `refreshGameUi`（罚款 0x44CD99 甚至开头 `refreshGameUi(0,0,3)`），且 `transferMoney
+  0x41D2C6` / `addMoney 0x41D3F4` 尾对当前玩家调 `refreshPlayerPanelFor 0x41D433`
+  （`g_modalDepth<=1` 立即重绘面板）。重写缺少这两层刷新，相位1 转账后 800ms 尾部与
+  保险消息期间停留在旧值。修复：① `game_panel.cpp` 导出 `refreshPlayerPanelFor`
+  （depth 守卫 + 临时切 currentPlayer）；② 转账/加钱函数尾调用；
+  ③ `fateHandler` 相位1 效果执行后补 `renderGameFrame + renderFrame`（`newsHandler` 同步）。
 
 ## 8. 验收清单
 

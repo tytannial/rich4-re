@@ -10,6 +10,7 @@
 #include "game/app/economy.h"
 #include "game/app/event_stack.h"
 #include "game/app/game_loop.h"
+#include "game/app/game_panel.h"
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
 #include "game/app/message_dialog.h"
@@ -925,6 +926,10 @@ void addMoney(Application& app, int player, int32_t amount, bool cash) {
         pl.bank += amount;
     }
     pl.monthSettleB += amount;  // [RE 0x44D418 dword_496BC8]
+    // [RE 0x41D3F4 尾] 收款者为当前玩家 → 立即重绘玩家面板（0x41D433；无模态时）
+    if (player == st.currentPlayer) {
+        refreshPlayerPanelFor(app, player);
+    }
 }
 
 // [RE 0x40E669] flyObjectSprite：物件精灵 A→B 直线插值动画（世界坐标，阻塞 24ms/帧）
