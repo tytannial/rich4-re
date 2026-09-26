@@ -200,6 +200,33 @@ struct EvtCell {
     uint16_t sprite = 0;        // +26 图块索引
 };
 
+// [RE 0x498E28] g_miscTable80 事件槽记录（5 槽 × 16 字节，槽索引 i = p-4；i=0..3 事件槽玩家 4..7，
+//   i=4 機器娃娃槽 8）。IDA 变量名逐字段对齐：
+//     +0 word_498E28 pixelX / +2 word_498E2A pixelY / +4 word_498E2C cell / +6 word_498E2E prevCell
+//     +8 byte_498E30 bailer / +9 byte_498E31 dir
+//     +A byte_498E32 **busy 行动状态**（0=自由游走 1=監獄 2=醫院；槽8=3）
+//        注意：绝对视角的 `byte_498DF2[16*p]`（p>=4）即本字段（0x498DF0+16*4+2 == 0x498E32），
+//        旧文档误标为"独立槽占用/轮转位"——原版无第二字段（无任何写入点）。
+//     +B byte_498E33 status（1=監獄 2=醫院；bit7=抓回闩锁，release 起点匹配即置位）
+//     +C byte_498E34 timerA / +D byte_498E35 timerB（slotFlag5）/ +E byte_498E36 timerC /
+//        +F byte_498E37 timerD：回合开始递减（1→0x80，下回合清 0）；timerA 归零重置动画。
+//   开局关押 = newGameInit memcpy 自 unk_47ECEC（槽4/5 busy=1、槽6/7 busy=2、槽8 busy=3）。
+struct NpcSlot80 {
+    uint16_t pixelX = 0;
+    uint16_t pixelY = 0;
+    uint16_t cell = 0;
+    uint16_t prevCell = 0;
+    uint8_t bailer = 0;
+    uint8_t dir = 0;
+    uint8_t busy = 0;
+    uint8_t status = 0;
+    int8_t timerA = 0;
+    int8_t timerB = 0;
+    int8_t timerC = 0;
+    int8_t timerD = 0;
+};
+static_assert(sizeof(NpcSlot80) == 16, "NpcSlot80 必须与 g_miscTable80 记录一致（16 字节）");
+
 // [RE 0x44808A 保存 / 0x448544 恢复] 時光機回合快照（原版 g_playerMapBlocks 2502 dword/玩家 +
 //   g_playerMapDatCopies 地图数据副本）。保存点 = startPlayerMove 掷骰前（人类玩家）；
 //   恢复 = 时光机全状态回滚。差异: 原版 news/fate 顺序表与位置未建模（P2 后期），跳过
@@ -207,7 +234,7 @@ struct TurnSnapshot {
     bool valid = false;
     uint32_t gameDate = 0;               // dword_497160
     Player players[4];                   // 原版 g_players 416B（4×104）
-    uint32_t miscTable80[10][2] = {};    // g_miscTable80 80B
+    NpcSlot80 npcSlots[5] = {};          // g_miscTable80 80B
     uint8_t cellTable[46 * 24] = {};     // g_cellTable 1104B
     uint8_t cardState60[60] = {};
     uint8_t itemStock[60] = {};
@@ -511,7 +538,8 @@ struct GameState {
     //   投注 sub_4315CC/42F7FC 写、开奖 431712 读、破产 sub_40CD87 清该玩家号）
     uint8_t lotteryNumbers[36] = {};
 
-    uint32_t miscTable80[10][2] = {}; // [RE 0x498E28] g_miscTable80
+    // [RE 0x498E28] g_miscTable80 事件槽记录（槽 4..8 各 16 字节，见 NpcSlot80）
+    NpcSlot80 npcSlots[5] = {};
     // [RE 0x497320] byte_497320 **礼物卡池**（8 种可赠卡库存；drawGiftCard 0x445ADA 展开随机抽；
     //   死神没收卡片 0x445B3F 归还；kMisc8Init 初值。其中 [4]/[5]（0x497324/25）兼作
     //   机车/汽车回收槽：damagePlayer 0x40CD3B/43 载具损毁 ++、newGameInit 初始载具 --、
@@ -654,34 +682,7 @@ struct GameState {
     uint16_t workerFromCell = 0;     // word_498E6C
     uint16_t workerPrevCell = 0;     // word_498E6E
 
-    // 事件槽（玩家 4..8 使用；16 字节步进）
-    // [RE 0x498DF2] byte_498DF2 槽占用（sub_418EBD 轮换检查）
-    uint8_t slotBusy2[8] = {};
-    // [RE 0x498DF5] byte_498DF5 槽标志（sub_40B93B）
-    uint8_t slotFlag5[8] = {};
-    // [RE 0x498DF6] byte_498DF6 槽标志（sub_40DD1F）
-    uint8_t slotFlag6[8] = {};
-    // [RE 0x498DF7] byte_498DF7 槽标志（sub_40DD1F）
-    uint8_t slotFlag7[8] = {};
-    // [RE 0x498E31] byte_498E31 槽朝向
-    uint8_t slotDir[8] = {};
-    // [RE 0x498E32] byte_498E32 槽占用（1=坐牢/在押，本回合不动；0=自由游走）
-    uint8_t slotBusy[8] = {};
-    // [RE 0x498DF3 / 0x498E33] byte_498DF3 事件槽状态：1=監獄 2=醫院，bit7=抓回触发闩锁
-    uint8_t slotStatus[8] = {};
-    // [RE 0x498DF0 / 0x498E30] byte_498DF0 保释人玩家号（0..3；恶行收益对象）
-    uint8_t slotBailer[8] = {};
-    // [RE 0x498E34/35/36/37] 槽状态倒计时（负数 = 完成）
-    int8_t slotTimerA[8] = {};
-    int8_t slotTimerB[8] = {};
-    int8_t slotTimerC[8] = {};
-    int8_t slotTimerD[8] = {};
-    // [RE 0x498E2C/0x498E2E] 槽 cellEnt / 上一步 cellEnt
-    uint16_t slotCell[8] = {};
-    uint16_t slotPrevCell[8] = {};
-    // [RE 0x498E28/0x498E2A] g_miscTable80 / word_498E2A 槽像素坐标
-    uint16_t slotPixelX[8] = {};
-    uint16_t slotPixelY[8] = {};
+    // 事件槽（玩家 4..8）专用状态见上方 GameState::npcSlots（[RE 0x498E28] g_miscTable80）。
 
     // [RE 0x498EB4] dword_498EB4 行走动画资源（每玩家 13 槽：EB4[13n+2*state+group]）
     UiImage walkRes[9][13];

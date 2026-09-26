@@ -148,8 +148,23 @@ void drawPlayerInfoPanel(Application& app) {
     if (v1 == 8) {
         v1 = static_cast<int>(state.workerPlayer);
     }
+    // [RE 0x415FF1 else 分支] 事件槽 NPC 回合面板（cur>=playerCount）：背景帧 5
+    //   （dword_48BE0C+72 = 12+12*5）+ NPC 名 dword_47ED5A[cur] @(582,40) 22 号 +
+    //   bailer 棋子帧 2 @(524,64)；无页签内容/色条（与玩家分支不同）
+    if (v1 >= state.playerCount && v1 >= 4 && v1 < 8) {
+        const int bi = state.npcSlots[v1 - 4].bailer;
+        if (state.panelFrame0.frameCount() > 5) {
+            blitElementOpaque(dst, state.panelFrame0.frame(5), 440, 0);
+        }
+        app.text().setFont(22, kTextDark, 0, 2, 0);
+        app.text().drawText(dst, kNpcNames[v1], 582, 40, 2);
+        if (bi < 4 && state.pieceSprites[bi].frameCount() > 2) {
+            blitElement(dst, state.pieceSprites[bi].frame(2), 524, 64, false);
+        }
+        return;
+    }
     if (v1 < 0 || v1 >= state.playerCount) {
-        return; // 事件槽分支（帧 6 + NPC 名 + 棋子外观）待 P5
+        return;
     }
     const Player& p = state.players[v1];
     const int tab = p.panelTab & 3;
@@ -346,6 +361,14 @@ void drawMiniMap(Application& app) {
         if (i == state.currentPlayer) {
             markX = v2;
             markY = v3;
+        }
+    }
+    // [RE 0x416E6D] 事件槽 4..8：不画标记；仅自由（busy==0，原版 !byte_498DF2）且为当前玩家时
+    //   用 word_498DE8/DEA（槽 pixelX/Y）记录位置供白框
+    for (int j = 4; j < 8; ++j) {
+        if (state.npcSlots[j - 4].busy == 0 && j == state.currentPlayer) {
+            markX = ((5696 * static_cast<int>(state.npcSlots[j - 4].pixelX)) >> 16) + 440;
+            markY = ((5696 * static_cast<int>(state.npcSlots[j - 4].pixelY)) >> 16) + v1;
         }
     }
     if (markX && markY) {

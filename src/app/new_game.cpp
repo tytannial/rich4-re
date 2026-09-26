@@ -7,6 +7,7 @@
 #include "game/app/new_game_tables.h"
 #include "game/app/save_data.h"
 #include "game/app/stock_system.h"
+#include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/log.h"
 #include "game/render/raw_bitmap.h"
@@ -269,8 +270,10 @@ bool newGameInit(Application& app, bool mode1) {
         state.players[k].alive = 1;
     }
 
-    // [RE 0x47ECEC] g_miscTable80 = unk_47ECEC（10 x 2）
-    std::memcpy(state.miscTable80, kMiscTable80, sizeof(state.miscTable80));
+    // [RE 0x47ECEC] g_miscTable80 = unk_47ECEC：开局关押初值（槽4/5 busy=1 監獄、槽6/7 busy=2 醫院、
+    //   槽8 busy=3 機器娃娃）；其余字段全 0（坐标/格 0 → 未释放前渲染跳过）。
+    //   [RE 0x498DF2 == 0x498E32] busy 即旧文档误称的"DF2 槽占用"（原版无第二字段）。
+    std::memcpy(state.npcSlots, kMiscTable80, sizeof(state.npcSlots));
     std::memset(state.misc8B, 0, sizeof(state.misc8B));
 
     // [RE 0x40732D/0x40733E] memset(g_jailFlags, 0, 8) / memset(g_hospitalFlags, 0, 8)
@@ -279,20 +282,12 @@ bool newGameInit(Application& app, bool mode1) {
     // [RE 0x40734F..0x407363] 开局默认在押事件槽 NPC（4..7）：
     //   byte_496B34/B35 = g_jailFlags[4]/[5] = 1（小偷/強盜，監獄）
     //   byte_496B66/B67 = g_hospitalFlags[6]/[7] = 1（流氓/間諜，醫院）
-    // TODO(P5): 保释后地面行走/恶人效果/回归監獄·醫院链见 41982d-p2-events.md §1.7
+    //   关押态由上面 npcSlots[0..3].busy = 1/1/2/2 表示（nextPlayer 跳过 busy!=0 的槽、
+    //   渲染不绘制），释放见 releaseEventNpc 0x43D7BF/0x43EE6E。见 498df0-event-slot-npc.md。
     state.jailFlags[4] = 1;
     state.jailFlags[5] = 1;
     state.hospitalFlags[6] = 1;
     state.hospitalFlags[7] = 1;
-    // [RE 0x40734F] 四大恶人事件槽开局"关押"：不占回合轮转（slotBusy2=1，nextPlayer 跳过）
-    //   + 坐牢不动（slotBusy=1）；status 1=監獄(4/5 小偷/強盜) 2=醫院(6/7 流氓/間諜)。
-    //   释放见 releaseEventNpc 0x43D7BF/0x43EE6E。见 498df0-event-slot-npc.md §1.3。
-    for (int i = 0; i < 4; ++i) {
-        state.slotBusy2[i] = 1;
-        state.slotBusy[i] = 1;
-        state.slotStatus[i] = static_cast<uint8_t>(i < 2 ? 1 : 2);
-        state.slotBailer[i] = 0xFF;  // 无保释人
-    }
 
     // 配置回写
     state.cfgTravel = state.newGameConfig.travelMode;
@@ -579,6 +574,17 @@ bool loadGameFromSlot(Application& app, int slot) {
     showLoading(app);
     if (!loadMap(app)) {
         return false;
+    }
+    // [PORT] 事件槽 NPC 状态恢复（本期范围 = miscTable80/jail/hospitalFlags；完整读档仍 P5 TODO）：
+    //   偏移见 save_data.h SaveLayout（与 saveGameToSlot 写序对应）→ 重建 players[4..7] 镜像/占用位
+    if (state.saveData.size() >= SaveLayout::kNpcBlockEnd) {
+        std::memcpy(state.npcSlots, state.saveData.data() + SaveLayout::kNpcSlots,
+                    sizeof(state.npcSlots));
+        std::memcpy(state.jailFlags, state.saveData.data() + SaveLayout::kJailFlags, 8);
+        std::memcpy(state.hospitalFlags, state.saveData.data() + SaveLayout::kHospitalFlags, 8);
+        rebuildEventNpcFromSlots(state);
+        RICH4_LOGI("load game: NPC slots restored (busy %u/%u/%u/%u)", state.npcSlots[0].busy,
+                   state.npcSlots[1].busy, state.npcSlots[2].busy, state.npcSlots[3].busy);
     }
     // [PORT] 存档未保存股票表/持股/均价 → 用 kStockInit 重建 + 股票→specPt 映射
     //   （loadMap 内的映射此时 stocks 全 0 无法反查；完整存档恢复待做）

@@ -160,7 +160,7 @@ bool saveGameToSlot(const std::string& gameDir, int slot, const GameState& state
         wbuf(buf, sizeof(buf));
     }
     w32(static_cast<uint32_t>(state.humanCount));
-    wbuf(state.miscTable80, 80);                       // g_miscTable80 16x5
+    wbuf(state.npcSlots, 80);                          // g_miscTable80 16x5（事件槽 4..8 记录）
     wbuf(state.cellTable.data(), 24 * 46);             // g_cellTable
     wbuf(state.cardState60, 60);                       // g_cardState60
     wbuf(state.itemStock, 60);                         // byte_49915C g_playerCards 道具库存
@@ -191,8 +191,8 @@ bool saveGameToSlot(const std::string& gameDir, int slot, const GameState& state
     }
     w32(static_cast<uint32_t>(state.publicFund));      // dword_499080 公库/乐透奖金池
     wbuf(state.lotteryNumbers, 36);                    // g_miscTable36A 乐透号码归属
-    wbuf(state.misc8A, 8);                             // g_misc8A
-    wbuf(state.misc8B, 8);                             // g_misc8B
+    wbuf(state.jailFlags, 8);                          // g_jailFlags 0x496B30
+    wbuf(state.hospitalFlags, 8);                      // g_hospitalFlags 0x496B60
     w32(static_cast<uint32_t>(state.newsPos));         // dword_4990E0 g_newsPos
     w32(static_cast<uint32_t>(state.fatePos));         // dword_4990B4 g_fatePos
     wbuf(state.newsOrder, 36);                         // g_newsOrder 0x499090

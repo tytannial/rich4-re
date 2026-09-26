@@ -117,6 +117,190 @@ int facingFromDelta(int dx, int dy) {
     return kDirTable[idx];
 }
 
+// [RE 0x41B42D LABEL_88 0x41C17A..0x41C7A5] 事件槽 NPC 恶行（cur>=4；busy==0 且 timerB==0 才执行）
+// 依据: 0x41B42D 反编译（LABEL_88 + LABEL_102 抢银行 + cur6/7 停留段）:
+//   cur 4/5（小偷/強盜，路过/停留均触发）：presentMask 排除 bailer 后取最低位且存活玩家 —
+//     小偷 = 偷其一半点券（points>>1）给 bailer（消息 0x463AE4「偷取%s\n\n%d點點券！」）；
+//     強盜 = discardRandomCard 抢卡 → giveCardToBag(bailer)（消息 0x463AF7「奪取%s%s！」）；
+//   随后強盜且落地格 cellType==14（銀行）→ 遍历玩家 (int)(bank×0.2) transferMoney(→bailer, 5)
+//     （消息 0x463B02）。两段步骤中 stepsRemaining!=0 时恢复循环移动音（0x41C328/0x41C43A）。
+//   cur 6/7（流氓/間諜，**仅停留** steps==0）：refreshGameUi → cellEnt+32 special 分类：
+//     (2000,4000) estate / (4000,6000) corp / (6000,8000) specPt；owner 非 bailer 时 —
+//     流氓(6)：estate = 同 owner 同路段名全部 (+28 priceAdd) 求和 ×moneyMul（0x463B21「勒索%s\n\n%d元保護費！」）；
+//              corp = (+34 buildPrice) ×moneyMul；
+//     間諜(7)：estate = (+44 price 最近租金，0 跳过)；corp = (+48 lastFee，0 跳过)；
+//              specPt = (+40 fund，0 跳过，转账至 100+idx 资金池)（0x463B36/0x463B49）。
+//     转账均 transferMoney(owner-1 → bailer, 金额, 0)。见 498df0-event-slot-npc.md §2.7。
+static void npcVillainPhase(Application& app, int p) {
+    GameState& st = app.gameState();
+    const int i = p - 4;
+    const NpcSlot80& slot = st.npcSlots[i];
+    if (slot.busy != 0 || slot.timerB != 0) {
+        return; // [RE 0x41C187] DF2(busy)!=0 || DF5(timerB)!=0 → 跳过恶行
+    }
+    const uint16_t cell = st.players[p].cellEntId;
+    if (cell == 0 || cell >= st.cellEnts.size()) {
+        return;
+    }
+    const CellEnt& ce = st.cellEnts[cell];
+    const uint8_t cellType = static_cast<uint8_t>(ce.occMask & 0xFF);
+    const uint8_t presentMask = static_cast<uint8_t>((ce.occMask >> 8) & 0xFF);
+    const int bailer = slot.bailer;
+    if (bailer >= 4) {
+        return;
+    }
+    char text[256];
+
+    if (p == 4 || p == 5) {
+        // [RE 0x41C19C] 同格非 bailer 玩家（掩码最低位；死者跳过，不尝试下一位）
+        const uint32_t mask = static_cast<uint32_t>(~(1u << bailer)) & presentMask;
+        if (mask != 0) {
+            const int victim = bitScanPlayer(mask); // [RE 0x41C1C9 sub_40D293]
+            if (victim >= 0 && victim < 4 && st.players[victim].alive != 0) {
+                if (p == 4) {
+                    // [RE 0x41C210] 小偷：偷一半点券（>>1，0 则跳过）
+                    const int half = st.players[victim].points >> 1;
+                    if (half != 0) {
+                        app.audio().stopEffectSlot(st.moveSoundIndex);
+                        std::snprintf(text, sizeof(text), "偷取%s\n\n%d點點券！",
+                                      playerNameNoSpace(st, victim).c_str(), half);
+                        showMessage(app, text, 1000);
+                        st.players[victim].points =
+                            static_cast<uint16_t>(st.players[victim].points - half);
+                        st.players[bailer].points =
+                            static_cast<uint16_t>(st.players[bailer].points + half);
+                        if (st.remainingSteps != 0) { // [RE 0x41C328] 移动中恢复循环音
+                            app.audio().playEffectLooping(st.moveSoundIndex);
+                        }
+                    }
+                } else {
+                    // [RE 0x41C299] 強盜：discardRandomCard → 给 bailer（0 跳过）
+                    const int card = discardRandomCard(app, victim);
+                    if (card != 0) {
+                        app.audio().stopEffectSlot(st.moveSoundIndex);
+                        std::snprintf(text, sizeof(text), "奪取%s%s！",
+                                      playerNameNoSpace(st, victim).c_str(), kCardNames[card]);
+                        showMessage(app, text, 1000);
+                        giveCardToBag(st, bailer, card); // [RE 0x41C307 sub_4412E4]
+                        if (st.remainingSteps != 0) {
+                            app.audio().playEffectLooping(st.moveSoundIndex);
+                        }
+                    }
+                }
+            }
+        }
+        // [RE 0x41C345 LABEL_102] 強盜 && cellType==14（銀行）→ 全体玩家银行 ×0.2 给 bailer
+        if (p == 5 && cellType == 14) {
+            int total = 0;
+            for (int v = 0; v < st.playerCount; ++v) {
+                if (st.players[v].alive == 0 || v == bailer) {
+                    continue;
+                }
+                const int amount =
+                    static_cast<int>(static_cast<double>(st.players[v].bank) * 0.2); // dbl_463B60
+                transferMoney(app, v, bailer, amount, 5); // [RE 0x41C39B] 银行优先+入现金
+                total += amount;
+            }
+            app.audio().stopEffectSlot(st.moveSoundIndex);
+            std::snprintf(text, sizeof(text), "強盜搶奪銀行\n\n得款%d元\n\n給%s！", total,
+                          playerNameNoSpace(st, bailer).c_str());
+            showMessage(app, text, 2000);
+            if (st.remainingSteps != 0) { // [RE 0x41C43A]
+                app.audio().playEffectLooping(st.moveSoundIndex);
+            }
+        }
+        return;
+    }
+
+    // cur 6/7：仅停留（steps==0）
+    if (st.remainingSteps != 0) {
+        return; // [RE 0x41C44E]
+    }
+    renderGameFrame(app); // [RE 0x41C458 refreshGameUi(0,0,1)]
+    app.renderFrame();
+    const uint16_t special = ce.special; // [RE 0x41C46D cellEnt+32]
+    if (special > 2000 && special < 4000) {
+        const int idx = special - 2000; // [RE 0x41C49B]
+        if (idx > 0 && idx < static_cast<int>(st.estates.size())) {
+            const Estate& e = st.estates[idx];
+            const int owner = (e.owner != 0) ? e.owner - 1 : -1;
+            if (owner >= 0 && owner != bailer) {
+                int amount = 0;
+                if (p == 6) {
+                    // [RE 0x41C4EC] 流氓：同 owner 同路段名全部 estate priceAdd(+28) 求和 ×moneyMul
+                    for (size_t k = 1; k < st.estates.size(); ++k) {
+                        const Estate& o = st.estates[k];
+                        if (o.owner == e.owner && std::strcmp(o.name, e.name) == 0) {
+                            amount += o.priceAdd;
+                        }
+                    }
+                    amount *= st.moneyMul;
+                    app.audio().stopEffectSlot(st.moveSoundIndex);
+                    std::snprintf(text, sizeof(text), "勒索%s\n\n%d元保護費！",
+                                  playerNameNoSpace(st, owner).c_str(), amount);
+                } else {
+                    // [RE 0x41C597] 間諜：estate+44 最近租金，0 跳过
+                    amount = e.price;
+                    if (amount == 0) {
+                        return;
+                    }
+                    app.audio().stopEffectSlot(st.moveSoundIndex);
+                    std::snprintf(text, sizeof(text), "取走過路費\n\n%d元！", amount);
+                }
+                showMessage(app, text, 1500);
+                transferMoney(app, owner, bailer, amount, 0); // [RE 0x41C56E..0x41C5D2]
+            }
+        }
+        return;
+    }
+    if (special > 4000 && special < 6000) {
+        const int idx = special - 4000; // [RE 0x41C5FD]
+        if (idx > 0 && idx < static_cast<int>(st.corps.size())) {
+            const Corp& c = st.corps[idx];
+            const int owner = (c.owner != 0) ? c.owner - 1 : -1;
+            if (owner >= 0 && owner != bailer) {
+                int amount = 0;
+                if (p == 6) {
+                    // [RE 0x41C666] 流氓：corp+34 buildPrice ×moneyMul
+                    amount = st.moneyMul * c.buildPrice;
+                    app.audio().stopEffectSlot(st.moveSoundIndex);
+                    std::snprintf(text, sizeof(text), "勒索%s\n\n%d元保護費！",
+                                  playerNameNoSpace(st, owner).c_str(), amount);
+                } else {
+                    // [RE 0x41C6BD] 間諜：corp+48 lastFee，0 跳过
+                    amount = c.lastFee;
+                    if (amount == 0) {
+                        return;
+                    }
+                    app.audio().stopEffectSlot(st.moveSoundIndex);
+                    std::snprintf(text, sizeof(text), "取走過路費\n\n%d元！", amount);
+                }
+                showMessage(app, text, 1500);
+                transferMoney(app, owner, bailer, amount, 0); // [RE 0x41C692/0x41C6B6]
+            }
+        }
+        return;
+    }
+    if (special > 6000 && special < 8000) {
+        const int idx = special - 6000; // [RE 0x41C6FE]
+        if (idx > 0 && idx < static_cast<int>(st.specPts.size())) {
+            const SpecPt& s = st.specPts[idx];
+            const int owner = (s.owner != 0) ? s.owner - 1 : -1;
+            if (s.owner != 0 && owner != bailer && p == 7) {
+                // [RE 0x41C73E] 間諜：specPt+40 fund，0 跳过；转账至 100+idx 资金池
+                const int amount = s.fund;
+                if (amount != 0) {
+                    app.audio().stopEffectSlot(st.moveSoundIndex);
+                    std::snprintf(text, sizeof(text), "取走盈餘\n\n%d元！", amount);
+                    showMessage(app, text, 1500);
+                    transferMoney(app, 100 + idx, bailer, amount, 0); // [RE 0x41C79E]
+                }
+            }
+        }
+        return;
+    }
+}
+
 // [RE 0x41B42D] onPlayerActionPhase 每格落地事件（路过/停留双判定；物件分派主体）
 // 依据: 0x41B42D 反编译 + docs/reverse/functions/map-object-refresh.md §5。变量：
 //   cellType = cellEnt+36 低字节、玩家在场掩码 = +36 bit8..15、objId = +36 bit16..23
@@ -162,7 +346,12 @@ void onPlayerActionPhase(Application& app) {
         return;
     }
     if (p >= 4) {
+        // [RE 0x41B42D NPC 分支 0x41B9D6../0x41C84E] 事件槽 NPC 物件分派（cur 4..7，槽 8 已在上方返回）。
+        //   与原版逐 case 对齐：`byte_498E35`(timerB) 非 0 时小偷类恶行跳过（特殊动画中）；
+        //   objType 13/14/16/17/18 仅小偷(p==4)触发"偷道具给 bailer"，5/6/7 走各自差异分支；
+        //   神明 1..10/12 不附身；每 case 结束后汇入 LABEL_88 恶行 + LABEL_145 抓回。
         const int i = p - 4;
+        NpcSlot80& nslot = st.npcSlots[i];
         Player& np = st.players[p];
         const uint16_t ncell = np.cellEntId;
         CellEnt& nce = st.cellEnts[ncell];
@@ -173,40 +362,152 @@ void onPlayerActionPhase(Application& app) {
             objType = st.cellTable[static_cast<size_t>(24 * (objId - 1))];
         }
         const bool stopped = st.remainingSteps == 0;
-        // [RE 0x41B42D] 通用受害（对齐真人 switch(objType) 11恶犬/17地雷/16路障，但恶人走永久关押、
-        //   不播爆炸/咬伤/住院动画，damagePlayer 对恶人无意义→直接 hospitalizePlayer(NPC,0)）：
-        if (stopped && (objType == 11 || objType == 17)) {  // 恶犬咬伤 / 地雷炸伤 → 入院(永久待保释)
-            releaseCellTableSlot(app, objId);  // 删除该格物件（地雷/恶犬轮替）
-            // 触发动画保留（地雷爆炸 525/音效82、恶犬咬伤 532/音效93，帧3切换），
-            //   仅省后续 hospitalizePlayer 的 524 救护车（NPC 分支本就不播）
-            playEventFlc(app, objType == 17 ? 525 : 532, 0, 40, objType == 17 ? 82 : 93, false, 3);
-            st.remainingSteps = 0;
-            hospitalizePlayer(app, p, 0);
-            return;
-        }
-        if (objType == 16) {  // 路障：路过即触发 → 删除 + 强制停下（不消失，仍自由身）
-            app.audio().stopEffectSlot(st.moveSoundIndex);
-            releaseCellTableSlot(app, objId);
-            st.remainingSteps = 0;
-        }
-        // [RE 0x41B42D loc_41C7A6] 事件槽 NPC 抓回（阶段1 行走闭环；恶行 LABEL_88 待阶段2）：
-        //   原版抓回在函数尾**每步无条件执行**（不是只在落定步）——随机游走途中经过監獄/醫院格
-        //   那一步即抓回，抓回后清 remainingSteps 终止本回合移动（对齐 0x41C7DF）。
-        const uint8_t home = static_cast<uint8_t>(st.slotStatus[i] & 0x7F);  // 1=原生监狱 2=原生医院
-        // 踩到任一監獄(4)/醫院(5)格即"消失重置"，回原生 home 在押（用户确认：无论入狱/入院，遇建筑
-        //   都重置；bit7 闩锁：起点非 home 时 release 已置→走回即抓，起点=home 时先离开二次抓）
-        if (home == 1 || home == 2) {
-            if (cellType == 4 || cellType == 5) {
-                if ((st.slotStatus[i] & 0x80) != 0) {
-                    if (home == 1) {
-                        jailPlayer(app, p, 0);
-                    } else {
-                        hospitalizePlayer(app, p, 0);
-                    }
-                    st.remainingSteps = 0;
-                } else {
-                    st.slotStatus[i] = static_cast<uint8_t>(st.slotStatus[i] | 0x80);
+        char text[256];
+
+        auto npcRestoreMoveLoop = [&]() { // [RE LABEL_68/LABEL_87] 移动中恢复循环移动音
+            if (st.remainingSteps != 0) {
+                app.audio().playEffectLooping(st.moveSoundIndex);
+            }
+        };
+        switch (objType) {
+            case 1: case 2: case 3: case 4: case 5: case 6:
+            case 7: case 8: case 9: case 10: case 12:
+                break; // 神明：NPC 不附身（原版 `if (cur<4 && !steps)`）
+            case 11: { // [RE 0x41B847] 惡犬：路过无视；停留 → 删(槽11) + FLC532/音93 + 住院
+                if (!stopped) {
+                    break;
                 }
+                releaseCellTableSlot(app, 11); // [RE deleteMapObject(11) 硬编码槽]
+                playEventFlc(app, 532, 0, 40, 93, false, 3); // [RE LABEL_44]
+                st.remainingSteps = 0;
+                hospitalizePlayer(app, p, 3); // [RE LABEL_45]
+                break;
+            }
+            case 13: { // [RE 0x41B99E] 禮物：仅小偷且 timerB==0 → 替 bailer 抽道具
+                if (p != 4 || nslot.timerB != 0) {
+                    break;
+                }
+                releaseCellTableSlot(app, 13);          // [RE deleteMapObject(13)]
+                renderGameFrame(app);                   // [RE 0x41B9C6 refreshGameUi(0,0,1)]
+                app.renderFrame();
+                std::snprintf(text, sizeof(text), "小偷偷得禮物\n\n給%s！",
+                              playerNameNoSpace(st, nslot.bailer).c_str());
+                app.audio().stopEffectSlot(st.moveSoundIndex); // [RE 停移动音]
+                showMessage(app, text, 1500);
+                const int item = drawGiftCard(app, nslot.bailer); // [RE drawGiftCard(bailer)]
+                if (item != 0) {
+                    app.audio().playEffectSlot(6);      // [RE dword_48237A 礼物音效]
+                    renderGameFrame(app);               // [RE refreshGameUi(bailer.x, bailer.y, 0)]
+                    app.renderFrame();
+                    std::snprintf(text, sizeof(text), "得到%s！", kItemNames[item - 1]);
+                    showMessage(app, text, 1500);
+                    playValueLine(app, nslot.bailer, kItemPrice[item - 1]);
+                    renderGameFrame(app);               // [RE LABEL_54 sub_41D546]
+                    app.renderFrame();
+                }
+                npcRestoreMoveLoop();
+                break;
+            }
+            case 14: { // [RE 0x41BBA6] 寶箱：仅小偷且 timerB==0 → bailer +500 点券
+                if (p != 4 || nslot.timerB != 0) {
+                    break;
+                }
+                app.audio().playEffectSlot(7);          // [RE dword_482382 宝箱音效]
+                releaseCellTableSlot(app, 14);          // [RE deleteMapObject(14)]
+                renderGameFrame(app);                   // [RE 0x41BBDD refreshGameUi(0,0,1)]
+                app.renderFrame();
+                std::snprintf(text, sizeof(text), "小偷偷得寶箱\n\n給%s！",
+                              playerNameNoSpace(st, nslot.bailer).c_str());
+                app.audio().stopEffectSlot(st.moveSoundIndex);
+                showMessage(app, text, 1500);
+                renderGameFrame(app);                   // [RE refreshGameUi(bailer.x, bailer.y, 0)]
+                app.renderFrame();
+                showMessage(app, "得到５００點券！", 1500); // [RE byte_463AD3]
+                st.players[nslot.bailer].points =
+                    static_cast<uint16_t>(st.players[nslot.bailer].points + 500);
+                playValueLine(app, nslot.bailer, 101); // [RE sub_44EF41(bailer,0,off_48084A 列0) 笑]
+                renderGameFrame(app);                   // [RE LABEL_54 sub_41D546]
+                app.renderFrame();
+                npcRestoreMoveLoop();
+                break;
+            }
+            case 16: { // [RE 0x41BCEB] 路障
+                if (p == 4) {
+                    if (nslot.timerB != 0) {
+                        break;
+                    }
+                    releaseCellTableSlot(app, objId);   // [RE deleteMapObject(v63)]
+                    renderGameFrame(app);               // [RE 0x41BD9C refreshGameUi(0,0,1)]
+                    app.renderFrame();
+                    std::snprintf(text, sizeof(text), "小偷偷得路障\n\n給%s！",
+                                  playerNameNoSpace(st, nslot.bailer).c_str());
+                    app.audio().stopEffectSlot(st.moveSoundIndex);
+                    showMessage(app, text, 1500);
+                    givePlayerItem(st, nslot.bailer, 2); // [RE givePlayerCard(bailer,2)]
+                    npcRestoreMoveLoop();
+                } else { // 5/6/7：删 + 强制停下（原版无消息/台词）
+                    app.audio().stopEffectSlot(st.moveSoundIndex); // [RE 0x41BD08]
+                    releaseCellTableSlot(app, objId);
+                    renderGameFrame(app);               // [RE 0x41BD26 refreshGameUi(0,0,1)]
+                    app.renderFrame();
+                    st.remainingSteps = 0;
+                }
+                break;
+            }
+            case 17: { // [RE 0x41BE64] 地雷
+                if (p != 4 && stopped) {                // 5/6/7 停留 → 炸伤住院
+                    releaseCellTableSlot(app, objId);   // [RE deleteMapObject(v63)]
+                    playEventFlc(app, 525, 0, 40, 82, false, 3);
+                    st.remainingSteps = 0;
+                    hospitalizePlayer(app, p, 3);       // [RE LABEL_45]
+                    break;
+                }
+                if (p == 4 && nslot.timerB == 0) {      // 小偷 → 替 bailer 拿地雷道具
+                    releaseCellTableSlot(app, objId);
+                    renderGameFrame(app);               // [RE 0x41BF4D refreshGameUi(0,0,1)]
+                    app.renderFrame();
+                    std::snprintf(text, sizeof(text), "小偷偷得地雷\n\n給%s！",
+                                  playerNameNoSpace(st, nslot.bailer).c_str());
+                    app.audio().stopEffectSlot(st.moveSoundIndex);
+                    showMessage(app, text, 1500);
+                    givePlayerItem(st, nslot.bailer, 3); // [RE givePlayerCard(bailer,3)]
+                    npcRestoreMoveLoop();
+                }
+                break;
+            }
+            case 18: { // [RE 0x41BFD2] 定時炸彈：仅小偷 → 替 bailer 拿道具（不挂身）
+                if (p == 4 && nslot.timerB == 0) {
+                    releaseCellTableSlot(app, objId);   // [RE deleteMapObject(v63)]
+                    renderGameFrame(app);               // [RE 0x41C0A9 refreshGameUi(0,0,1)]
+                    app.renderFrame();
+                    std::snprintf(text, sizeof(text), "小偷偷得定時炸彈\n\n給%s！",
+                                  playerNameNoSpace(st, nslot.bailer).c_str());
+                    app.audio().stopEffectSlot(st.moveSoundIndex);
+                    showMessage(app, text, 1500);
+                    givePlayerItem(st, nslot.bailer, 4); // [RE givePlayerCard(bailer,4)]
+                    npcRestoreMoveLoop();
+                }
+                break;
+            }
+            default:
+                break;
+        }
+        // [RE 0x41C17A LABEL_88] 恶行（小偷/強盜同格行窃、強盜抢银行、流氓/間諜勒索）
+        npcVillainPhase(app, p);
+        // [RE 0x41C7A6 LABEL_145] 抓回（每步无条件）：
+        //   status&0x7F==1（監獄）且 cellType==4、或 ==2（醫院）且 cellType==5 →
+        //   未置 bit7 则置位（防出门即抓）；已置 → jail/hospitalize + 停步
+        const uint8_t status = static_cast<uint8_t>(nslot.status & 0x7F);
+        if ((status == 1 && cellType == 4) || (status == 2 && cellType == 5)) {
+            if ((nslot.status & 0x80) != 0) {
+                if (status == 1) {
+                    jailPlayer(app, p, 0);
+                } else {
+                    hospitalizePlayer(app, p, 0);
+                }
+                st.remainingSteps = 0;
+            } else {
+                nslot.status = static_cast<uint8_t>(nslot.status | 0x80);
             }
         }
         return;
@@ -338,7 +639,7 @@ void onPlayerActionPhase(Application& app) {
                 app.renderFrame();              //   → 消息显示在物件已消失的新画面上
                 std::snprintf(text, sizeof(text), "得到%s！", kItemNames[item - 1]);
                 showMessage(app, text, 1500);
-                // [TODO P4] 道具语音 sub_44F230
+                playValueLine(app, p, kItemPrice[item - 1]); // [RE sub_44F230 道具价值台词]
             }
             break;
         }
@@ -350,9 +651,9 @@ void onPlayerActionPhase(Application& app) {
             releaseCellTableSlot(app, 14);
             renderGameFrame(app);  // [RE 0x41BB41] refreshGameUi(0,0,1)：宝箱先消失再弹效果
             app.renderFrame();
-            showMessage(app, "得到５００點券", 1500);  // [RE 0x463AD3]
+            showMessage(app, "得到５００點券！", 1500);  // [RE byte_463AD3]
             pl.points = static_cast<uint16_t>(pl.points + 500);
-            // [TODO P4] 大笑台词 sub_44EF41(p,0,off_48084A[char])
+            playValueLine(app, p, 101); // [RE sub_44EF41(p,0,off_48084A 列0) 笑]
             break;
         case 16:  // [RE 0x41BAF9] 路障：路过即触发 → 删除 + 强制停止
             app.audio().stopEffectSlot(st.moveSoundIndex);
@@ -439,7 +740,7 @@ void loadWalkResources(GameState& st, int p) {
         //   NPC 无多载具，停格/收租态(slot4/6/5/7)复用站立(364)或渡水(366)静态帧——
         //   否则每回合末进 state3 取未加载槽 → 棋子消失数帧=闪烁（2026-09-26 修）。
         const int i = p - 4;
-        if (st.slotFlag5[i]) {
+        if (st.npcSlots[i].timerB) {
             // 特殊/恶行动画组：停格 364，移动 367
             if ((st.playerActionFlags[p] & 0x0F) != 5) {
                 releaseWalkResources(st, p, 0);
@@ -2296,6 +2597,14 @@ bool moveOneStep(Application& app) {
             //   否则角色朝上一步方向走、到新格才转向 → 转角混乱
             pl.dir = static_cast<uint8_t>(facingBetween(st, pl.prevCellEnt, pl.cellEntId));
             updatePlayerCarriedObjects(st, p);
+            // [RE 0x40C05C NPC] 同步事件槽记录（原版直接以 word_498E2C/2E 为真源；
+            //   重写以 players 为运动真源，每步回写槽记录供存档/恶行/占位判据读取）
+            if (p >= 4 && p < 8) {
+                NpcSlot80& slot = st.npcSlots[p - 4];
+                slot.prevCell = pl.prevCellEnt;
+                slot.cell = pl.cellEntId;
+                slot.dir = pl.dir;
+            }
 
             st.stepTargetX = st.cellEnts[nextId].x;
             st.stepTargetY = st.cellEnts[nextId].y;
@@ -2360,6 +2669,14 @@ bool moveOneStep(Application& app) {
         } else if (st.stepExitState == 0) {
             pl.dir = static_cast<uint8_t>(facingBetween(st, pl.prevCellEnt, pl.cellEntId));
         }
+        // [RE 0x40C05C NPC] 到达同步槽像素坐标/朝向（原版到达将 g_miscTable80/word_498E2A
+        //   写回本步起点坐标；重写以 players 为真源直接同步到期终坐标，供存档/小地图使用）
+        if (p >= 4 && p < 8) {
+            NpcSlot80& slot = st.npcSlots[p - 4];
+            slot.pixelX = pl.spriteX;
+            slot.pixelY = pl.spriteY;
+            slot.dir = pl.dir;
+        }
         st.stepExitState = 0;
         return true;
     }
@@ -2367,6 +2684,12 @@ bool moveOneStep(Application& app) {
     st.playerStepY[p] += st.stepDeltaY;
     pl.spriteX = static_cast<uint16_t>(static_cast<int>(st.playerStepX[p]));
     pl.spriteY = static_cast<uint16_t>(static_cast<int>(st.playerStepY[p]));
+    // [RE 0x40C05C NPC] 移动每帧同步槽像素（原版每帧写 g_miscTable80/word_498E2A；供小地图白框）
+    if (p >= 4 && p < 8) {
+        NpcSlot80& slot = st.npcSlots[p - 4];
+        slot.pixelX = pl.spriteX;
+        slot.pixelY = pl.spriteY;
+    }
     return false;
 }
 
@@ -2380,9 +2703,10 @@ int checkPlayerAction(Application& app, int a1) {
     int v1 = 0;
     if (p >= 4) {
         const int s = p - 4;
-        // [RE 0x40C912 NPC] 行动状态 498E32(slotBusy=坐牢)/498E34/498E36 全 0 → 返回 2 可游走；
-        //   否则（坐牢/计时中）返回 0 → 本回合不移动（见 498df0-event-slot-npc.md §2.2）
-        if (st.slotBusy[s] == 0 && !a1 && st.slotTimerA[s] == 0 && st.slotTimerC[s] == 0) {
+        // [RE 0x40C912 NPC] 行动状态 498E32(busy=坐牢/入院)/498E34(timerA)/498E36(timerC) 全 0 → 返回 2 可游走；
+        //   否则（在押/计时中）返回 0 → 本回合不移动（见 498df0-event-slot-npc.md §2.2）
+        if (st.npcSlots[s].busy == 0 && !a1 && st.npcSlots[s].timerA == 0 &&
+            st.npcSlots[s].timerC == 0) {
             return 2;
         }
         return 0;
@@ -2534,7 +2858,7 @@ void saveTurnSnapshot(GameState& st, int p) {
     for (int k = 0; k < 4; ++k) {
         s.players[k] = st.players[k];
     }
-    std::memcpy(s.miscTable80, st.miscTable80, sizeof(s.miscTable80));
+    std::memcpy(s.npcSlots, st.npcSlots, sizeof(s.npcSlots));
     std::memcpy(s.cellTable, st.cellTable.data(), st.cellTable.size());
     std::memcpy(s.cardState60, st.cardState60, sizeof(s.cardState60));
     std::memcpy(s.itemStock, st.itemStock, sizeof(s.itemStock));
@@ -2579,7 +2903,7 @@ bool restoreTurnSnapshot(Application& app, int p) {
     for (int k = 0; k < 4; ++k) {
         st.players[k] = s.players[k];
     }
-    std::memcpy(st.miscTable80, s.miscTable80, sizeof(st.miscTable80));
+    std::memcpy(st.npcSlots, s.npcSlots, sizeof(st.npcSlots));
     std::memcpy(st.cellTable.data(), s.cellTable, sizeof(s.cellTable));
     std::memcpy(st.cardState60, s.cardState60, sizeof(st.cardState60));
     std::memcpy(st.itemStock, s.itemStock, sizeof(st.itemStock));
@@ -2651,11 +2975,11 @@ void startPlayerMove(Application& app) {
         st.moveSoundIndex = 9;
     } else {
         const int s = p - 4;
-        if (st.slotFlag6[s]) {
+        if (st.npcSlots[s].timerC) {
             st.playerActionState[p] = 0;
             st.playerActionWait[p] = -126;
         } else {
-            st.remainingSteps = st.slotFlag7[s] ? 1 : (std::rand() % 9 + 2);
+            st.remainingSteps = st.npcSlots[s].timerD ? 1 : (std::rand() % 9 + 2);
             st.playerActionState[p] = 1;
         }
         if (st.playerActionState[p]) {
@@ -2726,9 +3050,11 @@ int32_t insurancePayout(Application& app, int player, int32_t amount) {
 //   (BYTE2&0x7F)+1（重写 checkPlayerAction 同步）。debug 直调补跳入狱当回合同语义。
 // 差异: cellTable/cellNo 位置表（word_496D0A）P5；语音 P4；FLC 背景保存由逐帧重绘等价
 // [RE 0x43D7BF / 0x43EE6E] releaseEventNpc：保释事件槽 NPC 上路（填犯人表 + loadWalkResources）
-// 依据: releaseJailNpc/releaseHospitalNpc; 目标格 = 監獄/醫院格（word_48BAE0/48BAE2），
-//   bailer = 当前玩家（byte_498E30/DF0），当前格/坐标/来路清、状态 1監獄/2醫院、
-//   目标格类型匹配则置触发闩锁 bit7、清 jailFlags/hospitalFlags、slotBusy2=0 参与轮转。
+// 依据: releaseJailNpc/releaseHospitalNpc 反编译（a1>=4 段）:
+//   byte_498E30 = g_currentPlayer（bailer）；byte_498E32 = 0（busy 自由游走）；
+//   word_498E2C = word_48BAE0/48BAE2（監獄/醫院格）、word_498E2E = 0；g_miscTable80/word_498E2A =
+//   cellEnt 坐标；byte_498E33 = 1（監獄）/2（醫院）；**起点格类型匹配（監獄格 type4 / 醫院格 type5）
+//   恒真 → |=0x80 抓回闩锁**；jailFlags/hospitalFlags = 0；loadWalkResources。
 // 见 498df0-event-slot-npc.md §2。
 void releaseEventNpc(Application& app, int npc, bool fromJail) {
     GameState& st = app.gameState();
@@ -2736,17 +3062,17 @@ void releaseEventNpc(Application& app, int npc, bool fromJail) {
         return;
     }
     const int i = npc - 4;
+    NpcSlot80& slot = st.npcSlots[i];
     Player& pl = st.players[npc];
     const uint16_t cell = fromJail ? st.jailCellEntId : st.hospitalCellEntId;
-    st.slotBailer[i] = static_cast<uint8_t>(st.currentPlayer);
-    st.slotBusy[i] = 0;   // 498E32=0 自由游走
-    st.slotBusy2[i] = 0;  // 498DF2=0 参与回合轮转
-    st.slotCell[i] = cell;
-    st.slotPrevCell[i] = 0;
-    st.slotTimerA[i] = 0;
-    st.slotTimerB[i] = 0;
-    st.slotTimerC[i] = 0;
-    st.slotTimerD[i] = 0;
+    slot.bailer = static_cast<uint8_t>(st.currentPlayer);
+    slot.busy = 0;   // 498E32=0 自由游走
+    slot.cell = cell;
+    slot.prevCell = 0;
+    slot.timerA = 0;
+    slot.timerB = 0;
+    slot.timerC = 0;
+    slot.timerD = 0;
     // 复用 players[npc] 承载位置（moveOneStep/onPhase/渲染管线）；kind=3 避开人类/AI 分支
     pl.cellEntId = cell;
     pl.prevCellEnt = 0;
@@ -2762,18 +3088,14 @@ void releaseEventNpc(Application& app, int npc, bool fromJail) {
         const CellEnt& ce = st.cellEnts[cell];
         pl.spriteX = ce.x;
         pl.spriteY = ce.y;
-        st.slotPixelX[i] = ce.x;
-        st.slotPixelY[i] = ce.y;
+        slot.pixelX = ce.x;
+        slot.pixelY = ce.y;
+        // [RE 0x43D7E0/0x43EEA0] status = 保释建筑（1=監獄/2=醫院），非按 NPC 固定归属
+        slot.status = static_cast<uint8_t>(fromJail ? 1 : 2);
+        // 起点格类型与 status 匹配（監獄格 type4 / 醫院格 type5）→ 置抓回闩锁 bit7（原版恒真）
         const uint8_t ct = static_cast<uint8_t>(ce.occMask & 0xFF);
-        // 归属按原生槽固定：4/5(小偷/強盜)→监狱(home=1)、6/7(流氓/間谍)→医院(home=2)；
-        //   恶行收益另按 slotBailer（最后保释人），与归属解耦
-        const uint8_t home = static_cast<uint8_t>(npc < 6 ? 1 : 2);
-        const uint8_t homeCellType = static_cast<uint8_t>(home == 1 ? 4 : 5);
-        st.slotStatus[i] = home;
-        // 起点非 home 建筑（间谍被陷害关进监狱、从监狱放出等）→ 置触发位：游走踩到任一建筑即抓回；
-        //   起点即 home 建筑 → 不置（先离开、走一圈回来再抓，防刚保释即抓）
-        if (ct != homeCellType) {
-            st.slotStatus[i] = static_cast<uint8_t>(st.slotStatus[i] | 0x80);
+        if (ct == (fromJail ? 4 : 5)) {
+            slot.status = static_cast<uint8_t>(slot.status | 0x80);
         }
         st.cellEnts[cell].occMask |= static_cast<uint32_t>(4096u << i);  // NPC 占用位
     }
@@ -2783,8 +3105,33 @@ void releaseEventNpc(Application& app, int npc, bool fromJail) {
         st.hospitalFlags[npc] = 0;
     }
     loadWalkResources(st, npc);
-    RICH4_LOGI("releaseEventNpc: NPC %d released by %d, cell %u (RE 0x43D7BF/0x43EE6E)", npc,
-               st.currentPlayer, cell);
+    RICH4_LOGI("releaseEventNpc: NPC %d released by %d, cell %u status=%u (RE 0x43D7BF/0x43EE6E)",
+               npc, st.currentPlayer, cell, slot.status);
+}
+
+// [PORT] rebuildEventNpcFromSlots：从 npcSlots（g_miscTable80）重建 players[4..7] 运行时镜像。
+//   用于读档：自由（busy==0）且 cell 有效者恢复位置/坐标/朝向 + 地图占用位 + 行走资源；
+//   在押/未释放（busy!=0 或 cell==0）者清空镜像（渲染/轮转均以 busy/cell 跳过）。
+void rebuildEventNpcFromSlots(GameState& st) {
+    for (int i = 0; i < 4; ++i) {
+        const NpcSlot80& slot = st.npcSlots[i];
+        Player& pl = st.players[i + 4];
+        const bool free = (slot.busy == 0 && slot.cell > 0 && slot.cell < st.cellEnts.size());
+        pl.cellEntId = free ? slot.cell : 0;
+        pl.prevCellEnt = free ? slot.prevCell : 0;
+        pl.spriteX = free ? slot.pixelX : 0;
+        pl.spriteY = free ? slot.pixelY : 0;
+        pl.dir = free ? slot.dir : 0;
+        pl.alive = free ? 1 : 0;
+        pl.kind = free ? 3 : 0;
+        if (free) {
+            st.cellEnts[slot.cell].occMask |= static_cast<uint32_t>(4096u << i);
+            loadWalkResources(st, i + 4);
+        }
+    }
+    RICH4_LOGI("rebuildEventNpcFromSlots: busy=%d/%d/%d/%d cell=%u/%u/%u/%u", st.npcSlots[0].busy,
+               st.npcSlots[1].busy, st.npcSlots[2].busy, st.npcSlots[3].busy, st.npcSlots[0].cell,
+               st.npcSlots[1].cell, st.npcSlots[2].cell, st.npcSlots[3].cell);
 }
 
 // [RE 0x43D593] jailPlayer：入监（真人）/抓回坐牢（事件槽 NPC）
@@ -2794,22 +3141,22 @@ void jailPlayer(Application& app, int player, int days) {
         return;
     }
     if (player >= 4) {
-        // [RE 0x43D5??] NPC 抓回：清当前格占用（4096<<i）+ slotBusy=1（坐牢不动）+
-        //   清状态/触发/计时 + jailFlags=1（可再保释）；停在抓回所在（監獄）格，不清 slotBusy2
+        // [RE 0x43D593 a2>=4] NPC 抓回：清当前格占用（~(256<<player) = 4096<<i）+ busy=1（監獄）+
+        //   status/timerA~D 全清 + jailFlags=1（可再保释）；**不动坐标/格**（停在抓回所在建筑格，
+        //   渲染因 busy!=0 自动隐藏 0x40829D）；不清 bailer
         if (player < 8) {
             const int i = player - 4;
-            const uint16_t cell = st.players[player].cellEntId;
+            NpcSlot80& slot = st.npcSlots[i];
+            const uint16_t cell = slot.cell;
             if (cell > 0 && cell < st.cellEnts.size()) {
                 st.cellEnts[cell].occMask &= ~static_cast<uint32_t>(4096u << i);
             }
-            st.slotBusy[i] = 1;
-            st.slotStatus[i] = 0;
-            st.slotTimerA[i] = 0;
-            st.slotTimerB[i] = 0;
-            st.slotTimerC[i] = 0;
-            st.slotTimerD[i] = 0;
-            st.slotCell[i] = cell;
-            st.slotBusy2[i] = 1;   // 抓回=消失+停止回合轮转（地图不再绘制、回到在押态，需重新保释）
+            slot.busy = 1;
+            slot.status = 0;
+            slot.timerA = 0;
+            slot.timerB = 0;
+            slot.timerC = 0;
+            slot.timerD = 0;
             st.jailFlags[player] = 1;
             RICH4_LOGI("jailPlayer: NPC %d 抓回坐牢 (RE 0x43D593)", player);
         }
@@ -2859,21 +3206,20 @@ void hospitalizePlayer(Application& app, int player, int days) {
         return;
     }
     if (player >= 4) {
-        // [RE 0x43EC3F] NPC 抓回住院：同 jailPlayer NPC 分支，置 hospitalFlags
+        // [RE 0x43EC3F a2>=4] NPC 抓回住院：同 jailPlayer NPC 分支，busy=2 + hospitalFlags
         if (player < 8) {
             const int i = player - 4;
-            const uint16_t cell = st.players[player].cellEntId;
+            NpcSlot80& slot = st.npcSlots[i];
+            const uint16_t cell = slot.cell;
             if (cell > 0 && cell < st.cellEnts.size()) {
                 st.cellEnts[cell].occMask &= ~static_cast<uint32_t>(4096u << i);
             }
-            st.slotBusy[i] = 1;
-            st.slotStatus[i] = 0;
-            st.slotTimerA[i] = 0;
-            st.slotTimerB[i] = 0;
-            st.slotTimerC[i] = 0;
-            st.slotTimerD[i] = 0;
-            st.slotCell[i] = cell;
-            st.slotBusy2[i] = 1;   // 抓回=消失+停止回合轮转（回到在押态，需重新保释）
+            slot.busy = 2;
+            slot.status = 0;
+            slot.timerA = 0;
+            slot.timerB = 0;
+            slot.timerC = 0;
+            slot.timerD = 0;
             st.hospitalFlags[player] = 1;
             RICH4_LOGI("hospitalizePlayer: NPC %d 抓回住院 (RE 0x43EC3F)", player);
         }
@@ -2979,12 +3325,54 @@ void turnToAdjacentCell(GameState& st, int p) {
 //   BYTE2 監獄 → releaseJailNpc / BYTE3 醫院 → releaseHospitalNpc（清 g_jailFlags/g_hospitalFlags）；
 //   fixedStep/skipMove/银行停业(+59)/融资(+60) 先清 bit7 再倒计时（0→0x80，下回清 0）；
 //   byte54 冬眠 / state37 夢遊 在 stateFlags==0 时倒计时（0→0x80）；
-//   保险期 +62：0x41CC4B 递减、0x41CAE3 到期清 0
+//   保险期 +62：0x41CC4B 递减、0x41CAE3 到期清 0；
+//   **a1>=4（事件槽 4..7）不 return**：timerA~D 递减（见函数内 NPC 分支）
 // 差异: 原版结束分支未见状态字节清零（实测会永久卡在"住宿中"），重写在结束时清零对应 BYTE；
-//       同盟天数 +61（P4）、NPC 释放（P5）。附身神明寿命递减已接（attachEnd，0x41CC6F）
+//       同盟天数 +61（P4）。附身神明寿命递减已接（attachEnd，0x41CC6F）
 void updatePlayerStates(Application& app, int p) {
     GameState& st = app.gameState();
-    if (p < 0 || p >= 4) {
+    if (p >= 4) {
+        // [RE 0x41C84F a1>=4] 事件槽计时器递减：
+        //   timerA~D 负值（0x80 到期标记）→ 清 0；timerA 清零时 byte_498EA0&=~0x40 +
+        //   releaseWalkResources(a1, 当前动画组) + loadWalkResources（特殊动画组复位）；
+        //   正值递减，1→0x80（下回合清 0）。恶人无坐牢/住院天数（updatePlayerStates 只走计时器，
+        //   永久在押，唯一放出 = 保释 releaseEventNpc）。见 498df0-event-slot-npc.md §5-1b。
+        if (p < 8) {
+            const int i = p - 4;
+            NpcSlot80& slot = st.npcSlots[i];
+            if (slot.timerA < 0) {
+                slot.timerA = 0;
+                st.playerActionFlags[p] &= static_cast<uint8_t>(~0x40u);
+                releaseWalkResources(st, p, st.playerMoveGroup[p]);
+                loadWalkResources(st, p);
+            }
+            if (slot.timerB < 0) {
+                slot.timerB = 0;
+            }
+            if (slot.timerC < 0) {
+                slot.timerC = 0;
+            }
+            if (slot.timerD < 0) {
+                slot.timerD = 0;
+            }
+            auto decayNpc = [](int8_t& v) {
+                if (v == 0) {
+                    return;
+                }
+                const int8_t old = v;
+                v = static_cast<int8_t>(old - 1);
+                if (old == 1) {
+                    v = static_cast<int8_t>(0x80); // 到期标记（负值，下回合清 0）
+                }
+            };
+            decayNpc(slot.timerA);
+            decayNpc(slot.timerB);
+            decayNpc(slot.timerC);
+            decayNpc(slot.timerD);
+        }
+        return;
+    }
+    if (p < 0) {
         return;
     }
     // [RE 0x41C86D] 贷款到期检查（位于 alive/sceneRequest 检查之前）
@@ -3315,43 +3703,37 @@ void nextPlayer(Application& app) {
     }
 
     bool dayPassed = false;
-    for (int guard = 0; guard < 64; ++guard) {
-        const int v2 = cur + 1;
-        cur = v2;
-        if (v2 == st.playerCount) {
-            // [RE 0x418EBD LABEL_19] 玩家轮完 → 事件槽 4..7：slotBusy2==0（已保释上路）+
-            //   alive!=0（槽有数据）者进入其回合；全占用/未释放 → 回绕过天。
-            //   见 498df0-event-slot-npc.md §2.1（防 R1：空槽进回合会渲染跳左上角/错误掷骰）
-            int npc = -1;
-            for (int s = 4; s < 8; ++s) {
-                if (st.slotBusy2[s - 4] == 0 && st.players[s].alive != 0) {
-                    npc = s;
-                    break;
-                }
-            }
-            if (npc >= 0) {
-                cur = npc;
-                break;
-            }
+    int guard = 0;
+    for (;;) {
+        if (++guard > 64) {
             cur = 0;
-            dayPassed = true;
             break;
+        }
+        int v2 = cur + 1;
+        if (v2 == st.playerCount) {
+            // [RE 0x418EBD] 玩家轮完 → 从事件槽 4 起检查（LABEL_19）
+            v2 = 4;
+            cur = 4;
+        } else {
+            cur = v2;
+        }
+        if (v2 >= 4 && v2 < 8) {
+            // [RE 0x418EBD LABEL_19] 事件槽 4..7：busy==0（已保释上路）才进回合；
+            //   busy!=0（在押）→ +1 继续；全部在押 → 走到 8 回绕过天。
+            //   注意 busy 即旧文档误称的"498DF2 槽占用"（同一字节 0x498E32）
+            if (st.npcSlots[cur - 4].busy == 0) {
+                break; // LABEL_20 → cur>=4 → 选中
+            }
+            continue;
         }
         if (v2 == 8) {
             // 事件槽走完 → 回绕到 0 并过天
             cur = 0;
             dayPassed = true;
-            if (st.players[cur].alive == 0 && st.players[cur].spriteX != 0) {
-                continue;
+            if (st.players[0].alive == 0 && st.players[0].spriteX != 0) {
+                continue; // 玩家 0 死亡且已放置 → 继续找下一活人
             }
             break;
-        }
-        if (v2 >= 4 && v2 < 8) {
-            // 事件槽 4..7（LABEL_19）
-            if (!st.slotBusy2[cur - 4]) {
-                break; // 未占用 → LABEL_20 → cur>=4 → 返回
-            }
-            continue; // 占用 → 继续找
         }
         // v2 < playerCount（0..playerCount-1）：LABEL_20
         if (st.players[cur].alive != 0 || st.players[cur].spriteX == 0) {

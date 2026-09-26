@@ -23,6 +23,16 @@ struct SaveSlot {
 // 存档版本号（SAVE%d.DAT 偏移 0，固定 38）
 constexpr uint32_t kSaveVersion = 38;
 
+// [PORT] SAVE%d.DAT 中事件槽/在押标志字段偏移（与 saveGameToSlot 写序严格对应；
+//   用于 loadGameFromSlot 恢复 NPC 状态——完整读档仍为 P5 TODO）。
+//   偏移推导: version4 + date4 + map2 + mode2 + players4 + player[4]×104 + humanCount4 = 436
+struct SaveLayout {
+    static constexpr size_t kNpcSlots = 436;      // g_miscTable80 80B（NpcSlot80[5]）
+    static constexpr size_t kJailFlags = 9953;    // g_jailFlags 8B
+    static constexpr size_t kHospitalFlags = 9961; // g_hospitalFlags 8B
+    static constexpr size_t kNpcBlockEnd = 9969;  // hospitalFlags 末尾
+};
+
 // [RE 0x403D74] 读取存档头（文件不存在/版本不符返回 false）
 bool readSaveHeader(const std::string& path, SaveSlot& slot);
 

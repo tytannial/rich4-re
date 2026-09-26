@@ -67,6 +67,10 @@ void hospitalizePlayer(Application& app, int player, int days);
 //   fromJail=true 監獄（小偷/強盜），false 醫院（流氓/間諜）。见 498df0-event-slot-npc.md。
 void releaseEventNpc(Application& app, int npc, bool fromJail);
 
+// [PORT] rebuildEventNpcFromSlots：从 npcSlots（g_miscTable80）重建 players[4..7] 运行时镜像
+//   （读档/调试用；自由 busy==0 且 cell!=0 者恢复位置+占位+行走资源，其余清空）
+void rebuildEventNpcFromSlots(GameState& st);
+
 // [RE 0x44BA63] insurancePayout：保险期内费用由保险公司给付（保险期 +62 非 0 → 理赔 + 消息）
 int32_t insurancePayout(Application& app, int player, int32_t amount);
 

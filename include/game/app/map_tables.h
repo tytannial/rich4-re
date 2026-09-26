@@ -56,6 +56,8 @@ extern const uint8_t kCardAiPersona[31];
 extern const uint8_t kItemAiPersona[14];
 // [RE 0x47ECEC] unk_47ECEC
 extern const uint32_t kMiscTable80[10][2];
+// [RE 0x47ED5A] dword_47ED5A 事件槽 NPC 名表（索引 4..7 = 小偷/強盜/流氓/間諜；0..3 占位不用）
+extern const char* const kNpcNames[8];
 
 // [RE 0x475208] word_475208 日历背景资源索引（4*mode+map）
 extern const uint16_t kCalendarRes[8];

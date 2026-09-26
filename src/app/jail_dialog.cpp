@@ -10,6 +10,7 @@
 #include "game/app/confirm_dialog.h"
 #include "game/app/event_stack.h"
 #include "game/app/float_message.h"
+#include "game/app/map_tables.h"
 #include "game/app/message_dialog.h"
 #include "game/app/turn_system.h"
 #include "game/application.h"
@@ -33,8 +34,7 @@ constexpr int kBailPanelW = 100; // 悬停信息板（allocUiElement(100,95) 0x4
 constexpr int kBailPanelH = 95;
 // [RE 0x475C44] 保释费用（点券：玩家 0-3 = 30，事件槽 NPC 4-7 = 300）
 constexpr int kBailCost[8] = {30, 30, 30, 30, 300, 300, 300, 300};
-// [RE 0x47ED5A] 事件槽 NPC 名表（索引 4..7；0..3 为占位 0x11111111 不用）
-const char* const kNpcNames[8] = {"", "", "", "", "小偷", "強盜", "流氓", "間諜"};
+// [RE 0x47ED5A] 事件槽 NPC 名表见 map_tables.h `kNpcNames`（索引 4..7）
 // [RE 0x475BE2] NPC 答谢消息 4 条（監獄/醫院共用；原版 `&dword_475BE2[i]+2`，i=4..7 → 0..3）
 //   顺序 = NPC 4..7（小偷/強盜/流氓/間諜），文本含 #NNNN 语音前缀
 constexpr const char* kNpcThanks[4] = {

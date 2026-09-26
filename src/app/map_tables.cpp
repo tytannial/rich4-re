@@ -638,6 +638,9 @@ const uint32_t kMiscTable80[10][2] = {
     {196608, 0},
 };
 
+// [RE 0x47ED5A] dword_47ED5A 事件槽 NPC 名表（索引 4..7；0..3 为占位不用）
+const char* const kNpcNames[8] = {"", "", "", "", "小偷", "強盜", "流氓", "間諜"};
+
 // [RE 0x475208] word_475208 日历背景资源索引 u16[8]（4*mode+map）
 const uint16_t kCalendarRes[8] = {4, 28, 47, 67, 87, 108, 95, 118};
 

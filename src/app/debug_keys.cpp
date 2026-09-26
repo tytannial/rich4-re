@@ -426,6 +426,30 @@ bool handleDebugKey(Application& app, int code, bool shift) {
                 RICH4_LOGI("debug: Ctrl+Shift+Y cellTable dump done");
                 return true;
             }
+            case 8: { // [NEW] dump 事件槽 NPC（四大恶人）——busy/status/bailer/cell/timers/在押标志
+                for (int i = 0; i < 4; ++i) {
+                    const NpcSlot80& s = st.npcSlots[i];
+                    RICH4_LOGI("  npcSlot %d(%s): busy=%u status=0x%02X bailer=%u cell=%u prev=%u "
+                               "pixel=(%u,%u) dir=%u timers=%d,%d,%d,%d flags[jail=%u hosp=%u] "
+                               "mirror(cell=%u alive=%u)",
+                               i + 4, kNpcNames[i + 4], s.busy, s.status, s.bailer, s.cell,
+                               s.prevCell, s.pixelX, s.pixelY, s.dir, s.timerA, s.timerB, s.timerC,
+                               s.timerD, st.jailFlags[i + 4], st.hospitalFlags[i + 4],
+                               st.players[i + 4].cellEntId, st.players[i + 4].alive);
+                }
+                RICH4_LOGI("debug: Ctrl+Shift+8 npcSlots dump done");
+                return true;
+            }
+            case 9: { // [NEW] 释放全部在押事件槽 NPC（bailer=当前玩家；测试行走/恶行/抓回）
+                for (int i = 0; i < 4; ++i) {
+                    if (st.npcSlots[i].busy != 0) {
+                        const bool fromJail = (st.npcSlots[i].busy != 2);
+                        releaseEventNpc(app, i + 4, fromJail);
+                    }
+                }
+                RICH4_LOGI("debug: Ctrl+Shift+9 release all jailed NPCs (bailer=%d)", cur);
+                return true;
+            }
             default:
                 return false;
         }

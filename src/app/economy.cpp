@@ -460,6 +460,22 @@ void eliminatePlayer(Application& app, int p) {
         st.cellEnts[pl.cellEntId].occMask |= (256u << p);
     }
     pl.alive = 0;
+    // [RE 0x40CE22/0x40CE28] 清破产者監獄/醫院标志
+    st.jailFlags[p] = 0;
+    st.hospitalFlags[p] = 0;
+    // [RE 0x40CE3E..0x40CEE8] 保释人破产 → 其保释的事件槽 NPC 自动关回原生建筑
+    //   条件 = 自由（busy==0，原版 !byte_498E32）且 bailer==破产者（byte_498E30）:
+    //   槽 0/1（小偷/強盜）→ jailPlayer；槽 2/3（流氓/間諜）→ hospitalizePlayer
+    for (int i = 0; i < 2; ++i) {
+        if (st.npcSlots[i].busy == 0 && st.npcSlots[i].bailer == p) {
+            jailPlayer(app, i + 4, 0);
+        }
+    }
+    for (int i = 2; i < 4; ++i) {
+        if (st.npcSlots[i].busy == 0 && st.npcSlots[i].bailer == p) {
+            hospitalizePlayer(app, i + 4, 0);
+        }
+    }
     if (pl.cellTableIdx) {
         releaseCellTableSlot(app, pl.cellTableIdx);
     }

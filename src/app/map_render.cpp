@@ -309,9 +309,10 @@ void renderMap(Application& app, int centerX, int centerY) {
     for (int j = 0; j < state.playerCount && j < 9; ++j) {
         drawPiece(j);
     }
-    // [RE 0x40829D] 事件槽 NPC（4..7）：已保释上路（slotBusy2==0）才画；未释放坐标 0 由守卫跳过
+    // [RE 0x40829D] 事件槽 NPC（4..7）：busy==0（已保释上路/自由）才画；在押（1/2）经
+    //   0x408B87 判据跳过；坐标 0 由 drawPiece 守卫跳过
     for (int j = 4; j < 8; ++j) {
-        if (state.slotBusy2[j - 4] == 0) {
+        if (state.npcSlots[j - 4].busy == 0) {
             drawPiece(j);
         }
     }

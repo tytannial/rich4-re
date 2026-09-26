@@ -587,7 +587,16 @@ int cardEffectHibernate(Application& app) {
         q.byte54 = 5;                                   // [RE 0x444172]
         q.byte66 = static_cast<uint8_t>(q.byte66 + 5);  // [RE 0x44417A byte_496BAA]
     }
-    // 事件槽 4..7（byte_498DF5=0 / byte_498DF4=5）→ P5
+    // [RE 0x4440EA v0>=4 段] 事件槽 NPC（4..7）：`!byte_498DF2`（即 busy==0 自由游走；
+    //   原版 DF2 与 498E32 同一字节）→ byte_498DF5(timerB)=0、byte_498DF4(timerA)=5
+    //   （冬眠 5 回合，由 updatePlayerStates NPC 分支递减；在押 NPC 跳过）
+    for (int i = 0; i < 4; ++i) {
+        if (st.npcSlots[i].busy == 0) {
+            st.npcSlots[i].timerB = 0;
+            st.npcSlots[i].timerA = 5;
+            RICH4_LOGI("cardHibernate: NPC %d timerA=5 (RE 0x4440EA)", i + 4);
+        }
+    }
     renderGameFrame(app);  // [RE refreshGameUi(0,0,1)]
     RICH4_LOGI("cardHibernate: p%d affected others (RE 0x4440EA)", cur);
     return 1;

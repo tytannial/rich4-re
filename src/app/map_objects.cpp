@@ -126,7 +126,8 @@ bool canAttachObject(const GameState& st, int objId) {
 // [RE 0x40AF12] getObjectPosition：objId → 世界像素坐标（飞弹/核弹/机器工人/传送机用）
 // 依据: 0x40AF12 反编译; <2000 cellEnt；(2000,4000) estate；(4000,6000) corp；
 //   (6000,8000) specPt；(8000,10000) evtCell；&0x8000：低4位=玩家位掩码（spriteX/Y）、
-//   bit4-7=事件槽（miscTable80[槽][0/1]）、BYTE1&0x7F=挂身物件（cellTable 槽 +2/3 的 cellEnt 坐标）
+//   bit4-8=事件槽（g_miscTable80[8*(p-4)] = npcSlots[p-4].pixelX/Y，word 索引 8*(p-4)）、
+//   BYTE1&0x7F=挂身物件（cellTable 槽 +2/3 的 cellEnt 坐标）
 void getObjectPosition(const GameState& st, int objId, int& outX, int& outY) {
     outX = 0;
     outY = 0;
@@ -209,9 +210,10 @@ void getObjectPosition(const GameState& st, int objId, int& outX, int& outY) {
             while (((objId >> si) & 1) == 0) {
                 ++si;
             }
-            if (si < 10) {
-                outX = static_cast<int>(st.miscTable80[si][0] & 0xFFFF);
-                outY = static_cast<int>(st.miscTable80[si][1] & 0xFFFF);
+            if (si < 9) {
+                // [RE 0x40AF12] 事件槽坐标 = g_miscTable80[8*(p-4)] / word_498E2A[8*(p-4)]
+                outX = static_cast<int>(st.npcSlots[si - 4].pixelX);
+                outY = static_cast<int>(st.npcSlots[si - 4].pixelY);
             }
         } else if ((objId & 0x7F00) != 0) {
             const int idx = (objId >> 8) & 0x7F;
