@@ -137,11 +137,12 @@ return v;
 - 高字节条件（BYTE1(lParam)，道具均 0）：case 1..8 额外过滤（自宅/同类地产/无主地/路障炸弹格…），实现时可留档
 
 **鼠标/滚动**（flags&0x80）：
-- 鼠标出视口（x≥440 / y≥440 / y≤0）→ 方向 `dword_48C568`：1上 2左 3下（y==479）4右；
-  `SetTimer(50ms)` 开始滚动；鼠标回视口内 → KillTimer + 立即判定
+- 鼠标出视口（x==0 左 / x≥440 右 / y≤40 上 / y==479 下）→ 方向 `dword_48C568`：1上 2左 3下（y==479）4右；
+  `SetTimer(50ms)` 开始滚动；鼠标回视口内（1..439 / 41..478）→ KillTimer + 重置速度 8 + 立即判定
 - 每 tick：`speed dword_48C56C`（初 8，+4，上限 64）；
   `view.x += (vecX*speed)>>16; view.y += (vecY*speed)>>16`（16.16 定点），
-  clamp [220,2084]，`refreshGameUi(view.x, view.y, 0)`（滚动期间鼠标也可命中，`LABEL_53` 仍在跑）
+  clamp [220,2084]，`refreshGameUi(view.x, view.y, 0)`（**计时器激活期间鼠标在边缘不拾取**：
+  MOVE 走 `LABEL_52 → if(dword_48C564) goto LABEL_155`；仅 KillTimer 后才 `LABEL_53` 判定）
 - 方向向量表 `dword_4751B0[2*v7]`/`dword_4751B4[2*v7]`（v7=`(camDir+2*mouseDir-2)&7`，
   8 项 = N/NW/W/SW/S/NE…，16.16：±65536、±46341=0.7071）
 - 滚动方向光标 id：`off_475E0D[1..4]` = 0x22/0x28/0x26/0x24（34/40/38/36）
@@ -151,6 +152,10 @@ return v;
 - 默认/离开光标 `cursorSelect(5,1,0)`；进入模态 `setPauseDraw(1)` + `rebuildPickBuffer(1)` +
   PostMessage(WM_MOUSEMOVE 真实鼠标位置) 初始化
 - 选择内存：`dword_48C584` = 选中 id；`dword_48C580` = 当前光标类型（变化才 cursorSelect）
+- **实机核对（2026-09-26）**：飞弹 id7（mode `0x300C0`）与核弹 id13（`0x400C0`）共用
+  `launchMissile`，低 16 位同为 `0x00C0` → flags 均转 `0xB7`（滚动模式），仅 `cursorType`
+  3/4 不同；用户复测「飞弹滚动→发射」正常，**无需修正**（差异仅重写方向切换时重置速度、
+  滚动中点击带提示音两处，均不影响功能）。
 
 ### 1.2 角色气泡台词 `sub_44EF41(p, expr, text)`（**不是语音，是气泡**）
 
