@@ -162,12 +162,33 @@ void onPlayerActionPhase(Application& app) {
         return;
     }
     if (p >= 4) {
+        const int i = p - 4;
+        Player& np = st.players[p];
+        const uint16_t ncell = np.cellEntId;
+        CellEnt& nce = st.cellEnts[ncell];
+        const uint8_t cellType = static_cast<uint8_t>(nce.occMask & 0xFF);
+        const int objId = static_cast<int>((nce.occMask >> 16) & 0xFF);
+        uint8_t objType = 0;
+        if (objId > 0 && objId <= 46) {
+            objType = st.cellTable[static_cast<size_t>(24 * (objId - 1))];
+        }
+        const bool stopped = st.remainingSteps == 0;
+        // [RE 0x41B42D] 通用受害（对齐真人 switch(objType) 11恶犬/17地雷/16路障，但恶人走永久关押、
+        //   不播爆炸/咬伤/住院动画，damagePlayer 对恶人无意义→直接 hospitalizePlayer(NPC,0)）：
+        if (stopped && (objType == 11 || objType == 17)) {  // 恶犬咬伤 / 地雷炸伤 → 入院(永久待保释)
+            releaseCellTableSlot(app, objId);  // 删除该格物件（地雷/恶犬轮替）
+            st.remainingSteps = 0;
+            hospitalizePlayer(app, p, 0);
+            return;
+        }
+        if (objType == 16) {  // 路障：路过即触发 → 删除 + 强制停下（不消失，仍自由身）
+            app.audio().stopEffectSlot(st.moveSoundIndex);
+            releaseCellTableSlot(app, objId);
+            st.remainingSteps = 0;
+        }
         // [RE 0x41B42D loc_41C7A6] 事件槽 NPC 抓回（阶段1 行走闭环；恶行 LABEL_88 待阶段2）：
         //   原版抓回在函数尾**每步无条件执行**（不是只在落定步）——随机游走途中经过監獄/醫院格
         //   那一步即抓回，抓回后清 remainingSteps 终止本回合移动（对齐 0x41C7DF）。
-        const int i = p - 4;
-        const CellEnt& ce = st.cellEnts[st.players[p].cellEntId];
-        const uint8_t cellType = static_cast<uint8_t>(ce.occMask & 0xFF);
         const uint8_t home = static_cast<uint8_t>(st.slotStatus[i] & 0x7F);  // 1=原生监狱 2=原生医院
         // 踩到任一監獄(4)/醫院(5)格即"消失重置"，回原生 home 在押（用户确认：无论入狱/入院，遇建筑
         //   都重置；bit7 闩锁：起点非 home 时 release 已置→走回即抓，起点=home 时先离开二次抓）
