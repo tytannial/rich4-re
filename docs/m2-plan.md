@@ -304,7 +304,7 @@
 - ~~P4 卡片栏/道具栏 UI + 使用流程外壳~~ ✅ 2026-09-24（工具条 case7/8：`useCardDialog` 0x441BAA /
   `itemBagDialog` 0x447D97，panel.mkf[11] 5×3 网格；**改建卡(id7)/请神符(id23)/送神符(id22) 可用**，
   其余 27 卡 + 13 道具效果 stub；见 `441baa-inventory-panels.md`）
-- **P4 卡片效果专项分析 ✅ 2026-09-26**：`441baa-card-effects.md`——30 卡逐卡效果函数、三类交互范式（A 脚下格 / B 选玩家 / C 选玩家地产）、依赖原语盘点（多数已实现可复用）、被动卡链（18/19/20/21 走 `sub_444691`/`applyExemptCard`/`passOnCardDialog`/`applyFreeCard`）、实现分档 A/B/C、待细化清单；IDB 重命名 26 个效果/helper 函数；**烏龜卡指针订正 `0x446AFB`→`0x4458DF`**。下一步按档 A→B→C 逐卡实现。**档A 8 卡已实现 ✅ 2026-09-26**（`src/app/card_effects.cpp` + `card_bag_dialog.cpp` `cardEffect` switch 接线；`turnToAdjacentCell` 迁 `turn_system.cpp` 导出）；下一步档B（天使/惡魔/停留/冬眠/夢遊/陷害/紅/黑/查稅/烏龜 + 被动復仇/免費）。
+- **P4 卡片效果专项分析 ✅ 2026-09-26**：`441baa-card-effects.md`——30 卡逐卡效果函数、三类交互范式（A 脚下格 / B 选玩家 / C 选玩家地产）、依赖原语盘点（多数已实现可复用）、被动卡链（18/19/20/21 走 `sub_444691`/`applyExemptCard`/`passOnCardDialog`/`applyFreeCard`）、实现分档 A/B/C、待细化清单；IDB 重命名 26 个效果/helper 函数；**烏龜卡指针订正 `0x446AFB`→`0x4458DF`**。下一步按档 A→B→C 逐卡实现。**档A 8 卡已实现 ✅ 2026-09-26**（`src/app/card_effects.cpp` + `card_bag_dialog.cpp` `cardEffect` switch 接线；`turnToAdjacentCell` 迁 `turn_system.cpp` 导出）；**档B/C 全完成 ✅ 2026-09-26**（30 卡全实现：`card_effects.cpp` 档B 天使/惡魔/停留/冬眠/夢遊/陷害/查稅/漲價/查封/同盟/烏龜/紅/黑 + 档C 換地/換屋；被动 18復仇/19嫁祸/20免費/21免罪；`resolveFeePayer` 免费·嫁祸接入 + `stockPickDialog` 选股）。
 - 存档完整恢复（P5）、事件槽 NPC（P5）
 - ~~现金不足/神明阻止提示~~、~~询问框背景~~、~~连锁店创建~~、~~corp/specPt 收费~~ —— 均已完成
 

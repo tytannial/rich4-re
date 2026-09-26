@@ -143,19 +143,29 @@ if 非人类: flyObjectSprite; highlightBlink(); refreshGameUi(0,0,1); return v
   - 需先补：天数递减、状态写入 helper、`sub_444691`/`sub_444A60`、`cursorSelect`+股价倒计时。
 - **档C（需扩 `sub_446AE8` 选地块 + 双地块交换 UI，3 张）**：換地4 / 換屋5 /（查封27/同盟29 属 B，但同盟依赖 allyActive 递减）。
 
-### 实现进度（2026-09-26）
+### 实现进度（2026-09-26，**30 卡全实现**）
 
-- **档A 8 卡 ✅ 已实现**：`src/app/card_effects.cpp` —— id1 均富 `0x4420D8` / id2 均貧 `0x4421B4` /
-  id3 購地 `0x442325` / id6 轉向 `0x442F4D` / id8 拍賣 `0x443225` / id11 怪獸 `0x443917` /
-  id12 拆除 `0x443B0F` / id13 搶奪 `0x443E3D`；`card_bag_dialog.cpp` `cardEffect` switch 接线。
-- 新增导出：`turnToAdjacentCell` 由 `magic_house_dialog.cpp`（匿名 namespace）**迁至 `turn_system.cpp`**
-  + `turn_system.h` 声明（轉向卡复用）；道具价复用既有 `kItemPrice[13]`（`0x47FEEA`，id-1 索引）。
-- **AI 分支**：`useCardFlow` 仅 `alive==1` 进入 → 效果函数当前只走人类路径；AI 用卡链
+- **实现位置**：`src/app/card_effects.cpp/.h`（30 张效果 + 被动 `triggerRevengeCard`/`applyFreeCard`）
+  + `card_bag_dialog.cpp` `cardEffect` switch 接线 + `stock_market_dialog.cpp` `stockPickDialog`（红/黑选股）。
+- **档A（8）**：均富/均貧/購地/轉向/拍賣/怪獸/拆除/搶奪。
+- **档B（13 主 + 2 被动）**：天使（整路段批量 `level++`/corp `angelUpgrade` + FLC 523）、惡魔（整段
+  夷平 + 记债 30×M×level）、停留（`skipMove`）、冬眠（全体 `byte54=5` + 150×M）、夢遊（`state37=4/5`
+  + 清载具）、陷害（`jailPlayer` 5/4 天）、查稅（`cash×0.2` + 免费/嫁祸链）、漲價（`flag=0x50`）、
+  查封（`flag=0x51` + 研究所停研发）、同盟（`ally/allyActive=7`，先解旧盟）、烏龜（`fixedStep=2/3`）、
+  紅/黑（选股 → `stockNews=0x30`/`0x03` + `stockNewsApply`；黑卡持股损失记债 股数×跌幅/200）。
+- **档C（2）**：換地（交换同类地块 owner）；換屋（交换 `level/sub+type`，地权不变，0x40B4F8 动画）。
+- **被动链**：18 復仇 `triggerRevengeCard`（梦游/陷害宿主触发，反伤由调用方执行）、19 嫁祸
+  `passOnCardDialog`（已有）、20 免費 `applyFreeCard`（人类 `askDialog` / AI `(rand%3000+3000)×M` 阈值）、
+  21 免罪 `resolvePenaltyTarget`（已有）。
+- **机制补充**：`clearAllyPair` 提取导出（economy）；`updatePlayerStates` 补同盟天数递减（每次双向
+  `-20×M` 记债，7→…→0x80）；`resolveFeePayer` 补 **免費卡抵用（返回 -1 免付）→ 嫁祸转嫁 → 死神代付**
+  三步（原版顺序 0x419E58/0x419EB8/0x419ECC 等三处）；`turnToAdjacentCell` 迁 `turn_system.cpp` 导出。
+- **AI 分支**：`useCardFlow` 仅 `alive==1` 进入 → 效果函数只走人类路径；AI 用卡链
   （`sub_41E69E` + `dword_48BE58` 预选目标，`sub_41E6F2`=读表）随 P5 接入。
-- 待实机验证：坐标/FLC 落点（怪兽 FLC 557、拆除 FLC 529）、`selectTargetDialog` flags
-  （`0x0E0C0410` 玩家 / `0x0E0C0506` 地块 / `0x0E0C0526` 地块+道具）。
-- **后续**：档B（天使9/惡魔10/停留14/冬眠15/夢遊16/陷害17/紅24/黑25/查稅26/烏龜30 + 被动18/20）、
-  档C（換地4/換屋5）。
+- **台词（`sub_44EF41` 角色语音/气泡）**：各卡调用点已定位（off_4812xx 台词表），表数据提取随 P4 语音批次。
+- 待实机验证：FLC 落点（怪獸 557 / 拆除 529 / 天使 523）、`selectTargetDialog` flags
+  （`0x0E0C0410` 玩家 / `0x0E0C0506` 地块 / `0x0E0C0526` 地块+道具 / `0x0E0C0710` 玩家(陷阱类) /
+  `0x0E0C0202` estate 换地 / `0x0E0C0204` corp 换地）、`stockPickDialog` 选股交互。
 
 ## 6. 每卡实现前待细化清单
 
