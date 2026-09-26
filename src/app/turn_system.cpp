@@ -158,8 +158,33 @@ void onPlayerActionPhase(Application& app) {
         RICH4_LOGI("worker kick: slot %u at cell %u (RE 0x41B42D)", slotHi, w.cellEntId);
         return;
     }
-    if (p < 0 || p >= 4 || st.players[p].cellEntId == 0) {
-        // [TODO P5] 事件槽 NPC（p 4..7）
+    if (p < 0 || st.players[p].cellEntId == 0) {
+        return;
+    }
+    if (p >= 4) {
+        // [RE 0x41B42D loc_41C7A6] 事件槽 NPC 抓回（阶段1 行走闭环；恶行 LABEL_88 待阶段2）：
+        //   仅步数走完（落定）结算；状态 1監獄/2醫院 且落地格类型匹配 → 两段式：
+        //   首次置 bit7 闩锁、再次真抓回 jail/hospital（防刚出门即抓）。见 498df0 §2.8。
+        const int i = p - 4;
+        if (st.remainingSteps != 0) {
+            return;
+        }
+        const CellEnt& ce = st.cellEnts[st.players[p].cellEntId];
+        const uint8_t cellType = static_cast<uint8_t>(ce.occMask & 0xFF);
+        const uint8_t stt = static_cast<uint8_t>(st.slotStatus[i] & 0x7F);
+        if (stt == 1 && cellType == 4) {
+            if ((st.slotStatus[i] & 0x80) != 0) {
+                jailPlayer(app, p, 0);
+            } else {
+                st.slotStatus[i] = static_cast<uint8_t>(st.slotStatus[i] | 0x80);
+            }
+        } else if (stt == 2 && cellType == 5) {
+            if ((st.slotStatus[i] & 0x80) != 0) {
+                hospitalizePlayer(app, p, 0);
+            } else {
+                st.slotStatus[i] = static_cast<uint8_t>(st.slotStatus[i] | 0x80);
+            }
+        }
         return;
     }
     Player& pl = st.players[p];
@@ -384,7 +409,54 @@ void loadWalkResources(GameState& st, int p) {
         return;
     }
     if (p >= 4 && p < 8) {
-        return;  // 事件槽 4..7（P5）
+        // [RE 0x40B93B 事件槽 NPC] 行走资源 = data.mkf[4*p+364..367]（非角色 charIndex 系列）
+        const int i = p - 4;
+        if (st.slotFlag5[i]) {
+            // 特殊/恶行动画组：slot0=4p+364, slot2=4p+367，动画组 5
+            if ((st.playerActionFlags[p] & 0x0F) != 5) {
+                releaseWalkResources(st, p, 0);
+                st.playerActionFlags[p] =
+                    static_cast<uint8_t>((st.playerActionFlags[p] & 0xF0) | 5);
+                loadWalkRes(st, p, 0, static_cast<size_t>(4 * p + 364));
+                loadWalkRes(st, p, 2, static_cast<size_t>(4 * p + 367));
+            }
+            st.playerMoveGroup[p] = 0;
+            if (st.playerMoveFrame[p]) {
+                st.playerActionExtra[p] = 0;
+            }
+            st.playerMoveFrame[p] = 0;
+            return;
+        }
+        const uint16_t cell = st.slotCell[i];
+        const bool road = cell > 0 && cell < st.cellEnts.size() &&
+                          (st.cellEnts[cell].occMask & 0x80000000u) != 0;
+        if (!road) {
+            // 普通路（cellEnt+39 最高位=0）→ 走路组 slot0=4p+364 / slot2=4p+365
+            if ((st.playerActionFlags[p] & 0x0F) != 1) {
+                releaseWalkResources(st, p, 0);
+                st.playerActionFlags[p] =
+                    static_cast<uint8_t>((st.playerActionFlags[p] & 0xF0) | 1);
+                loadWalkRes(st, p, 0, static_cast<size_t>(4 * p + 364));
+                loadWalkRes(st, p, 2, static_cast<size_t>(4 * p + 365));
+            }
+            if (st.playerMoveGroup[p] == 1) {
+                st.playerMoveFrame[p] = 0;
+            }
+            st.playerMoveGroup[p] = 0;
+            return;
+        }
+        // 走进状态（0x10）→ slot1=4p+366
+        if ((st.playerActionFlags[p] & 0x30) != 0x10) {
+            releaseWalkResources(st, p, 1);
+            st.playerActionFlags[p] =
+                static_cast<uint8_t>((st.playerActionFlags[p] & 0xCF) | 0x10);
+            loadWalkRes(st, p, 1, static_cast<size_t>(4 * p + 366));
+        }
+        if (st.playerMoveGroup[p] == 0) {
+            st.playerMoveFrame[p] = 0;
+        }
+        st.playerMoveGroup[p] = 1;
+        return;
     }
     if (p >= 8) {
         // [RE 0x40B93B 槽8] 機器娃娃专用行走资源：data.mkf[521]（站立/走路 slot0）+
@@ -2271,9 +2343,12 @@ int checkPlayerAction(Application& app, int a1) {
     int v1 = 0;
     if (p >= 4) {
         const int s = p - 4;
-        if (!st.slotBusy2[s] && !a1 && !st.slotTimerA[s] && !st.slotTimerC[s]) {
+        // [RE 0x40C912 NPC] 行动状态 498E32(slotBusy=坐牢)/498E34/498E36 全 0 → 返回 2 可游走；
+        //   否则（坐牢/计时中）返回 0 → 本回合不移动（见 498df0-event-slot-npc.md §2.2）
+        if (st.slotBusy[s] == 0 && !a1 && st.slotTimerA[s] == 0 && st.slotTimerC[s] == 0) {
             return 2;
         }
+        return 0;
     } else {
         const uint8_t v2 = st.players[p].alive;
         if (v2) {
@@ -2371,6 +2446,11 @@ void beginPlayerTurn(Application& app) {
             break;
         case 2:
         case 5: {
+            // [RE 0x418C55 case2/5] 事件槽 NPC（>=4）直接移动，跳过 AI 用卡/道具/交易（R2）
+            if (p >= 4) {
+                startPlayerMove(app);
+                break;
+            }
             // [RE 0x418E13] 交易市场 AI（sub_4284BE；交易系统已搁置——仅分析归档）
             // [RE 0x418E18..0x418E21] rand()&1 → 用卡(useCardFlow 0x441BAA)/道具(itemPanelFlow 0x447D97)
             //   两函数内部自判 alive&6 + aiCardItem bit0/1；AI 用卡链见 ai_card.cpp
@@ -2608,13 +2688,86 @@ int32_t insurancePayout(Application& app, int player, int32_t amount) {
 //   才 release+走出 → 从触发回合数起第 X+1 次回合开始恢复行动。sub_40C912 显示
 //   (BYTE2&0x7F)+1（重写 checkPlayerAction 同步）。debug 直调补跳入狱当回合同语义。
 // 差异: cellTable/cellNo 位置表（word_496D0A）P5；语音 P4；FLC 背景保存由逐帧重绘等价
+// [RE 0x43D7BF / 0x43EE6E] releaseEventNpc：保释事件槽 NPC 上路（填犯人表 + loadWalkResources）
+// 依据: releaseJailNpc/releaseHospitalNpc; 目标格 = 監獄/醫院格（word_48BAE0/48BAE2），
+//   bailer = 当前玩家（byte_498E30/DF0），当前格/坐标/来路清、状态 1監獄/2醫院、
+//   目标格类型匹配则置触发闩锁 bit7、清 jailFlags/hospitalFlags、slotBusy2=0 参与轮转。
+// 见 498df0-event-slot-npc.md §2。
+void releaseEventNpc(Application& app, int npc, bool fromJail) {
+    GameState& st = app.gameState();
+    if (npc < 4 || npc >= 8) {
+        return;
+    }
+    const int i = npc - 4;
+    Player& pl = st.players[npc];
+    const uint16_t cell = fromJail ? st.jailCellEntId : st.hospitalCellEntId;
+    st.slotBailer[i] = static_cast<uint8_t>(st.currentPlayer);
+    st.slotBusy[i] = 0;   // 498E32=0 自由游走
+    st.slotBusy2[i] = 0;  // 498DF2=0 参与回合轮转
+    st.slotCell[i] = cell;
+    st.slotPrevCell[i] = 0;
+    st.slotTimerA[i] = 0;
+    st.slotTimerB[i] = 0;
+    st.slotTimerC[i] = 0;
+    st.slotTimerD[i] = 0;
+    // 复用 players[npc] 承载位置（moveOneStep/onPhase/渲染管线）；kind=3 避开人类/AI 分支
+    pl.cellEntId = cell;
+    pl.prevCellEnt = 0;
+    pl.alive = 1;
+    pl.kind = 3;
+    pl.stateFlags = 0;
+    pl.byte54 = 0;
+    pl.state37 = 0;
+    pl.skipMove = 0;
+    pl.fixedStep = 0;
+    pl.travel = 0;
+    if (cell > 0 && cell < st.cellEnts.size()) {
+        const CellEnt& ce = st.cellEnts[cell];
+        pl.spriteX = ce.x;
+        pl.spriteY = ce.y;
+        st.slotPixelX[i] = ce.x;
+        st.slotPixelY[i] = ce.y;
+        const uint8_t ct = static_cast<uint8_t>(ce.occMask & 0xFF);
+        st.slotStatus[i] = static_cast<uint8_t>(fromJail ? 1 : 2);
+        if (ct == (fromJail ? 4 : 5)) {
+            st.slotStatus[i] = static_cast<uint8_t>(st.slotStatus[i] | 0x80);
+        }
+        st.cellEnts[cell].occMask |= static_cast<uint32_t>(4096u << i);  // NPC 占用位
+    }
+    if (fromJail) {
+        st.jailFlags[npc] = 0;
+    } else {
+        st.hospitalFlags[npc] = 0;
+    }
+    loadWalkResources(st, npc);
+    RICH4_LOGI("releaseEventNpc: NPC %d released by %d, cell %u (RE 0x43D7BF/0x43EE6E)", npc,
+               st.currentPlayer, cell);
+}
+
+// [RE 0x43D593] jailPlayer：入监（真人）/抓回坐牢（事件槽 NPC）
 void jailPlayer(Application& app, int player, int days) {
     GameState& st = app.gameState();
     if (player < 0) {
         return;
     }
     if (player >= 4) {
-        RICH4_LOGI("jailPlayer: NPC %d days=%d ignored (P5 事件槽未建模)", player, days);
+        // [RE 0x43D5??] NPC 抓回：清当前格占用（4096<<i）+ slotBusy=1（坐牢不动）+
+        //   清状态/触发/计时 + jailFlags=1（可再保释）；停在抓回所在（監獄）格，不清 slotBusy2
+        if (player < 8) {
+            const int i = player - 4;
+            const uint16_t cell = st.slotCell[i];
+            if (cell > 0 && cell < st.cellEnts.size()) {
+                st.cellEnts[cell].occMask &= ~static_cast<uint32_t>(4096u << i);
+            }
+            st.slotBusy[i] = 1;
+            st.slotStatus[i] = 0;
+            st.slotTimerA[i] = 0;
+            st.slotTimerB[i] = 0;
+            st.slotTimerC[i] = 0;
+            st.slotTimerD[i] = 0;
+            st.jailFlags[player] = 1;
+            RICH4_LOGI("jailPlayer: NPC %d 抓回坐牢 (RE 0x43D593)", player);
+        }
         return;
     }
     Player& pl = st.players[player];
@@ -2661,7 +2814,22 @@ void hospitalizePlayer(Application& app, int player, int days) {
         return;
     }
     if (player >= 4) {
-        RICH4_LOGI("hospitalizePlayer: NPC %d days=%d ignored (P5 事件槽未建模)", player, days);
+        // [RE 0x43EC3F] NPC 抓回住院：同 jailPlayer NPC 分支，置 hospitalFlags
+        if (player < 8) {
+            const int i = player - 4;
+            const uint16_t cell = st.slotCell[i];
+            if (cell > 0 && cell < st.cellEnts.size()) {
+                st.cellEnts[cell].occMask &= ~static_cast<uint32_t>(4096u << i);
+            }
+            st.slotBusy[i] = 1;
+            st.slotStatus[i] = 0;
+            st.slotTimerA[i] = 0;
+            st.slotTimerB[i] = 0;
+            st.slotTimerC[i] = 0;
+            st.slotTimerD[i] = 0;
+            st.hospitalFlags[player] = 1;
+            RICH4_LOGI("hospitalizePlayer: NPC %d 抓回住院 (RE 0x43EC3F)", player);
+        }
         return;
     }
     Player& pl = st.players[player];
@@ -3104,13 +3272,12 @@ void nextPlayer(Application& app) {
         const int v2 = cur + 1;
         cur = v2;
         if (v2 == st.playerCount) {
-            // 玩家轮完 → 事件槽 4..7（流氓/间谍/小偷/强盗等特殊 NPC，M2）。
-            //   原版 byte_498DF2 默认为 0 会选中空闲槽 4，但原版该槽有 NPC 数据；
-            //   本作未实现这些 NPC，槽无数据 → 直接进入会导致 currentPlayer 指向空槽、
-            //   渲染回左上角并错误掷骰。故仅当事件槽有激活 NPC 才进入，否则回绕过天。
+            // [RE 0x418EBD LABEL_19] 玩家轮完 → 事件槽 4..7：slotBusy2==0（已保释上路）+
+            //   alive!=0（槽有数据）者进入其回合；全占用/未释放 → 回绕过天。
+            //   见 498df0-event-slot-npc.md §2.1（防 R1：空槽进回合会渲染跳左上角/错误掷骰）
             int npc = -1;
-            for (int s = st.playerCount; s < 8; ++s) {
-                if (st.players[s].alive != 0) {
+            for (int s = 4; s < 8; ++s) {
+                if (st.slotBusy2[s - 4] == 0 && st.players[s].alive != 0) {
                     npc = s;
                     break;
                 }

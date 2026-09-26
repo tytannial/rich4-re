@@ -11,6 +11,7 @@
 #include "game/app/event_stack.h"
 #include "game/app/float_message.h"
 #include "game/app/message_dialog.h"
+#include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/log.h"
 #include "game/platform/audio.h"
@@ -271,11 +272,10 @@ bool bailHandler(const SDL_Event* event, void* user) {
                 }
                 ui.msg.setup(*ui.sheet, kFrameMsg, 210, 150, 0, -6, 0x101010, 0); // [RE 0x43D189]
                 ui.msg.show(app, kNpcThanks[hit - 4]); // [RE 0x43D19E] dword_475BE2[i]+2
-                // [RE 0x43D7BF releaseJailNpc] 事件槽记录待 P5：行走/效果/回归链见
-                //   41982d-p2-events.md §1.7（犯人表 0x498E28 16B×4 + onPlayerActionPhase 事件槽分支）
-                st.jailFlags[hit] = 0;
                 st.players[st.currentPlayer].points = static_cast<uint16_t>(
                     st.players[st.currentPlayer].points - kBailCost[hit]);
+                // [RE 0x43D7BF releaseJailNpc] 填犯人表 → 上路随机游走（行走/抓回链见 498df0）
+                releaseEventNpc(app, hit, true);
                 ui.npcReleased = true; // [RE 0x48C4C9]
                 RICH4_LOGI("jailBail: NPC %d released by %d, cost %d (event-slot walk TODO P5, "
                            "RE 0x43CFDB)",
@@ -632,9 +632,8 @@ void doDischarge(HospCtx& ui) {
         blitElement(dst, nf, 420, 450, false); // blit 内部按帧 offset 定位
         ui.msg.setup(*ui.sheet, kHMsg, 200, 200, 0, -6, 0x101010, 0);
         ui.msg.show(app, kNpcThanks[i - 4]); // [RE 0x43DE3C] dword_475BE2[i]+2
-        // [RE 0x43EE6E releaseHospitalNpc] 事件槽记录待 P5：行走/效果/回归链见
-        //   41982d-p2-events.md §1.7（犯人表 0x498E28 16B×4 + onPlayerActionPhase 事件槽分支）
-        st.hospitalFlags[i] = 0;
+        // [RE 0x43EE6E releaseHospitalNpc] 填犯人表 → 上路随机游走
+        releaseEventNpc(app, i, false);
         ui.released = true;      // [RE 0x48C4F6]
         RICH4_LOGI("hospital visit: NPC %d released by %d, cost %d (event-slot walk TODO P5, "
                    "RE 0x43DE4C)",

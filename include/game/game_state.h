@@ -665,8 +665,12 @@ struct GameState {
     uint8_t slotFlag7[8] = {};
     // [RE 0x498E31] byte_498E31 槽朝向
     uint8_t slotDir[8] = {};
-    // [RE 0x498E32] byte_498E32 槽占用
+    // [RE 0x498E32] byte_498E32 槽占用（1=坐牢/在押，本回合不动；0=自由游走）
     uint8_t slotBusy[8] = {};
+    // [RE 0x498DF3 / 0x498E33] byte_498DF3 事件槽状态：1=監獄 2=醫院，bit7=抓回触发闩锁
+    uint8_t slotStatus[8] = {};
+    // [RE 0x498DF0 / 0x498E30] byte_498DF0 保释人玩家号（0..3；恶行收益对象）
+    uint8_t slotBailer[8] = {};
     // [RE 0x498E34/35/36/37] 槽状态倒计时（负数 = 完成）
     int8_t slotTimerA[8] = {};
     int8_t slotTimerB[8] = {};

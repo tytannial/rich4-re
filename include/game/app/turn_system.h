@@ -62,6 +62,11 @@ void endPlayerState(Application& app, int p);
 void jailPlayer(Application& app, int player, int days);
 void hospitalizePlayer(Application& app, int player, int days);
 
+// [RE 0x43D7BF / 0x43EE6E] releaseEventNpc：保释事件槽 NPC（4..7）——填犯人表
+//   （bailer/当前格=監獄·醫院格/坐标/状态/清占用轮转位）+ loadWalkResources → 上路随机游走。
+//   fromJail=true 監獄（小偷/強盜），false 醫院（流氓/間諜）。见 498df0-event-slot-npc.md。
+void releaseEventNpc(Application& app, int npc, bool fromJail);
+
 // [RE 0x44BA63] insurancePayout：保险期内费用由保险公司给付（保险期 +62 非 0 → 理赔 + 消息）
 int32_t insurancePayout(Application& app, int player, int32_t amount);
 

@@ -299,6 +299,12 @@ void renderMap(Application& app, int centerX, int centerY) {
     for (int j = 0; j < state.playerCount && j < 9; ++j) {
         drawPiece(j);
     }
+    // [RE 0x40829D] 事件槽 NPC（4..7）：已保释上路（slotBusy2==0）才画；未释放坐标 0 由守卫跳过
+    for (int j = 4; j < 8; ++j) {
+        if (state.slotBusy2[j - 4] == 0) {
+            drawPiece(j);
+        }
+    }
     // [RE 0x40829D] 機器娃娃（虚拟槽 8）：currentPlayer==8 期间绘制
     if (state.currentPlayer == 8) {
         drawPiece(8);

@@ -284,6 +284,15 @@ bool newGameInit(Application& app, bool mode1) {
     state.jailFlags[5] = 1;
     state.hospitalFlags[6] = 1;
     state.hospitalFlags[7] = 1;
+    // [RE 0x40734F] 四大恶人事件槽开局"关押"：不占回合轮转（slotBusy2=1，nextPlayer 跳过）
+    //   + 坐牢不动（slotBusy=1）；status 1=監獄(4/5 小偷/強盜) 2=醫院(6/7 流氓/間諜)。
+    //   释放见 releaseEventNpc 0x43D7BF/0x43EE6E。见 498df0-event-slot-npc.md §1.3。
+    for (int i = 0; i < 4; ++i) {
+        state.slotBusy2[i] = 1;
+        state.slotBusy[i] = 1;
+        state.slotStatus[i] = static_cast<uint8_t>(i < 2 ? 1 : 2);
+        state.slotBailer[i] = 0xFF;  // 无保释人
+    }
 
     // 配置回写
     state.cfgTravel = state.newGameConfig.travelMode;
