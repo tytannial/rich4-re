@@ -2765,6 +2765,7 @@ void jailPlayer(Application& app, int player, int days) {
             st.slotTimerC[i] = 0;
             st.slotTimerD[i] = 0;
             st.slotCell[i] = cell;
+            st.slotBusy2[i] = 1;   // 抓回=消失+停止回合轮转（地图不再绘制、回到在押态，需重新保释）
             st.jailFlags[player] = 1;
             RICH4_LOGI("jailPlayer: NPC %d 抓回坐牢 (RE 0x43D593)", player);
         }
@@ -2828,6 +2829,7 @@ void hospitalizePlayer(Application& app, int player, int days) {
             st.slotTimerC[i] = 0;
             st.slotTimerD[i] = 0;
             st.slotCell[i] = cell;
+            st.slotBusy2[i] = 1;   // 抓回=消失+停止回合轮转（回到在押态，需重新保释）
             st.hospitalFlags[player] = 1;
             RICH4_LOGI("hospitalizePlayer: NPC %d 抓回住院 (RE 0x43EC3F)", player);
         }
