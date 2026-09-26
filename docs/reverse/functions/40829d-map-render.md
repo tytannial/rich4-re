@@ -53,7 +53,9 @@ cellEnts 物件、玩家棋子，以及住宅用地/商業用地/行業設施點
   等价 `dword_48A44C/48A84C/word_48A850/854/856`）；玩家棋子行走动画/朝向帧已接入
   （帧 = `playerMoveFrame + dir*perDir`，`dir=(8-mapRotation+p.dir)&7`；**移动中即朝本步方向**，
   见 `40d7c4-game-state-machine.md`）；调色板染色（原版 `*(WORD*)(palette+510)`）阶段 3 接入。
-- 原版事件槽（玩家 4-8）NPC + `g_miscTable80` 段未绘制（本作 M1 无事件槽 NPC）。
+- 事件槽（玩家 4-8）NPC 绘制 **✅ 2026-09-26**：循环 `ebx 0..4`（edi=ebx*16），`busy(0x498E32)==0`
+  才画（在押/未释放跳过）；g_miscTable80 坐标 + `drawPiece` state×group 资源回退；见
+  `498df0-event-slot-npc.md` §1.4/§3。
 - 骰子滚动/点数绘制见 `game_panel.cpp`/`turn_system.cpp`（屏幕固定落点，见 `audio-system.md` 同段）。
 
 ## 验证方式

@@ -160,10 +160,13 @@ loadWalkResources(a1)
 
 - `word_48BAE0` = special 8002 的 cellEnt（監獄格）；`word_48BAE2` = special 8001（醫院格）
   （`loadMapData` 0x408023..0x408068 扫描）
-- **每项 16 字节**（`i = a1-4`，共 4 项 = 0x498E28..0x498E68）：
+- **每项 16 字节**（`i = a1-4`，共 4 项 = 0x498E28..0x498E68；权威字段表见
+  `498df0-event-slot-npc.md` §1.1）：
   `+0 u16 格坐标 x`（`g_miscTable80`） / `+2 u16 格坐标 y`（`word_498E2A`） /
   `+4 u16 監獄/醫院格 cellEnt`（`word_498E2C`） / `+6 u16 = 0`（`word_498E2E`） /
-  `+8 u8 保释人`（`byte_498E30`） / `+10 u8 = 0`（`byte_498E32`） /
+  `+8 u8 保释人`（`byte_498E30`） / `+9 u8 朝向`（`byte_498E31`） /
+  `+10 u8 行动状态 busy`（`byte_498E32`，**与绝对视角 `byte_498DF2[16*p]` 同一字节**；
+  0=自由游走 / 1=監獄 / 2=醫院） /
   `+11 u8 状态`（`byte_498E33`：1=監獄 / 2=醫院，格子类型 == 4/5 时再 `|= 0x80`）
 - `releaseJailNpc` 0x43D7BF / `releaseHospitalNpc` 0x43EE6E：`a1 < 4` 走 `sub_40D6BE(a1)`（玩家
   恢复占用/朝向）；`a1 >= 4` 填上表 + 清标志；末尾都调 `loadWalkResources(a1)`（供该槽在地图现身）
@@ -175,7 +178,8 @@ loadWalkResources(a1)
   （`jailBailDialog`/`visitAi` 的 NPC 目标）——两者勿混
 - 玩家 0..3 释放：`sub_40D6BE(player)` + 清 `g_jailFlags/8B`
 - 四大惡人（小偷/流氓/強盜/間諜）即保释出狱的事件槽 NPC（帮助 `[HELP 47/52/53/56]`），
-  出狱后在路面行动（行窃/保护费/抢卡/盗领）—— P5 事件槽 NPC 实现依据
+  出狱后在路面行动（行窃/保护费/抢卡/盗领）—— **✅ 已实现 2026-09-26**；
+  权威规格 `498df0-event-slot-npc.md`（恶行 §2.7 / 物件分支 §2.6 / 抓回 §2.8）
 
 ### 1.4 踩格触发（`onPlayerActionPhase` @0x41C7A6）
 ```
@@ -188,8 +192,9 @@ if (cl == 1 && 格子类型 == 4) {          // 監獄状态 + 監獄格
 }
 ```
 
-- `byte_498DF3`（0x498DF3，16B/玩家）：bit0-6 = 状态（1=監獄、2=醫院），bit7 = 触发标志
-  （与 `g_jailFlags/8B` 的分工待确认——推测 `byte_498DF3` 为"到达门外"状态）
+- `byte_498DF3`（0x498DF3，= 槽记录 `byte_498E33`）：bit0-6 = 状态（1=監獄、2=醫院），bit7 = 抓回闩锁
+  （release 起点类型匹配即置位；`g_jailFlags/8B` 是保释面板的"在押列表"，两者分工已确认——
+  抓回判据用 status，面板用 flags）
 - 入狱/住院期间：`onPlayerActionPhase` 的 `g_playerCellNo` 递减（`byte_496D0C[24*cellNo-24]`），
   到 0 → `sub_40E14D` 释放 + FLC 525 + `hospitalizePlayer(p,5)`/`jailPlayer(p,5)`（出院/出狱）；
   同格有其他存活玩家且无 cellNo → 传染转移（见 `41b42d-on-player-action-phase.md`）
@@ -254,55 +259,33 @@ return !byte_498EA2[cur] && !sceneRequest && !quitGame;
   则循环继续选卡；AI 分支按个性/可用性从 `g_cardState60` 前 8 槽试选（`sub_41E69E` 判定）
 - **P4 卡片系统实现时按 `sub_40DEFE` 接入回合推进**（debug `Ctrl+Shift+J`/`L` 已按此对齐）
 
-### 1.7 事件槽 NPC 地面行走 → 恶人效果 → 回归監獄/醫院（**P5 待做标记**，2026-09-23 调研）
+### 1.7 事件槽 NPC 地面行走 → 恶人效果 → 回归監獄/醫院（**✅ 已实现 2026-09-26**）
 
-> **现状**：释放动画（面板内擦格 + panel[64] 全身像 + 答谢消息）✅ 已实现；以下链条**未实现**，
-> 代码 `TODO(P5 事件槽 NPC)` 就位（`jail_dialog.cpp`/`turn_system.cpp`/`new_game.cpp`）。
-> 本节为 P5 开工入口：**函数链已定位，效果细节待逆向**。
->
-> ⚠️ **2026-09-26 深挖后本小节两处字段有误**：`byte_498DF0` 实为**保释人玩家号**（非"棋子外观"，
-> NPC 精灵是 `map.mkf[4*p+364..367]` 独立系列）；行走是**随机游走走回建築格**触发抓回（非"走完一圈
-> 回归目标"）。**完整准确依据见 `498df0-event-slot-npc.md`**，本节仅作历史索引。
+> **权威规格已迁移至 `498df0-event-slot-npc.md`**（本小节仅作历史索引；下方字段表为 2026-09-23
+> 初查版本，含两处误读已在专用文档订正：`498DF0`=保释人、`498DF2`=`498E32`=busy 同一字节）。
+> 实现：`turn_system.cpp`（`npcVillainPhase` / 释放·抓回 / `moveOneStep` 槽同步 /
+> `updatePlayerStates` NPC 计时）、`jail_dialog.cpp`、`game_panel.cpp`、`map_render.cpp`、
+> `new_game.cpp`、`save_data.cpp`；调试 `Ctrl+Shift+8/9`。
 
-**状态字段全表（0x498DF0..0x498E70）**
+**实现链（历史索引，细节以专用文档为准）**
 
-| 字段 | 地址 | 语义 |
-|------|------|------|
-| `byte_498DF0[16*p]` | 0x498DF0 | 事件槽 NPC 棋子外观（角色 ID；绘制 `pieceSprites[+24]` 帧，p=4..7） |
-| `byte_498DF2[16*p]` | 0x498DF2 | 事件槽占用/行动调度（`nextPlayer` 选槽 + `onPlayerActionPhase` 行动；重写 `slotBusy2`） |
-| `byte_498DF3[16*p]` | 0x498DF3 | bit0-6 状态（1=監獄/2=醫院）、bit7 触发（"到达门外"→ 踩格抓回） |
-| `byte_498E70` | 0x498E70 | 当前事件槽 NPC 索引（`currentPlayer==8` 时使用） |
-| 犯人表 0x498E28 | +1 `byte_498E31` | 朝向（`sub_40C78C` 转向用） |
-| （16B×4，见 §1.3） | +10/+12/+14 | `byte_498E32/498E34/498E36` 行动状态/计数（`sub_40C912` 全 0 → 返回 2） |
+1. **释放写入**：`releaseJailNpc 0x43D7BF` / `releaseHospitalNpc 0x43EE6E`（bailer/busy=0/
+   cell=監獄·醫院格/status=保释建筑|0x80/清 flags/`loadWalkResources`）
+2. **面板显示**：`sub_415F69` else 分支（帧 5 背景 + `dword_47ED5A[cur]` 名 + bailer 棋子帧 2）
+3. **回合调度**：`nextPlayer 0x418EBD`（依次 4..7，`busy==0` 才进槽）
+4. **行走/转向/坐标**：`onPlayerActionPhase 0x41B42D` NPC 分支；`moveOneStep 0x40C05C`；
+   `sub_40C912`；`getObjectPosition 0x40AF12`
+5. **踩格抓回**：`onPlayerActionPhase @0x41C7A6`（status 与落地格同类型 → `jailPlayer`/`hospitalizePlayer`）
+6. **四大恶人效果**（`LABEL_88 0x41C447`）：同格偷点券/抢卡、过银行抢 20%、停留勒索/窃租金红利 —
+   完整金额字段/消息/条件见 `498df0-event-slot-npc.md` §2.7
 
-**实现链（函数入口，均已 IDA 核实）**
+**初查清单（已全部完成）**
 
-1. **释放写入**（已有占位）：`releaseJailNpc` 0x43D7BF / `releaseHospitalNpc` 0x43EE6E
-   （填犯人表 + `loadWalkResources`；重写目前只清 `jailFlags/hospitalFlags`）
-2. **右侧面板显示**：`sub_415F69` 0x415F69（宽版 440,0,200×280）/ `sub_4166F8` 0x4166F8（窄版）
-   —— 当前玩家 ≥ 玩家数时画 `dword_47ED5A[cur]`（小偷/強盜/流氓/間諜）+ `byte_498DF0[16*cur]` 棋子
-3. **回合调度**：`nextPlayer` 0x418EBD（`byte_498DF2` 选择事件槽）→ 事件槽回合进入 `onPlayerActionPhase`
-4. **行走/转向/坐标**：
-   - `onPlayerActionPhase` 0x41B42D：**23 处引用 `byte_498DF0`**（0x41B9D6..0x41C78B）——
-     事件槽 NPC 每步行动/恶人效果主体
-   - `moveOneStep` 0x40C05C：读犯人表（0x498E28/0x498E2C 目标格）处理下一步
-   - `sub_40C78C` 0x40C78C：转向（`byte_498E31` 朝向 +4/180°，从相邻格中排除回头格随机选）
-   - `sub_40AF12` 0x40AF12：编号 → 坐标（`0x8000|0x10<<slot` 走犯人表坐标 `miscTable80/word_498E2A`）
-   - `sub_40C912` 0x40C912：行动前状态检查（事件槽 `byte_498E32/34/36` 全 0 → 返回 2）
-5. **回归/踩格抓回**：`word_498E2C` = 監獄/醫院格 cellEnt（走完一圈的回归目标）；
-   `onPlayerActionPhase` @0x41C7A6 用 `byte_498DF3` 判定"状态 + 到达对应格" → `jailPlayer`/`hospitalizePlayer`
-6. **四大恶人效果**（帮助 `[HELP 47/52/53/56]`，具体函数 P5 逆向；保释人 = 犯人表 `byte_498E30`）：
-   - 小偷：偷路人点券给保释人；流氓：按地价收保护费给保释人；
-   - 強盜：抢路人一张卡给保释人；間諜：窃取土地上次租金 / 盗领公司累积红利
-   - 全部在 `onPlayerActionPhase` 事件槽分支（0x41B9D6 起）
-
-**待查清单（P5 开工时）**
-
-- [ ] `onPlayerActionPhase` 事件槽分支逐 case 反汇编（0x41B9D6..0x41C7A6）
-- [ ] 行走路径/圈数规则（`byte_498E32/34/36` 语义、回归条件）
-- [ ] 恶人效果四函数定位（按帮助文本搜索）
-- [ ] 玩家淘汰 `sub_40CD87` 对犯人表的清理（0x40CE95/0x40CED2 已引用）
-- [ ] `sub_4440EA`（0x4440EA）卡片选人中的事件槽处理
+- [x] `onPlayerActionPhase` 事件槽分支逐 case（0x41B9D6..0x41C7A6）
+- [x] 行走路径/圈数规则（busy/status/timer 语义、同类建筑抓回）
+- [x] 恶人效果四段定位（LABEL_88/LABEL_102/cur6/7 段）
+- [x] `sub_40CD87` 对犯人表的清理（保释人破产关回）
+- [x] `sub_4440EA` 对事件槽的处理（timerA=5/timerB=0）
 
 ## 2. case 10/11/12 得點券（✅ 已实现）
 

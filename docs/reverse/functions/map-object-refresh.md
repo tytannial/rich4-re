@@ -6,7 +6,7 @@
 |----|-----|
 | 地址 | `0x40E033` createMapObject / `0x40E14D` deleteMapObject / `0x40E32C` attachEnd（附身结束飘走）/ `0x40E669` moveObjectSprite（A→B 移动动画）/ `0x40EA62` canAttach / `0x40EAD7` attachObject（踩中效果主体）/ `0x40AA6C` randomCellEnt / `0x41B42D` onPlayerActionPhase（路过/停留触发）/ `0x41C84F` updatePlayerStates（回合寿命递减）/ `0x41CF67` advanceDay（月度换位）/ `0x40FAFD` bounceObject（弹飞）/ `0x40CD07` damagePlayer（载具损毁+受伤）/ `0x40AB4A` demolishEstate（地产降级/没收）/ `0x445ADA` drawGiftCard |
 | 重写符号 | `src/app/map_objects.cpp`（attach/attachEnd/slotMachine/effects/relocate）+ `economy.cpp`（deleteMapObject）+ `turn_system.cpp`（分派/寿命）+ `map_render.cpp`（8方向帧/跟随/浮空数字/弹飞） |
-| 状态 | **已实现（2026-09-24）**：神明全链路（附身/寿命7·13/轮替/老虎机/抽丢卡/没收/跟随渲染）+ 惡犬/禮物/寶箱 + 路障/地雷/炸彈**触发链**；**神明持续效果 ✅（2026-09-25，§13：landAfterMove 天使/惡魔/土地公 + 福神追加 godBlessUpgrade + 死神代付 resolveFeePayer + 欠款矩阵 addPlayerDebt）**；[TODO P4] 道具放置入口与拆除卡（0x446BAA/C88/D69/0x446AFB）、角色台词语音；[TODO P5] 事件槽 NPC 分支 |
+| 状态 | **已实现（2026-09-24）**：神明全链路（附身/寿命7·13/轮替/老虎机/抽丢卡/没收/跟随渲染）+ 惡犬/禮物/寶箱 + 路障/地雷/炸彈**触发链**；**神明持续效果 ✅（2026-09-25，§13：landAfterMove 天使/惡魔/土地公 + 福神追加 godBlessUpgrade + 死神代付 resolveFeePayer + 欠款矩阵 addPlayerDebt）**；**事件槽 NPC（4..7）物件分支 ✅ 2026-09-26**（`498df0-event-slot-npc.md` §2.6）；[TODO P4] 道具放置入口与拆除卡（0x446BAA/C88/D69/0x446AFB）、角色台词语音 |
 
 ## 1. cellTable 槽位与字段（`g_cellTable` 0x496D08，46 项 × 24B）
 
@@ -137,7 +137,9 @@ C = 另一类事件台词（同 `sub_44B896` a3 分支）。**玩家侧收费公
 - 寿命 -1；归零 →（炸弹）`deleteMapObject` + **若本格是地产 `demolishEstate(objId, 0)` 降一级** + `damagePlayer` + 爆炸图 525 + 停止 + **住院 5**；（路障等挂身但非路障/炸弹 → 同分支递减，见原版 v8 段）
 - **同格转移**：本格存在其他玩家（cellEnt+36 高位玩家掩码）→ 挂件 `cellTableIdx`/+5/玩家归属 整体**转给该玩家**（停止专属音效 g_effectSlot3）
 
-**事件槽 NPC（4..7）差异**：惡犬/路障/地雷/炸彈对 NPC4（小偷）→ 删物件+给卡 2/3/4；礼物/宝箱 NPC4 可偷（给关联玩家）；強盜(NPC5) 抢银行存款、間諜(NPC6)/流氓(NPC7) 收他人地产费 —— **P5 实现**，本期仅玩家分支。
+**事件槽 NPC（4..7）差异（✅ 2026-09-26 已实现，细节 `498df0-event-slot-npc.md` §2.6）**：
+惡犬/地雷对 5/6/7 触发 FLC+住院；路障对 5/6/7 删+停步；**小偷(4)** 踩 禮物/寶箱/路障/地雷/炸彈 →
+删物件 + 给 bailer 对应道具（2/3/4）/＋500 点券；同格行窃/抢银行/勒索见 `LABEL_88`（同文档 §2.7）。
 **currentPlayer==8**（拆除卡虚拟工程车，0x446AFB 设置）：踩到物件 → `bounceObject`（0x40FAFD 弹飞：设 f32 位置/速度+flyCount）+ `deleteMapObject` —— **P4 卡片，TODO**。
 
 ## 6. deleteMapObject 细节（0x40E14D）
@@ -206,7 +208,7 @@ slot<12 → 配对轮替重建（§2.1）
 - ❌ deleteMapObject+轮替、attachObject、attachEnd 动画、寿命双入口递减、路过/停留分派（恶犬/礼物/宝箱/路障/地雷/炸弹）、
   8 方向帧、跟随绘制、浮空寿命数字、弹飞、giftPool/propStock/luckABC 字段与存档
 - [TODO P4] 道具放置入口（卡片使用）、拆除卡虚拟工程车（currentPlayer=8）、research 室道具
-- [TODO P5] 事件槽 NPC 4..7 物件分支、AI 使用三属性决策（sub_41FACC 等）
+- [x] **事件槽 NPC 4..7 物件分支 ✅ 2026-09-26**（`498df0-event-slot-npc.md`）；AI 使用三属性决策（sub_41FACC 等）待办
 
 ## 12. 验证方式
 新开局：6 神明（小財神/小福神/小窮神/小衰神/天使/惡犬）+礼物+宝箱。

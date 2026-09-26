@@ -122,7 +122,8 @@ landingEvent case 16 (0x41B3CB) → magicHouseVisit 0x43380A
 
 > 2/10 的坐牢/住院**不检查** stateFlags（直接进）；addPlayerDebt 先于 resolvePenaltyTarget
 > （嫁祸卡会把债务+惩罚转给目标选的人）。case 5 的 angelUpgrade 返回 bit7=封顶。
-> case 7 原版音效句柄 dword_4823F2 从未注册（静默 quirk）；NPC 分支（a1>=4 犯人表）P5。
+> case 7 原版音效句柄 dword_4823F2 从未注册（静默 quirk）；NPC（事件槽 4..7）为惩罚目标时
+> 已过滤（恶人不受魔法屋影响；重写 `p>=4` 不参与，见 `498df0-event-slot-npc.md` §5）。
 
 ## 5. 魔法屋 UI 文本（off_475694..A4）
 

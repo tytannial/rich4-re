@@ -57,7 +57,8 @@ while (!PeekMessageA(...)) {
 - `dword_48BE18 = 0`（取消手动视角）
 - 玩家 8 / 有状态 0x30 → 走特殊分支（`sub_41906A` / `sub_40F381` / `sub_448A7E`）
 - 否则循环 `++g_currentPlayer`：越过 `g_playerCount` 回绕（置 `v1=1` 表示过天）；
-  跳过 `!alive && spriteX` 的玩家；事件槽 4..8 检查 `byte_498DF2[16*i]`
+  跳过 `!alive && spriteX` 的玩家；事件槽 4..8 检查 `byte_498DF2[16*i]`（=槽记录 `busy`，同一字节；
+  busy==0 才进槽——在押 NPC 不产生回合；见 `498df0-event-slot-npc.md` §2.1）
 - `v1` → `advanceDay()`（过天）
 - `sub_41C84F(当前玩家)`（状态效果倒计时）
 - `v1 && byte_49715C` → `saveGameToSlot(0)`（自动存档）
@@ -155,8 +156,8 @@ while (!PeekMessageA(...)) {
   `rollDice`、`moveOneStep`
 - 差异：
   - `beginPlayerTurn` 仅区分人类/AI，未接入 `sub_40C912` 状态效果与 `sub_41982D` 落地事件
-  - `nextPlayerTurn` 事件槽 4..7：**无激活 NPC 时直接回绕过天**（本作 M1 无流氓/间谍等 NPC，
-    进入空槽会导致 `currentPlayer` 指向无数据槽 → 渲染回左上角/错误掷骰）
+  - `nextPlayerTurn` 事件槽 4..7：**已实现 ✅ 2026-09-26**（依次进槽、busy!=0 跳过；全在押回绕过天；
+    见 `498df0-event-slot-npc.md`）——旧注"本作 M1 无流氓/间谍等 NPC"已过时
   - `advanceDay` 未接入 `checkVictory`（0x41D89E，M3）；已接入音乐切换计时器
     `byte_46CB06`（低 4 位递减到 0 → `sub_454D91(0)` 切下一首）
   - 骰子已实现三阶段（角色扔骰 → 骰子滚动 FLC → 点数停留 500ms）+ 落地(槽2×2)/载具槽/槽3 音效；

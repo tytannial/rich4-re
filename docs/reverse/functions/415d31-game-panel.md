@@ -64,7 +64,10 @@
   - ~~`sub_415F69` 的 4 页签（資金/地產/股票/其他）统计与切换阶段 2 接入~~ →
     ✅ 已完整（4 页签统计 @(600,102/166/230) + 页签点击 0x4182FA，见 `query_dialog.cpp`/
     `ui-controls.md` §27）。
-  - 事件槽回合（`currentPlayer` 4..7）NPC 面板分支（原版帧 5/6 + NPC 名 + 棋子）未实现
+  - 事件槽回合（`currentPlayer` 4..7）NPC 面板分支 **✅ 2026-09-26**（原版帧 5 背景 +
+    `dword_47ED5A` NPC 名 @(582,40) + bailer 棋子帧 2 @(524,64)；`game_panel.cpp`
+    `drawPlayerInfoPanel` NPC 分支）；`currentPlayer==8` 機器娃娃沿用发起玩家
+    （`byte_498E70`→`workerPlayer`，0x416118/0x4167F4）
     （重写 `drawPlayerInfoPanel`/`drawPlayerBar` 直接 return）；`currentPlayer==8`
     （機器娃娃虚拟槽）已还原：面板/玩家条沿用发起玩家 `byte_498E70`（`workerPlayer`，
     0x416118/0x4167F4）。

@@ -27,7 +27,8 @@
 右侧資訊面板 4 页签 `game_panel.cpp`，见 `ui-controls.md` §27）**；**P2 事件格推进中**
 （得點券 case 10/11/12 ✅、卡片格 case 13 ✅、監獄/醫院 case 4/5 ✅ 含保释·出院面板+护士动画
 + **开局默认在押 NPC**（小偷·強盜/流氓·間諜，0x40734F）+ **NPC 释放动画**（panel[64] 全身像
-+ 答谢消息，0x43CFDB/0x43DE4C；事件槽路面行走待 P5）；  **小游戏 case 6/7/8 ✅ 2026-09-25**
++ 答谢消息，0x43CFDB/0x43DE4C）+ **事件槽 NPC／四大恶人全链 ✅ 2026-09-26**（行走/抓回/恶行/存档，
+`498df0-event-slot-npc.md`）；  **小游戏 case 6/7/8 ✅ 2026-09-25**
   （`minigame_dialog.cpp` `miniGameVisit`：**case 7 七彩氣球交互版 ✅**（0x4154DC：15s 射气球，
   分值/×2/÷2/? 随机效果/诱饵球，panel[78/79/91]+枪光标+音效 19/20/21+音乐场景 11）；
   **case 6 企鵝挖寶 ✅**（0x415215：15s 9×9 埋宝 8 方向企鹅行走，5 类宝物计分+火煤球即终+
@@ -79,14 +80,15 @@ damagePlayer/demolish/givePlayerItem）；`economy.cpp` deleteMapObject **配对
 （0x4634C0/0x463514 IDA 显示 "%s" 实为 "%s顯靈\n\n加蓋一層房屋！/投資失敗！"）+
 `checkCarriedGod` 守卫 helper（五处付费流标 [HELP 41/45/51]）；详见 `map-object-refresh.md` §13。
 道具放置入口（0x446BAA/C88/D69）与 13 道具效果 ✅（2026-09-25，`item_effects.md`）；角色台词
-气泡 ✅（`playItemLine` 0x44EF41）；[TODO P5] NPC 分支/事件槽目标。
+气泡 ✅（`playItemLine` 0x44EF41）；**事件槽 NPC 四大恶人 ✅ 2026-09-26**（`498df0-event-slot-npc.md`；
+剩余 P5：AI 目的地/卡片·道具选 NPC 目标）。
 请神/送神符效果函数 ✅（0x444E1A/0x444C45，`useInviteGodCard`/`useBanishGodCard`，
 调试 `Ctrl+Shift+I/H` 直调）；cellTable 拾取 id 改 0xA100|槽+1 修段重叠。
 研究所研发道具 ✅（2026-09-26，`lab_dialog.cpp` 0x44101D + `updatePlayerStates` 0x41C84F 尾倒计时产出）：
 owner 停留 type4 逐级解锁选 1（`corp.sub` 门槛变暗）→ `researchItem/researchLeft=5` → 归零
 `givePlayerItem(researchItem+8)`；机器工人/時光機/傳送機/工程車/核子飛彈 5 非卖品唯一入口，**道具 13 获取闭环**（`44101d-lab-develop.md`、`ui-controls.md` §35）。
 
-**功能总览**：`docs/help-checklist.md`（帮助文档 99 条 → 实现状态，当前 ✅ 72 / 🟡 21 / ❌ 6）。
+**功能总览**：`docs/help-checklist.md`（帮助文档 99 条 → 实现状态，当前 ✅ 93 / 🟡 5 / ❌ 1）。
 
 **M2 执行计划**：见 `docs/m2-plan.md`
 
@@ -96,7 +98,7 @@ owner 停留 type4 逐级解锁选 1（`corp.sub` 门槛变暗）→ `researchIt
   银行/小游戏/樂透/百貨/新聞/命運/魔法屋全链 ✅；**魔法屋+拍卖 2026-09-26**：
   `magic_house_dialog.cpp` 0x43380A + `auction_dialog.cpp` 0x43BDE5（新闻 idx 7 激活），
   `43380a-magic-house.md`/`43bde5-auction.md`、`ui-controls.md` §33/§34，调试 `Ctrl+Shift+0`；
-  面板底座 `ui-controls.md` §25，事件槽 NPC 路面行走待 P5；投降召唤死神 0x433088 → P4）
+  面板底座 `ui-controls.md` §25，事件槽 NPC 四大恶人 ✅ 2026-09-26；投降召唤死神 0x433088 → P4）
 - **P2 樂透（case 9）✅ 2026-09-25**：`lottery_dialog.cpp` + `lottery.h`——投注界面
   （0x42F7FC：9×4 网格选号/红圈帧 7/已售 -10 变暗/panel[14] FLC 循环/装饰闪烁/钱不足链；AI
   `cash>1000` 自动随机号）+ 15 号开奖（0x431712+0x43010C：panel[15/16/17]、摇号算法
@@ -115,8 +117,11 @@ owner 停留 type4 逐级解锁选 1（`corp.sub` 门槛变暗）→ `researchIt
 - 经济系统剩余：股市交易市场/挂单；**P4 卡片栏/道具栏 UI ✅（2026-09-24，工具条 case7/8 `useCardDialog` 0x441BAA / `itemBagDialog` 0x447D97，panel.mkf[11] 5×3 网格 + `cardRebuildEffect`/神符；改建/请神/送神卡可用，**卡片效果 30 卡全实现 ✅ 2026-09-26**（档A/B/C：`card_effects.cpp` + 被动 18復仇/19嫁祸/20免費/21免罪接入惩罚·收费链 `resolvePenaltyTarget`/`resolveFeePayer`；红黑卡选股 `stockPickDialog`；**AI/托管用卡链 ✅ `ai_card.cpp`**（0x41E69E 性格判定 + `dword_475324[31]` 目标表，`beginPlayerTurn` rand 触发）；**角色台词 ✅**（`card_lines.cpp` 生成表 0x48123A + `playCardLine`）；逐卡见 `441baa-card-effects.md`）；**AI/托管用道具链 ✅ 2026-09-26**（`ai_item.cpp` 0x420E9A + `funcs_420EE6`@0x4753A0 13 目标函数 + `dword_48BE64`；`420e9a-item-ai.md`）；13 道具效果全实现 ✅（2026-09-25，`item_effects.cpp`：气泡台词/目标选择模态/expireAssets/遥控骰子/娃娃槽8/时光机快照，逐道具见 `item-effects.md`）**
 - AI 决策：AI 买地 ✅（`sub_41D7D4`，2026-09-23）；`alive & 6` 电脑/托管自动行动
   （`landingEvent` 0x41982D 回合主流程）
-- 存档完整恢复：`loadGameFromSlot` 目前仅恢复地图/模式/玩家数
-- 事件槽 NPC（玩家 4-7：流氓/间谍/小偷等）—— 保释机制/犯人表（0x498E28）已研究
+- 存档完整恢复：`loadGameFromSlot` 目前恢复地图/模式/玩家数/股票重建 + **事件槽 NPC 记录**
+  （`npcSlots/jail/hospitalFlags`，2026-09-26），其余状态仍 TODO
+- ~~事件槽 NPC（玩家 4-7）~~ ✅ **2026-09-26 全链实现**（`498df0-event-slot-npc.md`：
+  开局关押 busy=1/1/2/2 → 保释行走 → `LABEL_88` 恶行 → 同类建筑抓回；物件分支/回合联动/
+  渲染面板/存档；调试 `Ctrl+Shift+8/9`）
 
 ## 目录结构
 
@@ -306,7 +311,9 @@ python tools/re_map.py
   saveBackground/表面保留）。传送后过渡动画（住院/入狱）必须用 preserveScene。
 - **视口**：`manualView=true` 且 `viewSmooth=0` → 场景跳左上角，并触发重选出生点/跳伞；
   小地图旋转只改 `mapRotation`，**不要**切视角模式。
-- **事件槽（玩家 4-7）**：无激活 NPC 时不能进入（否则 `currentPlayer` 指向无数据槽）。
+- **事件槽（玩家 4-7）**：**原版模型 = `busy(0x498E32)==0` 才进槽/绘制/可动**；
+  `byte_498DF2[16*p]` 与 `498E32` 是**同一字节**（旧文档误标独立"占用位"）——细节
+  `498df0-event-slot-npc.md` §1.1/§2.1。
 - **音乐**：取消对话框**不改动**音乐；確定仅在音量 0↔非0 时停/重播（非0 之间只调音量）。
 - **重新开局**：`newGameInit` 需重置 `mapRotation`/骰子/回合/音乐计时器等残留状态。
 - **音效 id 空间**：UI 音效（`g_uiSoundHover/Click/Confirm/Cancel` = Effect.mkf 0/1/2/4）

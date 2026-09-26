@@ -28,7 +28,7 @@ v61 = v63 ? g_cellTable[24*v63-24] : 0;  // cellTable 类型（1..18）
 | 分支 | 处理 |
 |------|------|
 | 玩家 8 | `sub_40FAFD(v63,…)` + `sub_40E14D(v63)`（AI 事件槽） |
-| 玩家 4..7（事件槽 NPC） | `switch(v61)`：case 1..10/12 → `sub_40EAD7`；case 11/13/14/16/17/18 → FLC/卡片；**LABEL_88 收租/抢钱**（读 `cellEnt+32` objId：2000+ 住宅用地 / 4000+ 商業用地 / 6000+ 行業設施點，`sub_41D2C6` 转账） |
+| 玩家 4..7（事件槽 NPC） | `switch(v61)`：case 1..10/12 → 不附身；case 11/13/14/16/17/18 → NPC 差异分支（小偷给 bailer 道具 / 5·6·7 炸伤/停步）；**LABEL_88 恶行**（cur4/5 同格偷点券/抢卡/抢银行；cur6/7 停留勒索/窃租金红利，`sub_41D2C6` 转账）；**LABEL_145 抓回**（status 同类型建筑）。✅ 2026-09-26 完整规格 `498df0-event-slot-npc.md` §2.6/§2.7/§2.8 |
 | 玩家 0..3 | 见下 |
 
 ### 玩家 0..3
@@ -74,8 +74,8 @@ v61 = v63 ? g_cellTable[24*v63-24] : 0;  // cellTable 类型（1..18）
 
 - 已实现：`transferMoney` / `releaseCellTableSlot` / `eliminatePlayer` / `bitScanPlayer`
   （`src/app/economy.cpp`）；`Player.bonusAtk/bonusDef/bonusMove`、`SpecPt.fund/fundPaid` 字段
-- 未实现：`sub_40EAD7` 神明效果、cellTable case 11/13/14/16/17/18 的 FLC/卡片、
-  事件槽 NPC（4..7）分支、`onPlayerActionPhase` 主体（当前仅日志）
+- 未实现：`sub_40EAD7` 神明效果（重写已实现主体，见 `map-object-refresh.md`）、cellTable case 11/13/14/16/17/18 的 FLC/卡片（重写已实现）、
+  事件槽 NPC（4..7）分支 **（✅ 2026-09-26 已实现）**
 - 数据缺口：`CellEnt` 未存 +36 bit0-7（格子类型）与 +38 标志；
   收支统计 `dword_496BC4/496BC8`、银行总资金 `dword_499080`、类型计数
   `byte_497321/497322/497323` 未建模

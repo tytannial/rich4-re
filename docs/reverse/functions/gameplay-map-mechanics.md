@@ -44,7 +44,8 @@
 类型 16/17/18 由玩家道具放置（`sub_446BAA`/`sub_446C88`/`sub_446D69` → `createMapObject(16/17/18)`）；
 `byte_497321/497322/497323` = 类型 16/17/18 的剩余计数。
 `[HELP 39..56]` 为这些神明/人物的行为描述（土地公占地、大小財神/福神/窮神/衰神/天使/惡魔效果与 7 天轮替、
-死神 13 天、四大惡人保释、惡犬咬伤住院三天等）—— P3/P4 神明效果实现依据。
+死神 13 天、四大惡人保释（**✅ 事件槽 NPC 全链 2026-09-26，`498df0-event-slot-npc.md`**）、
+惡犬咬伤住院三天等）—— P3/P4 神明效果实现依据。
 
 ### 1.3 objId 段（cellEnt+32）
 
@@ -203,7 +204,7 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
 | `sub_441F73` | 给玩家卡片（`sub_441E12` 结果 + 文本缓冲） | 0x441F73 | ❌ |
 | `sub_44F230` | 卡片/道具获得语音 | 0x44F230 | ❌ |
 | `newsEvent` / `fateEvent` | 新聞 / 命運 事件全屏 UI（36/37 事件表 + 判定 + 效果） | 0x44B6DF / 0x44DB81 | newsEvent ✅ 2026-09-26（`news_dialog.cpp`）；fateEvent ✅ 2026-09-26（`fate_event.cpp`，49 效果 + 卡片联动；公共辅助 `event_common`） |
-| `jailBailDialog` / `hospitalVisitDialog` | 監獄（保釋）/ 醫院（辦理出院）处理 | 0x43D304 / 0x43E9A4 | ✅（`jail_dialog.cpp`；NPC 格释放待 P5） |
+| `jailBailDialog` / `hospitalVisitDialog` | 監獄（保釋）/ 醫院（辦理出院）处理 | 0x43D304 / 0x43E9A4 | ✅（`jail_dialog.cpp`；NPC 格释放/事件槽行走/抓回 ✅ 2026-09-26） |
 | `lotteryVisit` | 樂透（投注/开奖） | 0x4315CC | ✅ 2026-09-25 |
 | `sub_4379C9` / `sub_436668` | 銀行 UI / 停留银行处理 | 0x4379C9 / 0x436668 | ❌ |
 | `sub_42E931` | 百貨公司（卡片店/道具店） | 0x42E931 | ❌ |
@@ -328,7 +329,7 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
 - [x] case 4/5 門外保釋/辦理出院 UI（`jailBailDialog`/`hospitalVisitDialog` + `sub_43CAAB`/`sub_43DA27`
       + panel.mkf[63/64/65]）与 AI 保释（费用表 `dword_475C44/475CA4` = 玩家 30/NPC 300 点券）；
       **含开局默认在押 NPC**（`newGameInit` 0x40734F：監獄 小偷/強盜、醫院 流氓/間諜；名表 `dword_47ED5A`）；
-      NPC 格释放（`releaseJailNpc`/`releaseHospitalNpc` 事件槽建模）待 P5
+      **NPC 释放/行走/抓回/恶行 ✅ 2026-09-26**（`498df0-event-slot-npc.md`）
 - [x] case 2 新聞（`newsEvent` 0x44B6DF：`newsOrder` 抽取 + `newsEventCheck` 36 条判定 +
       `g_newsFuncs` 36 效果（释放/灾害/三税/排行/股价停牌/坐牢）；`news_dialog.cpp`，2026-09-26；
       **拍卖 idx 7 桩待下一轮**、语音/浮动数字 → P4；详见 `44b6df-news-events.md`）
@@ -357,7 +358,8 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
       禮物得道具、寶箱 +500 点券）
 - [x] 路过銀行柜员机 ✅（原有）；停留结算仍由 landingEvent（P2）
 - [ ] 验收：进医院/监狱停留 N 回合、神明效果（**待实机**）
-- [ ] [TODO P5] 事件槽 NPC（p≥4）物件分支；[TODO P4] 角色台词语音 sub_44EF41
+- [x] **事件槽 NPC（p≥4）物件分支 + LABEL_88 恶行 ✅ 2026-09-26**（`498df0-event-slot-npc.md`）；
+      [TODO P4] 角色台词语音 sub_44EF41
 
 ### P4 卡片/道具/神明使用
 
@@ -373,8 +375,8 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
 ### P5 AI / 存档 / 事件槽 NPC
 
 - [ ] `sub_41E6F2` AI 决策、`alive&6` 自动行动
-- [ ] `loadGameFromSlot`(0x402AC5) 完整恢复
-- [ ] 事件槽 NPC（玩家 4..7）
+- [ ] `loadGameFromSlot`(0x402AC5) 完整恢复（NPC 槽 ✅ 2026-09-26）
+- [x] **事件槽 NPC（玩家 4..7）／四大恶人 ✅ 2026-09-26**（`498df0-event-slot-npc.md`）
 - [ ] 验收：AI 自动走完回合、读档恢复完整状态
 
 ## 6. 待确认问题（后续一并处理）
@@ -384,7 +386,8 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
 3. `CellEnt` +36 bit31 / +39 状态语义（MAPDAT 初值：bit31 与 +39=-128 联动；監獄 +39=8、醫院 +39=16）——
    重写代码当前用 bit31 作出生点/道路判定（`turn_system.cpp`），需与原版核对
 4. `sub_41D476` / `sub_41D7D4` 具体语义待分析（`sub_40FA61` 已明：神明槽 7/8/15 阻止购地/升级）
-5. 事件槽 NPC（玩家 4..7）与 0x43xxxx 段（監獄/醫院/事件）的关系
+5. ~~事件槽 NPC（玩家 4..7）与 0x43xxxx 段（監獄/醫院/事件）的关系~~ —— **已解决**：
+   槽记录 `g_miscTable80`（0x498E28，16B×5）+ `jail/hospitalFlags`；`498df0-event-slot-npc.md` 权威规格
 6. ~~商業用地建设~~ —— **已解决**：建设施对象是 `corp`（4000+，**商業用地** `[HELP 22]`），非 estate；
    `off_475150` = 设施名表（公園/旅館/購物中心/加油站/研究所 = type 0..4；帮助列表段作「商場」），
    升级上限表 `g_facilityMaxLevel`（0x474940 = `{1,5,5,1,5}`）。详见 `pricing-formulas.md` §4
