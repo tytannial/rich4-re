@@ -153,14 +153,14 @@ if st==2 && v62==5（醫院）:  同理 hospitalizePlayer(cur, 0) / |=0x80
 | R9 | 重开局/读档残留 slot → 脏 NPC | `newGameInit`/`loadGameFromSlot` 清零全部 slot* |
 | R10 | 渲染上界 playerCount→9 误画未激活槽 | 以在场条件 + 坐标有效为准 |
 
-## 5. 开放项（**必须实机验证**，久了未验）
+## 5. 开放项与实机确认（2026-09-26）
 
-1. **开局态模型**：`.data` 全 0 + nextPlayer `!498DF2 选中` + checkPlayerAction `498E32==0→return 2→游走`，静态推得**模型 A**：四大恶人**开局即在地图游走**，`jailFlags[4..7]=1` 仅表"抓回归属/初始在押显示"（踩監獄/醫院格见之，可花 300 点券"再保释"以使其为己所用）。与"开局关押待首次保释"的**模型 B** 相斥。
-   - **验证法**：阶段1 首步加 debug（`Ctrl+Shift+N` 打印四槽 `slotBusy2/slotBusy/坐标/当前格`），开局跑几天看是否恶人自行游走、踩監獄格保释面板显示什么。据实机定 A/B，再定 `newGameInit` 是否需补 `slotBusy[p-4]=1`（关押）或 `slotBusy2` 初值。
-2. **`slotBusy2` 精确置/清**：唯一疑似写点 `onPhase 0x41C17A`（case18/特殊格入口附近，待逐行）；`cardEffectHibernate`、`sub_418C55`、`drawMiniMap` 均读。阶段1 用 debug 观察确认。
-3. **`unk_47ECEC`（miscTable80 初值）**语义（1,1,2,2,3）与 NPC 初始格/坐标关系待验。
-4. **恶行金额字段**（estate+44 上次租金、corp+48、specPt+40 fund）与现有结构字段命名对齐待核。
-5. **off_47EDAA/47EDAE/47EDB6** NPC 动作名 BIG5 待 cp950 复核。
+1. **开局态 = B（实机 + 用户记忆确认）**：四大恶人开局**关押、不在地图游走、不占回合**；踩監獄/醫院格由保释面板（读 `jailFlags`）显示在押者，花 300 点券保释才 `releaseEventNpc` 上路随机游走。
+   - **重写落地**：关押态用 `slotBusy2=1`（nextPlayer 跳过、map_render 不绘制）。`newGameInit` 设 `slotBusy2[4..7]=1`+`slotBusy[4..7]=1`+`slotStatus`。游走=`slotBusy2=0`。
+   - **抓回=回关押态**：NPC 任一步落到監獄(type4)/醫院(type5)格 → `jailPlayer/hospitalizePlayer` NPC 分支置 `slotBusy=1`（坐牢）+ **`slotBusy2=1`（消失+停轮转）**+ `jailFlags/hospitalFlags=1`（待再保释）。此前只置 `slotBusy=1` 会"进回合卡着不消失"，已修。
+   - 静态 `.data` 全 0 曾推得 A（开局即游走），与实际/B 不符 → 说明原版关押另有初始化路径或本重写以 B 语义为准（不阻塞功能）。
+2. **动画（实机确认基本正常）**：`loadWalkResources` NPC 走路组=`data.mkf[4p+364]/[4p+365]`（slot0/2）、渡水/上岸=`[4p+366]`（**slot3=`EC0`**，非 slot1）；当前格真源用 `players[p].cellEntId`（随 `moveOneStep` 推进），不可用释放时的 `slotCell`（否则卡在監獄渡水组="始终坐船"）。
+3. 剩：`unk_47ECEC`(miscTable80 初值 1,1,2,2,3)语义、`off_47EDAA/47EDAE/47EDB6` NPC 动作名 BIG5 复核、恶行金额字段（见 §6 阶段2/3）。
 
 ## 6. 分期实现
 
