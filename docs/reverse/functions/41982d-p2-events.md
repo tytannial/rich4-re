@@ -109,7 +109,8 @@ byte_496BAA[player] += days                        // 累计入狱天数（统�
 > 醫院 @(420,450)；落点 = 实参 − 帧 offset）+ **答谢浮动消息**（監獄板帧1 @(210,150)、
 > 醫院 @(200,200)；文本 `dword_475BE2[i]` = #0123~#0126）→ `releaseJailNpc`/`releaseHospitalNpc`
 > → 消息播完面板重绘并退出（監獄 `byte_48C4C9` / 醫院 `byte_48C4F6`）。
-> **事件槽数据与路面行走（release* 另一半）待 P5**（`// TODO(P5 事件槽 NPC)` 注释就位）。
+> **事件槽数据与路面行走 ✅ 2026-09-26**（release*/busy 槽记录/`LABEL_88` 恶行/抓回；
+> `498df0-event-slot-npc.md`）。
 
 case 4 进入 `jailBailDialog`（case 5 为 `hospitalVisitDialog`，结构相同）：
 
@@ -458,7 +459,9 @@ AI/托管/动画关闭/资源失败同走原版
 调用方 `g_playerPoints[104*cur] += ax`（0x41B152）。
 **门控**：原版 `g_playerAlive[cur]==1 && byte_497159`（=settings[1] 動畫過程）才进交互小游戏；
 AI/托管/动画关闭 → else。当前人类亦走 else（交互版未接入，行为=原版关动画）。
-**差异**：四大恶人（事件槽 4..7）直接忽略不给分（项目决策；原版 NPC 亦随机得分）。
+**差异**：事件槽 NPC（4..7）走 `miniGameVisit` 的 else 分支不发分（`miniGameVisit` 对 p>=4 直接返回；
+原版 NPC 亦随机得分——保留差异）。恶人自身行为在 `onPlayerActionPhase` NPC 分支
+（`498df0-event-slot-npc.md`），与小游戏无关。
 
 ### 交互小游戏框架（2026-09-25 会话逆向，实现时直接照此）
 
@@ -637,8 +640,8 @@ case 14:
 1. ~~**case 10/11/12 得點券**~~ ✅ 已完成（2026-09-23；建立事件格 FLC 阻塞播放模板 `playEventFlc`）
 2. ~~**case 13 卡片格**~~ ✅ 已完成（2026-09-23；赠卡池抽卡/卡包 15 槽/舍弃最低价 + `showCardGet` 显示）
 3. ~~**case 4/5 監獄/醫院**~~ ✅ 已完成（2026-09-23；状态系统 + **保释/出院面板** `sub_43CAAB`/`sub_43DA27`
-   UI + panel.mkf[63/64/65] + **开局默认在押 NPC 0x40734F**；NPC 格释放与 P3 `onPlayerActionPhase`
-   cellNo 联动待 P5）
+   UI + panel.mkf[63/64/65] + **开局默认在押 NPC 0x40734F**；**NPC 格释放/行走/抓回 ✅ 2026-09-26**，
+   `498df0-event-slot-npc.md`）
 4. ~~**case 2 新聞**~~ ✅ 2026-09-26（`news_dialog.cpp`：36 条判定 + 36 效果全实现，拍卖 idx 7 桩；
    `44b6df-news-events.md`）；**case 3 命運**（37 事件表 + 效果函数表）待做
 5. ~~**case 6/7/8 小游戏**~~ ✅ 2026-09-25 三游戏交互版全实现（`minigame_dialog.cpp`，
@@ -652,8 +655,8 @@ case 14:
 | 卡片表/卡包/赠卡池 | 0x47FDEA / 0x499120 / 0x499198 | ✅ 已建模（`kCardNames`/`kCardPrices`/`cardState60`/`propStock`）；`g_playerCards`（0x49915B）与 `g_cardPool` 分工待 P4 |
 | `g_jailFlags` / `g_hospitalFlags` | 0x496B30 / 0x496B60 | 監獄/醫院在押标志（8 字节）—— ✅ 已建模（`GameState.jailFlags/hospitalFlags`；开局 0x40734F 默认 NPC 4/5、6/7） |
 | NPC 名表 | `dword_47ED5A` | 索引 4..7 = 小偷/強盜/流氓/間諜 —— ✅ 重写 `kNpcNames`（jail_dialog.cpp） |
-| `byte_498DF3` | 0x498DF3 | 玩家到达门外状态（16B/玩家）—— 未建模 |
-| 事件槽 NPC 犯人表 | 0x498E28 起 16B×4 | 保释人/目标格/坐标/状态 —— 未建模 |
+| `byte_498DF3` | 0x498DF3 | **=`byte_498E33` 槽记录 status**（1=監獄/2=醫院 + bit7 抓回闩锁）—— ✅ 已建模（`NpcSlot80.status`） |
+| 事件槽 NPC 犯人表 | 0x498E28 起 16B×5 | 槽记录（pixelX/Y/cell/prev/bailer/dir/busy/status/timerA~D）—— ✅ 已建模（`NpcSlot80 npcSlots[5]`，`498df0-event-slot-npc.md` §1.1） |
 | `stateFlags` BYTE2/BYTE3 | 0x496B9A | 監獄/醫院剩余天数（重写 `Player.stateFlags` 已有 u32） |
 | `byte_496BAA` | — | 累计入狱/住院天数（重写 `Player.byte66`） |
 | 新闻表 | 0x499090 / 0x4990E0 / 0x475EB4 / 0x475E24 / 0x475ED8 | 重写 `cardShuffle`/`cardShufflePos` 应改名 `newsOrder`/`newsPos` |
