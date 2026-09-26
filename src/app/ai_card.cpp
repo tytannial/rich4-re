@@ -1004,7 +1004,8 @@ int tgtTurtle(GameState& st) {  // [RE 0x420970] 自己路段产值高 → 自�
         }
     }
     const Player& pl = st.players[cur];
-    if (static_cast<double>(myValue) * 0.682 >= static_cast<double>(pl.cash) && myBlocks >= 2 &&
+    // [RE 0x463D40 = 1.5] 自己产值×1.5 ≥ 现金 → 对自己用（原版 dbl_463D40）
+    if (static_cast<double>(myValue) * 1.5 >= static_cast<double>(pl.cash) && myBlocks >= 2 &&
         (pl.bank + pl.cash) > 10000 && pl.luckB >= 0) {
         st.aiCardTarget = 0x8000 | (1 << cur);
         return 1;
