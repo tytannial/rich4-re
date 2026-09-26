@@ -40,6 +40,25 @@ uint32_t landExpireDate(const GameState& st) {
     return static_cast<uint32_t>(d);
 }
 
+// 目标选择：人类弹目标对话框；AI/托管读 aiCardSelect 预选（[RE 0x441BAA AI 分支 sub_41E6F2(0)]
+//   = dword_48BE58）
+int cardPickTarget(Application& app, int mode) {
+    GameState& st = app.gameState();
+    if (st.players[st.currentPlayer].alive == 1) {
+        return cardPickTarget(app, mode);
+    }
+    return st.aiCardTarget;
+}
+
+// 选股：人类弹行情选股模态；AI 读预选（0-based → 返回 1-based，0=无）
+int cardPickStock(Application& app, int mode) {
+    GameState& st = app.gameState();
+    if (st.players[st.currentPlayer].alive == 1) {
+        return stockPickDialog(app, mode);
+    }
+    return st.aiCardTarget + 1;
+}
+
 // 当前玩家所站格 special(objId)（0 = 无/越界）
 uint16_t standingObjId(const GameState& st) {
     const int cur = st.currentPlayer;
@@ -92,7 +111,7 @@ int cardEffectEqualPoor(Application& app) {
     GameState& st = app.gameState();
     const int cur = st.currentPlayer;
     // [RE 0x4421C9 sub_446AE8(0x0E0C0410)] 选玩家（flags 0x10 = 玩家位掩码）
-    const int v = selectTargetDialog(app, 0x0E0C0410);
+    const int v = cardPickTarget(app, 0x0E0C0410);
     if (v == 0) {
         return 0;  // 取消 → 不消耗
     }
@@ -181,7 +200,7 @@ int cardEffectTurn(Application& app) {
     GameState& st = app.gameState();
     const int cur = st.currentPlayer;
     // [RE 0x442F61 sub_446AE8(0x0E0C0010)] 选玩家
-    const int v = selectTargetDialog(app, 0x0E0C0010);
+    const int v = cardPickTarget(app, 0x0E0C0010);
     if (v == 0) {
         return 0;
     }
@@ -245,7 +264,7 @@ int cardEffectMonster(Application& app) {
     GameState& st = app.gameState();
     const int cur = st.currentPlayer;
     // [RE 0x44392C sub_446AE8(0x0E0C0506)] 选地块（estate|corp）
-    const int v = selectTargetDialog(app, 0x0E0C0506);
+    const int v = cardPickTarget(app, 0x0E0C0506);
     if (v == 0) {
         return 0;
     }
@@ -285,7 +304,7 @@ int cardEffectDemolish(Application& app) {
     GameState& st = app.gameState();
     const int cur = st.currentPlayer;
     // [RE 0x443B28 sub_446AE8(0x0E0C0526)] 选目标（地/路面道具）
-    const int v = selectTargetDialog(app, 0x0E0C0526);
+    const int v = cardPickTarget(app, 0x0E0C0526);
     if (v == 0) {
         return 0;
     }
@@ -346,7 +365,7 @@ int cardEffectSteal(Application& app) {
     GameState& st = app.gameState();
     const int cur = st.currentPlayer;
     // [RE 0x443E58 sub_446AE8(0x0E0C0410)] 选玩家
-    const int v = selectTargetDialog(app, 0x0E0C0410);
+    const int v = cardPickTarget(app, 0x0E0C0410);
     if (v == 0) {
         return 0;
     }
@@ -355,7 +374,13 @@ int cardEffectSteal(Application& app) {
         return 0;
     }
     // [RE 0x443E9B selectCardOrItemDialog(t)]：重写约定 = 仅返回 id，转移在调用方（同命运生日）
-    const int sel = selectCardOrItemFromPlayerDialog(app, t);
+    //   AI 分支 [RE sub_41E6F2(1) = dword_48BE5C]：aiCardSelect 已预选目标卡
+    int sel;
+    if (st.players[cur].alive == 1) {
+        sel = selectCardOrItemFromPlayerDialog(app, t);
+    } else {
+        sel = st.aiCardTarget2;
+    }
     if (sel == 0) {
         return v;  // 原版取消仍返回 v1（非 0=结束、不消耗抢夺卡）——照抄
     }
@@ -397,7 +422,7 @@ int collectSameRouteEstates(const GameState& st, int objId, std::vector<int>& ou
 int cardEffectAngel(Application& app) {
     GameState& st = app.gameState();
     const int cur = st.currentPlayer;
-    const int v = selectTargetDialog(app, 0x0E0C0006);  // [RE 0x4434E1 sub_446AE8]
+    const int v = cardPickTarget(app, 0x0E0C0006);  // [RE 0x4434E1 sub_446AE8]
     if (v == 0) {
         return 0;
     }
@@ -453,7 +478,7 @@ int cardEffectAngel(Application& app) {
 int cardEffectDevil(Application& app) {
     GameState& st = app.gameState();
     const int cur = st.currentPlayer;
-    const int v = selectTargetDialog(app, 0x0E0C0006);  // [RE 0x4436FF]
+    const int v = cardPickTarget(app, 0x0E0C0006);  // [RE 0x4436FF]
     if (v == 0) {
         return 0;
     }
@@ -502,7 +527,7 @@ int cardEffectDevil(Application& app) {
 int cardEffectStay(Application& app) {
     GameState& st = app.gameState();
     const int cur = st.currentPlayer;
-    const int v = selectTargetDialog(app, 0x0E0C0010);  // [RE 0x443FA5]
+    const int v = cardPickTarget(app, 0x0E0C0010);  // [RE 0x443FA5]
     if (v == 0) {
         return 0;
     }
@@ -566,7 +591,7 @@ void stripVehicle(GameState& st, int p) {
 int cardEffectSleepwalk(Application& app) {
     GameState& st = app.gameState();
     const int cur = st.currentPlayer;
-    const int v = selectTargetDialog(app, 0x0E0C0710);  // [RE 0x444201]
+    const int v = cardPickTarget(app, 0x0E0C0710);  // [RE 0x444201]
     if (v == 0) {
         return 0;
     }
@@ -605,7 +630,7 @@ int cardEffectSleepwalk(Application& app) {
 int cardEffectFrame(Application& app) {
     GameState& st = app.gameState();
     const int cur = st.currentPlayer;
-    const int v = selectTargetDialog(app, 0x0E0C0710);  // [RE 0x4444E4]
+    const int v = cardPickTarget(app, 0x0E0C0710);  // [RE 0x4444E4]
     if (v == 0) {
         return 0;
     }
@@ -641,7 +666,7 @@ int cardEffectFrame(Application& app) {
 int cardEffectTaxAudit(Application& app) {
     GameState& st = app.gameState();
     const int cur = st.currentPlayer;
-    const int v = selectTargetDialog(app, 0x0E0C0410);  // [RE 0x445215]
+    const int v = cardPickTarget(app, 0x0E0C0410);  // [RE 0x445215]
     if (v == 0) {
         return 0;
     }
@@ -680,7 +705,7 @@ int cardEffectTaxAudit(Application& app) {
 int cardEffectPriceUp(Application& app) {
     GameState& st = app.gameState();
     const int cur = st.currentPlayer;
-    const int v = selectTargetDialog(app, 0x0E0C0006);  // [RE 0x445452]
+    const int v = cardPickTarget(app, 0x0E0C0006);  // [RE 0x445452]
     if (v == 0) {
         return 0;
     }
@@ -711,7 +736,7 @@ int cardEffectPriceUp(Application& app) {
 int cardEffectSeal(Application& app) {
     GameState& st = app.gameState();
     const int cur = st.currentPlayer;
-    const int v = selectTargetDialog(app, 0x0E0C0006);  // [RE 0x4455B8]
+    const int v = cardPickTarget(app, 0x0E0C0006);  // [RE 0x4455B8]
     if (v == 0) {
         return 0;
     }
@@ -746,7 +771,7 @@ int cardEffectSeal(Application& app) {
 int cardEffectAlly(Application& app) {
     GameState& st = app.gameState();
     const int cur = st.currentPlayer;
-    const int v = selectTargetDialog(app, 0x0E0C0410);  // [RE 0x445735]
+    const int v = cardPickTarget(app, 0x0E0C0410);  // [RE 0x445735]
     if (v == 0) {
         return 0;
     }
@@ -776,7 +801,7 @@ int cardEffectAlly(Application& app) {
 int cardEffectTurtle(Application& app) {
     GameState& st = app.gameState();
     const int cur = st.currentPlayer;
-    const int v = selectTargetDialog(app, 0x0E0C0010);  // [RE 0x445904]
+    const int v = cardPickTarget(app, 0x0E0C0010);  // [RE 0x445904]
     if (v == 0) {
         return 0;
     }
@@ -802,9 +827,9 @@ int cardEffectSwapLand(Application& app) {
     const uint16_t objId = standingObjId(st);
     int target = 0;
     if (objId > 2000 && objId < 4000) {
-        target = selectTargetDialog(app, 0x0E0C0202);  // [RE 0x442685] 选 estate
+        target = cardPickTarget(app, 0x0E0C0202);  // [RE 0x442685] 选 estate
     } else if (objId > 4000 && objId < 6000) {
-        target = selectTargetDialog(app, 0x0E0C0204);  // [RE 0x4428CC] 选 corp
+        target = cardPickTarget(app, 0x0E0C0204);  // [RE 0x4428CC] 选 corp
     } else {
         return 0;  // 脚下非地块 → 不消耗
     }
@@ -855,9 +880,9 @@ int cardEffectSwapHouse(Application& app) {
     const uint16_t objId = standingObjId(st);
     int target = 0;
     if (objId > 2000 && objId < 4000) {
-        target = selectTargetDialog(app, 0x0E0C0202);  // [RE 0x442B6B] 选 estate
+        target = cardPickTarget(app, 0x0E0C0202);  // [RE 0x442B6B] 选 estate
     } else if (objId > 4000 && objId < 6000) {
-        target = selectTargetDialog(app, 0x0E0C0204);  // [RE 0x442D81] 选 corp
+        target = cardPickTarget(app, 0x0E0C0204);  // [RE 0x442D81] 选 corp
     } else {
         return 0;
     }
@@ -915,7 +940,7 @@ int cardEffectRedStock(Application& app) {
     GameState& st = app.gameState();
     const int cur = st.currentPlayer;
     // [RE 0x444F50 cursorSelect(12,15,10) + stockPanelMain(1)] 选股（0=取消不消耗）
-    const int v = stockPickDialog(app, 1);
+    const int v = cardPickStock(app, 1);
     if (v == 0) {
         return 0;
     }
@@ -936,7 +961,7 @@ int cardEffectBlackStock(Application& app) {
         before[i] = st.stocks[i][5];  // [RE 选股前快照 12 支现价]
     }
     // [RE 0x4450xx cursorSelect + stockPanelMain(2)] 选股
-    const int v = stockPickDialog(app, 2);
+    const int v = cardPickStock(app, 2);
     if (v == 0) {
         return 0;
     }

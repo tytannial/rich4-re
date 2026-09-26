@@ -24,6 +24,7 @@
 #include "game/app/facility_dialog.h"
 #include "game/app/fate_event.h"
 #include "game/app/game_loop.h"
+#include "game/app/item_bag_dialog.h"
 #include "game/app/item_lines.h"
 #include "game/app/jail_dialog.h"
 #include "game/app/lab_dialog.h"
@@ -2367,9 +2368,21 @@ void beginPlayerTurn(Application& app) {
             }
             break;
         case 2:
-        case 5:
-            startPlayerMove(app);
+        case 5: {
+            // [RE 0x418E13] 交易市场 AI（sub_4284BE；交易系统已搁置——仅分析归档）
+            // [RE 0x418E18..0x418E21] rand()&1 → 用卡(useCardFlow 0x441BAA)/道具(itemPanelFlow 0x447D97)
+            //   两函数内部自判 alive&6 + aiCardItem bit0/1；AI 用卡链见 ai_card.cpp
+            if ((std::rand() & 1) != 0) {
+                useCardDialog(app);
+            } else {
+                itemBagDialog(app);
+            }
+            if (app.gameState().sceneRequest != 0) {  // [RE 0x418E06] 场景切换保护
+                break;
+            }
+            startPlayerMove(app);  // [RE 0x40DD1F]
             break;
+        }
         default:
             break;
     }

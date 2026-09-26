@@ -3,8 +3,10 @@
 #include <SDL3/SDL.h>
 
 #include <cstdio>
+#include <cstdlib>
 
 #include "game/app/card_effects.h"
+#include "game/app/ai_card.h"
 #include "game/app/confirm_dialog.h"
 #include "game/app/economy.h"
 #include "game/app/event_common.h"
@@ -268,7 +270,43 @@ int cardRebuildEffect(Application& app) {
 void useCardDialog(Application& app) {
     GameState& st = app.gameState();
     const int cur = st.currentPlayer;
-    if (cur < 0 || cur >= 4 || st.players[cur].alive != 1) {
+    if (cur < 0 || cur >= 4) {
+        return;
+    }
+    // [RE 0x441BAA AI 分支] 电脑/托管（alive&6）且 aiCardItem bit0（使用卡片）：
+    //   手牌随机序逐张试 aiCardSelect（persona 判定 + 目标预选 dword_48BE58）→ 命中即用
+    if (st.players[cur].alive != 1) {
+        if ((st.players[cur].alive & 6) == 0 || (st.players[cur].aiCardItem & 1) == 0) {
+            return;
+        }
+        int cards[15];
+        int n = 0;
+        for (int i = 0; i < 15; ++i) {
+            const uint8_t c = st.cardState60[15 * cur + i];
+            if (c != 0) {
+                cards[n++] = c;
+            }
+        }
+        if (n == 0) {
+            return;
+        }
+        for (int i = n - 1; i > 0; --i) {  // Fisher-Yates（原版随机试序）
+            const int j = std::rand() % (i + 1);
+            const int t = cards[i];
+            cards[i] = cards[j];
+            cards[j] = t;
+        }
+        for (int i = 0; i < n; ++i) {
+            const int id = cards[i];
+            if (aiCardSelect(app, id) != 1) {
+                continue;
+            }
+            char text[64];
+            std::snprintf(text, sizeof text, "使用%s", kCardNames[id]);
+            showCardGet(app, id, text);
+            cardEffect(app, id);
+            return;  // 原版每回合最多使用一张
+        }
         return;
     }
     st.manualView = false;  // [RE 0x41D546] dword_48BE18=0（sub_41906A 全屏重绘停动画由全量重绘替代）
