@@ -163,24 +163,23 @@ void onPlayerActionPhase(Application& app) {
     }
     if (p >= 4) {
         // [RE 0x41B42D loc_41C7A6] 事件槽 NPC 抓回（阶段1 行走闭环；恶行 LABEL_88 待阶段2）：
-        //   仅步数走完（落定）结算；状态 1監獄/2醫院 且落地格类型匹配 → 两段式：
-        //   首次置 bit7 闩锁、再次真抓回 jail/hospital（防刚出门即抓）。见 498df0 §2.8。
+        //   原版抓回在函数尾**每步无条件执行**（不是只在落定步）——随机游走途中经过監獄/醫院格
+        //   那一步即抓回，抓回后清 remainingSteps 终止本回合移动（对齐 0x41C7DF）。
         const int i = p - 4;
-        if (st.remainingSteps != 0) {
-            return;
-        }
         const CellEnt& ce = st.cellEnts[st.players[p].cellEntId];
         const uint8_t cellType = static_cast<uint8_t>(ce.occMask & 0xFF);
         const uint8_t stt = static_cast<uint8_t>(st.slotStatus[i] & 0x7F);
         if (stt == 1 && cellType == 4) {
             if ((st.slotStatus[i] & 0x80) != 0) {
                 jailPlayer(app, p, 0);
+                st.remainingSteps = 0;
             } else {
                 st.slotStatus[i] = static_cast<uint8_t>(st.slotStatus[i] | 0x80);
             }
         } else if (stt == 2 && cellType == 5) {
             if ((st.slotStatus[i] & 0x80) != 0) {
                 hospitalizePlayer(app, p, 0);
+                st.remainingSteps = 0;
             } else {
                 st.slotStatus[i] = static_cast<uint8_t>(st.slotStatus[i] | 0x80);
             }
@@ -427,7 +426,7 @@ void loadWalkResources(GameState& st, int p) {
             st.playerMoveFrame[p] = 0;
             return;
         }
-        const uint16_t cell = st.slotCell[i];
+        const uint16_t cell = st.players[p].cellEntId;  // 真源=moveOneStep 推进的当前格（非释放时的 slotCell）
         const bool road = cell > 0 && cell < st.cellEnts.size() &&
                           (st.cellEnts[cell].occMask & 0x80000000u) != 0;
         if (!road) {
@@ -450,7 +449,7 @@ void loadWalkResources(GameState& st, int p) {
             releaseWalkResources(st, p, 1);
             st.playerActionFlags[p] =
                 static_cast<uint8_t>((st.playerActionFlags[p] & 0xCF) | 0x10);
-            loadWalkRes(st, p, 1, static_cast<size_t>(4 * p + 366));
+            loadWalkRes(st, p, 3, static_cast<size_t>(4 * p + 366));
         }
         if (st.playerMoveGroup[p] == 0) {
             st.playerMoveFrame[p] = 0;
@@ -2755,7 +2754,7 @@ void jailPlayer(Application& app, int player, int days) {
         //   清状态/触发/计时 + jailFlags=1（可再保释）；停在抓回所在（監獄）格，不清 slotBusy2
         if (player < 8) {
             const int i = player - 4;
-            const uint16_t cell = st.slotCell[i];
+            const uint16_t cell = st.players[player].cellEntId;
             if (cell > 0 && cell < st.cellEnts.size()) {
                 st.cellEnts[cell].occMask &= ~static_cast<uint32_t>(4096u << i);
             }
@@ -2765,6 +2764,7 @@ void jailPlayer(Application& app, int player, int days) {
             st.slotTimerB[i] = 0;
             st.slotTimerC[i] = 0;
             st.slotTimerD[i] = 0;
+            st.slotCell[i] = cell;
             st.jailFlags[player] = 1;
             RICH4_LOGI("jailPlayer: NPC %d 抓回坐牢 (RE 0x43D593)", player);
         }
@@ -2817,7 +2817,7 @@ void hospitalizePlayer(Application& app, int player, int days) {
         // [RE 0x43EC3F] NPC 抓回住院：同 jailPlayer NPC 分支，置 hospitalFlags
         if (player < 8) {
             const int i = player - 4;
-            const uint16_t cell = st.slotCell[i];
+            const uint16_t cell = st.players[player].cellEntId;
             if (cell > 0 && cell < st.cellEnts.size()) {
                 st.cellEnts[cell].occMask &= ~static_cast<uint32_t>(4096u << i);
             }
@@ -2827,6 +2827,7 @@ void hospitalizePlayer(Application& app, int player, int days) {
             st.slotTimerB[i] = 0;
             st.slotTimerC[i] = 0;
             st.slotTimerD[i] = 0;
+            st.slotCell[i] = cell;
             st.hospitalFlags[player] = 1;
             RICH4_LOGI("hospitalizePlayer: NPC %d 抓回住院 (RE 0x43EC3F)", player);
         }
