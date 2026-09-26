@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "game/app/card_lines.h"
 #include "game/app/economy.h"
 #include "game/app/event_stack.h"
 #include "game/app/game_loop.h"
@@ -1053,6 +1054,7 @@ bool useInviteGodCard(Application& app) {
     const uint16_t ent =
         static_cast<uint16_t>(st.cellTable[off + 2] | (st.cellTable[off + 3] << 8));
     cardBagRemove(st, p, 23);  // [RE 0x444E52 0x441343(cur,23)]
+    playCardLine(app, p, 22);  // [RE 0x444E7x 使用者台词 请神]
     // [TODO P4] 请神台词 sub_44EF41(p, 0, off_481292[27? stride 90 * charIndex])
     // 时序（用户核对后的修正）：原版 0x444E1A 为"新神飞行 → attach（内部才送走旧神）"，
     //   飞行期间旧神仍挂身、其后的 attachEnd 飘走期间新神贴图已还原大地图；

@@ -15,6 +15,7 @@
 #include "game/app/bank_stay_dialog.h"
 #include "game/app/card_bag_dialog.h"
 #include "game/app/card_effects.h"
+#include "game/app/card_lines.h"
 #include "game/app/confirm_dialog.h"
 #include "game/app/date_util.h"
 #include "game/app/dividend.h"
@@ -824,6 +825,7 @@ int resolvePenaltyTarget(Application& app, int player) {
                       playerNameNoSpace(st, player).c_str());
         showCardGet(app, 21, text); // [RE 0x444BB2 sub_441F73(21,...)]
         cardBagRemove(st, player, 21);
+        playCardLine(app, player, 20);  // [RE 0x444BB2 使用者台词 免罪]
         RICH4_LOGI("resolvePenaltyTarget: p=%d 免罪卡抵消 (RE 0x441210/0x444BB2)", player);
         return -1;
     }

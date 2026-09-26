@@ -6,8 +6,10 @@
 
 #include "game/app/auction_dialog.h"
 #include "game/app/card_bag_dialog.h"
+#include "game/app/card_lines.h"
 #include "game/app/confirm_dialog.h"
 #include "game/app/economy.h"
+#include "game/app/item_lines.h"
 #include "game/app/event_common.h"
 #include "game/app/game_loop.h"
 #include "game/app/game_panel.h"
@@ -79,6 +81,7 @@ int cardEffectEqualRich(Application& app) {
     GameState& st = app.gameState();
     const int cur = st.currentPlayer;
     cardBagRemove(st, cur, 1);  // [RE 0x4420E5 sub_441343(cur,1)]
+    playCardLine(app, cur, 0);  // [RE 使用者台词 均富]
     int64_t sum = 0;
     int n = 0;
     for (int i = 0; i < st.playerCount && i < 4; ++i) {
@@ -120,6 +123,8 @@ int cardEffectEqualPoor(Application& app) {
         return 0;
     }
     cardBagRemove(st, cur, 2);  // [RE 0x4421E6 sub_441343(cur,2)]
+    playCardLine(app, cur, 1);  // [RE 使用者台词 均貧]
+    playCardLine(app, t, kSpeechEqualPoorTarget);  // [RE 0x4422xx 目标台词]
     const int32_t avg = (st.players[t].cash + st.players[cur].cash) / 2;  // [RE 0x442200]
     if (st.players[t].cash > avg) {
         // [RE 0x44223F addPlayerDebt(t, cur, (cash[t]-avg)/100)]
@@ -189,6 +194,8 @@ int cardEffectBuyLand(Application& app) {
         return 0;
     }
     transferMoney(app, cur, seller, price, 0);  // [RE 0x442473] 使用者付、原主收（入银行）
+    playCardLine(app, cur, 2);                  // [RE 0x44242F 使用者台词 購地]
+    playCardLine(app, seller, kSpeechBuyLandSeller);  // [RE 0x4424A7 原主台词]
     cardBagRemove(st, cur, 3);                  // [RE 0x442610 sub_441343(cur,3)]
     RICH4_LOGI("cardBuyLand: objId=%u seller=%d price=%d comp=%d (RE 0x442325)", objId, seller,
                price, compensate);
@@ -209,6 +216,8 @@ int cardEffectTurn(Application& app) {
         return 0;
     }
     cardBagRemove(st, cur, 6);   // [RE 0x442F8A sub_441343(cur,6)]
+    playCardLine(app, cur, 5);   // [RE 使用者台词 轉向]
+    playCardLine(app, t, (t == cur) ? kSpeechTurnSelf : kSpeechTurnTarget);  // [RE 对方/自己]
     turnToAdjacentCell(st, t);   // [RE 0x443025 → 0x40C78C] 朝向反向 + 重选来路格
     RICH4_LOGI("cardTurn: p%d -> p%d dir=%u prev=%u (RE 0x442F4D)", cur, t, st.players[t].dir,
                st.players[t].prevCellEnt);
@@ -230,6 +239,7 @@ int cardEffectAuction(Application& app) {
             // [RE 0x442362] 补偿原主 M × priceAdd × (level+2)/5
             addPlayerDebt(st, es.owner - 1, cur,
                           (st.moneyMul * es.priceAdd) * (es.level + 2) / 5);
+            playCardLine(app, es.owner - 1, kSpeechAuctionOwner);  // [RE 0x4423AE 原主台词]
         }
         if (!runAuction(app, cur, objId, true)) {  // [RE 0x4423F3] 流标
             es.owner = 0;                          // [RE 0x4423FA] 归公
@@ -245,6 +255,7 @@ int cardEffectAuction(Application& app) {
         if (cp.owner != 0) {
             addPlayerDebt(st, cp.owner - 1, cur,
                           (st.moneyMul * cp.buildPrice) * (cp.sub + 2) / 5);
+            playCardLine(app, cp.owner - 1, kSpeechAuctionOwner);  // [RE 原主台词]
         }
         if (!runAuction(app, cur, objId, true)) {
             cp.owner = 0;
@@ -254,6 +265,7 @@ int cardEffectAuction(Application& app) {
     } else {
         return 0;  // [RE LABEL_21] 脚下非地块 → 不消耗
     }
+    playCardLine(app, cur, 7);  // [RE 0x4423xx 使用者台词 拍賣]
     cardBagRemove(st, cur, 8);  // [RE 0x442340/0x442616 sub_441343(cur,8)]
     RICH4_LOGI("cardAuction: objId=%u seller=%d (RE 0x443225)", objId, cur);
     return 1;
@@ -269,6 +281,7 @@ int cardEffectMonster(Application& app) {
         return 0;
     }
     cardBagRemove(st, cur, 11);  // [RE 0x443949 sub_441343(cur,11)]
+    playCardLine(app, cur, 10);  // [RE 使用者台词 怪獸]
     uint8_t owner = 0;
     if (v >= 4000) {
         const int i = v - 4000;
@@ -288,6 +301,9 @@ int cardEffectMonster(Application& app) {
         if (owner != 0) {  // [RE 0x4439B0]
             addPlayerDebt(st, owner - 1, cur, st.moneyMul * 30 * st.estates[i].level);
         }
+    }
+    if (owner != 0) {
+        playCardLine(app, owner - 1, kSpeechMonsterOwner);  // [RE 0x443Axx 原主台词]
     }
     int x = 0;
     int y = 0;
@@ -309,6 +325,7 @@ int cardEffectDemolish(Application& app) {
         return 0;
     }
     cardBagRemove(st, cur, 12);  // [RE 0x443B47 sub_441343(cur,12)]
+    playCardLine(app, cur, 11);  // [RE 使用者台词 拆除]
     if ((v & 0x8000) != 0 && v < 2000) {  // 路面道具（0x8000|槽<<8）
         const int slot = (v & 0x7F00) >> 8;  // [RE 0x443B6F]
         releaseCellTableSlot(app, slot);      // [RE 0x443BC5 deleteMapObject]
@@ -350,6 +367,7 @@ int cardEffectDemolish(Application& app) {
     }
     if (owner != 0) {  // [RE 0x443D02/0x443D20] 有主 → 记债 30×M
         addPlayerDebt(st, owner - 1, cur, 30 * st.moneyMul);
+        playCardLine(app, owner - 1, kSpeechDemolishOwner);  // [RE 原主台词]
     }
     int x = 0;
     int y = 0;
@@ -397,6 +415,8 @@ int cardEffectSteal(Application& app) {
         price = (sel >= 0 && sel < 31) ? kCardPrices[sel] : 0;  // [RE byte_47FDEF[8*sel]]
     }
     addPlayerDebt(st, t, cur, price);  // [RE 0x443EA6] 被夺者债权、使用者欠
+    playCardLine(app, cur, 12);        // [RE 使用者台词 搶奪]
+    playCardLine(app, t, kSpeechStealTarget);  // [RE 0x443ECx 目标台词]
     cardBagRemove(st, cur, 13);        // [RE 0x443EB9 sub_441343(cur,13)]
     RICH4_LOGI("cardSteal: p%d -> p%d sel=%d price=%d (RE 0x443E3D)", cur, t, sel, price);
     return 1;
@@ -427,6 +447,7 @@ int cardEffectAngel(Application& app) {
         return 0;
     }
     cardBagRemove(st, cur, 9);  // [RE 0x4434FE sub_441343(cur,9)]
+    playCardLine(app, cur, 8);  // [RE 0x443519 使用者台词 天使]
     bool capped = false;
     st.highlightEstates.clear();
     st.highlightCorps.clear();
@@ -483,6 +504,7 @@ int cardEffectDevil(Application& app) {
         return 0;
     }
     cardBagRemove(st, cur, 10);  // [RE 0x44371C sub_441343(cur,10)]
+    playCardLine(app, cur, 9);   // [RE 使用者台词 惡魔]
     st.highlightEstates.clear();
     st.highlightCorps.clear();
     if (v > 2000 && v < 4000) {
@@ -536,6 +558,8 @@ int cardEffectStay(Application& app) {
         return 0;
     }
     cardBagRemove(st, cur, 14);  // [RE 0x443FC9 sub_441343(cur,14)]
+    playCardLine(app, cur, 13);  // [RE 使用者台词 停留]
+    playCardLine(app, t, (t == cur) ? kSpeechStaySelf : kSpeechStayTarget);  // [RE 对方/自己]
     if (t == cur) {
         st.players[t].skipMove = 0x80;  // [RE 0x443FFF] 自己（下回合清）
     } else {
@@ -550,6 +574,7 @@ int cardEffectHibernate(Application& app) {
     GameState& st = app.gameState();
     const int cur = st.currentPlayer;
     cardBagRemove(st, cur, 15);  // [RE 0x4440F1 sub_441343(cur,15)]
+    playCardLine(app, cur, 14);  // [RE 使用者台词 冬眠]
     const int n = st.playerCount < 4 ? st.playerCount : 4;
     for (int i = 0; i < n; ++i) {
         Player& q = st.players[i];
@@ -596,6 +621,7 @@ int cardEffectSleepwalk(Application& app) {
         return 0;
     }
     cardBagRemove(st, cur, 16);  // [RE 0x44421E sub_441343(cur,16)]
+    playCardLine(app, cur, 15);  // [RE 使用者台词 夢遊]
     const int orig = bitScanPlayer(static_cast<uint32_t>(v));  // [RE 0x44423x]
     if (orig < 0 || orig >= 4) {
         return 0;
@@ -611,6 +637,13 @@ int cardEffectSleepwalk(Application& app) {
         return 1;
     }
     const int t = r;
+    // [RE 0x4443xx off_48089E] 受害者"睡觉"台词（价值表列 21）
+    {
+        const int ci = st.players[t].charIndex;
+        if (ci >= 0 && ci < 12 && kCardVictimLines[ci][0] != '\0') {
+            playLine(app, t, kCardVictimLines[ci]);
+        }
+    }
     st.players[t].state37 = static_cast<uint8_t>((t != cur) ? 5 : 4);  // [RE 0x4442F4]
     st.players[t].byte58 = static_cast<uint8_t>(st.players[t].byte58 + 5);  // [RE byte_496BAA? +58]
     stripVehicle(st, t);  // [RE 0x4442BC 段]
@@ -635,6 +668,7 @@ int cardEffectFrame(Application& app) {
         return 0;
     }
     cardBagRemove(st, cur, 17);  // [RE 0x444501 sub_441343(cur,17)]
+    playCardLine(app, cur, 16);  // [RE 使用者台词 陷害]
     const int orig = bitScanPlayer(static_cast<uint32_t>(v));  // [RE 0x44450x]
     if (orig < 0 || orig >= 4) {
         return 0;
@@ -652,6 +686,7 @@ int cardEffectFrame(Application& app) {
     } else {
         jailPlayer(app, t, 5);    // [RE 0x4445A0] 目标 5 天
     }
+    playCardLine(app, t, kSpeechFrameTarget);  // [RE 0x4445Cx 目标台词]
     // [RE 0x4445Cx] 原目标未被转嫁且持復仇卡(18) → 使用者坐牢 5 天
     if (t == orig && cardBagHas(st, orig, 18)) {
         triggerRevengeCard(app, orig);
@@ -671,6 +706,7 @@ int cardEffectTaxAudit(Application& app) {
         return 0;
     }
     cardBagRemove(st, cur, 26);  // [RE 0x445232 sub_441343(cur,26)]
+    playCardLine(app, cur, 25);  // [RE 使用者台词 查稅]
     int t = bitScanPlayer(static_cast<uint32_t>(v));  // [RE 0x44524x]
     if (t < 0 || t >= 4) {
         return 0;
@@ -691,6 +727,7 @@ int cardEffectTaxAudit(Application& app) {
     }
     if (t != cur) {
         tax = static_cast<int32_t>(st.players[t].cash * 0.2);  // [RE 0x4452E0 重算]
+        playCardLine(app, t, kSpeechTaxTarget);                 // [RE 0x4453xx 目标台词]
         transferMoney(app, t, cur, tax, 0);                     // [RE 0x4452F5]
         char text[192];
         std::snprintf(text, sizeof text, "%s被課稅%d元", playerNameNoSpace(st, t).c_str(), tax);
@@ -710,6 +747,7 @@ int cardEffectPriceUp(Application& app) {
         return 0;
     }
     cardBagRemove(st, cur, 27);  // [RE 0x44546F sub_441343(cur,27)]
+    playCardLine(app, cur, 26);  // [RE 使用者台词 漲價]
     if (v > 2000 && v < 4000) {
         std::vector<int> route;
         if (collectSameRouteEstates(st, v, route) < 0) {
@@ -741,6 +779,7 @@ int cardEffectSeal(Application& app) {
         return 0;
     }
     cardBagRemove(st, cur, 28);  // [RE 0x4455D5 sub_441343(cur,28)]
+    playCardLine(app, cur, 27);  // [RE 使用者台词 查封]
     if (v > 2000 && v < 4000) {
         std::vector<int> route;
         if (collectSameRouteEstates(st, v, route) < 0) {
@@ -776,6 +815,7 @@ int cardEffectAlly(Application& app) {
         return 0;
     }
     cardBagRemove(st, cur, 29);  // [RE 0x445752 sub_441343(cur,29)]
+    playCardLine(app, cur, 28);  // [RE 使用者台词 同盟]
     const int t = bitScanPlayer(static_cast<uint32_t>(v));  // [RE 0x44576x]
     if (t < 0 || t >= 4) {
         return 0;
@@ -791,6 +831,7 @@ int cardEffectAlly(Application& app) {
     st.players[cur].allyActive = 7;
     st.players[t].ally = static_cast<uint8_t>(cur + 1);
     st.players[t].allyActive = 7;
+    playCardLine(app, t, kSpeechAllyTarget);  // [RE 0x44583x 目标台词]
     refreshPlayerPanelFor(app, cur);  // [RE 0x445833 sub_41D433(cur)]
     renderGameFrame(app);             // [RE sub_41D546]
     RICH4_LOGI("cardAlly: p%d <-> p%d 7 days (RE 0x445710)", cur, t);
@@ -810,6 +851,8 @@ int cardEffectTurtle(Application& app) {
         return 0;
     }
     cardBagRemove(st, cur, 30);  // [RE 0x44592E sub_441343(cur,30)]
+    playCardLine(app, cur, 29);  // [RE 使用者台词 烏龜]
+    playCardLine(app, t, (t == cur) ? kSpeechTurtleSelf : kSpeechTurtleTarget);  // [RE 对方/自己]
     if (t == cur) {
         st.players[t].fixedStep = 2;  // [RE 0x44595x]
     } else {
@@ -847,6 +890,10 @@ int cardEffectSwapLand(Application& app) {
         }
         st.highlightEstates.push_back(a);  // [RE 0x4426B7 markPickBuffer]
         st.highlightEstates.push_back(b);
+        playCardLine(app, cur, 3);  // [RE 0x442777 使用者台词 換地]
+        if (st.estates[b].owner != 0) {
+            playCardLine(app, st.estates[b].owner - 1, kSpeechSwapLandOther);  // [RE 0x44287A]
+        }
         const uint8_t o = st.estates[a].owner;  // [RE 0x4427BB/0x4427C1] owner 互换
         st.estates[a].owner = st.estates[b].owner;
         st.estates[b].owner = o;
@@ -860,6 +907,10 @@ int cardEffectSwapLand(Application& app) {
         }
         st.highlightCorps.push_back(a);  // [RE 0x4428FE markPickBuffer]
         st.highlightCorps.push_back(b);
+        playCardLine(app, cur, 3);  // [RE 使用者台词 換地]
+        if (st.corps[b].owner != 0) {
+            playCardLine(app, st.corps[b].owner - 1, kSpeechSwapLandOther);  // [RE 对方台词]
+        }
         const uint8_t o = st.corps[a].owner;  // [RE 0x442A09/0x442A0F] owner 互换
         st.corps[a].owner = st.corps[b].owner;
         st.corps[b].owner = o;
@@ -900,6 +951,10 @@ int cardEffectSwapHouse(Application& app) {
         }
         st.highlightEstates.push_back(a);  // [RE 0x442BA0 markPickBuffer]
         st.highlightEstates.push_back(b);  // [RE 0x442BBA]
+        playCardLine(app, cur, 4);         // [RE 使用者台词 換屋]
+        if (st.estates[b].owner != 0) {
+            playCardLine(app, st.estates[b].owner - 1, kSpeechSwapHouseOther);  // [RE 对方台词]
+        }
         // [RE 0x40B4F8] 房屋互换（level+24/type+26 交换；动画简化为直接交换）
         Estate& ea = st.estates[a];
         Estate& eb = st.estates[b];
@@ -918,6 +973,10 @@ int cardEffectSwapHouse(Application& app) {
         }
         st.highlightCorps.push_back(a);  // [RE 0x442DB7 markPickBuffer]
         st.highlightCorps.push_back(b);  // [RE 0x442DD1]
+        playCardLine(app, cur, 4);       // [RE 使用者台词 換屋]
+        if (st.corps[b].owner != 0) {
+            playCardLine(app, st.corps[b].owner - 1, kSpeechSwapHouseOther);  // [RE 对方台词]
+        }
         Corp& ca = st.corps[a];
         Corp& cb = st.corps[b];
         const uint8_t sb = ca.sub;
@@ -993,6 +1052,8 @@ void triggerRevengeCard(Application& app, int victim) {
     std::snprintf(text, sizeof text, "%s\n\n", playerNameNoSpace(st, victim).c_str());
     showCardGet(app, 18, text);   // [RE sub_441F73(18,...)]
     cardBagRemove(st, victim, 18);  // [RE sub_441343(victim,18)]
+    playCardLine(app, victim, 17);  // [RE 0x44471F 受害者台词 復仇]
+    playCardLine(app, st.currentPlayer, kSpeechRevengeUser);  // [RE 0x44474F 使用者（被反伤）]
     // 差异: 原版尾段与 applyExemptCard(0x444753) 共享指令（IDA 边界）；重写不尾调以免误耗免罪卡
     RICH4_LOGI("triggerRevengeCard: victim p%d (RE 0x444691)", victim);
 }
@@ -1023,6 +1084,7 @@ int applyFreeCard(Application& app, int target, int32_t fee) {
                   playerNameNoSpace(st, target).c_str());
     showCardGet(app, 20, text);    // [RE "使用%s" + sub_441F73(20,...)]
     cardBagRemove(st, target, 20);  // [RE sub_441343(target,20)]
+    playCardLine(app, target, 19);  // [RE 0x444B0x 使用者台词 免費]
     RICH4_LOGI("applyFreeCard: p%d fee=%d used (RE 0x444A60)", target, fee);
     return 1;
 }
