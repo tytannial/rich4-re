@@ -99,13 +99,25 @@ sub_40E033(14, sub_40AA6C(0), 0, 0);
 重写：`UiImage::setPaletteEntry/basePaletteEntry`（load 时保存原始调色板副本），
 绘制循环按 `colorIdx`（-1 原图 / 0 黑 / 1..N 玩家色）设置。
 
-### 住宅用地/商業用地：无主不绘制但可拾取
+### 住宅用地/商業用地：无主不绘制但可拾取（高亮形状同原版）
 
 无主空地/公司**不绘制旗帜**（地形自带白色虚线框，原版空地即如此）；有主时绘制
-旗帜并把调色板[255] 替换为玩家色。但**无主项仍写入拾取缓冲**（`sub_409B18` 遍历全部
-estate/corp），因此点击空地会弹出提示：**建筑名 / 等级 / 费用**（如「空地 / 0級 / $400」，
-费用 = `estate +32 + 2*level`）。
+旗帜并把调色板[255] 替换为玩家色。但**无主项仍登记 drawList id**（`sub_40829D` 中
+estate/corp 循环：`tile=0` 仅跳过图块，`g_drawListId = 2000+n/4000+n` 照写）→
+`rebuildPickBuffer 0x409B18` 对 drawList 全部 estate/corp 写拾取缓冲，因此点击空地
+会弹出提示：**建筑名 / 等级 / 费用**（如「空地 / 0級 / $400」，费用 = `estate +32 + 2*level`）。
 **城市/省份名称**是**道路格（cellEnt）**的提示（名称来自 cellEnt +4，如「台北市」「墾丁」）。
+
+**高亮形状**（`0x409B18` writePickBuffer）：estate 一律 `g_pickMask` 帧
+`(8-(rot+dir))&1`（0/1，71x47/71x51）、corp 一律 `((8-(rot+dir))&1)+2`（2/3，143x103），
+**与 owner/level 无关**；`markPickBuffer + highlightBlink`（0x451985）据此闪烁。
+
+> **实机修正（2026-09-26）**：重写无主分支只填了 `MapHitRegion` 的拾取字段
+> （shape/shapeFrame=帧4），`hlShape` 保持 nullptr → `captureHighlightShapes` 跳过 →
+> **命运 id1 强制徵收/新闻 idx19 山洪归公后的目标格完全不闪烁**。原版对无主项同样写
+> 缓冲（命运 0x44BFB1 甚至先 mark 后改 owner）。修复：`map_render.cpp` 两处无主分支
+> push 后补 `hlShape=&flagTiles`、`hlFrame` 用原版帧（0/1 或 +2）；拾取矩形仍用帧 4
+> （体感魔改，见下）。"无主不写缓冲"的旧表述为误读。
 
 ## 重写要点
 

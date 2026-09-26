@@ -254,6 +254,9 @@ newsEvent:
   现 `mapHitRegions` 另存 `hl*`（原版形状/锚点），`captureHighlightShapes` 提取
   `highlightShapes` 快照（原版 pickBuffer 语义：启动时固定，拆除后仍亮——新闻 idx 19/21）；
   corp 单块高亮同步支持（`highlightCorps`）。
+  **2026-09-26 二修**：idx19 山洪/idx18 地震命中**无主地块**（或归公后变无主）时完全不闪——
+  重写无主分支只填拾取字段、`hlShape` 留空；原版 0x409B18 对无主 estate/corp 同样写缓冲。
+  已补两处 `hlShape/hlFrame/hlAnchor`（帧 0/1、+2），详见 `40e033-map-objects.md` 修正段。
   ② 银行停留「暫停放款」提示 8000→**1500ms**（原版 0x800005DC = 1500+左移 100px，
   旧文档误读 8000；重写 showMessage 不支持负值左移，故传正 1500）。
   ③ 扣钱类新闻（三税/罚款）**不走**神明调整：原版 `sub_41D2C6` 纯转账、`newsEvt11/12/13/30-35`

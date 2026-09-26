@@ -289,6 +289,13 @@ passOnCardDialog(p)：
 - **单块高亮上偏 40px**：`captureHighlightShapes` 沿用原版 pickBuffer 局部坐标 `it.y-40`，
   但重写直接画屏幕（无 highlightBlink 的 `+40` 回贴换算）→ 整体上移 40px。修复：锚点用
   `it.y`（`map_render.cpp`；证据与通用说明见 `frame-anchor.md` §5.3）。命运 id0/1 高亮受益。
+- **id1 强制徵收完全不闪烁（2026-09-26 二修）**：原版 0x44BFB1 顺序为
+  `refreshGameUi(x,y,2)→rebuildPickBuffer(1)→markPickBuffer(…, id, 0xFFFF)→addMoney→
+  owner=0/expireDate=0→rebuildMiniMap→highlightBlink`；`0x409B18` 对**无主 estate 同样**
+  写 `g_pickMask` 帧 `(8-(rot+dir))&1`（drawList 中 tile=0 但 id 已登记）。重写
+  `map_render.cpp` 无主分支只填拾取字段、`hlShape` 留空 → 形状快照为空 → 无闪烁。
+  修复：两处无主分支（estate/corp）补齐 `hlShape/hlFrame/hlAnchor`（帧 0/1、+2）；
+  拾取矩形保持帧 4 体感魔改。详见 `40e033-map-objects.md` 同名修正段。
 
 - **相位1 未切回场景**：实机反馈"坐牢时屏幕还没切回场景就开始播警车动画"。原版各效果函数
   phase1 开头先 `refreshGameUi(0,0,3)` 重绘地图（覆盖全屏事件面板）再播 FLC；重写单 Surface

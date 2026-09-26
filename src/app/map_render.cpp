@@ -414,11 +414,15 @@ void renderMap(Application& app, int centerX, int centerY) {
     for (size_t i = 1; i < state.estates.size(); ++i) {
         const Estate& es = state.estates[i];
         const int frame = (8 - (state.mapRotation + es.dir)) & 7;
-        // 原版拾取形状 = g_pickMask 帧 2/3（143x103 菱形，覆盖约 3x3 格）；
-        //   实机体感范围过大易误盖道路格 → 改用帧 4（51x51，约一个地块）
+        // [RE 0x409B18] 原版拾取/高亮形状：estate = g_pickMask 帧 (8-(rot+dir))&1（71x47/71x51）、
+        //   corp = +2（帧 2/3，143x103 菱形）；实机拾取体感范围过大易误盖道路格 →
+        //   命中矩形改用帧 4（51x51，约一个地块），高亮仍用原版帧（见 hl* 赋值）
         const int pickFrame = 4;
         if (es.owner == 0 && es.level == 0) {
-            // [RE 0x409B18] 无主空地仍可拾取（点击显示 空地/等级/费用）
+            // [RE 0x40829D/0x409B18] 无主空地：tile=0 不绘制但**仍登记 drawList id=2000+n**，
+            //   rebuildPickBuffer 照写 g_pickMask → 拾取与 highlightBlink 均有效
+            //   （旧注释"无主不写缓冲/hlShape=null"为误读；命运 id1 徵收/山洪归公后
+            //   目标变无主，原版高亮照常 → 曾因 hlShape 缺失导致重写无闪烁）
             int sx = 0;
             int sy = 0;
             if (state.flagTiles.frameCount() > pickFrame && projectItem(es.x, es.y, sx, sy)) {
@@ -426,6 +430,11 @@ void renderMap(Application& app, int centerX, int centerY) {
                 state.mapHitRegions.push_back(
                     {sx - pf.offsetX, sy - pf.offsetY, pf.width, pf.height,
                      static_cast<uint16_t>(2000 + i), &state.flagTiles, pickFrame, sx, sy});
+                GameState::MapHitRegion& hit = state.mapHitRegions.back();
+                hit.hlShape = &state.flagTiles;
+                hit.hlFrame = (8 - (state.mapRotation + es.dir)) & 1;
+                hit.hlAnchorX = sx;
+                hit.hlAnchorY = sy;
             }
             continue;
         }
@@ -469,6 +478,7 @@ void renderMap(Application& app, int centerX, int centerY) {
         // 同 estate：拾取形状改用帧 4（51x51）
         const int pickFrame = 4;
         if (cp.owner == 0 && cp.sub == 0) {
+            // [RE 0x40829D/0x409B18] 无主公司同上：不绘制但登记 id=4000+n，高亮形状 = 原版 corp 帧 2/3
             int sx = 0;
             int sy = 0;
             if (state.flagTiles.frameCount() > pickFrame && projectItem(cp.x, cp.y, sx, sy)) {
@@ -476,6 +486,11 @@ void renderMap(Application& app, int centerX, int centerY) {
                 state.mapHitRegions.push_back(
                     {sx - pf.offsetX, sy - pf.offsetY, pf.width, pf.height,
                      static_cast<uint16_t>(4000 + i), &state.flagTiles, pickFrame, sx, sy});
+                GameState::MapHitRegion& hit = state.mapHitRegions.back();
+                hit.hlShape = &state.flagTiles;
+                hit.hlFrame = ((8 - (state.mapRotation + cp.dir)) & 1) + 2;
+                hit.hlAnchorX = sx;
+                hit.hlAnchorY = sy;
             }
             continue;
         }
@@ -543,7 +558,6 @@ void renderMap(Application& app, int centerX, int centerY) {
                 hit.hlAnchorY = it.y;
             }
         }
-        const UiFrameView& f = it.spr->frame(it.frame);
         if (it.spr->isSprite()) {
             // [RE 0x40986A] 调色板[255] = 拥有者颜色（0=黑轮廓、1..8=玩家色、-1=原图）
             if (it.colorIdx < 0) {
