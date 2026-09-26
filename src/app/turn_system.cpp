@@ -2569,6 +2569,10 @@ int32_t insurancePayout(Application& app, int player, int32_t amount) {
 //   释放当前格占用 → cellEntId = 監獄格（word_48BAE0）→ sprite = evtCells[2]（綠島）→
 //   BYTE2 = days → g_jailFlags=1 → FLC 538 @(0,40)（settings[1] 动画过程）→ 语音（P4）→
 //   保险理赔 M×2000×days → byte66 += days（累计）
+// 天数语义（2026-09-26 IDA 复核，结果=非 bug）：显示/传入 X 天 = 错过 X 个完整回合
+//   （入狱当回合余下时间也计入）；0x41C84F 每回合开始 n→n-1，1→0x80，**再下一次**回合
+//   才 release+走出 → 从触发回合数起第 X+1 次回合开始恢复行动。sub_40C912 显示
+//   (BYTE2&0x7F)+1（重写 checkPlayerAction 同步）。debug 直调补跳入狱当回合同语义。
 // 差异: cellTable/cellNo 位置表（word_496D0A）P5；语音 P4；FLC 背景保存由逐帧重绘等价
 void jailPlayer(Application& app, int player, int days) {
     GameState& st = app.gameState();

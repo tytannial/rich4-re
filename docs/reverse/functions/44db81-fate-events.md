@@ -305,6 +305,12 @@ passOnCardDialog(p)：
   修复：amount=10，`fateApplyBankHack` 按 `def.amount％` 计算并加日志。
 - **罚款明细日志**：`fateApplyFine` 输出 idx/code/金额/转账前后 cash/bank/保险期，便于核对
   "未扣款"反馈（免罚/保险理赔为原版设计）。
+- **坐牢「X 天实际 X+1 天」= 原版语义，非 bug（2026-09-26 IDA 复核）**：
+  `jailPlayer` 0x43D593 写 BYTE2=days（累加 `&0x7F`）；`updatePlayerStates` 0x41C84F
+  每回合开始 `n→n-1`，`1→0x80`，**下一次**回合才 release+走出（`sub_40D6BE`）；
+  `sub_40C912` 显示 `(BYTE2&0x7F)+1`。即从触发回合数起第 X+1 次回合开始恢复行动
+  （入狱当回合余下时间计入）。重写逐行一致，debug 直调补跳当回合同语义。
+  见 `turn_system.cpp` jailPlayer 注释；**不做行为修改**。
 
 ## 8. 验收清单
 
