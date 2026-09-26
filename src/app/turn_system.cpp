@@ -177,6 +177,9 @@ void onPlayerActionPhase(Application& app) {
         //   不播爆炸/咬伤/住院动画，damagePlayer 对恶人无意义→直接 hospitalizePlayer(NPC,0)）：
         if (stopped && (objType == 11 || objType == 17)) {  // 恶犬咬伤 / 地雷炸伤 → 入院(永久待保释)
             releaseCellTableSlot(app, objId);  // 删除该格物件（地雷/恶犬轮替）
+            // 触发动画保留（地雷爆炸 525/音效82、恶犬咬伤 532/音效93，帧3切换），
+            //   仅省后续 hospitalizePlayer 的 524 救护车（NPC 分支本就不播）
+            playEventFlc(app, objType == 17 ? 525 : 532, 0, 40, objType == 17 ? 82 : 93, false, 3);
             st.remainingSteps = 0;
             hospitalizePlayer(app, p, 0);
             return;
