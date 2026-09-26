@@ -143,6 +143,20 @@ if 非人类: flyObjectSprite; highlightBlink(); refreshGameUi(0,0,1); return v
   - 需先补：天数递减、状态写入 helper、`sub_444691`/`sub_444A60`、`cursorSelect`+股价倒计时。
 - **档C（需扩 `sub_446AE8` 选地块 + 双地块交换 UI，3 张）**：換地4 / 換屋5 /（查封27/同盟29 属 B，但同盟依赖 allyActive 递减）。
 
+### 实现进度（2026-09-26）
+
+- **档A 8 卡 ✅ 已实现**：`src/app/card_effects.cpp` —— id1 均富 `0x4420D8` / id2 均貧 `0x4421B4` /
+  id3 購地 `0x442325` / id6 轉向 `0x442F4D` / id8 拍賣 `0x443225` / id11 怪獸 `0x443917` /
+  id12 拆除 `0x443B0F` / id13 搶奪 `0x443E3D`；`card_bag_dialog.cpp` `cardEffect` switch 接线。
+- 新增导出：`turnToAdjacentCell` 由 `magic_house_dialog.cpp`（匿名 namespace）**迁至 `turn_system.cpp`**
+  + `turn_system.h` 声明（轉向卡复用）；道具价复用既有 `kItemPrice[13]`（`0x47FEEA`，id-1 索引）。
+- **AI 分支**：`useCardFlow` 仅 `alive==1` 进入 → 效果函数当前只走人类路径；AI 用卡链
+  （`sub_41E69E` + `dword_48BE58` 预选目标，`sub_41E6F2`=读表）随 P5 接入。
+- 待实机验证：坐标/FLC 落点（怪兽 FLC 557、拆除 FLC 529）、`selectTargetDialog` flags
+  （`0x0E0C0410` 玩家 / `0x0E0C0506` 地块 / `0x0E0C0526` 地块+道具）。
+- **后续**：档B（天使9/惡魔10/停留14/冬眠15/夢遊16/陷害17/紅24/黑25/查稅26/烏龜30 + 被动18/20）、
+  档C（換地4/換屋5）。
+
 ## 6. 每卡实现前待细化清单
 
 1. `sub_446AE8` 各 flags 精确语义（哪些位=含自己/含对手/选玩家 vs 选地块/过滤建筑）——`decompile 0x446AE8` 定表。
