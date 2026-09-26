@@ -435,6 +435,9 @@ struct GameState {
     //   语义随卡：玩家掩码 0x8000|mask / 地块 objId / 股票 0-based 索引 / 改建设施号；不入存档（原版同）
     int aiCardTarget = 0;
     int aiCardTarget2 = 0;
+    // [RE 0x48BE64] AI 用道具预选（aiItemSelect 写、道具效果 AI 分支 sub_420EEE(idx) 读；
+    //   语义随道具：目标格 id（cellEnt）/ 遥控骰子点数 1..6 / 核弹 objId；不入存档）
+    int aiItemTarget = 0;
     std::string objectTipText; // 非空时显示提示框
     int objectTipX = 0;
     int objectTipY = 0;

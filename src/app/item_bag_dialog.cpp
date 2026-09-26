@@ -3,10 +3,13 @@
 #include <SDL3/SDL.h>
 
 #include <cstdio>
+#include <cstdlib>
 
+#include "game/app/ai_item.h"
 #include "game/app/event_stack.h"
 #include "game/app/item_effects.h"   // [RE 0x475DD4] g_itemEffectFuncs 分派
 #include "game/app/map_tables.h"
+#include "game/app/message_dialog.h"
 #include "game/app/new_game_tables.h"
 #include "game/application.h"
 #include "game/core/log.h"
@@ -178,7 +181,42 @@ void drawItemBagAt(Application& app, const UiImage& sheet, int player, int x, in
 void itemBagDialog(Application& app) {
     GameState& st = app.gameState();
     const int cur = st.currentPlayer;
-    if (cur < 0 || cur >= 4 || st.players[cur].alive != 1) {
+    if (cur < 0 || cur >= 4) {
+        return;
+    }
+    // [RE 0x447D97 AI 分支] 电脑/托管（alive&6）且 aiCardItem bit1（使用道具）：
+    //   手持道具随机序逐件试 aiItemSelect（persona + 目标预选 dword_48BE64）→ 命中即用
+    if (st.players[cur].alive != 1) {
+        if ((st.players[cur].alive & 6) == 0 || (st.players[cur].aiCardItem & 2) == 0) {
+            return;
+        }
+        int items[13];
+        int n = 0;
+        for (int i = 0; i < 13; ++i) {
+            if (st.itemStock[15 * cur + i] != 0) {
+                items[n++] = i + 1;
+            }
+        }
+        if (n == 0) {
+            return;
+        }
+        for (int i = n - 1; i > 0; --i) {
+            const int j = std::rand() % (i + 1);
+            const int t = items[i];
+            items[i] = items[j];
+            items[j] = t;
+        }
+        for (int i = 0; i < n; ++i) {
+            const int id = items[i];
+            if (aiItemSelect(app, id) != 1) {
+                continue;
+            }
+            char text[64];
+            std::snprintf(text, sizeof text, "使用%s", kItemBagNames[id]);  // [RE 0x4653E5]
+            showMessage(app, text, 1500);
+            itemEffect(app, id);
+            return;  // 原版每回合最多使用一件
+        }
         return;
     }
     st.manualView = false;  // [RE 0x41D546]

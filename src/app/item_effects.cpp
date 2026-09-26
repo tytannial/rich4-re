@@ -260,7 +260,7 @@ int placeMapItem(Application& app, int itemId, int objType, int mode, int sfxSlo
     if (st.players[p].alive == 1) {
         v = selectTargetDialog(app, mode);  // [RE 0x446AE8]
     } else {
-        v = 0;  // [RE 0x420EEE] AI 预选目标（dword_48BE64[0]；P5）
+        v = st.aiItemTarget;  // [RE 0x420EEE] AI 预选目标（dword_48BE64[0]；ai_item.cpp）
     }
     if (v == 0) {
         return 0;
@@ -347,7 +347,7 @@ int launchMissile(Application& app, int itemId, int mode, int radius, int dump, 
     if (st.players[p].alive == 1) {
         v = selectTargetDialog(app, mode);  // [RE 0x446AE8]
     } else {
-        v = 0;  // [RE 0x420EEE] AI 预选（P5）
+        v = st.aiItemTarget;  // [RE 0x420EEE] AI 预选（ai_item.cpp）
     }
     if (v == 0) {
         return 0;
@@ -648,7 +648,7 @@ int useItemTeleport(Application& app) {
                 showMessage(app, "只能移到空的道路或空地！", 1000);
             }
         } else {
-            dest = 0;  // [RE 0x420EEE] AI 预选（P5）
+            dest = st.aiItemTarget;  // [RE 0x420EEE] AI 预选目的地（ai_item.cpp）
         }
         if (dest == 0 || dest >= static_cast<int>(st.cellEnts.size())) {
             return 0;
@@ -740,7 +740,7 @@ int useItemTeleport(Application& app) {
                 showMessage(app, "只能移到空的道路或空地！", 1000);
             }
         } else {
-            dest = 0;  // [RE 0x420EEE] AI 预选（P5）
+            dest = st.aiItemTarget;  // [RE 0x420EEE] AI 预选（ai_item.cpp；AI 源=自己不走此分支）
         }
         if (dest == 0 || dest >= static_cast<int>(st.cellEnts.size())) {
             return 0;
@@ -887,7 +887,7 @@ int useItemRemoteDice(Application& app) {
         playItemLine(app, p, 8);   // [RE 0x44EF41] off_480D76（面板 blit 之前）
         dice = remoteDiceDialog(app);
     } else {
-        dice = 0;  // [RE 0x420EEE] dword_48BE64[0]（AI 预选目标；P5 接入）
+        dice = st.aiItemTarget;  // [RE 0x420EEE] dword_48BE64[0]（AI 预设点数 1..6；ai_item.cpp）
     }
     if (dice != 0) {
         startPlayerMove(app);          // [RE 0x40DD1F]（先于 takePlayerCard）
