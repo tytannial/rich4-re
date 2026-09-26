@@ -2,7 +2,7 @@
 
 > 由 `python tools/re_map.py` 自动生成，勿手改。
 
-## RE 映射（232 条）
+## RE 映射（233 条）
 
 | 地址 | 原符号 | 重写位置 | 依据 |
 |------|--------|----------|------|
@@ -109,6 +109,7 @@
 | `0x41DDA9` | aiDialogWndProc | `src/app/ai_dialog.cpp:318` | 0x41DDA9 反编译; WM_LBUTTONDOWN 玩家槽（再点选中槽 → alive^=4 托管）/控件； WM_MOUSEMOVE 拖动滑块；WM_LBUTTONUP 动作；WM_RBUTTONUP/WM_KEYDOWN 取消关闭 |
 | `0x41E345` | aiDialog（託管AI | `src/app/ai_dialog.cpp:394` | 0x41E345 反编译; panel.mkf[77] 帧 0 画布 + 槽数组 byte_48BE34 只列入 alive&1 的人类玩家（最多 4），默认选中当前玩家；runModal(sub_41DDA9) |
 | `0x41E69E` | aiCardSelect | `include/game/app/ai_card.h:7` | 0x41E69E（kCardAiPersona[卡] - aiPersonality[cur] >= 2 → 不用；== 1 时 1/3 概率） → dword_475324[卡] 目标选择函数（逐函数逆向，见 441baa-card-effects.md §AI）。 输出: 命中返回 1，并写 st.aiCardTarget（玩家掩码 0x8000\|mask / 地块 objId / 股票 0-based 索引 / 改建设施号）与 st.aiCardTarget2（抢夺卡目标卡 id）；未命中返回 0。 原版换屋/转向/被动卡(18..21) 的表项为 return 0（AI 不主动使用）。 |
+| `0x420E9A` | aiItemSelect | `include/game/app/ai_item.h:7` | 0x420E9A（kItemAiPersona[道具] - aiPersonality >= 2 → 不用；==1 时 1/3 概率） → funcs_420EE6 @ 0x4753A0[13] 目标函数（逐函数逆向，见 420e9a-item-ai.md）。 输出: 命中返回 1，并写 st.aiItemTarget（目标格 cellEnt id / 遥控骰子点数 1..6 / 核弹 objId）。 原版時光機(10) 目标函数为 return 0（AI 不用）。 |
 | `0x4225A3` | 地產清單页 | `src/app/query_dialog.cpp:396` | 0x4225A3 反编译; 子页签底 panel[9] 帧 11 @ (120+75k,64)、文字 off_4753D4 @ (+37,80)； 列表行 y=144+32*row；列 x = 168（地點 align2）/ 264（開發狀況）/ 394（價 格 align6）/ 490（收 費 align6）/ 540（租 期 align2）；estate 字体 16/0x101010、corp 16/0x101110； 價格 = M×(priceAdd+priceBase×level) / M×(buildPrice+feeTable[0]×sub)； 收費 estate 普通 = estateRouteRent(地主, 同街)，連鎖行 = 查看玩家連鎖總租； corp = M×feeTable[sub]；租期 = "%02d/%d/%d"（expireDate 年%100/月/日）或「無限期」 |
 | `0x423070` | 資產清單页 | `src/app/query_dialog.cpp:275` | 0x423070 反编译 page==0 分支（330/602/250 右对齐，字体 28；道具 panel[74] 图标 + 数量，卡片 kCardNames[id]）；0x422443 画 12 字段标签（x=142/430 两列 + 第二排 142） |
 | `0x423070` | 股票清單页 | `src/app/query_dialog.cpp:516` | 0x423070 反编译 page==2 分支; 列头 off_475448 @ x=204/332/476 y=68； 行 y=100+32*i；股票名 kStockNames[4*mode+map] @ 204 align2、 持有張數 @ 384 align6、總市價 = 股数×现价 @ 536 align6；字体 16 深灰 |
@@ -158,7 +159,7 @@
 | `0x446F05` | 汽車（id6） | `src/app/item_effects.cpp:191` | 0x446F05 反编译（尾部共享 0x446EFF 返回 1） |
 | `0x447428` | 傳送機（id11） | `src/app/item_effects.cpp:503` | 0x447428 反编译；AI 分支 = 0x8000\|(1<<cur)；玩家传送后 dir=最优出口朝向、 prevCellEnt=另一出口、state=1 触发落地结算；**传送自己前保存时光机快照** （0x4477C3 sub_44808A，位置更新前）；神明/物品旧格清 occMask bit16-23（0x44793B） ；目的地拾取语义 = occMask bit8-23 干净（医院/监狱/事件格原版可传，落地触发事件） 差异（保留魔改，用户确认）: ① 源 = 完全空的无主地拒绝（teleportSourceValid）； ② 房屋/设施目的地限**无主空地**；人物/神明/物品限**空道路或无主空地**（[HELP 94] "空道路/空地"；原版大菱形覆盖空地 → 不可选，[USER] 2026-09-26 放开空地： selectTargetDialog(allowEmptyLand) + resolveTeleportDest；有主/有建筑地块拒绝） 差异（待补）: AI 目的地 sub_420EEE（P5）；事件槽玩家 4..7（P5） |
 | `0x4479D2` | 工程車（id12） | `src/app/item_effects.cpp:901` | 0x4479D2 反编译；原载具/骰子暂存 kind(+100)/byte_496BCD(+101)（重写独立字段） |
-| `0x447C6E` | drawItemBagAt | `src/app/item_bag_dialog.cpp:141` | 0x447C6E 反编译; 工具条 (14,130) / 百货商店 (bagX,293) 共用；visibleMap 非空时写映射 |
+| `0x447C6E` | drawItemBagAt | `src/app/item_bag_dialog.cpp:144` | 0x447C6E 反编译; 工具条 (14,130) / 百货商店 (bagX,293) 共用；visibleMap 非空时写映射 |
 | `0x44808A` | saveTurnSnapshot | `src/app/turn_system.cpp:2407` | 0x44808A 反编译; 仅 currentPlayer<4 且 alive&1 保存；原版写 g_playerMapBlocks （2502 dword/玩家）+ mapDat 副本 |
 | `0x448544` | restoreTurnSnapshot | `src/app/turn_system.cpp:2450` | 0x448544 反编译; 恢复全部快照字段 + 全员 loadWalkResources + sub_40C03B/rebuildMiniMap |
 | `0x44B6DF` | newsEvent | `include/game/app/news_dialog.h:7` | 0x44B6DF 主循环（g_newsOrder 抽取 → newsEventCheck 判定 → panel.mkf[66] 画布 + data.mkf[441+idx] 插画 + 标题 + g_newsFuncs[idx](0) → 2400ms → (1)）； 判定 0x448BE2、效果表 0x475E24 共 36 条； 详见 docs/reverse/functions/44b6df-news-events.md。 差异: 语音 sub_44EF41 / 浮动数字 sub_44F354 → TODO(P4)；idx 7 拍卖 sub_43BDE5 → TODO(拍卖)。 |
@@ -175,7 +176,7 @@
 | `0x450441` | mkfRead | `src/resource/mkf.cpp:82` | 0x4029FD 中 sub_450441(dword_48A0E4, 1, 0, 0) 取 data.mkf 索引 1（菜单资源）； 0x406DE7 等多处按 (句柄, 索引, 输出, ...) 调用 差异: 原版返回内部缓存指针，当前返回独立 vector；关闭对应 sub_450404 |
 | `0x45144F` | 跳伞动画帧（FLC）叠加到地图区 | `src/app/game_loop.cpp:37` | 0x45144F 播放 data.mkf[charIndex+559] 到 (0,40) 区域 |
 | `0x45144F` | playEventFlc | `src/app/turn_system.cpp:650` | 0x45144F flcPlay(res, x, y, flags, soundId)：flcOpen（flags&1 透明 = 调色板索引 0； 见 0x4506C7）→ 阻塞逐帧 flcDecodeFrame，帧间隔 = FLC 头 speed（flags BYTE1 = 0 时）； 首帧解码后 sub_45434F 播放 Effect.mkf[soundId]（-1 不播）；播完释放资源。（迁移: 逐帧 renderGameFrame（经 eventFlc 叠加）+ renderFrame + pumpEvents + 分段延时， 音频续喂同 playHighlightBlink freeze=true: 播完**冻结末帧**持续显示（原版 backbuffer 保留，直到下一次全量重绘/ showGodNarration 释放）——神明插图 + 旁白叠加需要 switchFrame（原版 flcOpen flags BYTE2 = dword_48C85C 场景切换帧，[RE 0x450CED]）： >0 进入"保帧"模式——动画背景保持**开始前**的场景表面（每帧回卷区域背景再叠加当前帧， = 原版透明 blit 于保留表面），解到第 switchFrame 帧执行一次**视口锁定**的全量重绘 （原版 sub_40829D(-1,0) 用上次视口 dword_48B2AC，不随传送后的玩家位置重居中）： 视口原地不动、仅重建绘制列表——角色经棋子守卫 0x4086A1 此刻从画面消失、建筑显示 降级；动画**播完返回主循环后**视口才切到医院/监狱。原版实证：524=帧30（抬进医院）、 538=帧18（警车到中间）、525/532/526=帧3、552=帧1；0=不切换（插图期无状态变化的 动画，逐帧重绘与原版表面静止等价）。2026-09-24 三轮实机修正（跳视口→保帧→锁视口）） |
-| `0x451985` | 收租联动高亮（整条街/连锁店闪烁） | `include/game/game_state.h:442` | 0x419A67 收租时标记同 owner 同名住宅（或全部连锁店）→ v141>1 时 sub_451985 播放 16 帧亮度闪烁（byte_476380，30ms/帧）+ 400ms 停留； sub_4554FC 按 g_pickBuffer 0xFFFF 标记重绘高亮像素（迁移: 重写无 pickBuffer，改用 mapHitRegions 的 estate 绘制区域做 RGB555 亮度偏移； 帧推进/停留由阻塞播放 playHighlightBlink 控制，drawEstateHighlight 仅渲染） |
+| `0x451985` | 收租联动高亮（整条街/连锁店闪烁） | `include/game/game_state.h:445` | 0x419A67 收租时标记同 owner 同名住宅（或全部连锁店）→ v141>1 时 sub_451985 播放 16 帧亮度闪烁（byte_476380，30ms/帧）+ 400ms 停留； sub_4554FC 按 g_pickBuffer 0xFFFF 标记重绘高亮像素（迁移: 重写无 pickBuffer，改用 mapHitRegions 的 estate 绘制区域做 RGB555 亮度偏移； 帧推进/停留由阻塞播放 playHighlightBlink 控制，drawEstateHighlight 仅渲染） |
 | `0x451985` | drawEstateHighlight | `src/app/map_render.cpp:899` | 0x451985 每帧取 byte_476380[i] 亮度偏移（16 帧，30ms/帧）→ sub_4554FC 按 g_pickBuffer 的 0xFFFF 标记重绘高亮像素；循环后 sub_4528B9(400) 停留； byte_476380 = {4,8,12,16,12,8,4,0,252,248,244,240,244,248,252,0}（252..240 = -4..-16）（迁移: 重写无 pickBuffer，用 highlightShapes 快照（captureHighlightShapes 提取自 mapHitRegions 的原版 g_pickMask 形状）对 RGB555 逐通道偏移（8bit 亮度量 → 5bit: >>2）； 帧推进/停留由阻塞播放 playHighlightBlink（turn_system.cpp）负责，本函数仅按 highlightFrame 渲染（0..15 有效；16=停留期无偏移）） |
 | `0x451985` | playHighlightBlink | `src/app/turn_system.cpp:605` | 0x451985 逐帧 byte_476380[i] 重绘（sub_4554FC），每帧 sub_4528B9(30)， 循环后 sub_4528B9(400) 停留；原版在 showMessage(收费) 之前完成（迁移: 逐帧 renderGameFrame（画 surface）+ renderFrame（present/音频）+ 分段延时， 期间 pumpEvents 保持窗口响应（收租时 gamePlayerControl=0，事件被吞/仅物件提示） [PORT] 音频续喂：kTargetQueued=1024 字节（8bit mono @44.1kHz ≈ 23ms）——阻塞循环的 30ms 间隔会超过缓冲导致音乐 underrun（卡顿）→ 延时拆为 5ms 小段逐段 audio.update()） |
 | `0x451B9E` | highlightRect | `include/game/render/blit.h:68` | 0x451B9E 反编译（逐行右下移 + scaleElementChannels(-16) 顶/左 1px）； 强度按控件大小调（shift 1px/kChannelHalf 小控件，2px/kChannelThird 大按钮） 用途: 热键列表/按钮、股市按钮、卡片·道具格（0x44184A/0x445D59 按下反馈） |

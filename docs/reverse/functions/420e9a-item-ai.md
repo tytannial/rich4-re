@@ -45,17 +45,18 @@
   295 地雷? / 350 炸彈? / 651 傳送機 / 743 工程車 / 890 遙控骰子）；行 535（传送自己）已实现。
 - `kItemAiPersona` 已有；`GameState` 需加 `aiItemTarget`（对应 `dword_48BE64`）。
 
-## 4. 实现计划
+## 4. 实现进度（2026-09-26 已实现）
 
-1. **`ai_item.cpp/.h`**（与 `ai_card.cpp` 并列）：`aiItemSelect(app, itemId)` = persona 判定 +
-   上表 13 分支（输出 `st.aiItemTarget`；遥控骰子语义 = 格索引+1）；复用 `visibleOpponents/
-   mapHitRegions` 等 helper（可将二者公共 helper 提到共享头）。
-2. **`itemBagDialog` AI 分支**：`alive&6` + `aiCardItem&2` → 遍历手持道具 1..13（随机序）→
-   `aiItemSelect` → `showMessage("使用%s")` + `itemEffect`（原版每回合最多一个）。
-3. **`item_effects.cpp` 6 处 stub 接入** `st.aiItemTarget`（各自按原版编码解码：格 id / 索引+1）。
+1. **`src/app/ai_item.cpp/.h`**：`aiItemSelect(app, itemId)` = persona 判定 + 上表 13 分支
+   （输出 `st.aiItemTarget`，[RE 0x48BE64]）；時光機 return 0；視口用 `mapHitRegions`
+   （`cellIdOfHit`：地块命中取 `cellId`、cellEnt 直命中取 `id`）；常量 2.5（dbl_463D48）。
+2. **`itemBagDialog` AI 分支**（`item_bag_dialog.cpp`）：`alive&6` + `aiCardItem&2` → 手持道具
+   随机序逐件 `aiItemSelect` → 命中 `showMessage("使用%s")` + `itemEffect`（每回合最多一件）。
+3. **`item_effects.cpp` 6 处 stub 接入** `st.aiItemTarget`：placeMapItem（路障/地雷/炸彈）、
+   useItemRobotWorker、launchMissile（飛彈/核彈）、useItemTeleport 玩家分支目的地、物件分支
+   （备用）、useItemRemoteDice（点数 1..6）；行 535（传送源=自己）原有。
 4. **`GameState.aiItemTarget`**（不入存档，原版同）。
-5. 编译 + `re_map.py` + 文档（本文档 + `441baa-card-effects.md` 交叉引用、help-checklist
-   idx18/87..99、AGENTS/m2-plan）+ 提交。
+5. 顺带修复卡片侧：烏龜 AI 阈值 `dbl_463D40=1.5`（`ai_card.cpp`）。
 
 ## 5. 差异与待查
 
