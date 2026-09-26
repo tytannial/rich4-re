@@ -168,20 +168,21 @@ void onPlayerActionPhase(Application& app) {
         const int i = p - 4;
         const CellEnt& ce = st.cellEnts[st.players[p].cellEntId];
         const uint8_t cellType = static_cast<uint8_t>(ce.occMask & 0xFF);
-        const uint8_t stt = static_cast<uint8_t>(st.slotStatus[i] & 0x7F);
-        if (stt == 1 && cellType == 4) {
-            if ((st.slotStatus[i] & 0x80) != 0) {
-                jailPlayer(app, p, 0);
-                st.remainingSteps = 0;
-            } else {
-                st.slotStatus[i] = static_cast<uint8_t>(st.slotStatus[i] | 0x80);
-            }
-        } else if (stt == 2 && cellType == 5) {
-            if ((st.slotStatus[i] & 0x80) != 0) {
-                hospitalizePlayer(app, p, 0);
-                st.remainingSteps = 0;
-            } else {
-                st.slotStatus[i] = static_cast<uint8_t>(st.slotStatus[i] | 0x80);
+        const uint8_t home = static_cast<uint8_t>(st.slotStatus[i] & 0x7F);  // 1=原生监狱 2=原生医院
+        // 踩到任一監獄(4)/醫院(5)格即"消失重置"，回原生 home 在押（用户确认：无论入狱/入院，遇建筑
+        //   都重置；bit7 闩锁：起点非 home 时 release 已置→走回即抓，起点=home 时先离开二次抓）
+        if (home == 1 || home == 2) {
+            if (cellType == 4 || cellType == 5) {
+                if ((st.slotStatus[i] & 0x80) != 0) {
+                    if (home == 1) {
+                        jailPlayer(app, p, 0);
+                    } else {
+                        hospitalizePlayer(app, p, 0);
+                    }
+                    st.remainingSteps = 0;
+                } else {
+                    st.slotStatus[i] = static_cast<uint8_t>(st.slotStatus[i] | 0x80);
+                }
             }
         }
         return;
@@ -2740,8 +2741,14 @@ void releaseEventNpc(Application& app, int npc, bool fromJail) {
         st.slotPixelX[i] = ce.x;
         st.slotPixelY[i] = ce.y;
         const uint8_t ct = static_cast<uint8_t>(ce.occMask & 0xFF);
-        st.slotStatus[i] = static_cast<uint8_t>(fromJail ? 1 : 2);
-        if (ct == (fromJail ? 4 : 5)) {
+        // 归属按原生槽固定：4/5(小偷/強盜)→监狱(home=1)、6/7(流氓/間谍)→医院(home=2)；
+        //   恶行收益另按 slotBailer（最后保释人），与归属解耦
+        const uint8_t home = static_cast<uint8_t>(npc < 6 ? 1 : 2);
+        const uint8_t homeCellType = static_cast<uint8_t>(home == 1 ? 4 : 5);
+        st.slotStatus[i] = home;
+        // 起点非 home 建筑（间谍被陷害关进监狱、从监狱放出等）→ 置触发位：游走踩到任一建筑即抓回；
+        //   起点即 home 建筑 → 不置（先离开、走一圈回来再抓，防刚保释即抓）
+        if (ct != homeCellType) {
             st.slotStatus[i] = static_cast<uint8_t>(st.slotStatus[i] | 0x80);
         }
         st.cellEnts[cell].occMask |= static_cast<uint32_t>(4096u << i);  // NPC 占用位

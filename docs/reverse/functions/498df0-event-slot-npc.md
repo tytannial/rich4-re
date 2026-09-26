@@ -159,6 +159,12 @@ if st==2 && v62==5（醫院）:  同理 hospitalizePlayer(cur, 0) / |=0x80
    - **重写落地**：关押态用 `slotBusy2=1`（nextPlayer 跳过、map_render 不绘制）。`newGameInit` 设 `slotBusy2[4..7]=1`+`slotBusy[4..7]=1`+`slotStatus`。游走=`slotBusy2=0`。
    - **抓回=回关押态**：NPC 任一步落到監獄(type4)/醫院(type5)格 → `jailPlayer/hospitalizePlayer` NPC 分支置 `slotBusy=1`（坐牢）+ **`slotBusy2=1`（消失+停轮转）**+ `jailFlags/hospitalFlags=1`（待再保释）。此前只置 `slotBusy=1` 会"进回合卡着不消失"，已修。
    - 静态 `.data` 全 0 曾推得 A（开局即游走），与实际/B 不符 → 说明原版关押另有初始化路径或本重写以 B 语义为准（不阻塞功能）。
+1b. **归属/收益最终决策（2026-09-26 用户确认，覆盖上面"按保释建筑"推断）**：
+   - **重置归属 = 原生槽固定**：小偷/強盜(4/5)→监狱、流氓/間谍(6/7)→医院；`releaseEventNpc` 按 `npc<6?1:2` 设 `slotStatus`（原静态 `releaseJailNpc` 按保释建筑设 status，冲突时取原生固定）。→ 间谍被陷害关进监狱、从监狱保释→游走仍回**医院**；小偷被地雷炸入院、从医院保释→游走仍回**监狱**。
+   - **抓回触发 = 踩到任一監獄(4)/醫院(5)格**（"遇建筑无论如何消失重置"），按 home 调 `jailPlayer/hospitalizePlayer` 关回原生建筑在押；bit7 闩锁：`release` 起点≠home→置位(走回即抓)，起点=home→不置(走一圈、二次抓)。
+   - **收益对象 = `slotBailer`（最后保释人）**，与归属解耦（每次 release 覆盖）。
+   - **恶人不受命运/魔法屋影响**：`onPhase` NPC 分支只处理抓回，踩命运(3)/魔法屋(16)格天然不触发；魔法屋惩罚目标选择须过滤 `p>=4`。**仅新闻(`g_newsFuncs`)对恶人的效果**留阶段2 逐条查 `p>=4` 分支。
+   - 入狱/入院**不播 538/524 动画**、立即生效（`jailPlayer/hospitalizePlayer` NPC 分支无 `playEventFlc`）。
 2. **动画/音效（实机确认）**：`loadWalkResources` NPC 按 `slot=2*state+group` 取图，须覆盖**全部 state×group 槽**——走路组 `slot{0,2,4,6}`=`data.mkf[4p+364 站/365 走]`、渡水组 `slot{1,3,5,7}`=`[4p+366]`、`slotFlag5` 特殊组移动帧=`[4p+367]`；此前只载移动槽(0/2/3)，**每回合末进 `state3` 取空 slot6/7 → `pieceAnim[4..7]` 又从不加载 → `drawPiece` 回退 null 不绘制 = 棋子消失闪烁**，已补全并在 `drawPiece` 对 `p∈4..7` 加空槽回退（移动/站立槽）。渡水资源是 **slot3=`EC0`**（非 slot1）。当前格真源用 `players[p].cellEntId`（随 `moveOneStep` 推进），不可用释放时的 `slotCell`（否则卡在監獄渡水组="始终坐船"）。**移动音效**：`loadWalkResources` NPC 走路组→`moveSoundIndex=11`、渡水组→`15`（对齐真人 547/525 与原版 `dword_4749D4`；此前 NPC 分支漏设致坐船播行走音）。
 3. 剩：`unk_47ECEC`(miscTable80 初值 1,1,2,2,3)语义、`off_47EDAA/47EDAE/47EDB6` NPC 动作名 BIG5 复核、恶行金额字段（见 §6 阶段2/3）。
 
