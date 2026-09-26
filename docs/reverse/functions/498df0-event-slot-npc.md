@@ -165,6 +165,7 @@ if st==2 && v62==5（醫院）:  同理 hospitalizePlayer(cur, 0) / |=0x80
    - **收益对象 = `slotBailer`（最后保释人）**，与归属解耦（每次 release 覆盖）。
    - **恶人不受命运/魔法屋影响**：`onPhase` NPC 分支只处理抓回，踩命运(3)/魔法屋(16)格天然不触发；魔法屋惩罚目标选择须过滤 `p>=4`。**仅新闻(`g_newsFuncs`)对恶人的效果**留阶段2 逐条查 `p>=4` 分支。
    - 入狱/入院**不播 538/524 动画**、立即生效（`jailPlayer/hospitalizePlayer` NPC 分支无 `playEventFlc`）。
+   - **无坐牢/住院天数**：`updatePlayerStates 0x41C84F` 对 `p>=4` 首行 return，恶人不参与真人 `stateFlags`/`cellNo` 天数递减；一旦入狱/入院即**永久停留**，唯一放出路径=玩家保释 `releaseEventNpc`（地雷/恶犬致恶人入院亦走此永久关押态，2.2 实现时不得加天数）。
 2. **动画/音效（实机确认）**：`loadWalkResources` NPC 按 `slot=2*state+group` 取图，须覆盖**全部 state×group 槽**——走路组 `slot{0,2,4,6}`=`data.mkf[4p+364 站/365 走]`、渡水组 `slot{1,3,5,7}`=`[4p+366]`、`slotFlag5` 特殊组移动帧=`[4p+367]`；此前只载移动槽(0/2/3)，**每回合末进 `state3` 取空 slot6/7 → `pieceAnim[4..7]` 又从不加载 → `drawPiece` 回退 null 不绘制 = 棋子消失闪烁**，已补全并在 `drawPiece` 对 `p∈4..7` 加空槽回退（移动/站立槽）。渡水资源是 **slot3=`EC0`**（非 slot1）。当前格真源用 `players[p].cellEntId`（随 `moveOneStep` 推进），不可用释放时的 `slotCell`（否则卡在監獄渡水组="始终坐船"）。**移动音效**：`loadWalkResources` NPC 走路组→`moveSoundIndex=11`、渡水组→`15`（对齐真人 547/525 与原版 `dword_4749D4`；此前 NPC 分支漏设致坐船播行走音）。
 3. 剩：`unk_47ECEC`(miscTable80 初值 1,1,2,2,3)语义、`off_47EDAA/47EDAE/47EDB6` NPC 动作名 BIG5 复核、恶行金额字段（见 §6 阶段2/3）。
 
