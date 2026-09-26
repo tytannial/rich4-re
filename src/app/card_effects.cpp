@@ -1,7 +1,12 @@
 #include "game/app/card_effects.h"
 
+#include <cstdlib>
+#include <cstring>
+#include <vector>
+
 #include "game/app/auction_dialog.h"
 #include "game/app/card_bag_dialog.h"
+#include "game/app/confirm_dialog.h"
 #include "game/app/economy.h"
 #include "game/app/event_common.h"
 #include "game/app/game_loop.h"
@@ -11,6 +16,8 @@
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
 #include "game/app/message_dialog.h"
+#include "game/app/stock_market_dialog.h"
+#include "game/app/stock_system.h"
 #include "game/app/target_select_dialog.h"
 #include "game/app/turn_system.h"
 #include "game/application.h"
@@ -367,6 +374,631 @@ int cardEffectSteal(Application& app) {
     addPlayerDebt(st, t, cur, price);  // [RE 0x443EA6] 被夺者债权、使用者欠
     cardBagRemove(st, cur, 13);        // [RE 0x443EB9 sub_441343(cur,13)]
     RICH4_LOGI("cardSteal: p%d -> p%d sel=%d price=%d (RE 0x443E3D)", cur, t, sel, price);
+    return 1;
+}
+
+// ===== 档B：整路段类（天使/惡魔/漲價/查封）=====
+
+// 收集「与 objId 所指地块同路段（同名）」的 estate 索引到 out；返回目标自身索引（-1 无效）
+int collectSameRouteEstates(const GameState& st, int objId, std::vector<int>& out) {
+    const int ti = objId - 2000;
+    if (ti <= 0 || ti >= static_cast<int>(st.estates.size())) {
+        return -1;
+    }
+    for (int j = 1; j < static_cast<int>(st.estates.size()); ++j) {
+        if (std::strcmp(st.estates[j].name, st.estates[ti].name) == 0) {
+            out.push_back(j);
+        }
+    }
+    return ti;
+}
+
+// ===== id9 天使卡 [RE 0x4434C0]（整路段加盖）=====
+int cardEffectAngel(Application& app) {
+    GameState& st = app.gameState();
+    const int cur = st.currentPlayer;
+    const int v = selectTargetDialog(app, 0x0E0C0006);  // [RE 0x4434E1 sub_446AE8]
+    if (v == 0) {
+        return 0;
+    }
+    cardBagRemove(st, cur, 9);  // [RE 0x4434FE sub_441343(cur,9)]
+    bool capped = false;
+    st.highlightEstates.clear();
+    st.highlightCorps.clear();
+    if (v > 2000 && v < 4000) {
+        std::vector<int> route;
+        if (collectSameRouteEstates(st, v, route) < 0) {
+            return 0;
+        }
+        for (int j : route) {
+            Estate& es = st.estates[j];
+            if (es.level >= 5) {  // [RE 0x443539]
+                continue;
+            }
+            st.highlightEstates.push_back(j);  // [RE 0x44355A markPickBuffer]
+            if (es.type != 0) {
+                if (es.level == 0) {
+                    es.level = 1;  // [RE 0x44357B] 连锁店 0→1
+                }
+            } else {
+                ++es.level;                        // [RE 0x44358B]
+                if (es.level == 5) {
+                    capped = true;                 // [RE 0x4435A8]
+                }
+            }
+        }
+    } else if (v > 4000 && v < 6000) {
+        const int ci = v - 4000;
+        if (ci <= 0 || ci >= static_cast<int>(st.corps.size())) {
+            return 0;
+        }
+        st.highlightCorps.push_back(ci);  // [RE 0x4434FD markPickBuffer]
+        if (angelUpgrade(app, static_cast<uint16_t>(v)) < 0) {
+            capped = true;  // [RE 0x443614] bit7 = 封顶
+        }
+    } else {
+        return 0;
+    }
+    st.highlightFrame = (st.highlightEstates.empty() && st.highlightCorps.empty()) ? -1 : 0;
+    playHighlightBlink(app);  // [RE 0x4435B8/0x443624 highlightBlink]
+    if (capped) {
+        playEventFlc(app, 523, 0, 40, 90, false, 0);  // [RE playGodBuildFlc]
+    }
+    renderGameFrame(app);  // [RE 0x44362C refreshGameUi(0,0,1)]
+    RICH4_LOGI("cardAngel: objId=%d capped=%d (RE 0x4434C0)", v, capped ? 1 : 0);
+    return 1;
+}
+
+// ===== id10 惡魔卡 [RE 0x4436E0]（整路段夷平）=====
+int cardEffectDevil(Application& app) {
+    GameState& st = app.gameState();
+    const int cur = st.currentPlayer;
+    const int v = selectTargetDialog(app, 0x0E0C0006);  // [RE 0x4436FF]
+    if (v == 0) {
+        return 0;
+    }
+    cardBagRemove(st, cur, 10);  // [RE 0x44371C sub_441343(cur,10)]
+    st.highlightEstates.clear();
+    st.highlightCorps.clear();
+    if (v > 2000 && v < 4000) {
+        std::vector<int> route;
+        if (collectSameRouteEstates(st, v, route) < 0) {
+            return 0;
+        }
+        for (int j : route) {
+            Estate& es = st.estates[j];
+            if (es.owner != 0) {
+                addPlayerDebt(st, es.owner - 1, cur,
+                              st.moneyMul * 30 * es.level);  // [RE 0x44379A]
+            }
+            st.highlightEstates.push_back(j);  // [RE 0x4437C2 markPickBuffer]
+            es.level = 0;                      // [RE 0x4437CB]
+            es.type = 0;
+        }
+    } else if (v > 4000 && v < 6000) {
+        const int ci = v - 4000;
+        if (ci <= 0 || ci >= static_cast<int>(st.corps.size())) {
+            return 0;
+        }
+        Corp& cp = st.corps[ci];
+        if (cp.owner != 0) {
+            addPlayerDebt(st, cp.owner - 1, cur, st.moneyMul * 30 * cp.sub);
+        }
+        st.highlightCorps.push_back(ci);  // [RE 0x4438C4 markPickBuffer]
+        cp.sub = 0;
+        cp.type = 0;
+        forceHotelCheckout(st);  // [RE 0x4438D5]
+    } else {
+        return 0;
+    }
+    st.highlightFrame = (st.highlightEstates.empty() && st.highlightCorps.empty()) ? -1 : 0;
+    playHighlightBlink(app);  // [RE 0x4438E0/0x4438F6 highlightBlink]
+    renderGameFrame(app);     // [RE refreshGameUi]
+    RICH4_LOGI("cardDevil: objId=%d (RE 0x4436E0)", v);
+    return 1;
+}
+
+// ===== id14 停留卡 [RE 0x443F80] =====
+int cardEffectStay(Application& app) {
+    GameState& st = app.gameState();
+    const int cur = st.currentPlayer;
+    const int v = selectTargetDialog(app, 0x0E0C0010);  // [RE 0x443FA5]
+    if (v == 0) {
+        return 0;
+    }
+    const int t = bitScanPlayer(static_cast<uint32_t>(v));  // [RE 0x443FBF sub_40D293]
+    if (t < 0 || t >= 4) {
+        return 0;
+    }
+    cardBagRemove(st, cur, 14);  // [RE 0x443FC9 sub_441343(cur,14)]
+    if (t == cur) {
+        st.players[t].skipMove = 0x80;  // [RE 0x443FFF] 自己（下回合清）
+    } else {
+        st.players[t].skipMove = 1;     // [RE 0x44400x] 他人：下次前进停留
+    }
+    RICH4_LOGI("cardStay: p%d -> p%d skipMove=%u (RE 0x443F80)", cur, t, st.players[t].skipMove);
+    return 1;
+}
+
+// ===== id15 冬眠卡 [RE 0x4440EA]（全体对手冬眠 5 天 + 各记债 150×M）=====
+int cardEffectHibernate(Application& app) {
+    GameState& st = app.gameState();
+    const int cur = st.currentPlayer;
+    cardBagRemove(st, cur, 15);  // [RE 0x4440F1 sub_441343(cur,15)]
+    const int n = st.playerCount < 4 ? st.playerCount : 4;
+    for (int i = 0; i < n; ++i) {
+        Player& q = st.players[i];
+        // [RE 0x44412B] 非自己 / 存活 / 已放置 / 无状态效果 才命中
+        if (i == cur || q.alive == 0 || q.spriteX == 0 || q.stateFlags != 0) {
+            continue;
+        }
+        addPlayerDebt(st, i, cur, 150 * st.moneyMul);  // [RE 0x44415F]
+        q.state37 = 0;                                  // [RE 0x44416B] 清梦游
+        q.byte54 = 5;                                   // [RE 0x444172]
+        q.byte66 = static_cast<uint8_t>(q.byte66 + 5);  // [RE 0x44417A byte_496BAA]
+    }
+    // 事件槽 4..7（byte_498DF5=0 / byte_498DF4=5）→ P5
+    renderGameFrame(app);  // [RE refreshGameUi(0,0,1)]
+    RICH4_LOGI("cardHibernate: p%d affected others (RE 0x4440EA)", cur);
+    return 1;
+}
+
+// 清载具并暂存（梦游/冬眠共用；[RE 0x4442BC 段]）
+void stripVehicle(GameState& st, int p) {
+    Player& q = st.players[p];
+    q.vehicleRestore = q.travel;    // [RE byte_496BCE]
+    q.diceRestore = q.diceCount;    // [RE byte_496BCF]
+    const uint8_t veh = static_cast<uint8_t>(q.travel & 3);
+    if (veh != 0) {
+        if (veh == 1) {
+            ++st.itemStock[15 * p + 4];  // [RE byte_499160]
+        }
+        if (veh == 2) {
+            ++st.itemStock[15 * p + 5];  // [RE byte_499161]
+        }
+        q.travel = 0;      // [RE g_playerVehicle=0]
+        q.diceCount = 1;   // [RE byte_496B7A=1]
+    }
+    loadWalkResources(st, p);
+}
+
+// ===== id16 夢遊卡 [RE 0x4441DC] =====
+int cardEffectSleepwalk(Application& app) {
+    GameState& st = app.gameState();
+    const int cur = st.currentPlayer;
+    const int v = selectTargetDialog(app, 0x0E0C0710);  // [RE 0x444201]
+    if (v == 0) {
+        return 0;
+    }
+    cardBagRemove(st, cur, 16);  // [RE 0x44421E sub_441343(cur,16)]
+    const int orig = bitScanPlayer(static_cast<uint32_t>(v));  // [RE 0x44423x]
+    if (orig < 0 || orig >= 4) {
+        return 0;
+    }
+    if (st.players[orig].byte54 != 0) {  // [RE 0x44423F] 已冬眠 → 不叠加
+        return 1;
+    }
+    addPlayerDebt(st, orig, cur, 150 * st.moneyMul);  // [RE 0x44426C]
+    // [RE 0x44427F/0x444293] 免罪(21) → 抵消；否则嫁祸(19) → 改目标（= resolvePenaltyTarget 链）
+    const int r = resolvePenaltyTarget(app, orig);
+    if (r == -1) {
+        renderGameFrame(app);
+        return 1;
+    }
+    const int t = r;
+    st.players[t].state37 = static_cast<uint8_t>((t != cur) ? 5 : 4);  // [RE 0x4442F4]
+    st.players[t].byte58 = static_cast<uint8_t>(st.players[t].byte58 + 5);  // [RE byte_496BAA? +58]
+    stripVehicle(st, t);  // [RE 0x4442BC 段]
+    // [RE 0x4443xx] 原目标未被转嫁且持復仇卡(18) → 復仇：拖使用者下水 5 天
+    if (t == orig && cardBagHas(st, orig, 18)) {
+        triggerRevengeCard(app, orig);
+        st.players[cur].state37 = 5;
+        stripVehicle(st, cur);
+    }
+    renderGameFrame(app);  // [RE sub_41D546]
+    RICH4_LOGI("cardSleepwalk: p%d -> p%d state37=%u (RE 0x4441DC)", cur, t,
+               st.players[t].state37);
+    return 1;
+}
+
+// ===== id17 陷害卡 [RE 0x4444BF] =====
+int cardEffectFrame(Application& app) {
+    GameState& st = app.gameState();
+    const int cur = st.currentPlayer;
+    const int v = selectTargetDialog(app, 0x0E0C0710);  // [RE 0x4444E4]
+    if (v == 0) {
+        return 0;
+    }
+    cardBagRemove(st, cur, 17);  // [RE 0x444501 sub_441343(cur,17)]
+    const int orig = bitScanPlayer(static_cast<uint32_t>(v));  // [RE 0x44450x]
+    if (orig < 0 || orig >= 4) {
+        return 0;
+    }
+    addPlayerDebt(st, orig, cur, 150 * st.moneyMul);  // [RE 0x444539]
+    // [RE 0x44454C/0x444560] 免罪(21) → 抵消；嫁祸(19) → 改目标
+    const int r = resolvePenaltyTarget(app, orig);
+    if (r == -1) {
+        renderGameFrame(app);
+        return 1;
+    }
+    const int t = r;
+    if (t == cur) {
+        jailPlayer(app, cur, 4);  // [RE 0x4445A7] 反弹自己 4 天
+    } else {
+        jailPlayer(app, t, 5);    // [RE 0x4445A0] 目标 5 天
+    }
+    // [RE 0x4445Cx] 原目标未被转嫁且持復仇卡(18) → 使用者坐牢 5 天
+    if (t == orig && cardBagHas(st, orig, 18)) {
+        triggerRevengeCard(app, orig);
+        jailPlayer(app, cur, 5);
+    }
+    renderGameFrame(app);  // [RE sub_41D546]
+    RICH4_LOGI("cardFrame: p%d -> p%d (RE 0x4444BF)", cur, t);
+    return 1;
+}
+
+// ===== id26 查稅卡 [RE 0x4451F0] =====
+int cardEffectTaxAudit(Application& app) {
+    GameState& st = app.gameState();
+    const int cur = st.currentPlayer;
+    const int v = selectTargetDialog(app, 0x0E0C0410);  // [RE 0x445215]
+    if (v == 0) {
+        return 0;
+    }
+    cardBagRemove(st, cur, 26);  // [RE 0x445232 sub_441343(cur,26)]
+    int t = bitScanPlayer(static_cast<uint32_t>(v));  // [RE 0x44524x]
+    if (t < 0 || t >= 4) {
+        return 0;
+    }
+    int32_t tax = static_cast<int32_t>(st.players[t].cash * 0.2);  // [RE dbl_4653D8=0.2]
+    addPlayerDebt(st, t, cur, tax / 100);                          // [RE 0x44526A]
+    // [RE 0x44527D] 免費卡(20) 抵用成功 → 不转账
+    if (cardBagHas(st, t, 20) && applyFreeCard(app, t, tax) == 1) {
+        renderGameFrame(app);
+        return 1;
+    }
+    // [RE 0x4452A7] 嫁祸(19)（税额 > 2000 才可用）→ 改目标
+    if (cardBagHas(st, t, 19) && tax > 2000) {
+        const int r = passOnCardDialog(app, t);
+        if (r != -1) {
+            t = r;
+        }
+    }
+    if (t != cur) {
+        tax = static_cast<int32_t>(st.players[t].cash * 0.2);  // [RE 0x4452E0 重算]
+        transferMoney(app, t, cur, tax, 0);                     // [RE 0x4452F5]
+        char text[192];
+        std::snprintf(text, sizeof text, "%s被課稅%d元", playerNameNoSpace(st, t).c_str(), tax);
+        showMessage(app, text, 1500);  // [RE 0x44531B unk_4653C0]
+    }
+    renderGameFrame(app);  // [RE sub_41D546]
+    RICH4_LOGI("cardTaxAudit: p%d -> p%d tax=%d (RE 0x4451F0)", cur, t, tax);
+    return 1;
+}
+
+// ===== id27 漲價卡 [RE 0x44542D] =====
+int cardEffectPriceUp(Application& app) {
+    GameState& st = app.gameState();
+    const int cur = st.currentPlayer;
+    const int v = selectTargetDialog(app, 0x0E0C0006);  // [RE 0x445452]
+    if (v == 0) {
+        return 0;
+    }
+    cardBagRemove(st, cur, 27);  // [RE 0x44546F sub_441343(cur,27)]
+    if (v > 2000 && v < 4000) {
+        std::vector<int> route;
+        if (collectSameRouteEstates(st, v, route) < 0) {
+            return 0;
+        }
+        for (int j : route) {
+            st.estates[j].flag = 80;  // [RE 0x4454B2] 0x50：高半字节 5 = 5 天加倍
+        }
+    } else if (v > 4000 && v < 6000) {
+        const int ci = v - 4000;
+        if (ci <= 0 || ci >= static_cast<int>(st.corps.size())) {
+            return 0;
+        }
+        st.corps[ci].flag = 80;  // [RE 0x445505]
+    } else {
+        return 0;
+    }
+    renderGameFrame(app);  // [RE refreshGameUi(0,0,1)]
+    RICH4_LOGI("cardPriceUp: objId=%d (RE 0x44542D)", v);
+    return 1;
+}
+
+// ===== id28 查封卡 [RE 0x445593] =====
+int cardEffectSeal(Application& app) {
+    GameState& st = app.gameState();
+    const int cur = st.currentPlayer;
+    const int v = selectTargetDialog(app, 0x0E0C0006);  // [RE 0x4455B8]
+    if (v == 0) {
+        return 0;
+    }
+    cardBagRemove(st, cur, 28);  // [RE 0x4455D5 sub_441343(cur,28)]
+    if (v > 2000 && v < 4000) {
+        std::vector<int> route;
+        if (collectSameRouteEstates(st, v, route) < 0) {
+            return 0;
+        }
+        for (int j : route) {
+            st.estates[j].flag = 81;  // [RE 0x445612] 0x51：高半字节 5 天 + 低半字节查封标记
+        }
+    } else if (v > 4000 && v < 6000) {
+        const int ci = v - 4000;
+        if (ci <= 0 || ci >= static_cast<int>(st.corps.size())) {
+            return 0;
+        }
+        Corp& cp = st.corps[ci];
+        cp.flag = 81;  // [RE 0x445656]
+        if (cp.type == 4) {
+            cp.researchLeft = 0;  // [RE 0x445666] 研究所查封 → 停研发
+        }
+    } else {
+        return 0;
+    }
+    renderGameFrame(app);  // [RE refreshGameUi(0,0,1)]
+    RICH4_LOGI("cardSeal: objId=%d (RE 0x445593)", v);
+    return 1;
+}
+
+// ===== id29 同盟卡 [RE 0x445710] =====
+int cardEffectAlly(Application& app) {
+    GameState& st = app.gameState();
+    const int cur = st.currentPlayer;
+    const int v = selectTargetDialog(app, 0x0E0C0410);  // [RE 0x445735]
+    if (v == 0) {
+        return 0;
+    }
+    cardBagRemove(st, cur, 29);  // [RE 0x445752 sub_441343(cur,29)]
+    const int t = bitScanPlayer(static_cast<uint32_t>(v));  // [RE 0x44576x]
+    if (t < 0 || t >= 4) {
+        return 0;
+    }
+    // [RE 0x44579x/0x4457Cx] 先解双方旧盟
+    if (st.players[cur].ally != 0) {
+        clearAllyPair(st, cur);
+    }
+    if (st.players[t].ally != 0) {
+        clearAllyPair(st, t);
+    }
+    st.players[cur].ally = static_cast<uint8_t>(t + 1);  // [RE 0x44581x]
+    st.players[cur].allyActive = 7;
+    st.players[t].ally = static_cast<uint8_t>(cur + 1);
+    st.players[t].allyActive = 7;
+    refreshPlayerPanelFor(app, cur);  // [RE 0x445833 sub_41D433(cur)]
+    renderGameFrame(app);             // [RE sub_41D546]
+    RICH4_LOGI("cardAlly: p%d <-> p%d 7 days (RE 0x445710)", cur, t);
+    return 1;
+}
+
+// ===== id30 烏龜卡 [RE 0x4458DF] =====
+int cardEffectTurtle(Application& app) {
+    GameState& st = app.gameState();
+    const int cur = st.currentPlayer;
+    const int v = selectTargetDialog(app, 0x0E0C0010);  // [RE 0x445904]
+    if (v == 0) {
+        return 0;
+    }
+    const int t = bitScanPlayer(static_cast<uint32_t>(v));  // [RE 0x44591x]
+    if (t < 0 || t >= 4) {
+        return 0;
+    }
+    cardBagRemove(st, cur, 30);  // [RE 0x44592E sub_441343(cur,30)]
+    if (t == cur) {
+        st.players[t].fixedStep = 2;  // [RE 0x44595x]
+    } else {
+        st.players[t].fixedStep = 3;  // [RE 0x44597x]
+    }
+    RICH4_LOGI("cardTurtle: p%d -> p%d fixedStep=%u (RE 0x4458DF)", cur, t,
+               st.players[t].fixedStep);
+    return 1;
+}
+
+// ===== id4 換地卡 [RE 0x442622]（交换两块同类地块的 owner）=====
+int cardEffectSwapLand(Application& app) {
+    GameState& st = app.gameState();
+    const int cur = st.currentPlayer;
+    const uint16_t objId = standingObjId(st);
+    int target = 0;
+    if (objId > 2000 && objId < 4000) {
+        target = selectTargetDialog(app, 0x0E0C0202);  // [RE 0x442685] 选 estate
+    } else if (objId > 4000 && objId < 6000) {
+        target = selectTargetDialog(app, 0x0E0C0204);  // [RE 0x4428CC] 选 corp
+    } else {
+        return 0;  // 脚下非地块 → 不消耗
+    }
+    if (target == 0) {
+        return 0;  // [RE 0x44269F/0x4428E6] 取消
+    }
+    st.highlightEstates.clear();
+    st.highlightCorps.clear();
+    if (objId > 2000 && objId < 4000) {
+        const int a = objId - 2000;
+        const int b = target - 2000;
+        if (a <= 0 || a >= static_cast<int>(st.estates.size()) || b <= 0 ||
+            b >= static_cast<int>(st.estates.size())) {
+            return 0;
+        }
+        st.highlightEstates.push_back(a);  // [RE 0x4426B7 markPickBuffer]
+        st.highlightEstates.push_back(b);
+        const uint8_t o = st.estates[a].owner;  // [RE 0x4427BB/0x4427C1] owner 互换
+        st.estates[a].owner = st.estates[b].owner;
+        st.estates[b].owner = o;
+        buildMiniMapMarks(app);  // [RE 0x4427C6 rebuildMiniMap(0)]
+    } else {
+        const int a = objId - 4000;
+        const int b = target - 4000;
+        if (a <= 0 || a >= static_cast<int>(st.corps.size()) || b <= 0 ||
+            b >= static_cast<int>(st.corps.size())) {
+            return 0;
+        }
+        st.highlightCorps.push_back(a);  // [RE 0x4428FE markPickBuffer]
+        st.highlightCorps.push_back(b);
+        const uint8_t o = st.corps[a].owner;  // [RE 0x442A09/0x442A0F] owner 互换
+        st.corps[a].owner = st.corps[b].owner;
+        st.corps[b].owner = o;
+        buildMiniMapMarks(app);  // [RE 0x442A14 rebuildMiniMap(0)]
+    }
+    st.highlightFrame = 0;
+    playHighlightBlink(app);  // [RE 0x4427CE/0x442A1C highlightBlink]
+    renderGameFrame(app);     // [RE 0x4427D9/0x442A27 refreshGameUi(0,0,1)]
+    cardBagRemove(st, cur, 4);  // [RE loc_442AE2 sub_441343(cur,4)]
+    RICH4_LOGI("cardSwapLand: %u <-> %d (RE 0x442622)", objId, target);
+    return 1;
+}
+
+// ===== id5 換屋卡 [RE 0x442B02]（交换两块地块的 level/sub + type：房子互换、地权不变）=====
+int cardEffectSwapHouse(Application& app) {
+    GameState& st = app.gameState();
+    const int cur = st.currentPlayer;
+    const uint16_t objId = standingObjId(st);
+    int target = 0;
+    if (objId > 2000 && objId < 4000) {
+        target = selectTargetDialog(app, 0x0E0C0202);  // [RE 0x442B6B] 选 estate
+    } else if (objId > 4000 && objId < 6000) {
+        target = selectTargetDialog(app, 0x0E0C0204);  // [RE 0x442D81] 选 corp
+    } else {
+        return 0;
+    }
+    if (target == 0) {
+        return 0;  // [RE 0x442B85/0x442D9B] 取消
+    }
+    st.highlightEstates.clear();
+    st.highlightCorps.clear();
+    if (objId > 2000 && objId < 4000) {
+        const int a = objId - 2000;
+        const int b = target - 2000;
+        if (a <= 0 || a >= static_cast<int>(st.estates.size()) || b <= 0 ||
+            b >= static_cast<int>(st.estates.size())) {
+            return 0;
+        }
+        st.highlightEstates.push_back(a);  // [RE 0x442BA0 markPickBuffer]
+        st.highlightEstates.push_back(b);  // [RE 0x442BBA]
+        // [RE 0x40B4F8] 房屋互换（level+24/type+26 交换；动画简化为直接交换）
+        Estate& ea = st.estates[a];
+        Estate& eb = st.estates[b];
+        const uint8_t lv = ea.level;
+        const uint8_t ty = ea.type;
+        ea.level = eb.level;
+        ea.type = eb.type;
+        eb.level = lv;
+        eb.type = ty;
+    } else {
+        const int a = objId - 4000;
+        const int b = target - 4000;
+        if (a <= 0 || a >= static_cast<int>(st.corps.size()) || b <= 0 ||
+            b >= static_cast<int>(st.corps.size())) {
+            return 0;
+        }
+        st.highlightCorps.push_back(a);  // [RE 0x442DB7 markPickBuffer]
+        st.highlightCorps.push_back(b);  // [RE 0x442DD1]
+        Corp& ca = st.corps[a];
+        Corp& cb = st.corps[b];
+        const uint8_t sb = ca.sub;
+        const uint8_t ty = ca.type;
+        ca.sub = cb.sub;
+        ca.type = cb.type;
+        cb.sub = sb;
+        cb.type = ty;
+    }
+    st.highlightFrame = 0;
+    playHighlightBlink(app);  // [RE 0x442C89/0x442EA4 highlightBlink]
+    renderGameFrame(app);
+    cardBagRemove(st, cur, 5);  // [RE loc_442F2D sub_441343(cur,5)]
+    RICH4_LOGI("cardSwapHouse: %u <-> %d (RE 0x442B02)", objId, target);
+    return 1;
+}
+
+// ===== id24 紅卡 [RE 0x444F25]（选股票涨停 3 天）=====
+int cardEffectRedStock(Application& app) {
+    GameState& st = app.gameState();
+    const int cur = st.currentPlayer;
+    // [RE 0x444F50 cursorSelect(12,15,10) + stockPanelMain(1)] 选股（0=取消不消耗）
+    const int v = stockPickDialog(app, 1);
+    if (v == 0) {
+        return 0;
+    }
+    st.stockNews[v - 1] = 0x30;  // [RE byte_496987=32] 高 4 位 3 = 涨停 3 天
+    stockNewsApply(app, v);      // [RE 0x429040]
+    cardBagRemove(st, cur, 24);  // [RE 0x444F74 sub_441343(cur,24)]
+    renderGameFrame(app);        // [RE sub_41906A(1)]
+    RICH4_LOGI("cardRedStock: stock=%d halted=0x30 (RE 0x444F25)", v);
+    return 1;
+}
+
+// ===== id25 黑卡 [RE 0x44503F]（选股票跌停 3 天 + 持股者损失记债）=====
+int cardEffectBlackStock(Application& app) {
+    GameState& st = app.gameState();
+    const int cur = st.currentPlayer;
+    float before[12];
+    for (int i = 0; i < 12; ++i) {
+        before[i] = st.stocks[i][5];  // [RE 选股前快照 12 支现价]
+    }
+    // [RE 0x4450xx cursorSelect + stockPanelMain(2)] 选股
+    const int v = stockPickDialog(app, 2);
+    if (v == 0) {
+        return 0;
+    }
+    st.stockNews[v - 1] = 0x03;  // [RE byte_496987=2] 低 4 位 3 = 跌停 3 天
+    stockNewsApply(app, v);      // [RE 0x429040]
+    // [RE v9 = 快照价 - 现价（跌为正）；持股者 j 欠使用者 股数×v9/200]
+    const float diff = before[v - 1] - st.stocks[v - 1][5];
+    for (int j = 0; j < st.playerCount && j < 4; ++j) {
+        const int shares = st.playerShares[j][v - 1];  // [RE dword_497198]
+        if (shares != 0) {
+            addPlayerDebt(st, j, cur,
+                          static_cast<int32_t>(shares * diff / 200.0f));  // [RE flt_4653BC=200]
+        }
+    }
+    cardBagRemove(st, cur, 25);  // [RE sub_441343(cur,25)]
+    renderGameFrame(app);
+    RICH4_LOGI("cardBlackStock: stock=%d halted=0x03 diff=%.2f (RE 0x44503F)", v, diff);
+    return 1;
+}
+
+// ===== 被动：id18 復仇卡 [RE 0x444691] =====
+void triggerRevengeCard(Application& app, int victim) {
+    GameState& st = app.gameState();
+    if (victim < 0 || victim >= 4) {
+        return;
+    }
+    renderGameFrame(app);  // [RE refreshGameUi(受害者XY,0)]
+    char text[160];
+    std::snprintf(text, sizeof text, "%s\n\n", playerNameNoSpace(st, victim).c_str());
+    showCardGet(app, 18, text);   // [RE sub_441F73(18,...)]
+    cardBagRemove(st, victim, 18);  // [RE sub_441343(victim,18)]
+    // 差异: 原版尾段与 applyExemptCard(0x444753) 共享指令（IDA 边界）；重写不尾调以免误耗免罪卡
+    RICH4_LOGI("triggerRevengeCard: victim p%d (RE 0x444691)", victim);
+}
+
+// ===== 被动：id20 免費卡 [RE 0x444A60] =====
+int applyFreeCard(Application& app, int target, int32_t fee) {
+    GameState& st = app.gameState();
+    if (target < 0 || target >= 4) {
+        return 0;
+    }
+    renderGameFrame(app);  // [RE refreshGameUi(视口,0)]
+    bool use = false;
+    if (st.players[target].alive == 1) {
+        char text[160];
+        std::snprintf(text, sizeof text, "%s\n\n是否使用免費卡？",
+                      playerNameNoSpace(st, target).c_str());  // [RE aS_42 0x465388]
+        use = confirmDialog(app, text, 220, 320);  // [RE askDialog]
+    } else {
+        // [RE AI 分支] 阈值 (rand%3000+3000)×M；费用 ≤ 现金且阈值 ≥ 费用 → 不用
+        const int32_t threshold = (std::rand() % 3000 + 3000) * st.moneyMul;
+        use = !(fee <= st.players[target].cash && threshold >= fee);
+    }
+    if (!use) {
+        return 0;
+    }
+    char text[160];
+    std::snprintf(text, sizeof text, "%s\n\n免費卡生效！",
+                  playerNameNoSpace(st, target).c_str());
+    showCardGet(app, 20, text);    // [RE "使用%s" + sub_441F73(20,...)]
+    cardBagRemove(st, target, 20);  // [RE sub_441343(target,20)]
+    RICH4_LOGI("applyFreeCard: p%d fee=%d used (RE 0x444A60)", target, fee);
     return 1;
 }
 

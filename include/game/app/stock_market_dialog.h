@@ -12,4 +12,9 @@ class Application;
 //   详见 docs/reverse/functions/42b58f-stock-panel.md
 void stockMarketDialog(Application& app);
 
+// [NEW/RE 0x42B58F stockPanelMain] stockPickDialog：选股模态（红卡 mode=1 / 黑卡 mode=2 复用
+//   行情面板绘制；点击股票行 → requestExit(1..12)，EXIT/右键 → 0）。原版
+//   cursorSelect(12,15,10) + stockPanelMain(mode)。选股后效果由调用方执行。
+int stockPickDialog(Application& app, int mode);
+
 } // namespace rich4

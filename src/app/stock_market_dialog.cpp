@@ -170,6 +170,7 @@ struct StockPanelState {
     int hoverBtn = -1;  // 悬停按钮 0..4
     int pressedBtn = -1;
     bool closed = false;
+    int pickMode = 0;   // [NEW] 0=普通行情；1/2=选股模式（红/黑卡：点击行即返回）
 };
 
 // [RE 0x4296C1] 列标题 + 按钮标签（未选中→買/賣/資訊灰）
@@ -651,6 +652,18 @@ bool stockPanelHandler(const SDL_Event* event, void* user) {
             const int y = static_cast<int>(event->button.y);
             const int btn = hitButton(x, y);
             s.pressedBtn = -1;
+            if (s.pickMode != 0) {  // [NEW/RE stockPanelMain] 选股：点行返回 1..12，EXIT 取消
+                if (btn == 4) {
+                    s.app->events().requestExit(0);
+                    return true;
+                }
+                const int row = hitRow(x, y);
+                if (row >= 1 && row <= 12) {
+                    s.app->events().requestExit(row);
+                }
+                renderStockPanel(s);
+                return true;
+            }
             if (btn >= 0) {
                 switch (btn) {
                     case 0: s.view ^= 1; break;
@@ -708,6 +721,29 @@ void stockMarketDialog(Application& app) {
     s.pressedBtn = -1;
     s.closed = (st.stockMarketClosed != 0) || stockIsHoliday(st);
     runModal(app, &stockPanelHandler, &s);
+}
+
+// [RE stockPanelMain] stockPickDialog：选股模态（红/黑卡）
+int stockPickDialog(Application& app, int mode) {
+    GameState& st = app.gameState();
+    UiImage ui;
+    if (auto blob = st.panel.read(75)) {
+        ui.load(std::move(*blob));
+    }
+    if (ui.frameCount() < 3) {
+        return 0;
+    }
+    StockPanelState s;
+    s.app = &app;
+    s.ui = &ui;
+    s.view = 1;  // 股价表（选公司）
+    s.selStock = 0;
+    s.hoverRow = 0;
+    s.hoverBtn = -1;
+    s.pressedBtn = -1;
+    s.pickMode = mode;
+    s.closed = false;  // 选股不受休市限制
+    return runModal(app, &stockPanelHandler, &s);
 }
 
 } // namespace rich4

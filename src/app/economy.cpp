@@ -211,14 +211,29 @@ void addPlayerDebt(GameState& st, int creditor, int debtor, int32_t amount) {
     // [RE 0x40DFCC] 记债命中同盟 → 解除（sub_40CC1A：清双方 +65/+61）
     if (amount > 0 && creditor < 9 && debtor < 9 &&
         st.players[creditor].ally == static_cast<uint8_t>(debtor + 1)) {
-        st.players[creditor].ally = 0;
-        st.players[creditor].allyActive = 0;
-        st.players[debtor].ally = 0;
-        st.players[debtor].allyActive = 0;
+        clearAllyPair(st, creditor);
         RICH4_LOGI("addPlayerDebt: ally %d/%d dissolved by debt (RE 0x40CC1A)", creditor, debtor);
     }
     RICH4_LOGI("addPlayerDebt: %d owes %d += %d (total %d, RE 0x40DF69)", debtor, creditor, amount,
                v);
+}
+
+// [RE 0x40CC1A] clearAllyPair：解除 p 的同盟（清 p 与对象双方 ally/allyActive）
+void clearAllyPair(GameState& st, int p) {
+    if (p < 0 || p >= 9) {
+        return;
+    }
+    const int a = st.players[p].ally;
+    if (a == 0) {
+        return;
+    }
+    const int other = a - 1;
+    if (other >= 0 && other < 9 && st.players[other].ally == static_cast<uint8_t>(p + 1)) {
+        st.players[other].ally = 0;
+        st.players[other].allyActive = 0;
+    }
+    st.players[p].ally = 0;
+    st.players[p].allyActive = 0;
 }
 
 // [RE 0x40D2D3] findMaxCreditor：p 行欠款矩阵（[p][i]，即"欠 p 最多"）中最大且存活的玩家

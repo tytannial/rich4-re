@@ -155,14 +155,29 @@ int cardEffect(Application& app, int id) {
         case 1:  return cardEffectEqualRich(app);  // 均富卡 0x4420D8
         case 2:  return cardEffectEqualPoor(app);  // 均貧卡 0x4421B4
         case 3:  return cardEffectBuyLand(app);    // 購地卡 0x442325
+        case 4:  return cardEffectSwapLand(app);   // 換地卡 0x442622
+        case 5:  return cardEffectSwapHouse(app);  // 換屋卡 0x442B02
         case 6:  return cardEffectTurn(app);       // 轉向卡 0x442F4D
         case 7:  return cardRebuildEffect(app);    // 改建卡 0x44309B
         case 8:  return cardEffectAuction(app);    // 拍賣卡 0x443225
+        case 9:  return cardEffectAngel(app);      // 天使卡 0x4434C0
+        case 10: return cardEffectDevil(app);      // 惡魔卡 0x4436E0
         case 11: return cardEffectMonster(app);    // 怪獸卡 0x443917
         case 12: return cardEffectDemolish(app);   // 拆除卡 0x443B0F
         case 13: return cardEffectSteal(app);      // 搶奪卡 0x443E3D
+        case 14: return cardEffectStay(app);       // 停留卡 0x443F80
+        case 15: return cardEffectHibernate(app);  // 冬眠卡 0x4440EA
+        case 16: return cardEffectSleepwalk(app);  // 夢遊卡 0x4441DC
+        case 17: return cardEffectFrame(app);      // 陷害卡 0x4444BF
         case 22: return cardEffectBanish(app);     // 送神符 0x444C45
         case 23: return cardEffectInvite(app);     // 请神符 0x444E1A
+        case 24: return cardEffectRedStock(app);   // 紅卡 0x444F25
+        case 25: return cardEffectBlackStock(app); // 黑卡 0x44503F
+        case 26: return cardEffectTaxAudit(app);   // 查稅卡 0x4451F0
+        case 27: return cardEffectPriceUp(app);    // 漲價卡 0x44542D
+        case 28: return cardEffectSeal(app);       // 查封卡 0x445593
+        case 29: return cardEffectAlly(app);       // 同盟卡 0x445710
+        case 30: return cardEffectTurtle(app);     // 烏龜卡 0x4458DF
         default: return cardEffectStub(app, id);
     }
 }

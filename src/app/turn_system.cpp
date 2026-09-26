@@ -14,6 +14,7 @@
 #include "game/app/bank_dialog.h"
 #include "game/app/bank_stay_dialog.h"
 #include "game/app/card_bag_dialog.h"
+#include "game/app/card_effects.h"
 #include "game/app/confirm_dialog.h"
 #include "game/app/date_util.h"
 #include "game/app/dividend.h"
@@ -1153,15 +1154,27 @@ int findDeathGodCarrier(const GameState& st, int payer) {
     return -1;
 }
 
-// [RE 0x419ECC/0x41A6A4/0x41AF99] resolveFeePayer：收费金额定案（>0）后、转账前的**死神代付**
-//   步骤（三处收费管线同构：住宅過路費/商業收費/行業設施收費）：存在携带死神(或寶箱)的
-//   他人 → showMessage("死神顯靈\n\n由%s賠償%s") → 付款人替换为该玩家。
-//   差异: 原版此处之前还有嫁禍卡(19)/免費卡(20)判定（sub_4413AD/sub_444A60/sub_44476A，P4）
+// [RE 0x419E58/0x419EB8/0x419ECC（0x41A62E/0x41A683/0x41A6A4、0x41AF20/0x41AF75/0x41AF99 同构）]
+//   resolveFeePayer：收费金额定案（>0）后、转账前的三步：**免費卡(20) 抵用 → 嫁祸卡(19) 转嫁
+//   → 死神/寶箱代付**（三处收费管线：住宅過路費/商業收費/行業設施收費）。
+//   返回 -1 = 免費卡已抵用（调用方免付）；否则返回实际付款玩家。
 int resolveFeePayer(Application& app, int payer, int32_t fee, const char* feeName) {
     if (fee == 0) {
         return payer;
     }
     GameState& st = app.gameState();
+    // [RE 0x419E58] 免費卡(20)：抵用成功 → 免付
+    if (cardBagHas(st, payer, 20) && applyFreeCard(app, payer, fee) == 1) {
+        RICH4_LOGI("resolveFeePayer: p%d free card covers fee %d (RE 0x444A60)", payer, fee);
+        return -1;
+    }
+    // [RE 0x419EB8] 嫁祸卡(19)：转嫁他人（原版 0x44476A(payer, 2, 0)）
+    if (cardBagHas(st, payer, 19)) {
+        const int r = passOnCardDialog(app, payer);
+        if (r != -1) {
+            payer = r;
+        }
+    }
     const int c = findDeathGodCarrier(st, payer);
     if (c < 0) {
         return payer;
@@ -1683,9 +1696,11 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                 rent = applyGodRentModifier(app, p, rent, kFeeName);
                 // [RE 0x41A003] 转账：付款人 → 地主（flags=0，收款入银行存款）
                 if (rent > 0) {
-                    // [RE 0x419ECC] 死神代付（携带死神/寶箱的他人赔付，见 resolveFeePayer）
+                    // [RE 0x419E58/0x419EB8/0x419ECC] 免费卡/嫁祸卡/死神代付（见 resolveFeePayer）
                     const int payer = resolveFeePayer(app, p, rent, kFeeName);
-                    transferMoney(app, payer, es.owner - 1, rent, 0);
+                    if (payer >= 0) {  // -1 = 免費卡抵用免付
+                        transferMoney(app, payer, es.owner - 1, rent, 0);
+                    }
                     es.price = rent; // [RE 0x41A00B] estate+44 = 本次租金
                     RICH4_LOGI("rent: player %d -> %d amount %d (estate %d, RE 0x419A67)", p,
                                es.owner - 1, rent, idx);
@@ -1883,9 +1898,11 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                 // [RE 0x41A581] 通用后处理：神明调整 → 转账（flags=0 收款入银行）→ corp+48
                 rent = applyGodRentModifier(app, p, rent, feeName);
                 if (rent > 0) {
-                    // [RE 0x41A6A4] 死神代付
+                    // [RE 0x41A62E/0x41A683/0x41A6A4] 免费卡/嫁祸卡/死神代付
                     const int payer = resolveFeePayer(app, p, rent, feeName);
-                    transferMoney(app, payer, cp.owner - 1, rent, 0);
+                    if (payer >= 0) {  // -1 = 免費卡抵用免付
+                        transferMoney(app, payer, cp.owner - 1, rent, 0);
+                    }
                     cp.lastFee = rent; // [RE 0x41A75E] corp+48 = 最近收费
                     RICH4_LOGI("corp fee: player %d -> %d amount %d (corp %d type %u, RE 0x41A370)",
                                p, cp.owner - 1, rent, idx, cp.type);
@@ -2010,9 +2027,11 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                     showMessage(app, text, 1500);
                     fee = applyGodRentModifier(app, p, fee, feeName);
                     if (fee > 0) {
-                        // [RE 0x41AF99] 死神代付
+                        // [RE 0x41AF20/0x41AF75/0x41AF99] 免费卡/嫁祸卡/死神代付
                         const int payer = resolveFeePayer(app, p, fee, feeName);
-                        transferMoney(app, payer, objId - 5900, fee, 0); // 收款入公库
+                        if (payer >= 0) {  // -1 = 免費卡抵用免付
+                            transferMoney(app, payer, objId - 5900, fee, 0); // 收款入公库
+                        }
                         RICH4_LOGI("specPt fee: player %d -> fund %d amount %d (specPt %d idx %u, "
                                    "RE 0x41A168)",
                                    p, objId - 5900, fee, si, spIdx);
@@ -2825,6 +2844,21 @@ void updatePlayerStates(Application& app, int p) {
     }
     if (pl.bankFinanceFlags != 0) {
         pl.bankFinanceFlags = decay(pl.bankFinanceFlags, 0x7F);
+    }
+    // [RE 0x41CBDC..0x41CC41] 同盟天数 +61：到期(bit7) → clearAllyPair；>0 → 每次双向
+    //   addPlayerDebt(-20×M) 并递减（1 → 0x80，下回合解除；原版无条件执行）
+    if ((pl.allyActive & 0x80) != 0) {
+        clearAllyPair(st, p);
+        pl.allyActive = 0;
+    }
+    if (pl.allyActive != 0) {
+        const int ally = static_cast<int>(pl.ally) - 1;
+        if (ally >= 0 && ally < 9 && st.players[ally].ally == static_cast<uint8_t>(p + 1)) {
+            addPlayerDebt(st, p, ally, -20 * st.moneyMul);
+            addPlayerDebt(st, ally, p, -20 * st.moneyMul);
+        }
+        const uint8_t n = static_cast<uint8_t>(pl.allyActive - 1);
+        pl.allyActive = n != 0 ? n : 0x80;
     }
     // 保险期（+62）：0x41CC4B 递减（1 → 0x80），0x41CAE3 到期清 0（不受 stateFlags 限制）
     if (pl.insuranceDays != 0) {
