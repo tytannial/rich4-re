@@ -58,9 +58,9 @@
 
 | 函数 | 地址 | 说明 |
 |------|------|------|
-| `stockTick` | 0x4291D6 | 每日涨跌：停市判定 → 全局扰动 → 每支（停牌动量=0 / 新闻 ±10 / 正常：个股扰动 `(rand()-0x4000)/1171` → 动量 += 扰动×波动率 + 全局扰动 → 远离基准缩放 → clamp ±10）→ 当前价 = `sub_428EC5(昨收,动量)` → 历史 + 大盘；`advanceDay` 调用 |
+| `stockTick` | 0x4291D6 | 每日涨跌：停市判定 → 全局扰动 → 每支（停牌动量=0 / 新闻 ±10 / 正常：个股扰动 `(rand()-0x4000)/1171` → 动量 += 扰动×波动率 + 全局扰动 → 远离基准缩放 → clamp ±10）→ 当前价 = `sub_428EC5(昨收,动量)` → 历史 + 大盘；**调用点 2 处**：`advanceDay` 每日 + WinMain 新游戏链 0x401CEB 开局一次（重写 `stockInit`；读档链不调用） |
 | `sub_428EC5` | 0x428EC5 | 价格更新：`昨收 × (1+动量/100)` 后按档位取整（涨减/跌加档位），clamp [1, 9999] |
-| `sub_428D01` | 0x428D01 | 停市判定（`dword_4990DC` / `isSpecialDate`）——**未接入** |
+| `sub_428D01` | 0x428D01 | 停市判定（`dword_4990DC` / `isSpecialDate`）——重写 `stockTick` 已接入（`stockMarketClosed`/`stockIsHoliday`） |
 | `sub_42915A` | 0x42915A | 银行可售股数刷新（10%~30%） |
 | `buyStock` | 0x428D2A | 买入：现金路径（每股 `specPt.feeBase/10000`，`sharesLeft--`）/ 银行路径（当前价，银行可售--）；持股/均价更新 → `updateSpecPtControl`；返回 1 = 经营権变化 |
 | `sellStock` | 0x428E23 | 卖出：持股--（归零清均价）、银行股可售/发行++、金额入银行（a4=1）/系统（a4=0）；→ `updateSpecPtControl` |

@@ -521,12 +521,14 @@ void loadPanelUi(Application& app) {
     RICH4_LOGI("panel UI loaded (RE 0x4190CF)");
 }
 
-// [RE 0x4291D6] stockTick
-// 依据: 0x4291D6 反编译; 12 只股票随机初始涨跌（rand），历史记录 dword_497328
-// 差异: 股票行情在游戏内经济阶段接入；当前仅保持 kStockInit 初值
+// [RE 0x401CEB] stockInit：WinMain 新游戏链在 loadPanelUi 后调用 stockTick 一次（开局行情）
+// 依据: 0x401B9C case 0/4 调用序列（0x401CEB → 0x4291D6）；loadMapData 的 0x428CAF 已先建好
+//   specPt 映射；读档链（case 1）不调用（行情由存档恢复，重写完整存档恢复待 P5）
+// 差异: 开局若为休市日（周日/节日），stockTick 内部 stockIsClosed 判定后跳过——与原版一致
 void stockInit(Application& app) {
-    (void)app;
-    // TODO(RE 0x4291D6): 股票市场随机行情
+    stockTick(app);
+    RICH4_LOGI("stockInit: opening tick market=%d turn=%d (RE 0x401CEB)",
+               app.gameState().marketIndex, app.gameState().turnCounter);
 }
 
 // [RE 0x415872] playIntro
