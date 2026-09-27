@@ -227,6 +227,23 @@ struct NpcSlot80 {
 };
 static_assert(sizeof(NpcSlot80) == 16, "NpcSlot80 必须与 g_miscTable80 记录一致（16 字节）");
 
+// [RE 0x4967E0] g_miscTable336 玩家交易挂单（工具条 case 9「公佈欄」；每玩家 7 槽 × 12 字节）
+// 依据: 0x4246C5 queueTradeOrder 写入 / 0x42483E 清理 / 0x4255DA 成交 /
+//       0x4284BE 入口（人类 UI / AI 自动）/ 0x428475 每日 age++ / 存档 0x403146/0x402CB8；
+//   +0 类型 1=股票 2=地产 3=道具 4=卡片（旧文档 3/4 写反，见 4284be-trade-market.md）；
+//   +2 objId（股票号 / estate+2000 / corp+4000 / 道具 id 1..13 / 卡片 id）；
+//   +4 售价（现金）；+8 数量（仅股票）；+10/+11 地产 type/level 快照（失效检测）
+struct TradeSlot {
+    uint8_t type = 0;      // +0
+    uint8_t age = 0;       // +1（每日 ++，原版无读取点）
+    uint16_t objId = 0;    // +2
+    int32_t price = 0;     // +4
+    uint16_t count = 0;    // +8
+    uint8_t snapType = 0;  // +10
+    uint8_t snapLevel = 0; // +11
+};
+static_assert(sizeof(TradeSlot) == 12, "TradeSlot 必须与 g_miscTable336 记录一致（12 字节）");
+
 // [RE 0x44808A 保存 / 0x448544 恢复] 時光機回合快照（原版 g_playerMapBlocks 2502 dword/玩家 +
 //   g_playerMapDatCopies 地图数据副本）。保存点 = startPlayerMove 掷骰前（人类玩家）；
 //   恢复 = 时光机全状态回滚。差异: 原版 news/fate 顺序表与位置未建模（P2 后期），跳过
@@ -241,6 +258,7 @@ struct TurnSnapshot {
     uint8_t propStock[30] = {};          // 原版 30B
     uint8_t misc8A[8] = {};              // g_giftPool
     uint8_t misc8B[8] = {};
+    TradeSlot tradeSlots[8][7] = {};     // g_miscTable336（0x44808A/0x448544 快照含挂单）
     int32_t moneyMul = 1;
     int32_t dayCount = 0;
     int32_t turnCounter = 0;
@@ -540,6 +558,8 @@ struct GameState {
 
     // [RE 0x498E28] g_miscTable80 事件槽记录（槽 4..8 各 16 字节，见 NpcSlot80）
     NpcSlot80 npcSlots[5] = {};
+    // [RE 0x4967E0] g_miscTable336 交易挂单（工具条 case 9「公佈欄」；玩家 × 7 槽，见 TradeSlot）
+    TradeSlot tradeSlots[8][7] = {};
     // [RE 0x497320] byte_497320 **礼物卡池**（8 种可赠卡库存；drawGiftCard 0x445ADA 展开随机抽；
     //   死神没收卡片 0x445B3F 归还；kMisc8Init 初值。其中 [4]/[5]（0x497324/25）兼作
     //   机车/汽车回收槽：damagePlayer 0x40CD3B/43 载具损毁 ++、newGameInit 初始载具 --、

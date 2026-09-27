@@ -143,7 +143,6 @@ bool saveGameToSlot(const std::string& gameDir, int slot, const GameState& state
     auto w32 = [fp](uint32_t v) { std::fwrite(&v, 4, 1, fp); };
     auto w16 = [fp](uint16_t v) { std::fwrite(&v, 2, 1, fp); };
     auto wbuf = [fp](const void* p, size_t n) { std::fwrite(p, 1, n, fp); };
-    const uint8_t zeros[1728] = {};
 
     w32(kSaveVersion);
     w32(state.gameDate);
@@ -171,7 +170,8 @@ bool saveGameToSlot(const std::string& gameDir, int slot, const GameState& state
     wbuf(state.stockHistory, 4 * 1728);                // g_stockHistory
     wbuf(state.playerShares, 8 * 48);                  // g_playerShares
     wbuf(state.stocks, 36 * 12);                       // g_stocks
-    wbuf(zeros, 12 * 28);                              // g_miscTable336（阶段 3）
+    // [RE 0x4967E0] g_miscTable336 交易挂单（4 玩家 × 7 槽 × 12B = 336，原版 84B/玩家）
+    wbuf(state.tradeSlots, SaveLayout::kTradeSlotsSize);
     w32(static_cast<uint32_t>(state.currentPlayer));
     w32(static_cast<uint32_t>(state.cfgTravel));
     w32(static_cast<uint32_t>(state.cfgLandPerm));

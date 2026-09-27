@@ -210,6 +210,7 @@ bool newGameInit(Application& app, bool mode1) {
     // 卡片状态清零 + 道具/库存初值
     std::memset(state.cardState60, 0, sizeof(state.cardState60));
     std::memset(state.itemStock, 0, sizeof(state.itemStock));
+    std::memset(state.tradeSlots, 0, sizeof(state.tradeSlots));  // [RE 0x407485] g_miscTable336 清零
     for (int i = 0; i < 30; ++i) {
         state.propStock[i] = kPropStockInit[i]; // g_propStock[i] = byte_47FDF6[8*i]
     }
@@ -585,6 +586,14 @@ bool loadGameFromSlot(Application& app, int slot) {
         rebuildEventNpcFromSlots(state);
         RICH4_LOGI("load game: NPC slots restored (busy %u/%u/%u/%u)", state.npcSlots[0].busy,
                    state.npcSlots[1].busy, state.npcSlots[2].busy, state.npcSlots[3].busy);
+    }
+    // [PORT] 交易挂单恢复（g_miscTable336 336B；无效项由打开公佈欄时的
+    //   clearInvalidTradeOrders 清理——原版读档后同样处理）
+    if (state.saveData.size() >= SaveLayout::kTradeSlots + SaveLayout::kTradeSlotsSize) {
+        std::memset(state.tradeSlots, 0, sizeof(state.tradeSlots));
+        std::memcpy(state.tradeSlots, state.saveData.data() + SaveLayout::kTradeSlots,
+                    SaveLayout::kTradeSlotsSize);
+        RICH4_LOGI("load game: trade orders restored (RE 0x4967E0)");
     }
     // [PORT] 存档未保存股票表/持股/均价 → 用 kStockInit 重建 + 股票→specPt 映射
     //   （loadMap 内的映射此时 stocks 全 0 无法反查；完整存档恢复待做）

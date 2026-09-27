@@ -27,8 +27,10 @@ constexpr uint32_t kSaveVersion = 38;
 //   用于 loadGameFromSlot 恢复 NPC 状态——完整读档仍为 P5 TODO）。
 //   偏移推导: version4 + date4 + map2 + mode2 + players4 + player[4]×104 + humanCount4 = 436
 struct SaveLayout {
-    static constexpr size_t kNpcSlots = 436;      // g_miscTable80 80B（NpcSlot80[5]）
-    static constexpr size_t kJailFlags = 9953;    // g_jailFlags 8B
+    static constexpr size_t kNpcSlots = 436;       // g_miscTable80 80B（NpcSlot80[5]）
+    static constexpr size_t kTradeSlots = 9513;    // g_miscTable336 336B（4 玩家 × 7 槽 × 12B）
+    static constexpr size_t kTradeSlotsSize = 336;
+    static constexpr size_t kJailFlags = 9953;     // g_jailFlags 8B
     static constexpr size_t kHospitalFlags = 9961; // g_hospitalFlags 8B
     static constexpr size_t kNpcBlockEnd = 9969;  // hospitalFlags 末尾
 };
@@ -42,8 +44,9 @@ bool readSaveFile(const std::string& path, std::vector<uint8_t>& out);
 // [RE 0x402FD1] saveGameToSlot：把游戏内持久状态写入 SAVE%d.DAT
 // 依据: 0x402FD1 反编译; 字段顺序 version(38)/日期/地图/模式/玩家数/玩家(104x4)/
 //       人类数/道具表/格子表/卡片/股票/回合/地图数据/每玩家棋盘数据
-// 差异: g_miscTable336（建造队列）/dword_499084 等阶段 3 字段以 0 占位；
-//       dword_499080（publicFund）与 g_miscTable36A（lotteryNumbers）已正确写入
+// 差异: dword_499084 等阶段 3 字段以 0 占位；
+//       dword_499080（publicFund）与 g_miscTable36A（lotteryNumbers）已正确写入；
+//       g_miscTable336（交易挂单，4 玩家 × 7 槽）已正确写入
 bool saveGameToSlot(const std::string& gameDir, int slot, const struct GameState& state);
 
 } // namespace rich4

@@ -18,6 +18,7 @@
 #include "game/app/save_dialog.h"
 #include "game/app/settings_dialog.h"
 #include "game/app/stock_market_dialog.h"
+#include "game/app/trade_market.h"
 #include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/log.h"
@@ -194,12 +195,16 @@ void handleTopBarButton(Application& app, int index) {
             // [RE 0x441BAA] case 8: useCardFlow（卡片栏）
             useCardDialog(app);
             break;
+        case 9:
+            // [RE 0x4284BE] case 9: 交易市场（公佈欄，[HELP 11]）
+            tradeMarketDialog(app);
+            break;
         case 10:
             // [RE 0x417D65] case 10: sub_42B58F(0)（股票行情界面）
             stockMarketDialog(app);
             break;
         default:
-            // case 6=建造菜单(任务F)、case 9=交易市场 依赖游戏内逻辑，待实现
+            // 其余按钮（11+）无功能
             RICH4_LOGI("top bar button %d not implemented (RE 0x417D65)", index);
             break;
     }

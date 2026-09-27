@@ -43,6 +43,7 @@
 #include "game/app/spec_pt_dialog.h"
 #include "game/app/stock_system.h"
 #include "game/app/target_select_dialog.h"
+#include "game/app/trade_market.h"
 #include "game/core/encoding.h"
 #include "game/core/log.h"
 #include "game/render/blit.h"
@@ -2844,7 +2845,8 @@ void beginPlayerTurn(Application& app) {
                 startPlayerMove(app);
                 break;
             }
-            // [RE 0x418E13] 交易市场 AI（sub_4284BE；交易系统已搁置——仅分析归档）
+            // [RE 0x418E13] 交易市场 AI（sub_4284BE：清挂单 + 随机挂卖/改价/低价买入）
+            tradeAiTurn(app);
             // [RE 0x418E18..0x418E21] rand()&1 → 用卡(useCardFlow 0x441BAA)/道具(itemPanelFlow 0x447D97)
             //   两函数内部自判 alive&6 + aiCardItem bit0/1；AI 用卡链见 ai_card.cpp
             if ((std::rand() & 1) != 0) {
@@ -2897,6 +2899,7 @@ void saveTurnSnapshot(GameState& st, int p) {
     std::memcpy(s.propStock, st.propStock, sizeof(s.propStock));
     std::memcpy(s.misc8A, st.misc8A, sizeof(s.misc8A));
     std::memcpy(s.misc8B, st.misc8B, sizeof(s.misc8B));
+    std::memcpy(s.tradeSlots, st.tradeSlots, sizeof(s.tradeSlots));  // g_miscTable336（0x44808A 含）
     s.moneyMul = st.moneyMul;
     s.dayCount = st.dayCount;
     s.turnCounter = st.turnCounter;
@@ -2942,6 +2945,7 @@ bool restoreTurnSnapshot(Application& app, int p) {
     std::memcpy(st.propStock, s.propStock, sizeof(st.propStock));
     std::memcpy(st.misc8A, s.misc8A, sizeof(st.misc8A));
     std::memcpy(st.misc8B, s.misc8B, sizeof(st.misc8B));
+    std::memcpy(st.tradeSlots, s.tradeSlots, sizeof(st.tradeSlots));  // g_miscTable336（0x448544 含）
     st.moneyMul = s.moneyMul;
     st.dayCount = s.dayCount;
     st.turnCounter = s.turnCounter;
@@ -3600,8 +3604,8 @@ void advanceDay(Application& app) {
     ++st.dayCount;
     // [RE 0x41CFBF] 物價指數每日更新（只升不降；原版位于 checkVictory 之后）
     updateMoneyIndex(app);
-    // TODO(任务 F): sub_428475 —— g_miscTable336（建造/待办队列 7 槽）每日计数 ++；
-    //   队列由建造菜单写入（0x4246C5），当前未建模（表恒 0，无操作）
+    // [RE 0x428475] 交易挂单每日 age++（存活玩家每挂单 +1；advanceDay 0x41CFC4 调用）
+    ageTradeOrders(st);
 
     // 住宅用地/商業用地到期回收（原版 estates+23/+48、corps+28/+52 与 dword_497160 比较）
     bool refreshed = false;

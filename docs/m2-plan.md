@@ -297,7 +297,17 @@
 - ~~`updateMoneyIndex` 物價指數月度更新~~ ✅ 2026-09-23 接入（每日 advanceDay；**右侧面板显示 ✅**
   d0b4154，物價指數显示核对 2026-09-25 见 `415d31-game-panel.md`）；~~到期清算 `expireAssets`~~ ✅
   `economy.cpp`（飛彈/核彈接入；地块期限到期回收在 `advanceDay` 内联——语义订正见 `gameplay-map-mechanics.md`）
-- ~~银行贷款/存款利息（case 14 銀行格）~~ ✅ 2026-09-23 全链；~~每月 15 号分红~~ ✅ 2026-09-23（`dividend_dialog.cpp`）；~~月初结息~~ ✅ 2026-09-23（`month_settle_dialog.cpp`）；~~资产清单（idx 16）~~ ✅ 2026-09-25（查詢面板 `query_dialog.cpp`）；股市交易市场/挂单待做
+- ~~银行贷款/存款利息（case 14 銀行格）~~ ✅ 2026-09-23 全链；~~每月 15 号分红~~ ✅ 2026-09-23（`dividend_dialog.cpp`）；~~月初结息~~ ✅ 2026-09-23（`month_settle_dialog.cpp`）；~~资产清单（idx 16）~~ ✅ 2026-09-25（查詢面板 `query_dialog.cpp`）；~~股市交易市场/挂单~~ ✅ 2026-09-27（交易市場「公佈欄」`trade_market.cpp`，见下一行）
+- **交易市場「公佈欄」✅ 2026-09-27**（工具条 case 9，帮助 idx 11）：`src/app/trade_market.cpp` +
+  `trade_market.h`——`TradeSlot`/`GameState.tradeSlots[8][7]`（g_miscTable336 0x4967E0）；
+  数据层 `clearInvalidTradeOrders`(0x42483E)/`queueTradeOrder`(0x4246C5)/`removeTradeOrder`(0x4247D5)/
+  `executeTrade`(0x4255DA)/`ageTradeOrders`(0x428475)；UI 主面板(0x427C21/0x4249C2，panel[73]/[74]) +
+  详情(0x42704E) + 股票(0x4258C1)/地产(0x42608F+0x424AEA)/道具(0x4267A4)/卡片(0x426C2E) 4 子对话框；
+  **AI 自动交易 `tradeAiTurn`**（0x4284BE AI 分支：1/15 挂卖重复卡或库存≥3 道具、1/3 改价、
+  1/4 低价买入）接入 `beginPlayerTurn` case 2/5；`advanceDay` age++；`newGameInit` 清零；
+  存档（0x403146/0x402CB8，偏移 9513 336B）+ 时光机（0x44808A/0x448544）含挂单。
+  订正：类型表 **3=道具 / 4=卡片**（旧文档写反）。**待实机验收**；`4284be-trade-market.md`、
+  `ui-controls.md` §36；help-checklist idx 11 ✅（累计 95/99）
 - ~~研究所研发 `labDevelopDialog`（P4 道具系统）~~ ✅ 2026-09-26（`lab_dialog.cpp` 0x44101D + `updatePlayerStates` 0x41C84F 产出；道具 13 获取入口闭环，非卖品 5 项；见 `44101d-lab-develop.md`）
   - 修正 2026-09-27：触发移到收尾 loc_41B077（先升級询问后研究、首次建设施即弹）；面板帧7 底图(不透明)+帧5 标题+未解锁灰度+黄框+按下下沉
 - 收租的同盟分账 / 死神代付 / 免租卡片 / 浮动数字（P4 卡片与神明系统）
