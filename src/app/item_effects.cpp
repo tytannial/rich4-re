@@ -358,7 +358,9 @@ int useItemRobotWorker(Application& app) {
 }
 
 // [RE 0x446FBC / 0x447ACE] 飞弹/核弹公共：选目标（0x300C0/0x400C0 含滚动）→ 扣道具 →
-//   取目标坐标 → 视口对准目标 → expireAssets（100/38/0 降级 或 -1/38/1 归公）→
+//   取目标坐标 → 视口对准目标（refreshGameUi(x,y,0)：经 sub_415E70→sub_40829D **重绘
+//   新视口并重建 g_drawList**）→ expireAssets（100=屏幕 ±100 方块 / -1=全视野；
+//   重写 mapHitRegions 屏幕空间口径）→
 //   FLC（528 音效81 / 530 音效83，switchFrame=9）→ 范围内受伤玩家（alive&0x40）
 //   向发射者记账 90×M + 住院 3 → 面板复位
 int launchMissile(Application& app, int itemId, int mode, int radius, int dump, int flcRes,
@@ -382,7 +384,8 @@ int launchMissile(Application& app, int itemId, int mode, int radius, int dump, 
     int x = 0;
     int y = 0;
     getObjectPosition(st, v, x, y);  // [RE 0x40AF12]
-    // [RE 0x41D476] refreshGameUi(x, y, 0)：视口中心对准目标（expireAssets 以视野中心取范围）
+    // [RE 0x41D476] refreshGameUi(x, y, 0)：设视口 + 经 sub_415E70→sub_40829D **重绘**
+    //   （视口中心=目标；expireAssets 随后的屏幕空间采样以此为基准）
     st.manualView = true;
     st.viewSmoothX = x;
     st.viewSmoothY = y;
@@ -972,9 +975,9 @@ int itemEffect(Application& app, int id) {
         case 10: return useItemTimeMachine(app);
         case 11: return useItemTeleport(app);
         case 12: return useItemBulldozer(app);
-        // 核子飛彈：原版 expireAssets(-1) 的 -1 = sub_40A45C 采集**当前视野 440×440**
-        //   （非全地图）→ 世界坐标 ±220（帮助"9×9"为约数）；归公 dump=1
-        case 13: return launchMissile(app, 13, 0x400C0, 220, 1, 530, 83);
+        // 核子飛彈：原版 expireAssets(-1) = sub_40A45C(-1) 采集**整个 440×440 视野**
+        //   （g_drawList 全量；帮助"9×9"为约数）；归公 dump=1
+        case 13: return launchMissile(app, 13, 0x400C0, -1, 1, 530, 83);
         case 14: return useItemGetOff(app);  // 下車按鈕（道具栏，0x447C00）
         default:
             RICH4_LOGI("item effect id=%d (%s) not implemented (P4, RE 0x475DD4 + 4*id)", id,

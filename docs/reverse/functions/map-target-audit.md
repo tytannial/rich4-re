@@ -99,3 +99,42 @@ bits 24-31 = 光标 idx-1
 3. **视口/FLC 时序**：`refreshGameUi` 三 flags 语义（含"==玩家坐标→跟随"）、
    拆除卡 FLC 529 switchFrame=0x26/停留 500ms、外星人"旧表面播 FLC、播完切视口"。
 4. **拾取/占用**：`occMask` 全生命周期；三道具"无法指定道路位置"诊断（`[DIAG]` 日志在案）。
+
+## 6. 范围清算专项（2026-09-27 第二批完成）
+
+### 原版链路（0x40AC7B → 0x40A45C → 0x409DE7）
+
+1. `sub_409DE7()`：清空 pickBuffer → 遍历 **g_drawList**（上次 `sub_40829D` 的绘制列表，
+   玩家/事件槽/cellTable 物件/estate/corp/specPt/evtCell 各一条），把 **id 写到对象锚点
+   像素**（每对象 1 像素，屏幕坐标 `g_drawListX/Y`；`|=`）；
+   **过滤：有主挂身物件（`g_cellOwner[slot-1] != 0`）不写**（附身神明/炸弹不参与清算）。
+2. `sub_40A45C(a1)`：`a1==-1` 扫全 440×440 缓冲；否则扫 `(220-a1)²` 起边长 `2a1` 方块
+   （缓冲中心 = 屏幕 (220,260)）；收集非零 id → `rebuildPickBuffer(1)` 恢复。
+3. `expireAssets` 按 id 段处理（维持原实现）：住宅/商業 归公或降级、玩家 `damagePlayer`、
+   事件槽 `hospitalizePlayer`、挂身物件 `deleteMapObject`。
+
+### 关键澄清：`refreshGameUi(x,y,0/2)` **会重绘**
+
+`refreshGameUi` 的 `flags&1==0` 分支走 `drawMiniMap + sub_415E70(0)`，而 **`sub_415E70`
+内部调 `sub_40829D(BE1C, BE20)` 完整重绘地图并重建 g_drawList**（用新视口）。
+所以飞弹/外星人/山洪的 `refreshGameUi(x,y,0/2)` = **视口对准目标并立即重绘**，
+`expireAssets` 的范围即以**目标处新视口**为中心——重写各调用点 `renderGameFrame`
+（`launchMissile` / `focusObjId→focusView`）语义等价，**不需改动**。
+（旧文档"原版只设视口不重绘、范围用旧视口"为误读，2026-09-27 修正。）
+
+### 重写改动
+
+- `expireAssets` 收集：世界坐标 `±radius` 遍历 cellEnt → **`mapHitRegions` 屏幕空间**
+  （anchorX/anchorY = drawListX/Y；`[220±r) × [260±r)`；-1 = 全部），
+  `normalizeHitId` 转原版编码，去重；补 **有主挂身物件过滤**（0x409DE7）；
+- 核弹调用 `radius 220 → -1`（原版 `sub_40A45C(-1)` = 全视野，两者等价但 -1 为原值）；
+- `cx/cy` 仅存参（不再用于筛选）。
+- 影响调用点：飞弹/核弹（`launchMissile`）、外星人 news4、山洪 news19——均在
+  `renderGameFrame`（视口对准目标）之后调用 ✓。
+
+## 7. 剩余批次
+
+1. **地块高亮闪烁**：`captureHighlightShapes` 来源/时机、收租"先闪烁后弹收费"。
+2. **视口/FLC 时序**：`refreshGameUi` 三 flags 语义补全（"==玩家坐标→跟随"）、
+   拆除卡 FLC 529 `switchFrame=0x26` + `sub_45285E(500)`、外星人 FLC 落点参数。
+3. **拾取/占用**：`occMask` 全生命周期；三道具"无法指定道路位置"诊断（`[DIAG]` 在案）。

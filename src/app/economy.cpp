@@ -2,6 +2,7 @@
 
 #include <SDL3/SDL.h>
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <vector>
@@ -12,6 +13,7 @@
 #include "game/app/magic_house_dialog.h"
 #include "game/app/map_objects.h"
 #include "game/app/stock_system.h"
+#include "game/app/target_select_dialog.h"
 #include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/app/map_render.h"
@@ -340,35 +342,54 @@ void releaseCellTableSlot(Application& app, int slot) {
 
 // [RE 0x40AC7B] expireAssets：范围资产清算（飞弹 expireAssets(100,38,0,cur) /
 //   核弹 expireAssets(-1,38,1,cur)）
-// 依据: 0x40AC7B 反编译；范围采集 = sub_40A45C 读 pickBuffer（每物件 1 像素）——重写按
-//   世界坐标 (±radius，-1=全图) 遍历 cellEnt 等价收集（玩家掩码 0x8000|mask、物件槽
-//   BYTE1、estate/corp/specPt 段 id）；
+// 依据: 0x40AC7B 反编译；范围采集 = sub_40A45C：
+//   ① sub_409DE7 清 pickBuffer 后用 **g_drawList（上次 sub_40829D 的绘制列表）按对象
+//      **锚点像素**重建（每对象 1 像素，屏幕坐标）；
+//   ② 扫 (220±radius)² 方块（radius==-1 = 全 440×440 缓冲 = 屏幕 y40..480）收集非零 id；
+//   ③ rebuildPickBuffer(1) 恢复。
+//   重写 mapHitRegions = g_drawList 等价（上次 renderGameFrame 的绘制记录，屏幕坐标；
+//   anchorX/anchorY 即 drawListX/Y）。**调用方必须先做 refreshGameUi(x,y,0) 等价的重绘把
+//   视口对准目标**（launchMissile 的 renderGameFrame / news focusObjId 已做——原版
+//   refreshGameUi(x,y,0) 经 sub_415E70→sub_40829D 即重绘新视口，非"只设视口"）。
+//   拾取编码经 normalizeHitId 转原版（玩家 0x8000|位掩码 / 物件 0x8000|槽<<8）。
+//   2026-09-27 由"世界坐标 ±radius 正方形"口径改回屏幕空间忠实复刻。
 //   flags&2 住宅 / flags&4 商業：dump≠0 归公（owner 欠 30×M×level，owner/level/type 清零）；
 //   dump=0 降级（owner 欠 30×M，level/sub--，连锁 type 归零）；
 //   flags&0x20（id&0x8000）：低 4 位玩家 damagePlayer / bit4-7 事件槽 hospitalize /
 //   BYTE1&0x7F 物件 deleteMapObject（重写 releaseCellTableSlot）
 void expireAssets(Application& app, int cx, int cy, int radius, int flags, int dump, int payer) {
     GameState& st = app.gameState();
+    (void)cx;
+    (void)cy;
+    const int c0 = 220 - radius;
+    const int c1 = 220 + radius;
+    const int r0 = 260 - radius;
+    const int r1 = 260 + radius;
     std::vector<uint16_t> ids;
-    const int n = static_cast<int>(st.cellEnts.size());
-    for (int i = 1; i < n; ++i) {
-        const CellEnt& ce = st.cellEnts[i];
-        if (radius != -1 &&
-            (std::abs(ce.x - cx) >= radius || std::abs(ce.y - cy) >= radius)) {
+    for (const GameState::MapHitRegion& hit : st.mapHitRegions) {
+        if (hit.id == 0) {
             continue;
         }
-        const uint8_t pmask = static_cast<uint8_t>((ce.occMask >> 8) & 0xFF);
-        if (pmask != 0) {
-            ids.push_back(static_cast<uint16_t>(0x8000 | pmask));
+        if (radius != -1 &&
+            !(hit.anchorX >= c0 && hit.anchorX < c1 && hit.anchorY >= r0 && hit.anchorY < r1)) {
+            continue;
         }
-        const uint8_t slotHi = static_cast<uint8_t>((ce.occMask >> 16) & 0xFF);
-        if ((flags & 0x20) != 0 && slotHi != 0) {
-            ids.push_back(static_cast<uint16_t>(0x8000 | (slotHi << 8)));
+        const int v = normalizeHitId(hit.id);
+        if (v == 0) {
+            continue;
         }
-        if (ce.special >= 2000) {
-            ids.push_back(ce.special);
+        // [RE 0x409DE7] 有主挂身物件（g_cellOwner != 0，如附身神明/炸弹）不写入拾取
+        //   缓冲 → 不参与范围清算（原版 `!g_cellOwner[8*(slot-1)]` 才收集）
+        if ((v & 0x8000) != 0 && (v & 0x7F00) != 0) {
+            const int slot = (v >> 8) & 0x7F;
+            if (slot >= 1 && slot <= 46 && st.cellTable[24 * (slot - 1) + 5] != 0) {
+                continue;
+            }
         }
+        ids.push_back(static_cast<uint16_t>(v));
     }
+    std::sort(ids.begin(), ids.end());
+    ids.erase(std::unique(ids.begin(), ids.end()), ids.end());
     for (const uint16_t v13 : ids) {
         if ((flags & 2) != 0 && v13 > 2000 && v13 < 4000) {
             const int ei = v13 - 2000;
