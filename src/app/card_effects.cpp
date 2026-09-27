@@ -303,15 +303,21 @@ int cardEffectMonster(Application& app) {
             addPlayerDebt(st, owner - 1, cur, st.moneyMul * 30 * st.estates[i].level);
         }
     }
-    if (owner != 0) {
-        playCardLine(app, owner - 1, kSpeechMonsterOwner);  // [RE 0x443Axx 原主台词]
-    }
     int x = 0;
     int y = 0;
     getObjectPosition(st, v, x, y);  // [RE 0x40AF12]
-    focusView(app, x, y);            // [RE 0x41D476 refreshGameUi(x,y,0)]
-    demolishAtObjId(app, v, 2);      // [RE 0x4439F5] mode2 = 拆建筑留地
-    playEventFlc(app, 557, x, y, 80);  // [RE 0x443A1A] 怪獸破壞 FLC 557（音效 80）
+    focusView(app, x, y);            // [RE 0x41D476 refreshGameUi(x,y,0)]（视口对准目标）
+    demolishAtObjId(app, v, 2);      // [RE 0x4439F5/0x443A81] mode2 = 拆建筑留地
+    // [RE 0x443AAF] FLC 557 落点 (0,40)、flags 0x100001（BYTE2=0x10 → switchFrame=16）、音效 80
+    // （原重写误把目标世界坐标当 FLC 落点且未传 switchFrame）
+    playEventFlc(app, 557, 0, 40, 80, true, 16);
+    eventAudioWait(app, 500);  // [RE 0x443AC5] sub_45285E(0x1F4) 停留 500ms（末帧保留）
+    if (owner != 0) {
+        playCardLine(app, owner - 1, kSpeechMonsterOwner);  // [RE 0x443AF3] 原主台词（FLC 后）
+    }
+    st.eventFlcActive = false;  // 释放 FLC 末帧
+    st.manualView = false;      // [RE 0x41D546]
+    renderGameFrame(app);
     RICH4_LOGI("cardMonster: objId=%d owner=%u (RE 0x443917)", v, owner);
     return 1;
 }
@@ -371,13 +377,22 @@ int cardEffectDemolish(Application& app) {
     }
     if (owner != 0) {  // [RE 0x443D02/0x443D20] 有主 → 记债 30×M
         addPlayerDebt(st, owner - 1, cur, 30 * st.moneyMul);
-        playCardLine(app, owner - 1, kSpeechDemolishOwner);  // [RE 原主台词]
+        // 原主台词在 FLC 之后（[RE 0x443E28]），见下方
     }
     int x = 0;
     int y = 0;
     getObjectPosition(st, v, x, y);
-    focusView(app, x, y);
-    playEventFlc(app, 529, x, y, 97);  // [RE 0x443D6C] 拆除 FLC 529（音效 97）
+    focusView(app, x, y);  // [RE 0x41D476 refreshGameUi(x,y,0)]（视口对准目标）
+    // [RE 0x443DDC] FLC 529 落点 (0,40)、flags 0x260001（BYTE2=0x26 → switchFrame=38）、音效 97
+    // （原重写误把目标世界坐标当 FLC 落点且未传 switchFrame）
+    playEventFlc(app, 529, 0, 40, 97, true, 38);
+    eventAudioWait(app, 500);  // [RE 0x443DF2] sub_45285E(0x1F4) 停留 500ms（末帧保留）
+    if (owner != 0) {
+        playCardLine(app, owner - 1, kSpeechDemolishOwner);  // [RE 0x443E28] 原主台词
+    }
+    st.eventFlcActive = false;  // 释放 FLC 末帧
+    st.manualView = false;      // [RE 0x41D546]
+    renderGameFrame(app);
     RICH4_LOGI("cardDemolish: objId=%d owner=%u (RE 0x443B0F)", v, owner);
     return 1;
 }

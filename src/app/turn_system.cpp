@@ -1044,8 +1044,10 @@ void startRouteHighlight(GameState& st, const Estate& es) {
 }
 
 // [RE 0x451985] playHighlightBlink：阻塞播放联动闪烁（先闪烁、后弹收费提示）
-// 依据: 0x451985 逐帧 byte_476380[i] 重绘（sub_4554FC），每帧 sub_4528B9(30)，
-//       循环后 sub_4528B9(400) 停留；原版在 showMessage(收费) 之前完成
+// 依据: 0x451985 逐帧 byte_476380[i] 重绘（sub_4554FC；**byte_476380[i] 是
+//       unk_485D68 亮度变换表的索引 k**，非线性查表变换——2026-09-27 修正误用的 >>2
+//       线性偏移），每帧 sub_4528B9(30)，循环后 sub_4528B9(400) 停留；
+//       原版在 showMessage(收费) 之前完成
 // 迁移: 逐帧 renderGameFrame（画 surface）+ renderFrame（present/音频）+ 分段延时，
 //       期间 pumpEvents 保持窗口响应（收租时 gamePlayerControl=0，事件被吞/仅物件提示）
 // [PORT] 音频续喂：kTargetQueued=1024 字节（8bit mono @44.1kHz ≈ 23ms）——阻塞循环的

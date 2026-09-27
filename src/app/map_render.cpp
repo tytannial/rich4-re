@@ -937,36 +937,65 @@ void captureHighlightShapes(Application& app) {
 }
 
 // [RE 0x451985] drawEstateHighlight：高亮快照闪烁（整条街/连锁店/单块，纯渲染）
-// 依据: 0x451985 每帧取 byte_476380[i] 亮度偏移（16 帧，30ms/帧）→ sub_4554FC 按
-//       g_pickBuffer 的 0xFFFF 标记重绘高亮像素；循环后 sub_4528B9(400) 停留；
+// 依据: 0x451985 每帧取 byte_476380[i]（**unk_485D68 亮度变换表的索引 k**，非线性偏移）
+//       → sub_4554FC 按 g_pickBuffer 的 0xFFFF 标记用 `表[通道 5bit]` 重绘高亮像素；
+//       循环后 sub_4528B9(400) 停留；
 //       byte_476380 = {4,8,12,16,12,8,4,0,252,248,244,240,244,248,252,0}（252..240 = -4..-16）
 // 迁移: 重写无 pickBuffer，用 highlightShapes 快照（captureHighlightShapes 提取自
-//       mapHitRegions 的原版 g_pickMask 形状）对 RGB555 逐通道偏移（8bit 亮度量 → 5bit: >>2）；
+//       mapHitRegions 的原版 g_pickMask 形状）对 RGB555 各通道**查表**（kHlTable，dump 自
+//       exe 0x485D68；2026-09-27 修正：原实现误用 `k>>2` 线性偏移 → 幅度仅 1/4 且无压缩）；
 //       帧推进/停留由阻塞播放 playHighlightBlink（turn_system.cpp）负责，本函数仅按
-//       highlightFrame 渲染（0..15 有效；16=停留期无偏移）
+//       highlightFrame 渲染（0..15 有效；16=停留期无变换）
 void drawEstateHighlight(Application& app) {
     GameState& state = app.gameState();
     if (state.highlightFrame < 0 || state.highlightFrame > 15 ||
         state.highlightShapes.empty()) {
         return;
     }
-    // [RE 0x476380] 高亮亮度偏移序列（16 帧；i8）
+    // [RE 0x476380] 高亮亮度序列（16 帧；值 = 表索引 k）
     static const int8_t kHighlightLut[16] = {4,  8,  12, 16, 12, 8,  4,  0,
                                              -4, -8, -12, -16, -12, -8, -4, 0};
-    const int off5 = kHighlightLut[state.highlightFrame] >> 2; // 4..16 → 1..4（5bit 通道量）
-    if (off5 == 0) {
+    const int8_t k = kHighlightLut[state.highlightFrame];
+    if (k == 0) {
         return;
     }
+    // [RE 0x485D68] unk_485D68 + 32*k 亮度变换表（每通道 5bit 输入 → 5bit 输出）
+    static const uint8_t kHlTable[9][32] = {
+        {0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13,
+         13, 14, 14, 15, 15},  // k=-16
+        {0, 1, 1, 2, 2, 3, 4, 4, 5, 6, 6, 7, 7, 8, 9, 9, 10, 10, 11, 12, 12, 13, 13, 14, 15, 15,
+         16, 17, 17, 18, 18, 19},  // k=-12
+        {0, 1, 1, 2, 3, 4, 4, 5, 6, 7, 7, 8, 9, 10, 10, 11, 12, 13, 13, 14, 15, 16, 16, 17, 18, 19,
+         19, 20, 21, 22, 22, 23},  // k=-8
+        {0, 1, 2, 3, 3, 4, 5, 6, 7, 8, 9, 10, 10, 11, 12, 13, 14, 15, 16, 17, 17, 18, 19, 20, 21,
+         22, 23, 24, 24, 25, 26, 27},  // k=-4
+        {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+         25, 26, 27, 28, 29, 30, 31},  // k=0
+        {4, 5, 6, 7, 7, 8, 9, 10, 11, 12, 13, 14, 14, 15, 16, 17, 18, 19, 20, 21, 21, 22, 23, 24,
+         25, 26, 27, 28, 28, 29, 30, 31},  // k=4
+        {8, 9, 9, 10, 11, 12, 12, 13, 14, 15, 15, 16, 17, 18, 18, 19, 20, 21, 21, 22, 23, 24, 24,
+         25, 26, 27, 27, 28, 29, 30, 30, 31},  // k=8
+        {12, 13, 13, 14, 14, 15, 16, 16, 17, 18, 18, 19, 19, 20, 21, 21, 22, 22, 23, 24, 24, 25,
+         25, 26, 27, 27, 28, 29, 29, 30, 30, 31},  // k=12
+        {16, 16, 17, 17, 18, 18, 19, 19, 20, 20, 21, 21, 22, 22, 23, 23, 24, 24, 25, 25, 26, 26,
+         27, 27, 28, 28, 29, 29, 30, 30, 31, 31},  // k=16
+    };
+    static const int8_t kHlK[9] = {-16, -12, -8, -4, 0, 4, 8, 12, 16};
+    int ti = 0;
+    while (ti < 8 && kHlK[ti] != k) {
+        ++ti;
+    }
+    const uint8_t* lut = kHlTable[ti];
     uint16_t* px = app.surface().pixels();
-    auto adjust = [px, off5](int x, int y) {
+    auto adjust = [px, lut](int x, int y) {
         if (x < 0 || y < 0 || x >= Surface::kWidth || y >= Surface::kHeight) {
             return;
         }
         const size_t o = static_cast<size_t>(y) * Surface::kWidth + x;
         const uint16_t c = px[o];
-        const int r = std::clamp(((c >> 10) & 0x1F) + off5, 0, 31);
-        const int g = std::clamp(((c >> 5) & 0x1F) + off5, 0, 31);
-        const int b = std::clamp((c & 0x1F) + off5, 0, 31);
+        const uint16_t r = lut[(c >> 10) & 0x1F];
+        const uint16_t g = lut[(c >> 5) & 0x1F];
+        const uint16_t b = lut[c & 0x1F];
         px[o] = static_cast<uint16_t>((r << 10) | (g << 5) | b);
     };
     for (const auto& hs : state.highlightShapes) {
