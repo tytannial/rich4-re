@@ -447,32 +447,30 @@ int useItemTimeMachine(Application& app) {
     return ok ? 1 : 0;
 }
 
-// [HELP 94] 傳送機目的地校验：人物/神明/物品必须移至**空道路**（无玩家/物件占用）。
-//  [RE 0x409B18] 原版拾取语义：格 id 仅在 occMask bit8-23==0 时登记；地产/设施点被
-//  大菱形拾取覆盖（拾取 id 2000+/4000+/6000+ → flags=1 拒绝）；医院(8001)/监狱(8002)/
-//  事件格(8000+i) 无 drawList 拾取覆盖 → 返回格 id → 原版可传（落地触发对应事件）。
-//  [USER] 保留魔改边界：格 id 路径仅放行 occMask 干净的格；地产/设施点（special
-//  2000..7999）拒绝。**无主空地**不走此函数（selectTargetDialog allowEmptyLand +
-//  resolveTeleportDest 解析为格）。
+// [RE 0x409B18 / 0x446AE8(0x2090001)] 傳送機人物/神明/物品目的地：原版 flags=1 的格 id
+//   路径**无 special 检查**——occMask 干净（bit8-23：玩家/事件槽/物件）即在拾取缓冲登记
+//   （`rebuildPickBuffer` cellEnt 段），地块格/医院/监狱/事件格一律可选，落地触发
+//   买地/住院/入狱/事件（[HELP 94]「须移至空道路/空地」为提示文本；原版不判别地块）。
+//   2026-09-27 撤销 [USER] 魔改（曾拒绝 special 2000..7999）：撤销地块格对象归一化后，
+//   地块格边缘恢复返回格 id，旧检查把它们全部拦下 → 传送残留"只能移到空的道路或空地！"。
+//   occMask 检查在拾取层已保证，此处保留作防御。无主空地对象 id 路径见 resolveTeleportDest。
 bool isVacantRoad(const GameState& st, int cellId) {
     if (cellId <= 0 || cellId >= static_cast<int>(st.cellEnts.size())) {
         return false;
     }
     const CellEnt& ce = st.cellEnts[cellId];
-    if (ce.special >= 2000 && ce.special <= 7999) {
-        return false;  // 地产/设施点（2000..7999，非空道路）；8000+ = 医院/监狱/事件格放行
-    }
     if ((ce.occMask & 0x00FFFF00u) != 0) {
-        return false;  // bit8-23：玩家/事件槽/物件占用
+        return false;  // bit8-23：玩家/事件槽/物件占用（拾取层已过滤，防御）
     }
     return true;
 }
 
-// [USER 魔改] 傳送機目的地解析（[HELP 94]「須移至空道路/空地」）：
-//   <2000 = 格 id（空道路/医院 8001/监狱 8002/事件格，走 isVacantRoad）；
-//   2000..6000 = 无主空地对象 id（住宅 owner==0&&level==0 / 商业 owner==0&&sub==0，
-//   selectTargetDialog allowEmptyLand 选入）→ 解析为 special == id 且占用干净的格；
-//   有主/有建筑地块拒绝（原版大菱形拾取覆盖 → 同样不可选）。
+// 傳送機目的地解析（[HELP 94]「須移至空道路/空地」）：
+//   <2000 = 格 id（**原版路径**：occMask 干净即可，含地块格/医院/监狱/事件格 → 落地
+//   触发买地/住院/入狱/事件）；
+//   [USER] 2000..6000 = 无主空地**对象 id**（住宅 owner==0&&level==0 / 商业
+//   owner==0&&sub==0，selectTargetDialog allowEmptyLand 选入；原版大菱形内不可选）→
+//   解析为 special == id 且占用干净的格。
 //   返回格 id；0 = 拒绝。
 int resolveTeleportDest(const GameState& st, int sel) {
     if (sel > 0 && sel < 2000) {

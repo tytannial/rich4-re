@@ -168,7 +168,10 @@ bits 24-31 = 光标 idx-1
   大菱形，形状已按原版帧 0/1/2/3）；
 - `target_select_dialog.cpp`：**回退** 2026-09-27 一度尝试的 `snapNearestCell` 就近
   吸附魔改（用户否决：原版无此机制）；
-- 传送机 [USER] 魔改边界（人物/神明/物品目的地限空道路 `isVacantRoad`）保留；
+- `item_effects.cpp`：**撤销 `isVacantRoad` 的 special 检查**（归一化撤销的连带修正）——
+  原版 `sub_446AE8(0x2090001)` 对格 id 无地块判别（occMask 干净即可，落地触发
+  买地/住院/入狱/事件）；保留无主空地放开（`allowEmptyLand`）与
+  `teleportSourceValid`（源=完全空无主地拒绝）两项 [USER] 魔改；
 - 连带核对：整路段卡 BYTE1 过滤对格 id 一律 false（拒绝）＝原版（只有大菱形内对象 id
   可被 case 5/6/8 判定）；`expireAssets` 不处理格 id＝原版 `sub_409DE7`；AI 经
   `cellIdOfHit`/`objIdAt` 取格与对象不受影响。
