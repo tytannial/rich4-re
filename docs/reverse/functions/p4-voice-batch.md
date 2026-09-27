@@ -37,18 +37,19 @@
 | 神明租金免付 | 0x41D7C1 `sub_44F567`（列12/13/14 意外之财） | ✅ `playWindfallLine`；大財神 `v==0` 时在 showMessage 后播（原金额档） |
 | 新闻/命运收款付款 | 0x449A80 等 / `sub_44CD99`/`sub_44CF1E` / fate 438/459 | ⬜ 归 P4-D |
 
-### D2 移动落地 / 物件 / 神明
+### D2 移动落地 / 物件 / 神明 —— **P4-C ✅ 2026-09-27**
 
-| 重写位置 | 原版 | 缺什么 |
+| 重写位置 | 原版 | 状态 |
 |---|---|---|
-| ~~`turn_system.cpp` case16/17/18~~ ✅ | 0x41BD56 列14 expr1 / 0x41BEFF 列15 expr1 / 0x41C063 列16 expr2 | **P4-A ✅ 2026-09-27**：`kItemTouchLines` + `playLine` expr（炸彈曾误用放置表列3 已修） |
-| `turn_system.cpp:317`（onPhase 注释）恶犬 | case11 无 `sub_44EF41` | 原版咬伤**无台词**（静默）——文档旧描述有误 |
-| `map_objects.cpp:515`（attachEnd） | 穷神/衰神/死神哭台词 | 神明飘走哭台词 |
-| `map_objects.cpp:616` | v>700 大笑 `off_48086A` | 老虎机结果大笑 |
-| `map_objects.cpp:627` | `sub_44F354` 三档 | 大財神超额收款台词 |
-| `map_objects.cpp:641`/`:654` | `sub_44F230` | 老虎机卡片/双卡语音 |
-| `turn_system.cpp:1563`/`:1566`（godBlessUpgrade） | 0x40FA13 `off_480886` / 0x40FA49 `off_48084A` | 福神封顶/祝福台词 |
-| `turn_system.cpp:1628`（土地公）、`:1775`（恶魔） | `sub_44EF41` 大笑 `off_48084A` | 神明事件高兴台词 |
+| case16/17/18 踩中三类 | 0x41BD56 列14 expr1 / 0x41BEFF 列15 expr1 / 0x41C063 列16 expr2 | ✅ P4-A（`kItemTouchLines`） |
+| `attachObject` 全部 case | 小財神 v>700 大笑列8 expr3（0x40ECDE 共享块）/ 大財神 v≥5000×M `sub_44F354` / 福神抽卡·双卡 `sub_44F230` / 穷神·衰神·死神哭列22 expr2（0x40EF44/F00D/F0AC/F17E/F314，原版带 bit15=不刷新视口，重写无位差） | ✅ |
+| `attachEnd` 飘走 | 0x40E659：穷/衰/死神 → 列23 expr2 | ✅ |
+| `godBlessUpgrade` | 0x40FA13 封顶列15 expr0；未封顶 0x40FA49→0x40ECDE 列8 expr3 | ✅（原版未封顶非 off_48084A 随机——勘误） |
+| `checkPlayerActionStatus` | 0x40CA51/0x40CACA/0x40CB4C：坐牢列19 expr2 / 住院列20 expr2 / 冬眠列21 expr1（各 50%，先台词后消息；冬眠会被 sub_44EF41 守卫拦=原版行为） | ✅ |
+| 土地公强占 | 0x40F8AB：off_48084A 列0（= kValueLines 第一列）expr0 | ✅ |
+| 惡犬咬伤 | case11 无 `sub_44EF41` | ✅ 原版即无台词（勘误） |
+| 恶魔 | `landAfterMove` 内无 `sub_44EF41`（唯一 0x40F8AB 属土地公） | ✅ 原版即无台词 |
+| 移动落地哭/笑（onPhase 等） | 无独立调用点（除上述已接） | ✅ 无缺口 |
 
 ### D3 事件 / 卡片 / 道具
 
@@ -78,9 +79,10 @@
    `playWindfallLine`/`playEstateChainSpeech`；接入住宅收租（含同盟分账）、corp 收费、
    升级封顶、连锁吐槽、住宿/入狱/住院/出国、大財神、神明租金免付。
    剩余调用点见 D1 表 ⬜（新闻/命运 → P4-D）。
-3. **P4-C（D2）**：状态提示 `checkPlayerActionStatus`（列19/20/21 台词 50%）、神明哭/笑
-   （`attachObject`/`attachEnd`）、老虎机（`off_48086A`/`sub_44F354`）、`godBlessUpgrade`、
-   土地公/恶魔；恶犬咬伤确认无台词。
+3. **P4-C（D2）✅ 2026-09-27**：`kMoneyLines` 扩至 18 列（+19/20/21 状态、22 神明哭、
+   23 飘走）；`attachObject` 全 case 台词（大笑/收款/抽卡/哭）、`attachEnd` 飘走、
+   `godBlessUpgrade`（封顶列15/未封顶列8）、`checkPlayerActionStatus` 状态台词
+   （坐牢/住院/冬眠 50%）、土地公强占大笑；恶犬/恶魔原版本就无台词。
 4. **P4-D（D3）**：事件/卡片/道具（`off_480856` 新闻、`off_481292` 请神、得點券/卡片格/命运、
    `sub_44F230` 补点、选卡对话框）。
 

@@ -15,10 +15,11 @@ extern const char* const kItemLines[12][13];
 //   同 off_480D5A 表，角色 stride 26）；onPlayerActionPhase case16/17/18 播
 extern const char* const kItemTouchLines[12][3];
 
-// [RE 0x480862..892] 金额/状态台词表（off_48084A 家族 27 列中的 13 列，见生成器注释）：
+// [RE 0x480862..89A] 金额/状态台词表（off_48084A 家族 27 列中的 18 列，见生成器注释）：
 //   0/1/2 收款高/中/低、3/4/5 付款高/中/低、6 住宅满级、7 欠债、
-//   8/9 同路段≥3 连锁吐槽（必播/1/3 概率）、10/11/12 意外之财高/中/低
-extern const char* const kMoneyLines[12][13];
+//   8/9 同路段≥3 连锁吐槽（必播/1/3 概率）、10/11/12 意外之财高/中/低、
+//   13/14/15 状态提示（坐牢/住院/冬眠）、16 神明附身哭、17 神明飘走
+extern const char* const kMoneyLines[12][18];
 
 // [RE 0x48084A] off_48084A 角色价值台词表（12 角色 x 27 列，取列 0..2）
 //   由 tools/gen_item_lines.py 生成（src/app/item_lines.cpp）

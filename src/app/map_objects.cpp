@@ -513,7 +513,7 @@ void showGodNarration(Application& app, const char* text) {
 // [RE 0x40E32C] attachEnd：附身结束（24 帧上升飘走 → 删除 → 配对轮替）
 // 依据: 0x40E32C 反编译; 挂起态（stateFlags≠0）跳过动画静默删除；
 //   动画：物件精灵自玩家位置每帧 y-=10、朝向帧 (f+1)&7、60ms/帧，顶出 40 早停；
-//   音效槽 19（dword_4823E2）；结束后穷神/衰神/死神追加哭台词（sub_44EF41 → [TODO P4]）
+//   音效槽 19（dword_4823E2）；结束后穷神/衰神/死神追加飘走台词（列23 expr2，0x40E659）
 void attachEnd(Application& app, int p) {
     GameState& st = app.gameState();
     if (p < 0 || p >= 9) {
@@ -568,13 +568,20 @@ void attachEnd(Application& app, int p) {
     st.cellTable[off + 3] = static_cast<uint8_t>(savedEnt >> 8);
     // [RE 0x40E14D] 删除 + 配对轮替
     releaseCellTableSlot(app, objId);
+    // [RE 0x40E659] 穷神/衰神/死神飘走台词 off_4808A6（列23、expr2）
+    if (type == 5 || type == 6 || type == 7 || type == 8 || type == 15) {
+        const int ci = st.players[p].charIndex;
+        if (ci >= 0 && ci < 12) {
+            playLine(app, p, kMoneyLines[ci][17], 2);
+        }
+    }
     RICH4_LOGI("attachEnd: player %d god type %u left (RE 0x40E32C)", p, type);
 }
 
 // [RE 0x40EAD7] attachObject：踩中可附身物件 → 旧神飘走、新神挂身（寿命 7/13）、
 //   luckA/B/C += kLuck*、case 即时效果（插图+旁白受设置 byte_497159=settings[1] 控制）
-// 差异: 角色台词/语音 sub_44EF41（哭/笑，off_48086A/862/8A2 表）与卡片语音
-//   sub_44F230（byte_47FDEF 价→语音）为 [TODO P4]；大財神超额台词 sub_44F354 仅选句 → P4
+// 台词（P4-C ✅ 2026-09-27）：小財神 v>700 大笑列8 expr3（0x40ECDE）/ 大財神 v≥5000×M
+//   收款档 / 福神抽卡 sub_44F230 / 穷神·衰神·死神哭列22 expr2（0x40EF44/F00D/F0AC/F17E/F314）
 void attachObject(Application& app, int p, int cellEntId, int objId) {
     GameState& st = app.gameState();
     if (objId == 0 || !canAttachObject(st, objId) || p < 0 || p >= 9) {
@@ -601,6 +608,13 @@ void attachObject(Application& app, int p, int cellEntId, int objId) {
     pl.luckB += kLuckB[type];
     pl.luckC += kLuckC[type];
     const bool voiceOn = st.settings[1] != 0;  // [RE byte_497159]
+    // [RE 0x44EF41] 角色台词公共（kMoneyLines 列索引：2=列8 大笑 / 16=列22 哭）
+    const auto godLine = [&](int colIdx, int expr) {
+        const int ci = pl.charIndex;
+        if (ci >= 0 && ci < 12) {
+            playLine(app, p, kMoneyLines[ci][colIdx], expr);
+        }
+    };
     char text[256];
     switch (type) {
         case 1: {  // 小財神：向所有对手收取（老虎机 4 位）
@@ -614,7 +628,10 @@ void attachObject(Application& app, int p, int cellEntId, int objId) {
                     transferMoney(app, i, p, v, 1);  // 对手→我（现金）
                 }
             }
-            // [TODO P4] v>700 大笑台词 sub_44EF41(p,3,off_48086A[char])
+            // [RE 0x40ECDE] v>700 且无场景切换 → 大笑台词 off_48086A（列8、expr3）
+            if (v > 700 && !st.sceneRequest) {
+                godLine(2, 3);
+            }
             RICH4_LOGI("attach smallRich: %d each from rivals (RE 0x40EAD7 case1)", v);
             break;
         }
@@ -642,7 +659,7 @@ void attachObject(Application& app, int p, int cellEntId, int objId) {
                 std::snprintf(text, sizeof(text), kFmtGodGet, kObjectNames[3],
                               kCardNames[card]);
                 showMessage(app, text, 1500);
-                // [TODO P4] 卡片语音 sub_44F230(currentPlayer, kCardPrices[card])
+                playValueLine(app, p, kCardPrices[card]);  // [RE 0x40EFE2] 卡片语音
             }
             break;
         }
@@ -655,11 +672,12 @@ void attachObject(Application& app, int p, int cellEntId, int objId) {
             const int c2 = drawFreeCard(st, p);
             std::snprintf(text, sizeof(text), kFmtGodGet2, kCardNames[c1], kCardNames[c2]);
             showMessage(app, text, 1500);
-            // [TODO P4] 双卡语音 sub_44F230(两卡价和)
+            // [RE 0x40F088] 双卡语音（两卡价和）
+            playValueLine(app, p, kCardPrices[c1] + kCardPrices[c2]);
             break;
         }
         case 5: {  // 小窮神：付给每个对手（老虎机 3 位）
-            // [TODO P4] 哭台词 sub_44EF41(p,2,off_4808A2[char])
+            godLine(16, 2);  // [RE 0x40EF44] 哭台词 off_4808A2（列22、expr2）
             if (voiceOn) {
                 playEventFlc(app, godFlcRes(5), 0, 40, godFlcSound(5), /*freeze=*/true);
                 showGodNarration(app, kGodNarr[5]);
@@ -673,7 +691,7 @@ void attachObject(Application& app, int p, int cellEntId, int objId) {
             break;
         }
         case 6: {  // 大窮神：付给银行
-            // [TODO P4] 哭台词
+            godLine(16, 2);  // [RE 0x40F00D] 哭台词（列22、expr2）
             if (voiceOn) {
                 playEventFlc(app, godFlcRes(6), 0, 40, godFlcSound(6), /*freeze=*/true);
                 showGodNarration(app, kGodNarr[6]);
@@ -683,7 +701,7 @@ void attachObject(Application& app, int p, int cellEntId, int objId) {
             break;
         }
         case 7: {  // 小衰神：随机丢 1 卡
-            // [TODO P4] 哭台词
+            godLine(16, 2);  // [RE 0x40F0AC] 哭台词（列22、expr2）
             if (voiceOn) {
                 playEventFlc(app, godFlcRes(7), 0, 40, godFlcSound(7), /*freeze=*/true);
                 showGodNarration(app, kGodNarr[7]);
@@ -696,7 +714,7 @@ void attachObject(Application& app, int p, int cellEntId, int objId) {
             break;
         }
         case 8: {  // 大衰神：丢一半卡
-            // [TODO P4] 哭台词
+            godLine(16, 2);  // [RE 0x40F17E] 哭台词（列22、expr2）
             if (voiceOn) {
                 playEventFlc(app, godFlcRes(8), 0, 40, godFlcSound(8), /*freeze=*/true);
                 showGodNarration(app, kGodNarr[8]);
@@ -725,7 +743,7 @@ void attachObject(Application& app, int p, int cellEntId, int objId) {
             }
             break;
         case 15:  // 死神：没收全部道具+卡片（寿命 13 已在上方）
-            // [TODO P4] 哭台词
+            godLine(16, 2);  // [RE 0x40F314] 哭台词（列22、expr2）
             if (voiceOn) {
                 playEventFlc(app, godFlcRes(15), 0, 40, godFlcSound(15), /*freeze=*/true);
                 showGodNarration(app, kGodNarr[15]);

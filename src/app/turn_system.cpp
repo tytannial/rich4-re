@@ -1602,11 +1602,19 @@ void godBlessUpgrade(Application& app, int p, uint16_t cellEntId) {
     }
     app.audio().playEffectSlot(18);  // [RE 0x40F9E1] dword_4823DA 升级音效
     renderGameFrame(app);            // [RE 0x40F9EF] 消息后重绘：加盖后的建筑出场
+    const int ci = st.players[p].charIndex;
     if ((flags & 0x80) != 0) {
-        // [RE 0x40FA13] 封顶台词 off_480886[charIdx*27]：sub_44EF41 [TODO P4]
+        // [RE 0x40FA13] 封顶台词 off_480886（列15、expr0）+ FLC 523
+        if (ci >= 0 && ci < 12) {
+            playLine(app, p, kMoneyLines[ci][6], 0);
+        }
         playEventFlc(app, 523, 0, 40, 90);
+    } else {
+        // [RE 0x40FA49 → 0x40ECDE] 未封顶：大笑台词 off_48086A（列8、expr3）
+        if (ci >= 0 && ci < 12) {
+            playLine(app, p, kMoneyLines[ci][2], 3);
+        }
     }
-    // [RE 0x40FA49] 未封顶：off_48084A[charIdx*27 + (rand&1)] 祝福台词 [TODO P4]
 }
 
 // [RE 0x40FBB8] findDeathGodCarrier：付款人外、存活且附身 idx∈{14,15} 的首位玩家（代付者）。
@@ -1815,7 +1823,10 @@ void landAfterMove(Application& app, int p, uint16_t cellEntId) {
             }
             buildMiniMapMarks(app);  // [RE 0x40F834] rebuildMiniMap(0)
             showMessage(app, "土地公顯靈\n\n強佔土地！", 1500);  // [RE 0x40F878/0x4634F2]
-            // [RE 0x40F8AB] 大笑台词 sub_44EF41(off_48084A 表)：[TODO P4]
+            // [RE 0x40F8AB] 大笑台词（off_48084A 列0 = kValueLines 第一列、expr0）
+            if (st.players[p].charIndex >= 0 && st.players[p].charIndex < 12) {
+                playLine(app, p, kValueLines[st.players[p].charIndex][0], 0);
+            }
             RICH4_LOGI("god land-grab: player %d seizes obj %u (prev owner %u, RE 0x40F381)", p,
                        objId, prevOwner);
             break;
@@ -2883,9 +2894,16 @@ int checkPlayerAction(Application& app, int a1) {
                 } else {
                     // [RE 0x40C912] 状态文本（BIG5 0x4631E0..：%s住宿中/消失中/坐牢中/住院中/
                     //   冬眠中\n\n還剩%d天！；天数 = (编码 & 0x7F/0x3F) + 1）
+                    //   坐牢/住院/冬眠另有 50% 台词（列19/20/21，expr2/2/1；台词先于消息）
                     char text[128] = {};
                     const char* name = st.players[p].name ? st.players[p].name : "";
                     const uint32_t sf = st.players[p].stateFlags;
+                    const int ci = st.players[p].charIndex;
+                    const auto statusLine = [&](int colIdx, int expr) {
+                        if (ci >= 0 && ci < 12 && (std::rand() & 1)) {
+                            playLine(app, p, kMoneyLines[ci][colIdx], expr);
+                        }
+                    };
                     if (sf & 0xFFu) {
                         std::snprintf(text, sizeof(text), "%s住宿中\n\n還剩%d天！", name,
                                       static_cast<int>(sf & 0x7Fu) + 1);
@@ -2895,12 +2913,15 @@ int checkPlayerAction(Application& app, int a1) {
                     } else if ((sf >> 16) & 0xFFu) {
                         std::snprintf(text, sizeof(text), "%s坐牢中\n\n還剩%d天！", name,
                                       static_cast<int>((sf >> 16) & 0x7Fu) + 1);
+                        statusLine(13, 2);  // [RE 0x40CA51] 列19「放我出去」
                     } else if ((sf >> 24) & 0xFFu) {
                         std::snprintf(text, sizeof(text), "%s住院中\n\n還剩%d天！", name,
                                       static_cast<int>((sf >> 24) & 0x7Fu) + 1);
+                        statusLine(14, 2);  // [RE 0x40CACA] 列20「我不要打針」
                     } else if (st.players[p].byte54) {
                         std::snprintf(text, sizeof(text), "%s冬眠中\n\n還剩%d天！", name,
                                       static_cast<int>(st.players[p].byte54 & 0x7Fu) + 1);
+                        statusLine(15, 1);  // [RE 0x40CB4C] 列21（playLine 冬眠守卫会拦，同原版）
                     }
                     if (text[0]) {
                         showMessage(app, text, 1500);
