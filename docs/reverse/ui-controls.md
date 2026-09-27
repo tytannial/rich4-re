@@ -578,7 +578,7 @@ UI 音效与游戏音效槽**是两套**，勿混：
   股票=總市值/成本(playerAvgCost)/經營権家数、其他=點券/貸款/保險期；物价指数
   「物價指數  %d」@ (450,260) font12（全局 `g_moneyMul`，**任何 tab 均显示**，位于页签
   switch 之前；布局 2 玩家条不含此文字；`currentPlayer==8` 機器娃娃虚拟槽时面板/玩家条
-  沿用 `workerPlayer`；精确核对见 `415d31-game-panel.md`「物價指數显示核对」）。
+  沿用槽 8 bailer（`npcSlots[4].bailer` = byte_498E70）；精确核对见 `415d31-game-panel.md`）。
 - **重写位置**：`src/app/query_dialog.cpp` `queryDialog`（工具条 case 6 接入 `game_loop.cpp`）、
   `src/app/game_panel.cpp` `drawPlayerInfoPanel` + `game_loop.cpp` `handleLeftButtonDown`
   页签命中。

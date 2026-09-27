@@ -426,16 +426,25 @@ bool handleDebugKey(Application& app, int code, bool shift) {
                 RICH4_LOGI("debug: Ctrl+Shift+Y cellTable dump done");
                 return true;
             }
-            case 8: { // [NEW] dump 事件槽 NPC（四大恶人）——busy/status/bailer/cell/timers/在押标志
-                for (int i = 0; i < 4; ++i) {
+            case 8: { // [NEW] dump 事件槽记录（四大恶人 4..7 + 槽8 機器娃娃）
+                for (int i = 0; i < 5; ++i) {
                     const NpcSlot80& s = st.npcSlots[i];
-                    RICH4_LOGI("  npcSlot %d(%s): busy=%u status=0x%02X bailer=%u cell=%u prev=%u "
-                               "pixel=(%u,%u) dir=%u timers=%d,%d,%d,%d flags[jail=%u hosp=%u] "
-                               "mirror(cell=%u alive=%u)",
-                               i + 4, kNpcNames[i + 4], s.busy, s.status, s.bailer, s.cell,
-                               s.prevCell, s.pixelX, s.pixelY, s.dir, s.timerA, s.timerB, s.timerC,
-                               s.timerD, st.jailFlags[i + 4], st.hospitalFlags[i + 4],
-                               st.players[i + 4].cellEntId, st.players[i + 4].alive);
+                    const int np = i + 4;
+                    if (np < 8) {
+                        RICH4_LOGI("  npcSlot %d(%s): busy=%u status=0x%02X bailer=%u cell=%u prev=%u "
+                                   "pixel=(%u,%u) dir=%u timers=%d,%d,%d,%d flags[jail=%u hosp=%u] "
+                                   "mirror(cell=%u alive=%u)",
+                                   np, kNpcNames[np], s.busy, s.status, s.bailer, s.cell,
+                                   s.prevCell, s.pixelX, s.pixelY, s.dir, s.timerA, s.timerB,
+                                   s.timerC, s.timerD, st.jailFlags[np], st.hospitalFlags[np],
+                                   st.players[np].cellEntId, st.players[np].alive);
+                    } else {
+                        RICH4_LOGI("  npcSlot 8(娃娃): busy=%u bailer=%u cell=%u prev=%u pixel=(%u,%u) "
+                                   "dir=%u mirror(cell=%u sprite=(%u,%u))",
+                                   s.busy, s.bailer, s.cell, s.prevCell, s.pixelX, s.pixelY, s.dir,
+                                   st.players[8].cellEntId, st.players[8].spriteX,
+                                   st.players[8].spriteY);
+                    }
                 }
                 RICH4_LOGI("debug: Ctrl+Shift+8 npcSlots dump done");
                 return true;

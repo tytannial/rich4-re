@@ -170,7 +170,7 @@ static void npcVillainPhase(Application& app, int p) {
                         st.players[bailer].points =
                             static_cast<uint16_t>(st.players[bailer].points + half);
                         if (st.remainingSteps != 0) { // [RE 0x41C328] 移动中恢复循环音
-                            app.audio().playEffectLooping(st.moveSoundIndex);
+                            app.audio().playEffectSlotLooping(st.moveSoundIndex);
                         }
                     }
                 } else {
@@ -183,7 +183,7 @@ static void npcVillainPhase(Application& app, int p) {
                         showMessage(app, text, 1000);
                         giveCardToBag(st, bailer, card); // [RE 0x41C307 sub_4412E4]
                         if (st.remainingSteps != 0) {
-                            app.audio().playEffectLooping(st.moveSoundIndex);
+                            app.audio().playEffectSlotLooping(st.moveSoundIndex);
                         }
                     }
                 }
@@ -206,7 +206,7 @@ static void npcVillainPhase(Application& app, int p) {
                           playerNameNoSpace(st, bailer).c_str());
             showMessage(app, text, 2000);
             if (st.remainingSteps != 0) { // [RE 0x41C43A]
-                app.audio().playEffectLooping(st.moveSoundIndex);
+                app.audio().playEffectSlotLooping(st.moveSoundIndex);
             }
         }
         return;
@@ -315,11 +315,16 @@ static void npcVillainPhase(Application& app, int p) {
 // 差异: 角色台词/语音 sub_44EF41（哭 off_4808A2/笑 off_48086A/路障等地雷台词 off_480D92..）
 //   与道具/卡片语音 sub_44F230 → [TODO P4]；事件槽 NPC（p≥4：小偷/強盜/流氓/間諜物件分支 +
 //   LABEL_88 恶行 + 抓回）✅ 2026-09-26（见 498df0-event-slot-npc.md §2.6/§2.7/§2.8；
-//   工程车虚拟角色 p==8 拆除卡 0x446AFB 弹飞删除 → [TODO P4]）；
+//   機器娃娃 p==8 沿路踢物件 ✅（0x446AFB 写槽8 + onPhase bounceObject/deleteMapObject）；
 //   乞丐施捨在原版为无条件检查（bankVisit 标志仅影响音效恢复）
 void onPlayerActionPhase(Application& app) {
     GameState& st = app.gameState();
     const int p = st.currentPlayer;
+    // [RE 0x41B43E] 到达（步数尽）统一停移动音（原版函数首行 `if (!g_stepsRemaining)
+    //   audioStopEffect(&g_effectSlots[2*dword_4749D4])`；含事件槽 4..7 与本回合末的娃娃 8）
+    if (st.remainingSteps == 0) {
+        app.audio().stopEffectSlot(st.moveSoundIndex);
+    }
     if (p == 8) {
         // [RE 0x41B42D p==8] 機器娃娃沿路踢除物件：bounceObject(槽, 起始格, 上一格) 弹飞 +
         //   deleteMapObject（0x41B4F1..0x41B531）；无物件格直接返回
@@ -367,7 +372,7 @@ void onPlayerActionPhase(Application& app) {
 
         auto npcRestoreMoveLoop = [&]() { // [RE LABEL_68/LABEL_87] 移动中恢复循环移动音
             if (st.remainingSteps != 0) {
-                app.audio().playEffectLooping(st.moveSoundIndex);
+                app.audio().playEffectSlotLooping(st.moveSoundIndex);
             }
         };
         switch (objType) {
@@ -2540,8 +2545,9 @@ bool moveOneStep(Application& app) {
         // [RE 0x40C05C] 每步开始重载行走资源（原版 sub_40B93B）
         loadWalkResources(st, p);
         // [RE 0x4542CE + 0x48234A] 每步开始播放移动音效（moveSoundIndex 为游戏音效槽 11..15，
-        //   经 dword_48234A 映射到 Effect.mkf）
-        if (st.moveSoundIndex > 0) {
+        //   经 dword_48234A 映射到 Effect.mkf）；槽 8（機器娃娃）由 startPlayerMove 循环播槽 9，
+        //   不在此逐帧重播（原版 0x40DD1F p>=8 播一次循环音）
+        if (st.moveSoundIndex > 0 && p != 8) {
             app.audio().playEffectSlot(st.moveSoundIndex);
         }
         int startX = st.cellEnts[pl.cellEntId].x;
@@ -2599,8 +2605,8 @@ bool moveOneStep(Application& app) {
             pl.dir = static_cast<uint8_t>(facingBetween(st, pl.prevCellEnt, pl.cellEntId));
             updatePlayerCarriedObjects(st, p);
             // [RE 0x40C05C NPC] 同步事件槽记录（原版直接以 word_498E2C/2E 为真源；
-            //   重写以 players 为运动真源，每步回写槽记录供存档/恶行/占位判据读取）
-            if (p >= 4 && p < 8) {
+            //   重写以 players 为运动真源，每步回写槽记录供存档/恶行/占位判据读取；含槽8）
+            if (p >= 4 && p < 9) {
                 NpcSlot80& slot = st.npcSlots[p - 4];
                 slot.prevCell = pl.prevCellEnt;
                 slot.cell = pl.cellEntId;
@@ -2671,8 +2677,8 @@ bool moveOneStep(Application& app) {
             pl.dir = static_cast<uint8_t>(facingBetween(st, pl.prevCellEnt, pl.cellEntId));
         }
         // [RE 0x40C05C NPC] 到达同步槽像素坐标/朝向（原版到达将 g_miscTable80/word_498E2A
-        //   写回本步起点坐标；重写以 players 为真源直接同步到期终坐标，供存档/小地图使用）
-        if (p >= 4 && p < 8) {
+        //   写回本步起点坐标；重写以 players 为真源直接同步到期终坐标，供存档/小地图使用；含槽8）
+        if (p >= 4 && p < 9) {
             NpcSlot80& slot = st.npcSlots[p - 4];
             slot.pixelX = pl.spriteX;
             slot.pixelY = pl.spriteY;
@@ -2685,8 +2691,8 @@ bool moveOneStep(Application& app) {
     st.playerStepY[p] += st.stepDeltaY;
     pl.spriteX = static_cast<uint16_t>(static_cast<int>(st.playerStepX[p]));
     pl.spriteY = static_cast<uint16_t>(static_cast<int>(st.playerStepY[p]));
-    // [RE 0x40C05C NPC] 移动每帧同步槽像素（原版每帧写 g_miscTable80/word_498E2A；供小地图白框）
-    if (p >= 4 && p < 8) {
+    // [RE 0x40C05C NPC] 移动每帧同步槽像素（原版每帧写 g_miscTable80/word_498E2A；供小地图白框；含槽8）
+    if (p >= 4 && p < 9) {
         NpcSlot80& slot = st.npcSlots[p - 4];
         slot.pixelX = pl.spriteX;
         slot.pixelY = pl.spriteY;
@@ -2974,6 +2980,8 @@ void startPlayerMove(Application& app) {
         st.remainingSteps = 9;
         st.playerActionState[p] = 1;
         st.moveSoundIndex = 9;
+        // [RE 0x40DD1F p>=8] `dword_4749D4=9; audioPlayEffect(&g_effectSlots[2*9], 1)`（循环）
+        app.audio().playEffectSlotLooping(9);
     } else {
         const int s = p - 4;
         if (st.npcSlots[s].timerC) {
@@ -3679,12 +3687,13 @@ void nextPlayer(Application& app) {
     st.manualView = false;
     int cur = st.currentPlayer;
 
-    // [RE 0x418EBD] 玩家 8（機器娃娃）特殊分支：恢复原玩家（byte_498E70）+ byte_498E72
-    //   （0→3）+ 面板重绘（sub_415E70(1) 重写逐帧重绘等价）→ 该玩家重开回合
+    // [RE 0x418EBD] 玩家 8（機器娃娃）特殊分支：恢复原玩家（槽8 bailer = byte_498E70）+
+    //   槽8 busy（byte_498E72）0→3 + 面板重绘（sub_415E70(1) 重写逐帧重绘等价）→ 该玩家重开回合
     if (cur == 8) {
-        st.currentPlayer = st.workerPlayer;
-        if (st.workerFlag == 0) {
-            st.workerFlag = 3;
+        NpcSlot80& wslot = st.npcSlots[4];
+        st.currentPlayer = wslot.bailer;
+        if (wslot.busy == 0) {
+            wslot.busy = 3;
         }
         st.playerActionFlags[st.currentPlayer] |= 0x80;
         RICH4_LOGI("worker end: back to player %d (RE 0x418EBD)", st.currentPlayer);
@@ -3757,6 +3766,17 @@ void nextPlayer(Application& app) {
     RICH4_LOGI("next player: %d day=%d (RE 0x418EBD)", cur, dayPassed ? 1 : 0);
 }
 
+// [RE 0x40FAD6] cellFlyPending：46 槽 cellTable +6（g_cellFlyCount）任一非 0 = 弹飞动画未完
+//   （原版返回 1=全 0 播完；case0 对 p==8 检查，未完则 wait 重置 1 继续等）
+static bool cellFlyPending(const GameState& st) {
+    for (int i = 0; i < 46; ++i) {
+        if (st.cellTable[static_cast<size_t>(24 * i) + 6] != 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // [RE 0x40D7C4] updateGameState
 // 依据: 0x40D7C4 反编译; byte_498EA2 状态机:
 //   0 = 收尾倒计时（byte_498EA5）→ sub_418E7F 重算（landingEvent 停留结算）/ 负数则 sub_418EBD
@@ -3794,12 +3814,16 @@ void updateGameState(Application& app) {
                 }
                 const int8_t v3 = st.playerActionWait[p];
                 if ((v3 & 0x7F) == 0) {
-                    if (v3 >= 0) {
-                        calcPlayerWait(app); // 普通玩家 v0=false
-                    } else {
+                    if (v3 < 0) {
                         st.gameStateActive = false;
                         st.playerActionWait[p] = 0;
                         nextPlayer(app);
+                    } else if (p == 8 && cellFlyPending(st)) {
+                        // [RE 0x40D7C4 case0 p==8] 弹飞物件动画未播完（sub_40FAD6()==0）→
+                        //   wait 重置 1 继续等，动画播完才落地结算/交还回合
+                        st.playerActionWait[p] = 1;
+                    } else {
+                        calcPlayerWait(app); // 普通玩家 v0=false
                     }
                 }
             }

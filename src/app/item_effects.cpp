@@ -213,35 +213,47 @@ int useItemCar(Application& app) {
     return 1;
 }
 
-// [RE 0x446AFB] 機器娃娃（id1）：扣道具+台词 → 虚拟槽 8 复制玩家状态（位置/格/资源）→
-//   currentPlayer=8 → startPlayerMove（槽 8 走 9 步，沿路由 onPlayerActionPhase 弹飞踢除
-//   物件）→ 走完 nextPlayer 恢复原玩家继续回合
+// [RE 0x446AFB] 機器娃娃（道具 id1；IDA 名 startDemolishWorker 有误导）：扣道具+台词 →
+//   写**槽 8 记录**（0x498E68/6A=玩家精灵坐标、6C/6E=格、70=bailer=玩家、71=dir、72=busy=0）→
+//   currentPlayer=8 → startPlayerMove（9 步，沿路 onPlayerActionPhase 弹飞踢除物件）→
+//   走完 nextPlayer 恢复原玩家（busy 0→3）。无独立 worker 字段（旧文档/旧实现误设）。
 int useItemWorker(Application& app) {
     GameState& st = app.gameState();
     const int p = st.currentPlayer;
     if (p < 0 || p >= 4 || st.players[p].alive != 1) {
         return 0;
     }
-    takePlayerItem(st, p, 1);  // [RE 0x446B05]
-    playItemLine(app, p, 1);   // [RE 0x44EF41] off_480D5A
+    takePlayerItem(st, p, 1);  // [RE 0x446B05 takePlayerCard(cur,1)]
+    playItemLine(app, p, 1);   // [RE 0x44EF41 off_480D5A 列0「替我除掉障礙物！」]
     const Player& src = st.players[p];
-    st.workerPlayer = static_cast<uint8_t>(p);  // [RE 0x499070] byte_498E70
-    st.workerFlag = 0;                          // [RE 0x498E72]
-    st.workerFromCell = src.cellEntId;          // [RE word_498E6C]
-    st.workerPrevCell = src.prevCellEnt;        // [RE word_498E6E]
+    // [RE 0x446B44..0x446B8E] 槽 8 记录写入（与事件槽 4..7 同构 nibble）
+    NpcSlot80& slot = st.npcSlots[4];
+    slot.pixelX = src.spriteX;       // word_498E68
+    slot.pixelY = src.spriteY;       // word_498E6A
+    slot.cell = src.cellEntId;       // word_498E6C（弹飞 fromCell）
+    slot.prevCell = src.prevCellEnt; // word_498E6E（弹飞 toCell）
+    slot.bailer = static_cast<uint8_t>(p); // byte_498E70（结束恢复该玩家）
+    slot.dir = src.dir;              // byte_498E71
+    slot.busy = 0;                   // byte_498E72（使用中；结束 0→3）
+    slot.status = 0;
+    slot.timerA = 0;
+    slot.timerB = 0;
+    slot.timerC = 0;
+    slot.timerD = 0;
+    // 运行时镜像 players[8]（重写移动/渲染管线载体；原版无玩家 8 结构）
     Player& w = st.players[8];
-    w = src;              // 虚拟槽 = 玩家状态（坐标/格/朝向/角色资源）
+    w = src;              // 坐标/格/朝向/角色
     w.travel = 0;
     w.diceCount = 1;
-    w.alive = 0x80;       // 娃娃标记（非人类/AI 位；渲染/移动用）
+    w.alive = 0x80;       // 娃娃标记（非人类/AI 位）
     w.cellNo = 0;
     w.cellTableIdx = 0;
     w.stateFlags = 0;
     w.byte54 = 0;
     st.currentPlayer = 8;  // [RE 0x446B94]
     loadWalkResources(st, 8);
-    startPlayerMove(app);  // [RE 0x40DD1F] steps=9 state=1
-    RICH4_LOGI("itemWorker: p%d -> slot8 from cell %u (RE 0x446AFB)", p, st.workerFromCell);
+    startPlayerMove(app);  // [RE 0x40DD1F] steps=9 state=1 + 循环音槽9
+    RICH4_LOGI("itemWorker: p%d -> slot8 from cell %u (RE 0x446AFB)", p, slot.cell);
     return 1;
 }
 

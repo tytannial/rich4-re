@@ -185,6 +185,15 @@ st = status & 0x7F
   `bailer==破产者` → `jailPlayer(i+4,0)`；槽 2/3 → `hospitalizePlayer`
 - `cardEffectHibernate 0x4440EA`：对 `busy==0` 的槽 4..7 → `timerB=0`、`timerA=5`（冬眠 5 回合）
 
+### 2.11 槽 8：機器娃娃（道具 id1，`0x446AFB`）—— 同构槽记录
+
+- 使用（`0x446AFB`）：扣道具 id1 + 台词列 0 → **写槽 8 记录**（pixelX/Y=玩家精灵、cell/prev=玩家格、
+  bailer=玩家号、dir、**busy=0**）→ `currentPlayer=8` → `startPlayerMove`（9 步，循环音槽 9）
+- 结束（`nextPlayer 0x418EBD`）：`currentPlayer=槽8 bailer`、`busy 0→3` → 该玩家重开回合
+- 踢物件（`onPhase 0x41B42D`）：`bounceObject(槽, cell, prevCell)` + `deleteMapObject`；
+  收尾 `0x40D7C4 case0` 用 `sub_40FAD6`（46 槽 flyCount 全 0）等弹飞动画播完才交还回合
+- 渲染/资源/音效见 `item-effects.md` §1.6；**旧实现的独立 `worker*` 字段已删除**（单真源 `npcSlots[4]`）
+
 ## 3. 渲染 / 面板
 
 - 地图棋子：`busy==0` 才画（含坐标/槽守卫）；在押立即隐藏（无 FLC/无天数）

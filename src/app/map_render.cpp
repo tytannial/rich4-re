@@ -316,8 +316,9 @@ void renderMap(Application& app, int centerX, int centerY) {
             drawPiece(j);
         }
     }
-    // [RE 0x40829D] 機器娃娃（虚拟槽 8）：currentPlayer==8 期间绘制
-    if (state.currentPlayer == 8) {
+    // [RE 0x40829D] 機器娃娃（虚拟槽 8）：槽记录 busy（0x498E72）==0（使用中）才画；
+    //   结束 nextPlayer 置 3 → 不再绘制（与 currentPlayer==8 窗口等价，改 busy 判据更忠实）
+    if (state.npcSlots[4].busy == 0) {
         drawPiece(8);
     }
 

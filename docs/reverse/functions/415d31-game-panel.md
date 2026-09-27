@@ -66,11 +66,8 @@
     `ui-controls.md` §27）。
   - 事件槽回合（`currentPlayer` 4..7）NPC 面板分支 **✅ 2026-09-26**（原版帧 5 背景 +
     `dword_47ED5A` NPC 名 @(582,40) + bailer 棋子帧 2 @(524,64)；`game_panel.cpp`
-    `drawPlayerInfoPanel` NPC 分支）；`currentPlayer==8` 機器娃娃沿用发起玩家
-    （`byte_498E70`→`workerPlayer`，0x416118/0x4167F4）
-    （重写 `drawPlayerInfoPanel`/`drawPlayerBar` 直接 return）；`currentPlayer==8`
-    （機器娃娃虚拟槽）已还原：面板/玩家条沿用发起玩家 `byte_498E70`（`workerPlayer`，
-    0x416118/0x4167F4）。
+    `drawPlayerInfoPanel` NPC 分支）；`currentPlayer==8` 機器娃娃沿用**槽 8 bailer**
+    （`byte_498E70` = `npcSlots[4].bailer`，0x416118/0x4167F4；旧 `workerPlayer` 字段已并入槽记录）。
   - `sub_416E6D` 小地图已使用 `sub_40A4E1` 叠加标记后的工作副本
     （`dword_48BADC`，见 map_render.cpp `buildMiniMapMarks`）；**每帧重建**以随物件变化更新
     （原版在 22 处变化点调用）；玩家标记帧 6、大地图帧 5 已对齐。
@@ -105,8 +102,8 @@
   `currentPlayer < g_playerCount || currentPlayer == 8` 分支内；**任何 tab 都绘制**（位于
   页签 switch 之前）。布局 2 的玩家条（`drawPlayerInfoPanelSlim` 0x4166F8）**不含**此文字。
 - **`currentPlayer == 8`（機器娃娃虚拟槽）**：原版三个函数均取
-  `byte_498E70`（`workerPlayer`）作为实际玩家——完整面板 0x416118、玩家条 0x4167F4、
-  `nextPlayer` 0x418EDA；重写已还原（`drawPlayerInfoPanel` / `drawPlayerBar`）。
+  `byte_498E70`（**槽 8 记录 bailer = `npcSlots[4].bailer`**）作为实际玩家——完整面板 0x416118、
+  玩家条 0x4167F4、`nextPlayer` 0x418EDA；重写已还原（`drawPlayerInfoPanel` / `drawPlayerBar`）。
 - **刷新时机**：原版由 `dword_475110` 脏区位驱动（bit2 玩家条区 + bit3 小地图区 = `0xC`），
   `sub_4192F7` 局部 blit 后清位；重写逐帧全量重绘，数值每日 `updateMoneyIndex`
   （0x423ACF，`advanceDay` 内）更新后立即生效，无可见差异。
@@ -120,4 +117,4 @@
 物價指數核对（2026-09-25）：设为布局 0/1（设置 → 显示单选，`settings[5]`）后右侧完整面板
 (450,260) 应显示「物價指數  N」；`Ctrl+7` 加现金 / `Ctrl+Shift+D` 过天后数字上升（只升不降）。
 機器娃娃：`Ctrl+Shift+F` 发全道具 → 道具栏使用機器娃娃（虚拟槽 8）期间，布局 0/1 完整面板
-与布局 2 玩家条均应显示**发起玩家**资料（`workerPlayer`），面板不消失、玩家不错位。
+与布局 2 玩家条均应显示**发起玩家**资料（槽 8 bailer），面板不消失、玩家不错位。

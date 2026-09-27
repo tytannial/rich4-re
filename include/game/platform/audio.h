@@ -44,6 +44,9 @@ public:
     // [RE 0x48234A] 播放游戏音效槽（0..23；原版 dword_48234A[2*slot] 映射到 Effect.mkf 索引）
     //   同槽替换（原版单 DirectSound buffer：sub_4542E9 停止 + sub_4542CE 播放）
     bool playEffectSlot(int slot);
+    // [RE 0x4542CE(handle,1)] 槽循环播放（移动音/機器娃娃；同槽替换 + DSBPLAY_LOOPING）——
+    //   stopEffectSlot(slot) 可停（原版 `audioPlayEffect(&g_effectSlots[2*slot], 1)` 语义）
+    bool playEffectSlotLooping(int slot);
     // [RE 0x4542E9] 停止指定音效槽（移动结束等）
     void stopEffectSlot(int slot);
     // [RE byte_49715B] 音效音量 0-4（0 = 静音）

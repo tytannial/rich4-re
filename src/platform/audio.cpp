@@ -411,6 +411,21 @@ void Audio::stopEffectSlot(int slot) {
                  voices.end());
 }
 
+// [RE 0x4542CE(handle,1)] 槽循环播放（移动音/機器娃娃）：
+//   同槽替换 + looping 标记 + slot 归属（stopEffectSlot 可停）
+bool Audio::playEffectSlotLooping(int slot) {
+    if (slot < 0 || slot >= 24) {
+        return false;
+    }
+    stopEffectSlot(slot);
+    if (!playEffect(kEffectSlotIndex[slot])) {
+        return false;
+    }
+    m_impl->voices.back().slot = slot;
+    m_impl->voices.back().looping = true;
+    return true;
+}
+
 // ---- 角色语音（Speaking.mkf；0x45441A/0x4544B9/0x454493）----
 // 原版 dword_47E750 单 DirectSound buffer：sub_45441A 播新语音前先 sub_454493 停旧；
 // 迁移: 单槽声部（slot = kVoiceSlot），update 混音与其他音效同路。

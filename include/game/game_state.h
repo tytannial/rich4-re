@@ -675,12 +675,10 @@ struct GameState {
     // [RE 0x419572 v2] 本次掷骰显示的点数精灵个数（遥控单骰 = 1，否则 = diceCount）——
     //   rollDice 写入、map_render 停留期画点数用（原版 v2 = forced ? 1 : byte_496B7A）
     uint8_t diceShowCount = 1;
-    // [RE 0x498E68..0x498E72] 機器娃娃（虚拟槽 8）状态：原玩家 / 标志（0x498E72）/
-    //   起始格（word_498E6C，弹飞 fromCell）/ 上一格（word_498E6E，弹飞 toCell）
-    uint8_t workerPlayer = 0;        // byte_498E70
-    uint8_t workerFlag = 0;          // byte_498E72（结束若 0 → 3）
-    uint16_t workerFromCell = 0;     // word_498E6C
-    uint16_t workerPrevCell = 0;     // word_498E6E
+
+    // [RE 0x498E68..0x498E77] 機器娃娃（虚拟槽 8）**无独立字段**——使用槽记录 `npcSlots[4]`
+    //   （基址 0x498E68 = 0x498E28+16*4）：pixelX/Y(498E68/6A)、cell(498E6C)、prevCell(498E6E)、
+    //   bailer=发起玩家(498E70)、dir(498E71)、busy(498E72：0=使用中；结束 0→3)；0x446AFB 写入。
 
     // 事件槽（玩家 4..8）专用状态见上方 GameState::npcSlots（[RE 0x498E28] g_miscTable80）。
 

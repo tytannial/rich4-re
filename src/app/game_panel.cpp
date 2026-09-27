@@ -81,7 +81,7 @@ void drawTopBar(Application& app) {
 
 // [RE 0x4166F8] 玩家信息条（布局 2，440,0-640,80；panel.mkf[0] 帧 4 = 200x80）
 // 依据: 0x4166F8 反编译; dword_48BE0C + 60 → 帧 4（+12 主头 + 12*4）；
-//   currentPlayer==8（機器娃娃虚拟槽）→ 沿用发起玩家 byte_498E70（workerPlayer，0x4167F4）
+//   currentPlayer==8（機器娃娃虚拟槽）→ 沿用发起玩家 槽8 bailer＝byte_498E70（0x4167F4）
 void drawPlayerBar(Application& app) {
     GameState& state = app.gameState();
     Surface& dst = app.surface();
@@ -94,8 +94,8 @@ void drawPlayerBar(Application& app) {
     if (v1 >= state.playerCount && v1 != 8) {
         return;
     }
-    // [RE 0x4167F4] 機器娃娃虚拟槽 8：面板沿用发起玩家 byte_498E70（workerPlayer）
-    const int idx = (v1 == 8) ? static_cast<int>(state.workerPlayer) : v1;
+    // [RE 0x4167F4] 機器娃娃虚拟槽 8：面板沿用发起玩家（槽8 bailer = byte_498E70）
+    const int idx = (v1 == 8) ? static_cast<int>(state.npcSlots[4].bailer) : v1;
     if (idx < 0 || idx >= state.playerCount) {
         return;
     }
@@ -137,7 +137,7 @@ void drawPlayerBar(Application& app) {
 //     （"%d天"）+ 貸款剩餘天數 @ (500,146) font12
 // 差异: 事件槽回合（currentPlayer 4..7）NPC 面板分支 ✅ 2026-09-26（帧 5 + kNpcNames + bailer 棋子）；
 //   currentPlayer==8（機器娃娃虚拟槽）
-//   沿用 workerPlayer（byte_498E70，0x416118）；脏区标志 dword_475110&0xC 忽略（逐帧重绘）
+//   沿用发起玩家（槽8 bailer = byte_498E70，0x416118）；脏区标志 dword_475110&0xC 忽略（逐帧重绘）
 void drawPlayerInfoPanel(Application& app) {
     GameState& state = app.gameState();
     Surface& dst = app.surface();
@@ -145,9 +145,9 @@ void drawPlayerInfoPanel(Application& app) {
         return;
     }
     int v1 = state.currentPlayer;
-    // [RE 0x416118] 機器娃娃虚拟槽 8：完整面板沿用发起玩家 byte_498E70（workerPlayer）
+    // [RE 0x416118] 機器娃娃虚拟槽 8：完整面板沿用发起玩家（槽8 bailer = byte_498E70）
     if (v1 == 8) {
-        v1 = static_cast<int>(state.workerPlayer);
+        v1 = static_cast<int>(state.npcSlots[4].bailer);
     }
     // [RE 0x415FF1 else 分支] 事件槽 NPC 回合面板（cur>=playerCount）：背景帧 5
     //   （dword_48BE0C+72 = 12+12*5）+ NPC 名 dword_47ED5A[cur] @(582,40) 22 号 +
@@ -364,9 +364,9 @@ void drawMiniMap(Application& app) {
             markY = v3;
         }
     }
-    // [RE 0x416E6D] 事件槽 4..8：不画标记；仅自由（busy==0，原版 !byte_498DF2）且为当前玩家时
-    //   用 word_498DE8/DEA（槽 pixelX/Y）记录位置供白框
-    for (int j = 4; j < 8; ++j) {
+    // [RE 0x416E6D] 事件槽 4..8（8=機器娃娃）：不画标记；仅自由（busy==0，原版 !byte_498DF2）
+    //   且为当前玩家时用 word_498DE8/DEA（槽 pixelX/Y）记录位置供白框
+    for (int j = 4; j < 9; ++j) {
         if (state.npcSlots[j - 4].busy == 0 && j == state.currentPlayer) {
             markX = ((5696 * static_cast<int>(state.npcSlots[j - 4].pixelX)) >> 16) + 440;
             markY = ((5696 * static_cast<int>(state.npcSlots[j - 4].pixelY)) >> 16) + v1;

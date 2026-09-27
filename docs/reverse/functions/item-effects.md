@@ -202,18 +202,29 @@ return v;
   `rollDice(a1@edx, a2)` 里 `if (a2) { v2=1; dice=[a2]; }`（**单骰**）
 - 流程：模态返回 v0 → `sub_40DD1F()`（开始移动，0x40DD1F）→ takePlayerCard(8) → `byte_475DD8=v0`
 
-### 1.6 機器娃娃 —— 虚拟槽 8
+### 1.6 機器娃娃 —— 虚拟槽 8（✅ 已实现 2026-09-27）
 
-- `startDemolishWorker`（0x446AFB，旧称"拆除卡"实为娃娃）：
-  `takePlayerCard(1)`；台词列 0；保存玩家坐标/cellEntId 到 `word_498E68/6A/6C/6E`、
-  `byte_498E70=玩家号`、`byte_498E71=byte_496B78`、`byte_498E72=0`；`g_currentPlayer=8`；`sub_40DD1F()`
+- `startDemolishWorker`（0x446AFB，IDA 名误称"拆除卡"；实为**道具 id1 機器娃娃**）：
+  `takePlayerCard(cur,1)`；台词列 0；写**槽 8 记录**（与事件槽 4..7 同构，即重写 `npcSlots[4]`）：
+  `word_498E68/6A`=玩家 spriteX/Y→pixelX/Y、`word_498E6C/6E`=玩家 cell/prevCell、
+  `byte_498E70`=玩家号→bailer、`byte_498E71`=byte_496B78→dir、`byte_498E72`=0→busy；
+  `g_currentPlayer=8`；`sub_40DD1F()`
+  - **无独立 worker 字段**：`workerPlayer/workerFlag/workerFromCell/workerPrevCell` 为旧实现分叉，
+    2026-09-27 已并入 `npcSlots[4]`（`busy` 初值 3 来自 `unk_47ECEC`）
 - `startPlayerMove`（0x40DD1F）对 `currentPlayer>=8`：`stepsRemaining=9`、状态 1、
-  `dword_4749D4=9`、音效 `dword_482382[4]`（+16 字节）
-- `endTurn`（0x418EBD）对 8：`g_currentPlayer=byte_498E70`；`byte_498E72` 0→3；
-  `sub_415E70(1)`（恢复玩家精灵状态）
+  `dword_4749D4=9`、**循环播音效槽 9**（`&dword_482382[4]` == `&g_effectSlots[2*9]`，
+  注册 Effect 索引 38 == `kEffectSlotIndex[9]`；重写 `playEffectSlotLooping(9)`）
+- `endTurn`（0x418EBD）对 8：`g_currentPlayer=槽8 bailer`；`槽8 busy` 0→3；
+  `sub_415E70(1)`（恢复玩家精灵状态）；面板/玩家条/小地图白框均用槽 8 的 bailer/pixelX/Y
 - **p==8 到达格处理**（onPlayerActionPhase 0x41B42D）：踩到物件 → `bounceObject`（0x40FAFD
-  设 f32 位置/速度+flyCount 弹飞）+ `deleteMapObject`（重写见 map-object-refresh.md §5）
-- case0 收尾：`sub_40FAD6()`（`g_cellFlyCount[24*i]` 全 0 才继续）
+  设 f32 位置/速度+flyCount 弹飞）+ `deleteMapObject`；无物件直接返回
+- **收尾等待**（0x40D7C4 case0）：`sub_40FAD6()` 遍历 46 槽 `g_cellFlyCount`（cellTable +6）——
+  任一非 0（弹飞动画未完）→ `byte_498EA5=1` 重置继续等；全 0 才 `sub_418E7F` 落地结算
+  （娃娃 `checkPlayerAction(1)=0 → wait=-125`）→ `nextPlayer` 交还回合
+- 移动：`moveOneStep 0x40C05C` 读槽记录 6C/6E（重写每步同步 `npcSlots[4].cell/prev/pixel/dir`）；
+  槽 8 **不占** cellEnt 占用位（v65==4 跳过 `&= / |=`）；速度 `dist×flt_4631DC`（0.125）
+- 渲染：`0x40829D` 循环槽 4..8，`busy==0` 才画；行走资源 `data.mkf[521]（slot0 站/522 slot2 走）`
+  （0x40B93B p>=8 分支：组标志 1 + releaseWalkResources(8,0)）
 
 ### 1.7 时光机 —— 回合快照 `g_playerMapBlocks`
 
@@ -242,7 +253,7 @@ return v;
 7. id9 機器工人（目标选择 + angelUpgrade + FLC553）
 8. id7 飛彈（expireAssets/getObjectPosition/FLC528）
 9. id13 核子飛彈
-10. id1 機器娃娃（槽 8）
+10. ~~id1 機器娃娃（槽 8）~~ ✅ 2026-09-27（见 §1.6）
 11. id11 傳送機
 12. id10 時光機（快照）
 
@@ -251,6 +262,7 @@ return v;
 - [x] 传送机 0x447428 完整流程（0x5AA：选目标 → 目的地 → 分类搬迁 + 快照 + 拾取语义，
   见 §4）；剩 AI 目的地 `sub_420EEE`（P5）与事件槽 4..7（P5）
 - [ ] 时光机快照写入点（回合开始/advanceDay？）
+- [x] 机器娃娃槽 8（0x446AFB：槽记录/9 步/踢物件/收尾 sub_40FAD6 等待/循环音槽 9）✅ 2026-09-27（§1.6）
 - [ ] 工程车 18 步计数与拆除逻辑（行走中的对应代码）
 - [ ] 机器工人 FLC 553 flags（0x2C0001=帧?）与 sub_45144F 参数映射
 - [ ] 高字节条件 BYTE1 case 1..8（当前道具不用；卡片重建可能用）

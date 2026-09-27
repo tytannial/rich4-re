@@ -140,7 +140,10 @@ C = 另一类事件台词（同 `sub_44B896` a3 分支）。**玩家侧收费公
 **事件槽 NPC（4..7）差异（✅ 2026-09-26 已实现，细节 `498df0-event-slot-npc.md` §2.6）**：
 惡犬/地雷对 5/6/7 触发 FLC+住院；路障对 5/6/7 删+停步；**小偷(4)** 踩 禮物/寶箱/路障/地雷/炸彈 →
 删物件 + 给 bailer 对应道具（2/3/4）/＋500 点券；同格行窃/抢银行/勒索见 `LABEL_88`（同文档 §2.7）。
-**currentPlayer==8**（拆除卡虚拟工程车，0x446AFB 设置）：踩到物件 → `bounceObject`（0x40FAFD 弹飞：设 f32 位置/速度+flyCount）+ `deleteMapObject` —— **P4 卡片，TODO**。
+**currentPlayer==8（機器娃娃虚拟槽，0x446AFB 道具 id1 设置）✅ 2026-09-27**：踩到物件 →
+`bounceObject`（0x40FAFD 弹飞：设 f32 位置/速度+flyCount）+ `deleteMapObject`；收尾 case0 等
+弹飞动画播完（`sub_40FAD6` 46 槽 flyCount 全 0）才交还回合。见 `item-effects.md` §1.6。
+（旧标注"拆除卡虚拟工程车"为误名——拆除卡 12=0x443B0F，工程车=道具 12/0x4479D2。）
 
 ## 6. deleteMapObject 细节（0x40E14D）
 
@@ -207,7 +210,7 @@ slot<12 → 配对轮替重建（§2.1）
 - ✅ createMapObject / randomCellEnt / 月度换位（advanceDay）/ cellTableIdx 字段 / 整表存档 / 拾取提示 / 静态帧渲染
 - ❌ deleteMapObject+轮替、attachObject、attachEnd 动画、寿命双入口递减、路过/停留分派（恶犬/礼物/宝箱/路障/地雷/炸弹）、
   8 方向帧、跟随绘制、浮空寿命数字、弹飞、giftPool/propStock/luckABC 字段与存档
-- [TODO P4] 道具放置入口（卡片使用）、拆除卡虚拟工程车（currentPlayer=8）、research 室道具
+- [TODO P4] 道具放置入口（卡片使用）、research 室道具；**機器娃娃槽8 ✅ 2026-09-27**（`item-effects.md` §1.6）
 - [x] **事件槽 NPC 4..7 物件分支 ✅ 2026-09-26**（`498df0-event-slot-npc.md`）；AI 使用三属性决策（sub_41FACC 等）待办
 
 ## 12. 验证方式

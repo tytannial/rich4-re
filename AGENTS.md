@@ -80,7 +80,9 @@ damagePlayer/demolish/givePlayerItem）；`economy.cpp` deleteMapObject **配对
 （0x4634C0/0x463514 IDA 显示 "%s" 实为 "%s顯靈\n\n加蓋一層房屋！/投資失敗！"）+
 `checkCarriedGod` 守卫 helper（五处付费流标 [HELP 41/45/51]）；详见 `map-object-refresh.md` §13。
 道具放置入口（0x446BAA/C88/D69）与 13 道具效果 ✅（2026-09-25，`item_effects.md`）；角色台词
-气泡 ✅（`playItemLine` 0x44EF41）；**事件槽 NPC 四大恶人 ✅ 2026-09-26**（`498df0-event-slot-npc.md`；
+气泡 ✅（`playItemLine` 0x44EF41）；**機器娃娃槽8 并入事件槽模型核证 ✅ 2026-09-27**
+（`item-effects.md` §1.6：0x446AFB 写槽8/9步/踢物件/收尾等 flyCount/循环音槽9）；
+**事件槽 NPC 四大恶人 ✅ 2026-09-26**（`498df0-event-slot-npc.md`；
 剩余 P5：AI 目的地/卡片·道具选 NPC 目标）。
 请神/送神符效果函数 ✅（0x444E1A/0x444C45，`useInviteGodCard`/`useBanishGodCard`，
 调试 `Ctrl+Shift+I/H` 直调）；cellTable 拾取 id 改 0xA100|槽+1 修段重叠。
@@ -314,6 +316,11 @@ python tools/re_map.py
 - **事件槽（玩家 4-7）**：**原版模型 = `busy(0x498E32)==0` 才进槽/绘制/可动**；
   `byte_498DF2[16*p]` 与 `498E32` 是**同一字节**（旧文档误标独立"占用位"）——细节
   `498df0-event-slot-npc.md` §1.1/§2.1。
+- **槽 8（機器娃娃）与事件槽同构**：`0x498E68..E77` = `npcSlots[4]`（bailer=发起玩家=
+  `byte_498E70`、busy=`byte_498E72`、cell/prev/pixel/dir）；`0x446AFB` 写槽8 → 走 9 步踢物件 →
+  `nextPlayer` busy 0→3。**循环移动音 = 槽 9**（`&dword_482382[4]` == `&g_effectSlots[2*9]`，
+  勿用 `playEffectLooping(effectId)`，用 `playEffectSlotLooping(slot)`）；收尾 `sub_40FAD6`
+  等 46 槽 flyCount 清空才交还回合。**勿再建 `workerPlayer` 之类独立字段**（2026-09-27 并入）。
 - **音乐**：取消对话框**不改动**音乐；確定仅在音量 0↔非0 时停/重播（非0 之间只调音量）。
 - **重新开局**：`newGameInit` 需重置 `mapRotation`/骰子/回合/音乐计时器等残留状态。
 - **音效 id 空间**：UI 音效（`g_uiSoundHover/Click/Confirm/Cancel` = Effect.mkf 0/1/2/4）
