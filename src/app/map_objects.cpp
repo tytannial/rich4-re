@@ -1097,7 +1097,7 @@ int pickNearestAttachable(Application& app) {
 
 // [RE 0x444E1A] useInviteGodCard：请神符（卡 id 23）
 // 依据: 0x444E1A 反编译; 人类选择走 0x444D1A（AI → sub_41E6F2 [TODO P5]）；
-//   选中 → cardBagRemove(cur,23) 丢卡 → 台词（off_481292 → [TODO P4]）→
+//   选中 → cardBagRemove(cur,23) 丢卡 → 台词（卡片表槽22，0x444E7A）→
 //   flyObjectSprite（神明格 → 玩家屏幕位置，无停留）→ attachObject 附身（走完整效果）
 // 差异: 无候选时原版静默返回（不丢卡）
 bool useInviteGodCard(Application& app) {
@@ -1116,8 +1116,9 @@ bool useInviteGodCard(Application& app) {
     const uint16_t ent =
         static_cast<uint16_t>(st.cellTable[off + 2] | (st.cellTable[off + 3] << 8));
     cardBagRemove(st, p, 23);  // [RE 0x444E52 0x441343(cur,23)]
-    playCardLine(app, p, 22);  // [RE 0x444E7x 使用者台词 请神]
-    // [TODO P4] 请神台词 sub_44EF41(p, 0, off_481292[27? stride 90 * charIndex])
+    // [RE 0x444E7A] 请神台词 = off_481292 + 360*char = 卡片表槽 22（playCardLine 即该表，
+    //   旧注释"另表未接"系误判；off_481292 = off_48123A + 22*4）
+    playCardLine(app, p, 22);
     // 时序（用户核对后的修正）：原版 0x444E1A 为"新神飞行 → attach（内部才送走旧神）"，
     //   飞行期间旧神仍挂身、其后的 attachEnd 飘走期间新神贴图已还原大地图；
     //   重写改为 **先送走旧神（attachEnd 飘走 + 轮替）→ 新神再飞身靠近 → 附身**。

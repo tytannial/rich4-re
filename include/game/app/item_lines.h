@@ -15,11 +15,13 @@ extern const char* const kItemLines[12][13];
 //   同 off_480D5A 表，角色 stride 26）；onPlayerActionPhase case16/17/18 播
 extern const char* const kItemTouchLines[12][3];
 
-// [RE 0x480862..89A] 金额/状态台词表（off_48084A 家族 27 列中的 18 列，见生成器注释）：
+// [RE 0x48084A..8B2] 金额/状态台词表（off_48084A 家族 27 列中的 24 列，见生成器注释）：
 //   0/1/2 收款高/中/低、3/4/5 付款高/中/低、6 住宅满级、7 欠债、
 //   8/9 同路段≥3 连锁吐槽（必播/1/3 概率）、10/11/12 意外之财高/中/低、
-//   13/14/15 状态提示（坐牢/住院/冬眠）、16 神明附身哭、17 神明飘走
-extern const char* const kMoneyLines[12][18];
+//   13/14/15 状态提示（坐牢/住院/冬眠）、16 神明附身哭、17 神明飘走、
+//   18/19/20 倒霉档（住宿/入狱/住院天数 + 新闻业主 3/4 随机）、
+//   21 终局胜利大笑、22 淘汰认输、23 失败鼓励（defeatFlow）
+extern const char* const kMoneyLines[12][24];
 
 // [RE 0x48084A] off_48084A 角色价值台词表（12 角色 x 27 列，取列 0..2）
 //   由 tools/gen_item_lines.py 生成（src/app/item_lines.cpp）
@@ -53,10 +55,15 @@ void playPayerLine(Application& app, int player, int32_t amount);
 bool playDebtorLine(Application& app, int player, int creditor, int32_t amount);
 
 // [RE 0x44F2C2] playStatusDaysLine：状态天数台词（expr2；住宿/入狱/住院/出国共用）——
-//   days>6 列3；4..6 列3/4 随机；1..3 列5；0 无
+//   days>6 倒霉列3；4..6 列3/4 随机；1..3 列5「死不了人」；0 无
 void playStatusDaysLine(Application& app, int player, int days);
 
-// [RE 0x44F567] playWindfallLine：意外之财台词（expr3；大財神附身免付时播）——
+// [RE 0x44EF41 off_480856] playUnluckyLine：倒霉台词（expr2；灾害/拆屋/载具损毁/没收）——
+//   random=true 列3/4 随机（0x4494CD/0x44BF9F 业主/房主），false 列3 固定
+//   （0x44CB30/0x44CC36 载具损毁、0x44D777 没收）
+void playUnluckyLine(Application& app, int player, bool random);
+
+// [RE 0x44F567] playWindfallLine：意外之财台词（expr3；大財神附身免付/命运逃过罚款时播）——
 //   >=9000M 列12；5000..9000M 列12/13 随机；0<金额<5000M 列14；<=0 无
 void playWindfallLine(Application& app, int player, int32_t amount);
 

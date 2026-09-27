@@ -313,8 +313,8 @@ static void npcVillainPhase(Application& app, int p) {
 //   步行=咬伤 FLC532+住院3、有车=碾过 FLC552 无事）、禮物13（0x41B8A2 drawGiftCard 道具）、
 //   寶箱14（0x41B960 删+500点券）、路障16（0x41BAF9 路过删+强制停止）、
 //   地雷17（0x41BB0A 停留删+炸+住院3）、炸彈18（0x41BC2B 停留无挂件→挂身 life38）
-// 差异: 角色台词/语音 sub_44EF41（哭 off_4808A2/笑 off_48086A/路障等地雷台词 off_480D92..）
-//   与道具/卡片语音 sub_44F230 → [TODO P4]；事件槽 NPC（p≥4：小偷/強盜/流氓/間諜物件分支 +
+// 台词（P4-A/C ✅）：路障/地雷/炸彈踩中（kItemTouchLines 列14/15/16）、神明哭/笑
+//   （kMoneyLines 列22/8）、抽卡 sub_44F230（playValueLine）；事件槽 NPC（p≥4：小偷/強盜/流氓/間諜物件分支 +
 //   LABEL_88 恶行 + 抓回）✅ 2026-09-26（见 498df0-event-slot-npc.md §2.6/§2.7/§2.8；
 //   機器娃娃 p==8 沿路踢物件 ✅（0x446AFB 写槽8 + onPhase bounceObject/deleteMapObject）；
 //   乞丐施捨在原版为无条件检查（bankVisit 标志仅影响音效恢复）
@@ -1675,8 +1675,8 @@ int resolveFeePayer(Application& app, int payer, int32_t fee, const char* feeNam
 //     [RE 0x40F61B] → FLC 526 @ 建筑屏幕坐标−(55,55) 音效 95 [RE 0x40F636]；
 //   12 土地公 → estate/corp 占为本有：owner==自己 → 无动作 [RE 0x40F6B4]；他人地记债
 //     M×(estate+28/corp+34)×(level+2.0)/5.0（flt_46350C=2.0/flt_463510=5.0）；原无主且
-//     cfgLandPerm → 到期日 [RE 0x40F7F2]；owner=我+1 + 小地图 + 消息(0x4634F2)，
-//     大笑台词 sub_44EF41 [TODO P4]；
+//     cfgLandPerm → 到期日 [RE 0x40F7F2]；owner=我+1 + 小地图 + 消息(0x4634F2)
+//     + 大笑台词（0x40F8AB 价值列0 = kValueLines 首列，P4-C）；
 //   其余附身值（含 3/4 福神=在付费升级路径 godBlessUpgrade）无持续动作。
 // 差异: 另一调用点 sub_418EBD（回合尾、alive&0x30 临时载具分支）依赖载具计时系统 [TODO]；
 //       原版开头的 refreshGameUi(视口同步) 省略（重写逐帧重绘）
@@ -1840,7 +1840,8 @@ void landAfterMove(Application& app, int p, uint16_t cellEntId) {
 //   → angelUpgrade（times 次；第 1 次封顶则不再追加）→ FLC 553 施工（switchFrame=44
 //   全量重绘时显示结果）→ 封顶播 FLC 523。返回第 1 次 flags（bit7=封顶）。
 //   拥有者停留：times=2（0x41AAE8 + 0x41AAFC 两次）；他人收费：times=1（0x41AD7E）后按地价收费
-int realtyPickUpgrade(Application& app, int sel, int times) {
+//   ownerPath=true（拥有者）封顶时另有台词（0x41AB2F 列15 expr0，FLC 523 前）
+int realtyPickUpgrade(Application& app, int sel, int times, bool ownerPath) {
     GameState& st = app.gameState();
     int tx = 0;
     int ty = 0;
@@ -1864,7 +1865,13 @@ int realtyPickUpgrade(Application& app, int sel, int times) {
     app.renderFrame();
     playEventFlc(app, 553, 0, 40, 91, false, 44);  // [RE 0x45144F flags 0x2C0001 音效 91]
     if ((flags & 0x80) != 0) {
-        // [RE playGodBuildFlc] 封顶 FLC 523（拥有者路径另有台词 0x41AB2F [TODO P4]）
+        // [RE 0x41AB2F] 拥有者路径封顶台词（列15 expr0）+ playGodBuildFlc FLC 523
+        if (ownerPath && st.currentPlayer >= 0 && st.currentPlayer < 4) {
+            const int ci = st.players[st.currentPlayer].charIndex;
+            if (ci >= 0 && ci < 12) {
+                playLine(app, st.currentPlayer, kMoneyLines[ci][6], 0);
+            }
+        }
         playEventFlc(app, 523, 0, 40, 90, false, 0);
     }
     st.manualView = false;  // [RE sub_41D546] 视口复位
@@ -1911,11 +1918,12 @@ static void labDevelopAfterLanding(Application& app, int p, uint16_t objId) {
 //       （0x41D709 付款方神明调整，作用于双方总额）→ showMessage → transferMoney(flags=0
 //       收款入银行)
 //   事件格 case 10/11/12 得點券（0x41B184/0x41B21E/0x41B2A3）：data.mkf[537] FLC（阻塞）+
-//     showMessage("得點券ＮＮ點") + 点券 50/30/10；角色语音 sub_44EF41 待 P4（case 12 原版无）
+//     showMessage("得點券ＮＮ點") + 点券 50/30/10；case10 列0/1 随机、case11 列2
+//     （kValueLines expr0，0x41B211；case 12 原版无）
 //   事件格 case 13 卡片（0x41B302）：data.mkf[536] FLC + drawFreeCard（0x441E12 赠卡池抽卡，
-//     满 15 舍弃最低价，见 cardBag* 辅助）+ showCardGet（0x441F73 卡片图/提示框/1500ms）；
-//     卡片获得语音 sub_44F230 待 P4
-// 差异: 收租角色台词（付款方 sub_44F4ED/sub_44F42D、收款方 sub_44F354）待 P4
+//     满 15 舍弃最低价，见 cardBag* 辅助）+ showCardGet（0x441F73 卡片图/提示框/1500ms）
+//     + 卡片价值语音（0x41B38C playValueLine(卡价)）
+// 台词（P4-B ✅）：收租付款方 sub_44F4ED/sub_44F42D、收款方 sub_44F354（同盟分账仅地主份额）
 int landingEvent(Application& app, uint16_t cellEntId) {
     GameState& st = app.gameState();
     const int p = st.currentPlayer;
@@ -1978,7 +1986,13 @@ int landingEvent(Application& app, uint16_t cellEntId) {
         playEventFlc(app, 537, 0xCC, 0xB4, 98);
         showMessage(app, kText[i], 1000); // [RE 0x41B1BE] 3E8 = 1000ms
         st.players[p].points = static_cast<uint16_t>(st.players[p].points + kPoints[i]);
-        // [RE 0x41B211] sub_44EF41(player, 0, 语音)：P4 语音系统接入；case 12 无语音
+        // [RE 0x41B211] 角色语音（expr0）：case10 列0/1 随机、case11 列2；case12 原版无
+        if (i < 2 && p < 4) {
+            const int ci = st.players[p].charIndex;
+            if (ci >= 0 && ci < 12) {
+                playLine(app, p, kValueLines[ci][(i == 0) ? (std::rand() & 1) : 2], 0);
+            }
+        }
         RICH4_LOGI("landingEvent: cellType %u 得點券 +%d (total %u) RE 0x41982D case %u", cellType,
                    kPoints[i], st.players[p].points, cellType);
         return 0x80;
@@ -2006,7 +2020,8 @@ int landingEvent(Application& app, uint16_t cellEntId) {
         char text[64];
         std::snprintf(text, sizeof(text), "得到%s！", kCardNames[cardId]); // [RE 0x463AA8]
         showCardGet(app, cardId, text);                                    // [RE 0x441F73]
-        // [RE 0x44F230] 卡片获得语音 byte_47FDEF[cardId*8]：P4 语音系统
+        // [RE 0x41B38C] 卡片获得语音（sub_44F230，卡价 byte_47FDEF[8*card] = kCardPrices）
+        playValueLine(app, p, kCardPrices[cardId]);
         RICH4_LOGI("landingEvent: card cell -> %s (RE 0x41982D case 13)", text);
         return 0x80;
     }
@@ -2121,7 +2136,7 @@ int landingEvent(Application& app, uint16_t cellEntId) {
             //   → 音效槽 18（dword_4823DA）；level==5 → 角色语音（sub_44EF41 索引 0）
             //   → 否则 estateChainSpeech(name, 1)（1/3 概率感想，P4）
             // 差异: 原版询问文本 sprintf("%s\n\n", name)（无费用），重写补费用行便于阅读；
-            //       角色语音/吐槽（P4）、showMessage 提示待接入
+            //       台词（P4-B ✅）：封顶列15 expr0 / 升级连锁吐槽 estateChainSpeech(name,1)
             if (es.level >= 5 || es.type != 0 || pl.state37 != 0) {
                 goto landingTail;
             }
@@ -2176,8 +2191,8 @@ int landingEvent(Application& app, uint16_t cellEntId) {
             //   【同盟分账】v8 += v134、v132 = v134/v8 → sub_41D709 付款方神明调整（作用于
             //   双方总额）→ showMessage（同盟时 0x46399A「屬%s與%s」）→ 按 v132 拆分
             //   sub_41D2C6 转账（flags=0 收款入银行）→ estate+44 = 本次租金
-            // 差异: 收租角色台词（付款方 sub_44F4ED/sub_44F42D、收款方 sub_44F354；
-            //       sub_44F354 实为按金额档选句的台词表，非浮动数字）待 P4
+            // 台词（P4-B ✅ 2026-09-27）：付款方 sub_44F4ED（欠债优先）/sub_44F42D、
+            //   收款方 sub_44F354（按金额档选句的台词表，非浮动数字；同盟=地主份额）
             app.audio().playEffectSlot(20);
             static const char kFeeName[] = "過路費"; // [RE 0x47517C] off_47517C 初值
             if (ownerCanCollectRent(app, es.owner - 1, es.flag, kFeeName)) {
@@ -2395,7 +2410,11 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                 ++cp.sub;                       // [RE 0x41A35D]
                 app.audio().playEffectSlot(18); // [RE 0x4823DA]
                 if (cp.sub == 5) {
-                    // [RE 0x41A365 → 0x4199F1] 封顶台词（[TODO P4]）+ 施工 FLC 523
+                    // [RE 0x41A365 → 0x4199F1] 封顶台词（列15 expr0）+ 施工 FLC 523
+                    const int ci = pl.charIndex;
+                    if (ci >= 0 && ci < 12) {
+                        playLine(app, p, kMoneyLines[ci][6], 0);
+                    }
                     playEventFlc(app, 523, 0, 40, 90);
                 } else {
                     // [RE 0x41A36B → 0x419A39] 福神免费追加
@@ -2541,6 +2560,11 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                     airlineDays = roulettePrompt(app, 0, spName.c_str());
                     if (airlineDays == 0) {
                         showMessage(app, "不用出國！", 1500); // [RE 0x463A5F]
+                        // [RE 0x41AC1F] 免出国台词（off_480852 列2、expr1）
+                        const int ci = st.players[p].charIndex;
+                        if (ci >= 0 && ci < 12) {
+                            playLine(app, p, kValueLines[ci][2], 1);
+                        }
                         goto landingTail;
                     }
                     fee = sp.feeBase * airlineDays * st.moneyMul;
@@ -2570,7 +2594,7 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                         sel = 0;  // [RE 0x40B455] AI 预选（P5）
                     }
                     if (sel != 0) {
-                        realtyPickUpgrade(app, sel, 1);  // [RE 0x41AD7E] 加盖 1 层 + FLC553
+                        realtyPickUpgrade(app, sel, 1, false);  // [RE 0x41AD7E] 加盖 1 层 + FLC553
                         if (sel > 2000 && sel < 4000) {
                             const int ei = sel - 2000;
                             fee = (ei > 0 && ei < static_cast<int>(st.estates.size()))
@@ -2603,6 +2627,10 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                         // [RE 0x41AF20/0x41AF75/0x41AF99] 免费卡/嫁祸卡/死神代付
                         const int payer = resolveFeePayer(app, p, fee, feeName);
                         if (payer >= 0) {  // -1 = 免費卡抵用免付
+                            // [RE 0x41B006] 付款人=本人 → 付款台词（金额档 expr2；公库无收款台词）
+                            if (payer == p) {
+                                playPayerLine(app, p, fee);
+                            }
                             transferMoney(app, payer, objId - 5900, fee, 0); // 收款入公库
                         }
                         // [RE 0x41B05A] 航空付款后：付款人出國 airlineDays 天（免费卡免付时
@@ -2643,7 +2671,7 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                     }
                     if (sel != 0) {
                         // [RE 0x41AAE8 + 0x41AAFC] 免费加盖两次（第 1 次封顶则一次）
-                        const int flags = realtyPickUpgrade(app, sel, 2);
+                        const int flags = realtyPickUpgrade(app, sel, 2, true);
                         RICH4_LOGI("specPt realty: p%d upgrade obj %d flags %d (RE 0x41AA3C)", p,
                                    sel, flags);
                     }

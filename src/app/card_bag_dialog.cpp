@@ -266,7 +266,7 @@ int cardRebuildEffect(Application& app) {
         RICH4_LOGI("cardRebuild: corp[%d] type -> %u sub %u (RE 0x44309B)", i, cp.type, cp.sub);
         return 1;
     }
-    return 0;  // [TODO P4] 台词 sub_44EF41
+    return 0;  // 无目标：原版 sub_4420D5（选卡对话框）为空函数（0x44EF41 全 xref 核实，无台词）
 }
 
 // [RE 0x441BAA] useCardFlow

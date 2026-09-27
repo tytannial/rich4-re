@@ -140,14 +140,15 @@ owner 停留 type4 逐级解锁选 1（`corp.sub` 门槛**灰度**）→ `resear
 - ~~事件槽 NPC（玩家 4-7）~~ ✅ **2026-09-26 全链实现**（`498df0-event-slot-npc.md`：
   开局关押 busy=1/1/2/2 → 保释行走 → `LABEL_88` 恶行 → 同类建筑抓回；物件分支/回合联动/
   渲染面板/存档；调试 `Ctrl+Shift+8/9`）
-- **P4 语音专项（进行中）**：清单 → `docs/reverse/functions/p4-voice-batch.md`
-  （**P4-A ✅**：路障/地雷/炸彈踩中台词 `kItemTouchLines` + `playLine` 表情帧 expr
-  （原版 a2 → 帧 a2+1，全调用链透传）；**P4-B/D1 ✅**：`kMoneyLines` 金额/状态台词 +
-  收款/付款/欠债/状态天数/连锁吐槽/意外之财六函数，接入收租（同盟分账）/corp 收费/封顶/
-  住宿/入狱/住院/出国/大財神/神明免付；**P4-C/D2 ✅ 2026-09-27**：`attachObject` 全 case
-  （大笑/收款/抽卡/哭 列22）+ `attachEnd` 飘走（列23）+ `godBlessUpgrade` + 状态提示台词
-  （坐牢/住院/冬眠 列19/20/21）+ 土地公大笑；**注意 expr 不是表选择器**——详情见专项 §1；
-  下一步 D3 事件/卡片/道具）
+- **P4 语音专项 ✅ 全部完成（2026-09-27）**：清单 → `docs/reverse/functions/p4-voice-batch.md`
+  （**P4-A** 踩中台词+`playLine` 表情帧 expr；**P4-B/D1** `kMoneyLines` 金额/状态台词 +
+  收款/付款/欠债/状态天数/连锁/意外之财六函数（收租/同盟分账/corp/封顶/连锁/住宿入狱住院出国/
+  大財神/神明免付）；**P4-C/D2** `attachObject` 全 case（哭 列22）+ `attachEnd` 飘走 +
+  `godBlessUpgrade` + 状态提示（列19/20/21）+ 土地公大笑；**P4-D/D3** `playUnluckyLine`
+  （灾害/拆屋/载具/没收 列3/4/5）+ 得點券（kValueLines）+ 卡片格 + 命运收付款 + 新闻业主 ×4 +
+  淘汰/终局胜利；勘误：选卡·道具栏=空函数、请神符=卡片表槽22 已播；**修正 playStatusDaysLine
+  列映射 bug**（原误用付款列9/10/11 → 倒霉列3/4/5）；checkVictory/defeatFlow 留 M3；
+  **注意 expr 不是表选择器**——详情见专项 §1）
 
 ## 目录结构
 

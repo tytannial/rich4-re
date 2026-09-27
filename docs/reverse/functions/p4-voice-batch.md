@@ -51,23 +51,31 @@
 | 恶魔 | `landAfterMove` 内无 `sub_44EF41`（唯一 0x40F8AB 属土地公） | ✅ 原版即无台词 |
 | 移动落地哭/笑（onPhase 等） | 无独立调用点（除上述已接） | ✅ 无缺口 |
 
-### D3 事件 / 卡片 / 道具
+### D3 事件 / 卡片 / 道具 —— **P4-D ✅ 2026-09-27**
 
-| 重写位置 | 原版 | 缺什么 |
+| 重写位置 | 原版 | 状态 |
 |---|---|---|
-| `turn_system.cpp:1927` | 0x41B211 `sub_44EF41(player,0,…)` | 得點券 case 10/11 语音（case 12 原版无） |
-| `turn_system.cpp:1946` | 0x41B302 段 | 卡片格获得语音 `sub_44F230` |
-| `card_bag_dialog.cpp:269` | 0x4420D5 | 选卡对话框台词 |
-| `map_objects.cpp:1060` | 0x444E7x `off_481292` | 请神符台词（`playCardLine` 槽 22 已播，另表未接） |
-| `fate_event.cpp:438`/`:459`/`:585`/`:662` | `sub_44F42D`/`sub_44F354`/收到卡/面板 | 命运事件台词 |
-| `news_dialog.cpp:198`/`:300`/`:378`/`:428` | `off_480856` | 新闻业主倒霉台词 |
-| `news_dialog.cpp:473` | `sub_44F354` | 新闻入账收款台词 |
-| `441baa-inventory-panels.md:136` | 0x4420D5 | 道具栏台词 |
+| 得點券 case10/11（0x41B184/0x41B21E） | case10 `off_48084A 列0/1 随机`、case11 列2（= kValueLines）expr0 | ✅；case12(+10) 原版无 |
+| 卡片格 case13 | 0x41B38C `playValueLine(卡价)` | ✅ |
+| 选卡/道具栏对话框 | **`sub_4420D5` = 空函数** | ✅ 勘误（原版无台词；旧 TODO 误标） |
+| 请神符 | 0x444E7A = `off_481292 + 360*char` = **卡片表槽 22** | ✅ `playCardLine(22)`（"另表未接"系误判） |
+| 命运 逃过罚款 | 0x44CE7E `sub_44F567`（原额档） | ✅ `playWindfallLine` |
+| 命运 加倍付款 | 0x44CEF9 `sub_44F42D` | ✅ `playPayerLine` |
+| 命运 收款/卖股 | 0x44D334 `sub_44F354`、0x44D028 `sub_44F567` | ✅ `playCollectorLine`/`playWindfallLine` |
+| 命运 拆屋/载具/没收 | 0x44BF9F 列3/4、0x44CB30/CC36 列3、0x44D777 列3（expr2） | ✅ `playUnluckyLine` |
+| 命运 偷卡/面板 | 无 `sub_44EF41` xref | ✅ 勘误（原版无台词） |
+| 新闻业主 ×4（怪獸/瓦斯/洪水/龍捲風） | 0x4494CD/44A5C3/44AB0F/44AE7F 列3/4 expr2 | ✅ 有主才播 |
+| 新闻奖励入账 idx8/9/10 | 0x449A80 `sub_44F354` | ✅ |
+| 淘汰认输 | 0x40D237 列25 expr2（sub_41906A(1) 后、FLC555 前） | ✅ `eliminatePlayer` |
+| 终局胜利大笑（仅剩1人） | 0x40D060 列24 expr3 | ✅ `eliminatePlayer` |
+| checkVictory 0x41D947 / defeatFlow 0x407956 | 列24 expr3 / 列26 expr3+bit15 | ⬜ 留 M3（场景未实现；表已备） |
 
 ### 其他
 
 - 小游戏 AI/动画分支台词：`minigame_dialog.cpp:1368`/`:1394`（`off_48084A` 笑，AI/恶人分支，当前有意保留）。
-- 状态文本语音：`turn_system.cpp:2790`（`sub_44808A` 等，M2 接入备注）。
+- 状态文本语音：✅ P4-C（`checkPlayerAction` 消息 + 50% 台词列19/20/21）。
+- **P4 专项至此全部完成**；`sub_44EF41` 112 处 xref 中除 M3 场景（checkVictory/defeatFlow）
+  与节日音乐等外均已核对归属。
 
 ## 3. 实现批次（已定序 A→B→C→D）
 
@@ -83,8 +91,12 @@
    23 飘走）；`attachObject` 全 case 台词（大笑/收款/抽卡/哭）、`attachEnd` 飘走、
    `godBlessUpgrade`（封顶列15/未封顶列8）、`checkPlayerActionStatus` 状态台词
    （坐牢/住院/冬眠 50%）、土地公强占大笑；恶犬/恶魔原版本就无台词。
-4. **P4-D（D3）**：事件/卡片/道具（`off_480856` 新闻、`off_481292` 请神、得點券/卡片格/命运、
-   `sub_44F230` 补点、选卡对话框）。
+4. **P4-D（D3）✅ 2026-09-27**：`kMoneyLines` 扩至 24 列（+18/19/20 倒霉列3/4/5、
+   21/22/23 胜利/淘汰/失败列24/25/26）+ `playUnluckyLine`；得點券（kValueLines）、卡片格、
+   命运（逃过/加倍/收款/拆屋/载具/没收/卖股）、新闻业主 ×4、奖励入账 ×3、淘汰/终局胜利；
+   勘误：选卡·道具栏（sub_4420D5 空函数）、请神符（= 卡片表槽22 已播）、命运偷卡无台词；
+   **修正 P4-C bug**：`playStatusDaysLine` 原误用付款列9/10/11 → 倒霉列3/4/5。
+   checkVictory/defeatFlow 台词留 M3。**P4 专项至此全部完成。**
 
 每批：Python 提取表（cp950 → UTF-8）→ 落在 `item_lines.cpp`/`card_lines.cpp` 同款表文件 →
 调用点接入（补 expr 参数）→ 实机核对（气泡头像表情 + 语音编号）。

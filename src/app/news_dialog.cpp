@@ -6,7 +6,8 @@
 //   440×480，用帧 0）+ data.mkf[441+idx] 插画（388×251 RGB555 @25,44）+ 标题 @(24,8) →
 //   效果函数(0) → 全屏 blt → 阻塞 2400ms → 效果函数(1) → 释放。
 // 重写：单 Surface 事件驱动，进入时绘制一次；runModal 每 tick renderFrame 呈现。
-// 差异: 语音 sub_44EF41 / 浮动数字 sub_44F354 → TODO(P4)；idx 7 拍卖 ✅ 2026-09-26
+// 差异: 语音（P4-D ✅ 2026-09-27）：业主倒霉台词 ×4（0x4494CD/44A5C3/44AB0F/44AE7F）+
+//   奖励收款 sub_44F354（0x449A80）；其余收付款走命运共用函数；idx 7 拍卖 ✅ 2026-09-26
 //   （auction_dialog.cpp runAuction 0x43BDE5，价款入公库）。
 
 #include "game/app/news_dialog.h"
@@ -25,6 +26,7 @@
 #include "game/app/event_common.h"
 #include "game/app/event_stack.h"
 #include "game/app/game_loop.h"
+#include "game/app/item_lines.h"
 #include "game/app/map_objects.h"
 #include "game/app/map_tables.h"
 #include "game/app/stock_system.h"
@@ -195,7 +197,9 @@ void evt05_monsterDestroy(NewsCtx& ctx, int phase) {
     focusObjId(app, ctx.targetObjId, x, y);
     demolishAtObjId(app, ctx.targetObjId, 1); // [RE 0x44944F]
     playEventFlc(app, 539, 0, 40, 84, false, 0x20); // [RE 0x44947D flags 0x200001]
-    // [TODO P4] 业主台词 sub_44EF41(targetParam-1, 2, off_480856[char*27+(rand&1)])
+    if (ctx.targetParam != 0) {  // [RE 0x4494CD] 业主倒霉台词（列3/4 随机，expr2）
+        playUnluckyLine(app, ctx.targetParam - 1, true);
+    }
     resetView(app);
 }
 
@@ -297,7 +301,9 @@ void evt15_gasExplosion(NewsCtx& ctx, int phase) {
     demolishAtObjId(app, idx + 2000, 0); // [RE 0x44A543] 降一级
     playEventFlc(app, 527, 0, 40, 87, false, 5); // [RE 0x44A571 flags 0x50001]
     newsWait(app, 300);                          // [RE 0x44A587]
-    // [TODO P4] 业主台词 sub_44EF41(owner-1, 2, off_480856[...])
+    if (es.owner != 0) {  // [RE 0x44A5C3] 业主倒霉台词（列3/4 随机，expr2）
+        playUnluckyLine(app, es.owner - 1, true);
+    }
     resetView(app);
 }
 
@@ -375,7 +381,9 @@ void evt19_flood(NewsCtx& ctx, int phase) {
     blinkSingleObj(app, ctx.targetObjId);     // [RE 0x44AA9F] 单块高亮（estate/corp）
     resetView(app);
     newsWait(app, 300); // [RE 0x44AACA]
-    // [TODO P4] 业主台词 sub_44EF41(targetParam-1, 2, ...)
+    if (ctx.targetParam != 0) {  // [RE 0x44AB0F] 业主倒霉台词（列3/4 随机，expr2）
+        playUnluckyLine(app, ctx.targetParam - 1, true);
+    }
 }
 
 // [RE 0x44AB2C] idx 20：超級颱風侵襲%s 多處房屋受損
@@ -425,7 +433,9 @@ void evt21_tornado(NewsCtx& ctx, int phase) {
     demolishAtObjId(app, ctx.targetObjId, 0); // [RE 0x44ADFE] 降一级
     playEventFlc(app, 535, 0, 40, 88, false, 8); // [RE 0x44AE2C flags 0x80001]
     newsWait(app, 300);                          // [RE 0x44AE42]
-    // [TODO P4] 业主台词 sub_44EF41(targetParam-1, 2, ...)
+    if (ctx.targetParam != 0) {  // [RE 0x44AE7F] 业主倒霉台词（列3/4 随机，expr2）
+        playUnluckyLine(app, ctx.targetParam - 1, true);
+    }
     resetView(app);
 }
 
@@ -458,7 +468,7 @@ void countOwnedAssets(const GameState& st, int counts[4]) {
 // [RE 0x41D433] 原版 sub_41D433 = 临时切换 currentPlayer 刷新右侧信息面板；
 //   重写每帧全量重绘面板，金额更新下一帧自动可见（无需显式刷新）
 
-// idx 8/9/10 共用阶段 1：对准玩家 → 入现金（浮动数字 TODO P4）
+// idx 8/9/10 共用阶段 1：对准玩家 → 入现金 → 收款台词（0x449A80 sub_44F354）
 void rewardPlayerPhase1(NewsCtx& ctx) {
     Application& app = *ctx.app;
     GameState& st = app.gameState();
@@ -470,7 +480,8 @@ void rewardPlayerPhase1(NewsCtx& ctx) {
     addMoney(app, p, ctx.targetParam, true); // [RE 0x449A5C cash=true]
     RICH4_LOGI("news reward: p=%d +%d cash=%d bank=%d (RE 0x4498B3)", p, ctx.targetParam,
                st.players[p].cash, st.players[p].bank);
-    // [TODO P4] 浮动数字 sub_44F354(p, amount)
+    // [RE 0x449A80] 获奖收款台词（sub_44F354 金额档，expr3）
+    playCollectorLine(app, p, ctx.targetParam);
     resetView(app);
 }
 

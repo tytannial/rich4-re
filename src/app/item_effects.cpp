@@ -248,15 +248,29 @@ void playStatusDaysLine(Application& app, int player, int days) {
     }
     const char* line = nullptr;
     if (days > 6) {
-        line = kMoneyLines[ci][3];
+        line = kMoneyLines[ci][18];
     } else if (days > 3) {
-        line = (std::rand() & 1) ? kMoneyLines[ci][4] : kMoneyLines[ci][3];
+        line = (std::rand() & 1) ? kMoneyLines[ci][19] : kMoneyLines[ci][18];
     } else if (days > 0) {
-        line = kMoneyLines[ci][5];
+        line = kMoneyLines[ci][20];
     }
     if (line != nullptr) {
         playLine(app, player, line, 2);  // [RE 0x44EF41] expr 2
     }
+}
+
+// [RE 0x44EF41 off_480856] playUnluckyLine：倒霉台词（expr2；列3/4 随机或列3 固定）
+void playUnluckyLine(Application& app, int player, bool random) {
+    GameState& st = app.gameState();
+    if (player < 0 || player >= 4) {
+        return;
+    }
+    const int ci = st.players[player].charIndex;
+    if (ci < 0 || ci >= 12) {
+        return;
+    }
+    const int col = (random && (std::rand() & 1)) ? 19 : 18;
+    playLine(app, player, kMoneyLines[ci][col], 2);
 }
 
 // [RE 0x44F567] playWindfallLine：意外之财台词（大財神免付；金额档 expr3）

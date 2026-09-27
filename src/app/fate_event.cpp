@@ -6,7 +6,8 @@
 //   440×480，帧 0）+ 插画 @(25,44) + 效果(0) 文本 @(24,330)/头像 @(390,344) → 全屏 blt →
 //   阻塞 1600ms → 效果(1)（数值/状态/高亮）→ 800ms → 释放。
 // 重写：单 Surface 事件驱动（同 news_dialog），进入时绘制一次；runModal 每 tick renderFrame。
-// 差异: 语音 sub_44EF41/sub_44F354 → TODO(P4)；byte_497324/5 统计并入 misc8A（与 damagePlayer
+// 台词（P4-D ✅ 2026-09-27）：罚款逃过=意外之财/加倍付款/收款档、拆屋·载具损毁·没收倒霉、
+//   卖股收款（0x44CE7E/CEF9/0x44D334/0x44BF9F/0x44CB30/CC36/D777）；byte_497324/5 统计并入 misc8A（与 damagePlayer
 //       同源）；生日人类逐人顶部行演出简化为直接弹选卡面板。
 
 #include "game/app/fate_event.h"
@@ -324,6 +325,7 @@ void fateLoseVehicle(Application& app, int player) {
     pl.travel = 0;
     pl.diceCount = 1;
     loadWalkResources(st, player);
+    playUnluckyLine(app, player, false);  // [RE 0x44CB30/0x44CC36] 载具损毁倒霉台词（列3 固定）
     RICH4_LOGI("fate: p=%d vehicle lost (RE 0x44CA46)", player);
 }
 
@@ -425,6 +427,8 @@ void fateApplyFine(FateCtx& ctx, const FateDef& def) {
     const FateLuckResult lr = fateLuckRoll(st, cur, def.luck);
     if (lr.code == 1) {
         showMessage(app, lr.text, 1500);
+        // [RE 0x44CE7E] 幸运逃过罚款 = 意外之财台词（sub_44F567 按原额档，expr3；不转账）
+        playWindfallLine(app, cur, def.amount * st.moneyMul);
         return;
     }
     int32_t amt = def.amount * st.moneyMul;
@@ -438,7 +442,7 @@ void fateApplyFine(FateCtx& ctx, const FateDef& def) {
     transferMoney(app, cur, -1, amt, 0); // [RE sub_41D2C6(cur,-1,amt,0)]
     if (st.players[cur].alive != 0 && st.sceneRequest == 0) {
         insurancePayout(app, cur, amt); // [RE sub_44BA63]
-        // [TODO(P4)] 语音 sub_44F42D
+        playPayerLine(app, cur, amt);  // [RE 0x44CEF9] 付款方台词（sub_44F42D，expr2）
     }
     RICH4_LOGI("fate fine after: p=%d cash=%d bank=%d insurance=%u (RE 0x44CD99)", cur,
                st.players[cur].cash, st.players[cur].bank, st.players[cur].insuranceDays);
@@ -459,7 +463,8 @@ void fateApplyGain(FateCtx& ctx, const FateDef& def) {
         amt *= 2;
     }
     addMoney(app, cur, amt, true); // [RE addMoney(cur, amt, 1)]
-    // [TODO(P4)] 语音 sub_44F354
+    // [RE 0x44D334] 收款台词（sub_44F354 金额档，expr3）
+    playCollectorLine(app, cur, amt);
 }
 
 void fateApplyHouseDemolish(FateCtx& ctx) {
@@ -476,6 +481,7 @@ void fateApplyHouseDemolish(FateCtx& ctx) {
     es.type = 0;
     blinkSingleObj(app, ctx.targetEstate + 2000); // [RE rebuildPickBuffer/markPickBuffer/highlightBlink]
     resetView(app);
+    playUnluckyLine(app, cur, true);  // [RE 0x44BF9F] 拆屋倒霉台词（列3/4 随机，expr2）
 }
 
 void fateApplyLandRequisition(FateCtx& ctx) {
@@ -585,7 +591,7 @@ void fateApplyBirthday(FateCtx& ctx) {
             }
         }
     }
-    // [TODO(P4)] 语音（收到卡时）
+    // 偷卡效果原版无台词（sub_44EF41 xref 全表核实；旧 [TODO P4] 系误标）
 }
 
 void fateApplyTravel(FateCtx& ctx, bool abducted) {
@@ -656,13 +662,16 @@ void fateApplySellAllStock(FateCtx& ctx) {
         showMessage(app, lr.text, 1500);
         return;
     }
+    int32_t sold = 0;
     for (int i = 0; i < 12; ++i) {
         const int32_t shares = st.playerShares[cur][i];
         if (shares > 0) {
-            sellStock(app, cur, i, shares, true); // [RE sellStock(cur,i,shares,1)]
+            sold += sellStock(app, cur, i, shares, true); // [RE sellStock(cur,i,shares,1)]
         }
     }
-    // [RE sub_41D433(cur)] 面板刷新由每帧重绘替代；语音 TODO(P4)
+    // [RE sub_41D433(cur)] 面板刷新由每帧重绘替代
+    // [RE 0x44D334] 卖股求现收款台词（sub_44F354，expr3）
+    playCollectorLine(app, cur, sold);
 }
 
 void fateApplyConfiscate(FateCtx& ctx) {
@@ -678,6 +687,7 @@ void fateApplyConfiscate(FateCtx& ctx) {
     const int pts2 = confiscateCards(app, cur); // [RE g_playerPoints += sub_441F21]
     st.players[cur].points =
         static_cast<uint16_t>(st.players[cur].points + pts + pts2);
+    playUnluckyLine(app, cur, false);  // [RE 0x44D777] 没收倒霉台词（列3 固定，expr2）
     RICH4_LOGI("fate: confiscate p=%d +%d points (RE 0x44D677)", cur, pts + pts2);
 }
 

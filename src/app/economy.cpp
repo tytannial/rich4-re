@@ -10,6 +10,7 @@
 #include "game/app/auction_dialog.h"
 #include "game/app/game_loop.h"
 #include "game/app/game_panel.h"
+#include "game/app/item_lines.h"
 #include "game/app/magic_house_dialog.h"
 #include "game/app/map_objects.h"
 #include "game/app/stock_system.h"
@@ -578,6 +579,13 @@ void eliminatePlayer(Application& app, int p) {
         st.currentPlayer = p;
         app.audio().playSceneMusic(2);
         renderGameFrame(app);
+        // [RE 0x40D237] 淘汰认输台词 off_4808AE（列25、expr2；sub_41906A(1) 后、FLC555 前）
+        if (p < 4) {
+            const int ci = st.players[p].charIndex;
+            if (ci >= 0 && ci < 12) {
+                playLine(app, p, kMoneyLines[ci][22], 2);
+            }
+        }
         playEventFlc(app, 555, 0, 40, 100);
         for (int t = 0; t < 2000; t += 5) {
             app.audio().update();
@@ -593,7 +601,7 @@ void eliminatePlayer(Application& app, int p) {
                    p);
         return;
     }
-    // [RE 0x40D0A9] 淘汰台词 off_4808AE[角色] → [TODO(P4 语音专项)]
+    // （淘汰台词已在 0x40D237 位置接入，见上）
     // ---- 存活统计（原版 v13=存活人类数 / result=总存活数；alive 未入场=0 → 自动只算已入场）----
     int aliveHumans = 0;
     int aliveTotal = 0;
@@ -612,9 +620,21 @@ void eliminatePlayer(Application& app, int p) {
         return;
     }
     if (aliveTotal == 1) {
-        // [RE 0x40D3E0] 仅剩一个存活玩家 → 该玩家直接胜利：sceneRequest = 2（单人）/3（多人）；
-        //   不做资产清算/拍卖（原版 result==1 分支）；胜利演出（胜利台词 sub_44EF41 + 通关结算
-        //   gameClearFlow）属 M3
+        // [RE 0x40D060] 终局胜利大笑（off_4808AA 列24、expr3；胜者，无存活人类判定之后）；
+        //   通关结算 gameClearFlow 属 M3
+        int winner = -1;
+        for (int i = 0; i < st.playerCount && i < 9; ++i) {
+            if (st.players[i].alive != 0) {
+                winner = i;
+                break;
+            }
+        }
+        if (winner >= 0 && winner < 4) {
+            const int ci = st.players[winner].charIndex;
+            if (ci >= 0 && ci < 12) {
+                playLine(app, winner, kMoneyLines[ci][21], 3);
+            }
+        }
         st.sceneRequest = (st.humanCount == 1) ? 2 : 3;
         RICH4_LOGI("eliminatePlayer: p%d eliminated -> last player wins, scene %d (RE 0x40CD87)",
                    p, st.sceneRequest);
