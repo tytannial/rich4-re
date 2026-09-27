@@ -8,6 +8,7 @@
 #include <cstring>
 
 #include "game/app/card_lines.h"
+#include "game/app/item_lines.h"
 #include "game/app/economy.h"
 #include "game/app/event_stack.h"
 #include "game/app/game_loop.h"
@@ -624,7 +625,10 @@ void attachObject(Application& app, int p, int cellEntId, int objId) {
             }
             const int v = slotMachineDialog(app, 1);
             addMoney(app, p, v, true);
-            // [TODO P4] v≥5000×M 超额台词 sub_44F354（三档选句）
+            // [RE 0x40ED85] v≥5000×M 收款台词（sub_44F354 金额档，expr3；<5000×M 不播）
+            if (v >= 5000 * st.moneyMul) {
+                playCollectorLine(app, p, v);
+            }
             RICH4_LOGI("attach bigRich: %d to cash (RE 0x40EAD7 case2)", v);
             break;
         }

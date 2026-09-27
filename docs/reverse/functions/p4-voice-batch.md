@@ -32,9 +32,9 @@
 | 同路段≥3 吐槽 | 0x41A13E（必播列16）/0x419A2B（1/3 列17） | ✅ `playEstateChainSpeech` |
 | 住宿/入狱/住院 | 0x41A7E0/0x43D5F9/0x43ECA5 `sub_44F2C2`（天数档、expr2） | ✅ `playStatusDaysLine`；住宿仅付款人==本人时播 |
 | 买地/升级询问语音 | 0x4198xx（`sub_44EF41` 索引 0） | ⬜ 待核（未必存在独立调用） |
-| 出国 `startTravelState` | 0x40D3F8 `sub_44F2C2` | ⬜ 归 P4-C（命运批） |
-| 大財神超额收款 | 0x40ED85 `sub_44F354`（attachObject） | ⬜ 归 P4-C（神明批） |
-| 神明租金调整 | 0x41D7C1 `sub_44F567`（列12/13/14 意外之财） | ⬜ 归 P4-C（`applyGodRentModifier`） |
+| 出国/绑架 `startTravelState` | 0x40D3F8 `sub_44F2C2` | ✅ 天数档 expr2 |
+| 大財神超额收款 | 0x40ED85 `sub_44F354`（attachObject） | ✅ `v>=5000×M` 才播（`playCollectorLine`） |
+| 神明租金免付 | 0x41D7C1 `sub_44F567`（列12/13/14 意外之财） | ✅ `playWindfallLine`；大財神 `v==0` 时在 showMessage 后播（原金额档） |
 | 新闻/命运收款付款 | 0x449A80 等 / `sub_44CD99`/`sub_44CF1E` / fate 438/459 | ⬜ 归 P4-D |
 
 ### D2 移动落地 / 物件 / 神明
@@ -72,11 +72,12 @@
 
 1. **P4-A ✅ 2026-09-27**：路障/地雷/炸彈踩中台词（`kItemTouchLines` 列14/15/16）+ `playLine`
    expr 表情帧参数（原版 a2 → 帧 a2+1，`card_lines`/`item_lines` 全透传）。
-2. **P4-B（D1）✅ 2026-09-27**：金额/状态台词表 `kMoneyLines[12][10]`（off_48084A 列
-   6/7/8 收款、9/10/11 付款、15 封顶、16/17 连锁、18 欠债）+ 五个函数
+2. **P4-B（D1）✅ 2026-09-27**：金额/状态台词表 `kMoneyLines[12][13]`（off_48084A 列
+   6/7/8 收款、9/10/11 付款、15 封顶、16/17 连锁、18 欠债、12/13/14 意外之财）+ 六个函数
    `playCollectorLine`/`playPayerLine`/`playDebtorLine`/`playStatusDaysLine`/
-   `playEstateChainSpeech`；接入住宅收租（含同盟分账）、corp 收费、升级封顶、连锁吐槽、
-   住宿/入狱/住院。剩余调用点见 D1 表 ⬜（出国/大財神/神明租金/新闻命运）。
+   `playWindfallLine`/`playEstateChainSpeech`；接入住宅收租（含同盟分账）、corp 收费、
+   升级封顶、连锁吐槽、住宿/入狱/住院/出国、大財神、神明租金免付。
+   剩余调用点见 D1 表 ⬜（新闻/命运 → P4-D）。
 3. **P4-C（D2）**：状态提示 `checkPlayerActionStatus`（列19/20/21 台词 50%）、神明哭/笑
    （`attachObject`/`attachEnd`）、老虎机（`off_48086A`/`sub_44F354`）、`godBlessUpgrade`、
    土地公/恶魔；恶犬咬伤确认无台词。

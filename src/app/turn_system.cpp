@@ -1480,6 +1480,10 @@ int32_t applyGodRentModifier(Application& app, int payer, int32_t rent, const ch
     if (v != rent) {
         showMessage(app, text, 1500);
     }
+    // [RE 0x41D7B4/0x41D7C1] 大財神免付（v==0）→ 意外之财台词（sub_44F567，原金额档 expr3）
+    if (v == 0 && rent > 0) {
+        playWindfallLine(app, payer, rent);
+    }
     return v;
 }
 

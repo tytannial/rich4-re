@@ -259,6 +259,30 @@ void playStatusDaysLine(Application& app, int player, int days) {
     }
 }
 
+// [RE 0x44F567] playWindfallLine：意外之财台词（大財神免付；金额档 expr3）
+void playWindfallLine(Application& app, int player, int32_t amount) {
+    GameState& st = app.gameState();
+    if (player < 0 || player >= 4) {
+        return;
+    }
+    const int ci = st.players[player].charIndex;
+    if (ci < 0 || ci >= 12) {
+        return;
+    }
+    const int32_t m = st.moneyMul;
+    const char* line = nullptr;
+    if (amount >= 9000 * m) {
+        line = kMoneyLines[ci][10];
+    } else if (amount >= 5000 * m) {
+        line = (std::rand() & 1) ? kMoneyLines[ci][11] : kMoneyLines[ci][10];
+    } else if (amount > 0) {
+        line = kMoneyLines[ci][12];
+    }
+    if (line != nullptr) {
+        playLine(app, player, line, 3);  // [RE 0x44EF41] expr 3
+    }
+}
+
 // [RE 0x44F627] playEstateChainSpeech：同名地产 ≥3 块（自家）感想
 void playEstateChainSpeech(Application& app, const char* name, int flag) {
     GameState& st = app.gameState();

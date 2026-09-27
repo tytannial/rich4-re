@@ -26,6 +26,7 @@
 #include "game/app/event_common.h"
 #include "game/app/event_stack.h"
 #include "game/app/game_loop.h"
+#include "game/app/item_lines.h"
 #include "game/app/map_objects.h"
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
@@ -289,6 +290,8 @@ void fateStartTravelStateLocal(Application& app, Player& pl, int player, int day
     st.jailFlags[player] = 0;
     st.hospitalFlags[player] = 0;
     pl.stateFlags = 0;
+    // [RE 0x40D3F8] 出国/绑架天数台词（sub_44F2C2，expr2）
+    playStatusDaysLine(app, player, days);
     if (pl.cellEntId > 0 && pl.cellEntId < st.cellEnts.size()) {
         st.cellEnts[pl.cellEntId].occMask &= ~(256u << player); // [RE 0x40D399] 清占用
     }
