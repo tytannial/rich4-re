@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""生成 src/app/item_lines.cpp：道具台词表（0x480D5A，12 角色 x 26 列指针，取列 0..12 = 道具 id1..13）
-与价值台词表（0x48084A，12 角色 x 27 列指针，取列 0..2 = 高/中/低价）。
+"""生成 src/app/item_lines.cpp：道具台词表（0x480D5A，12 角色 x 26 列指针，取列 0..12 = 道具 id1..13）、
+被踩中台词表（同表列 14/15/16 = 路障/地雷/定時炸彈）与价值台词表（0x48084A，12 角色 x 27 列指针，
+取列 0..2 = 高/中/低价）。
 
 用法: python tools/gen_item_lines.py [--exe resources/game/rich4.exe]
 """
@@ -12,6 +13,7 @@ DGROUP_VA, DGROUP_RAW = 0x463000, 0x61600
 LINES_VA = 0x480D5A
 VALUE_VA = 0x48084A
 CHAR_N, COL_N = 12, 13
+TOUCH_COLS = (14, 15, 16)  # 路障/地雷/定時炸彈被踩中（0x480D92/96/9A）
 VALUE_STRIDE, VALUE_COL_N = 27, 3
 
 
@@ -54,6 +56,11 @@ def main() -> None:
         row = [cstr(u32(LINES_VA + 4 * (26 * c + k))) for k in range(COL_N)]
         lines.append("    {" + ", ".join(cpp(s) for s in row) + "},")
 
+    touches = []
+    for c in range(CHAR_N):
+        row = [cstr(u32(LINES_VA + 4 * (26 * c + k))) for k in TOUCH_COLS]
+        touches.append("    {" + ", ".join(cpp(s) for s in row) + "},")
+
     values = []
     for c in range(CHAR_N):
         row = [cstr(u32(VALUE_VA + 4 * (VALUE_STRIDE * c + k))) for k in range(VALUE_COL_N)]
@@ -62,7 +69,8 @@ def main() -> None:
     text = (
         "// 由 tools/gen_item_lines.py 从 rich4.exe 生成，勿手改\n"
         "// [RE 0x480D5A] off_480D5A 角色台词表：12 角色 x 26 列文本指针；\n"
-        "//   道具效果只取列 0..12（= 道具 id1..13）；含 '#NNNN' 语音前缀 / '#NNNN@MM' 表情\n"
+        "//   道具效果列 0..12（= 道具 id1..13）；被踩中列 14/15/16 = 路障/地雷/定時炸彈；\n"
+        "//   含 '#NNNN' 语音前缀 / '#NNNN@MM' 表情\n"
         "// [RE 0x48084A] off_48084A 角色价值台词表：12 角色 x 27 列，取列 0..2\n"
         "//   （sub_44F230：>100 → 0；51..100 → 0/1 随机；<=50 → 2）\n"
         '#include "game/app/item_lines.h"\n'
@@ -71,6 +79,12 @@ def main() -> None:
         "\n"
         "const char* const kItemLines[12][13] = {\n"
         + "\n".join(lines)
+        + "\n};\n"
+        "\n"
+        "// [RE 0x480D92/96/9A] 被踩中台词（列14 路障 / 列15 地雷 / 列16 定時炸彈）；\n"
+        "//   onPlayerActionPhase case16/17/18 → sub_44EF41(踩中者, 1/1/2, ...)\n"
+        "const char* const kItemTouchLines[12][3] = {\n"
+        + "\n".join(touches)
         + "\n};\n"
         "\n"
         "const char* const kValueLines[12][3] = {\n"

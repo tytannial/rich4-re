@@ -662,11 +662,18 @@ void onPlayerActionPhase(Application& app) {
             pl.points = static_cast<uint16_t>(pl.points + 500);
             playValueLine(app, p, 101); // [RE sub_44EF41(p,0,off_48084A 列0) 笑]
             break;
-        case 16:  // [RE 0x41BAF9] 路障：路过即触发 → 删除 + 强制停止
+        case 16:  // [RE 0x41BAF9] 路障：路过即触发 → 删除 + 强制停止 + 被挡台词
             app.audio().stopEffectSlot(st.moveSoundIndex);
             releaseCellTableSlot(app, objId);
+            renderGameFrame(app);  // [RE 0x41BD20] refreshGameUi(0,0,1)：先删物件再弹台词
             st.remainingSteps = 0;
-            // [TODO P4] 哭台词 sub_44EF41(p,1,off_480D92[char])
+            // [RE 0x41BD56] 踩中者被挡台词 off_480D92（列14、表情帧1）；玩家4-7/娃娃由 playLine 守卫跳过
+            if (p >= 0 && p < 4) {
+                const int ci = st.players[p].charIndex;
+                if (ci >= 0 && ci < 12) {
+                    playLine(app, p, kItemTouchLines[ci][0], 1);
+                }
+            }
             break;
         case 17:  // [RE 0x41BB0A] 地雷：停留触发 → 炸 + 车毁 + 住院3
             if (!stopped) {
@@ -675,7 +682,13 @@ void onPlayerActionPhase(Application& app) {
             releaseCellTableSlot(app, objId);
             damagePlayer(app, p);
             playEventFlc(app, 525, 0, 40, 82, false, 3);  // [RE 地雷 flags 0x30001 帧3]
-            // [TODO P4] 哭台词 off_480D96
+            // [RE 0x41BEFF] 踩中者哭台词 off_480D96（列15、表情帧1）；玩家4-7/娃娃不播
+            if (p >= 0 && p < 4) {
+                const int ci = st.players[p].charIndex;
+                if (ci >= 0 && ci < 12) {
+                    playLine(app, p, kItemTouchLines[ci][1], 1);
+                }
+            }
             st.remainingSteps = 0;
             hospitalizePlayer(app, p, 3);
             break;
@@ -690,7 +703,13 @@ void onPlayerActionPhase(Application& app) {
             ce.occMask &= ~0x00FF0000u;  // 本格占用让位给挂身物件
             app.audio().playEffectSlot(3);  // [RE g_effectSlot3] 滴答循环
             renderGameFrame(app);           // [RE 0x41BC2B] refreshGameUi(0,0,1)：立即显示挂身
-            playItemLine(app, p, 4);        // [RE 0x44EF41 off_480D9A] 炸弹台词（列3）
+            // [RE 0x41C063] 踩中者台词 off_480D9A（列16 被炸、表情帧2）——原实现误用放置表列3
+            if (p >= 0 && p < 4) {
+                const int ci = st.players[p].charIndex;
+                if (ci >= 0 && ci < 12) {
+                    playLine(app, p, kItemTouchLines[ci][2], 2);
+                }
+            }
             RICH4_LOGI("bomb attached: p%d obj %d life=38 (RE 0x41BC2B)", p, objId);
             break;
         default:

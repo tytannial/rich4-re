@@ -32,6 +32,7 @@ struct ItemLineCtx {
     Application* app = nullptr;
     const char* line = nullptr;
     int player = 0;
+    int expr = 0;  // [RE 0x44EF41 a2] 头像表情帧索引（画帧 expr+1）
     uint64_t startMs = 0;
 };
 
@@ -44,9 +45,14 @@ void drawItemLine(ItemLineCtx& ctx) {
     if (tip.frameCount() > 6) {
         blitElement(dst, tip.frame(6), 220, 130, false);  // [RE 0x44F033] g_tipFrame+84 = 帧6 云朵气泡
     }
-    // 说话头像 = pieceSprites[p] 帧 expr+1（expr=0 → 帧 1）[RE 0x44EF41]
+    // 说话头像 = pieceSprites[p] 帧 expr+1（expr=0 → 帧 1；表情 哭/被炸/笑 = 帧 2/3/4）[RE 0x44EF41]
     if (ctx.player >= 0 && ctx.player < 9 && st.pieceSprites[ctx.player].frameCount() > 1) {
-        blitElement(dst, st.pieceSprites[ctx.player].frame(1), 170, 130, false);
+        const UiImage& pc = st.pieceSprites[ctx.player];
+        size_t f = static_cast<size_t>(ctx.expr) + 1;
+        if (f >= pc.frameCount()) {
+            f = 1;  // 表情帧缺失时回退普通帧
+        }
+        blitElement(dst, pc.frame(f), 170, 130, false);
     }
     const char* t = ctx.line;
     if (t[0] == '#') {
@@ -87,10 +93,10 @@ bool itemLineHandler(const SDL_Event* event, void* user) {
 
 // [RE 0x44EF41] playLine：通用角色气泡台词（原 sub_44EF41 本体）
 // 依据: 0x44EF41 反编译；tip 框 data.mkf[517] 帧 6（g_tipFrame+84，271×199 红边云朵气泡）@(220,130)
-//   + 头像 pieceSprites[p] 帧 1
+//   + 头像 pieceSprites[p] 帧 exprFrame+1（a2 = 表情帧索引）
 //   @(170,130) + 文本 @(200,130) 或 '@MM' 表情 data.mkf[519] 帧 MM-1 @(240,130)；
 //   时长 1000ms；同文本指针去重（dword_4762C8）；状态中（stateFlags BYTE1/state37/byte54）不显示
-void playLine(Application& app, int player, const char* line) {
+void playLine(Application& app, int player, const char* line, int exprFrame) {
     GameState& st = app.gameState();
     if (player < 0 || player >= 4 || line == nullptr || line[0] == '\0') {
         return;
@@ -123,12 +129,13 @@ void playLine(Application& app, int player, const char* line) {
     ctx.app = &app;
     ctx.line = line;
     ctx.player = player;
-    RICH4_LOGI("playLine: p%d %s (RE 0x44EF41)", player, line);
+    ctx.expr = exprFrame;
+    RICH4_LOGI("playLine: p%d expr%d %s (RE 0x44EF41)", player, exprFrame, line);
     runModal(app, &itemLineHandler, &ctx, 16);
 }
 
 // [RE 0x44EF41] playItemLine：道具/卡片效果入口台词（查 kItemLines 表）
-void playItemLine(Application& app, int player, int itemId) {
+void playItemLine(Application& app, int player, int itemId, int exprFrame) {
     GameState& st = app.gameState();
     if (player < 0 || player >= 4 || itemId < 1 || itemId > 13) {
         return;
@@ -137,7 +144,7 @@ void playItemLine(Application& app, int player, int itemId) {
     if (ci < 0 || ci >= 12) {
         return;
     }
-    playLine(app, player, kItemLines[ci][itemId - 1]);
+    playLine(app, player, kItemLines[ci][itemId - 1], exprFrame);
 }
 
 // [RE 0x44F230] playValueLine：卡片/道具价值台词（12 角色 x 3 档）

@@ -34,7 +34,8 @@ constexpr int kSpeechTaxTarget = 85;       // 查稅：目标
 constexpr int kSpeechAllyTarget = 88;      // 同盟：目标
 constexpr int kSpeechTurtleTarget = 89;    // 烏龜：目标
 
-// [RE 0x44EF41] playCardLine：按槽位播角色气泡台词（playLine 语义：语音/表情/状态守卫/去重）
-void playCardLine(Application& app, int player, int slot);
+// [RE 0x44EF41] playCardLine：按槽位播角色气泡台词（playLine 语义：语音/表情/状态守卫/去重；
+//   exprFrame = 头像表情帧索引，见 item_lines.h playLine）
+void playCardLine(Application& app, int player, int slot, int exprFrame = 0);
 
 } // namespace rich4

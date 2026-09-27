@@ -42,7 +42,7 @@ const char* const kCardVictimLines[12] = {
 };
 
 // [RE 0x44EF41] playCardLine：按槽播角色气泡台词（复用 playLine 的语音/表情/状态守卫）
-void playCardLine(Application& app, int player, int slot) {
+void playCardLine(Application& app, int player, int slot, int exprFrame) {
     if (player < 0 || player >= 9 || slot < 0 || slot >= 90) {
         return;
     }
@@ -54,7 +54,7 @@ void playCardLine(Application& app, int player, int slot) {
     if (line == nullptr || line[0] == '\0') {
         return;
     }
-    playLine(app, player, line);
+    playLine(app, player, line, exprFrame);
 }
 
 } // namespace rich4
