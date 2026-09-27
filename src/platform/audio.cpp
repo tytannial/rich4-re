@@ -512,13 +512,19 @@ bool Audio::playNextMusic() {
     return playMusic((cur + 1) & 7);
 }
 
-bool Audio::playSceneMusic(int sceneIndex) {
+bool Audio::playSceneMusic(int sceneIndex, bool saveCurrent) {
     // [RE 0x4549CF] 原版 if (byte_49715A)：音乐音量为 0 时不播放
     if (!m_impl->stream || m_musicDir.empty() || m_musicVolume <= 0) {
         return false;
     }
     if (sceneIndex < 0 || sceneIndex >= 17) {
         return false;
+    }
+    // [RE 0x4549CF → 0x454B1A musicOnTrackEnd] 当前正在播放可选曲目（track 1-8；原版
+    //   byte_47E772<0 可选曲目模式）且未带 bit15（0x8000 跳过保存）→ 先压栈保存，
+    //   面板/淘汰演出退出时 resumeSceneMusic 弹栈恢复（投降召唤死神的淘汰音乐场景依赖此步）
+    if (saveCurrent && m_impl->track >= 1 && m_impl->track <= 8) {
+        m_musicStack.push_back(m_impl->track - 1);
     }
     // [RE 0x4549CF] 场景音乐（off_47E793 表）→ CD 音轨 10-26
     char name[32];
@@ -537,13 +543,9 @@ bool Audio::playSceneMusic(int sceneIndex) {
     return true;
 }
 
-// [RE 0x4549CF] 面板进入：当前为可选曲目（byte_47E772<0 判定）时 musicOnTrackEnd(0x454B1A)
-//   压栈（记曲目+位置）再切场景音乐。重写不记播放位置（OGG 从头播，见 resumeSceneMusic）。
+// [RE 0x4549CF] 面板进入：与 playSceneMusic 等义（原版同一函数内部自动压栈）；
+//   压栈/恢复语义见 playSceneMusic/resumeSceneMusic
 bool Audio::pushSceneMusic(int sceneIndex) {
-    const int t = m_impl->track;
-    if (t >= 1 && t <= 8) {
-        m_musicStack.push_back(t - 1);
-    }
     return playSceneMusic(sceneIndex);
 }
 

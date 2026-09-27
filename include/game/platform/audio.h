@@ -69,10 +69,12 @@ public:
     bool playMusic(int trackIndex);
     // [RE 0x454D91 a1==0] 切下一首可选曲目（byte_47E771=(byte_47E771+1)&7；进游戏/过天轮换）
     bool playNextMusic();
-    // [RE 0x4549CF] 播放场景音乐（sceneIndex → track10-26；原版 off_47E793 MIDI 表）
-    bool playSceneMusic(int sceneIndex);
-    // [RE 0x4549CF/0x454B1A] 面板进入：当前为可选曲目（track 1-8）时压栈（原版 musicOnTrackEnd
-    //   记曲目+播放位置 dword_48CB50/byte_48CB70[dword_47E7D7]）再切场景音乐
+    // [RE 0x4549CF] 播放场景音乐（sceneIndex → track10-26；原版 off_47E793 MIDI 表）。
+    //   saveCurrent=true（默认）时若当前为可选曲目（track 1-8）先压栈保存（原版 musicOnTrackEnd
+    //   语义，byte_47E772<0 判定）；saveCurrent=false 对应原版 bit15（0x8000|scene 不压栈）
+    bool playSceneMusic(int sceneIndex, bool saveCurrent = true);
+    // [RE 0x4549CF/0x454B1A] 面板进入：等义于 playSceneMusic（原版同一函数内部自动压栈）；
+    //   保留独立入口供面板语义表达
     bool pushSceneMusic(int sceneIndex);
     // [RE 0x454BCC] 面板退出：弹栈恢复之前播放的可选曲目（原版 "play mid from 位置" 续播；
     //   重写 OGG 从头播，位置恢复省略）

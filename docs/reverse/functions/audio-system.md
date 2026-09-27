@@ -86,8 +86,8 @@
 | `sub_45441A`（drawText 遇 `#NNNN` 播语音；查 g_effectVolume） | `Audio::playVoice(id)`（`text.cpp` drawText 解析 4 位十进制触发） | **单通道**：新语音打断旧（对齐 sub_454493 先停后播）；Speaking.mkf = 8bit/mono RIFF（1374 项，懒加载缓存）；**采样率混合：1184 条 22050 + 190 条 44100**（idx 266..1238 散布，含忍太郎 266-281/宫本宝藏 330-345 道具台词段）——原版 `sub_453DCF` 把 WAV fmt 原样填 DSBUFFERDESC 由 DirectSound 硬件重采样；重写混音固定 22050 → `resample8Mono` 线性降采样；effectVolume=0 不播 |
 | `sub_4544B9`（Status&PLAYING；完成即释放） | `Audio::voicePlaying()` | 语音声部 = `voices[slot == -2]`，播完由 update 清理 |
 | `sub_454493`（Stop+Release） | `Audio::stopVoice()` | |
-| `sub_4549CF`（musicPlayScene；当前可选曲目时先 `sub_454B1A` push） | `Audio::pushSceneMusic(i)` | 仅 track 1-8 入栈（场景音乐重复进入不叠栈，对齐 byte_47E772<0 判定） |
-| `sub_454B1A`（push {曲目\|0x80, 播放位置 dword_48CB50}） | 栈仅记曲目索引 | **差异：OGG 从头播放**（MIDI 位置续播省略） |
+| `sub_4549CF`（musicPlayScene；当前可选曲目时先 `sub_454B1A` push；**bit15 `0x8000\|scene` = 不压栈**） | `Audio::playSceneMusic(i, saveCurrent=true)` / `Audio::pushSceneMusic(i)`（转发） | **压栈在 playSceneMusic 内**（track 1-8 → push，对齐 byte_47E772<0 判定）；已确认 bit15 调用点：`newGameInit` 0x40711A（`0x8001`→saveCurrent=false）、`sub_452444` 节日音乐（重写未实现）；其余调用点（魔法屋/拍卖/银行/乐透/监医/月刊/小游戏/破产淘汰 0x40CF88 等）均无 bit15 = 自动压栈 |
+| `sub_454B1A`（push {曲目\|0x80, 播放位置 dword_48CB50}） | 栈仅记曲目索引 | **差异：OGG 从头播放**（MIDI 位置续播省略）；破产流程 `musicPlayScene(2)` 依赖此步保存投降前游戏曲目，魔法屋 dialog 退出 pop 恢复（2026-09-27 实机修复） |
 | `sub_454BCC`（弹栈恢复可选曲目） | `Audio::resumeSceneMusic()` | 栈空不动作（原版无条件弹栈） |
 
 - 接线：`gameInit` `setSpeakingArchive(&state.speaking)` + `app.text().setAudio(&app.audio())`
