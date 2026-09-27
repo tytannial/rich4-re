@@ -488,10 +488,10 @@ bool loadMap(Application& app) {
 
     // [RE 0x407D6A] 初始物件放置：类型 1,3,5,7,9,11（神明）+ 13/14，位置随机 cellEnt
     for (int t = 1; t <= 11; t += 2) {
-        createMapObject(state, t, randomCellEnt(state, 0), 0, 0);
+        createMapObject(app, t, randomCellEnt(state, 0), 0, 0);
     }
-    createMapObject(state, 13, randomCellEnt(state, 0), 0, 0);
-    createMapObject(state, 14, randomCellEnt(state, 0), 0, 0);
+    createMapObject(app, 13, randomCellEnt(state, 0), 0, 0);
+    createMapObject(app, 14, randomCellEnt(state, 0), 0, 0);
     // [RE 0x407AD2] 棋子动画资源初始化
     initMapEntities(app);
     // TODO(RE 0x40A4E1): 小地图背景绘制（叠加住宅用地/商業用地标記）

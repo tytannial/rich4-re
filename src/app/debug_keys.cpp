@@ -349,7 +349,7 @@ bool handleDebugKey(Application& app, int code, bool shift) {
             case 'o': { // [NEW] 当前格生成 cellTable 物件（类型 1..18 循环；测附身/挂身/渲染）
                 static int sDebugObjType = 1;
                 const uint16_t cell = st.players[cur].cellEntId;
-                const int obj = createMapObject(st, sDebugObjType, cell, 0, 0);
+                const int obj = createMapObject(app, sDebugObjType, cell, 0, 0);
                 RICH4_LOGI("debug: Ctrl+Shift+O createMapObject type %d -> obj %d cell %u "
                            "(cellTableIdx=%u cellNo=%u)",
                            sDebugObjType, obj, cell, st.players[cur].cellTableIdx,

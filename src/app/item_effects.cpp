@@ -278,7 +278,7 @@ int placeMapItem(Application& app, int itemId, int objType, int mode, int sfxSlo
         return 0;
     }
     const Player& pl = st.players[p];
-    const int obj = createMapObject(st, objType, v, 0, 0);  // [RE 0x40E033]
+    const int obj = createMapObject(app, objType, v, 0, 0);  // [RE 0x40E033]
     if (obj != 0 && v < static_cast<int>(st.cellEnts.size())) {
         // [RE 0x40E669] 从玩家精灵位置飞向目标格世界坐标，100 帧
         flyObjectSprite(app, obj, pl.spriteX, pl.spriteY, st.cellEnts[v].x, st.cellEnts[v].y, 100);

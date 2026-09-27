@@ -7,6 +7,7 @@
 #include <cstring>
 #include <vector>
 
+#include "game/app/map_objects.h"
 #include "game/app/map_tables.h"
 #include "game/app/turn_system.h"
 #include "game/application.h"
@@ -809,7 +810,8 @@ void initMapEntities(Application& app) {
 //   kCellTypeInit[46]，deleteMapObject 只清 +2/+4/+5 不清类型）；
 //   类型搜索段 15→14..15、16→16..25、17→26..35、18→36..45、其他→type-1 单槽；
 //   cellEnt 占用位 |= (槽+1)<<16；a4≠0 且 type==15 → 创建即附身 a4-1（请神卡场景，P4 未接）
-int createMapObject(GameState& state, int type, int cellEntId, uint8_t a3, uint8_t a4) {
+int createMapObject(Application& app, int type, int cellEntId, uint8_t a3, uint8_t a4) {
+    GameState& state = app.gameState();
     int lo = type - 1;
     int hi = type;
     if (type == 15) {
@@ -847,11 +849,11 @@ int createMapObject(GameState& state, int type, int cellEntId, uint8_t a3, uint8
             e[3] = static_cast<uint8_t>((cellEntId >> 8) & 0xFF);
             state.cellEnts[cellEntId].occMask |= static_cast<uint32_t>(slot + 1) << 16;
         }
-        // [RE 0x40E0CB] 死神(15) 带拥有者登记 → 创建即附身（请神卡 P4，暂仅同步字段）
+        // [RE 0x40E0CB] 死神(15) 带拥有者登记 → attachObject 完整附身（投降死神 0x411B35 /
+        //   请神卡共用）：设 cellTableIdx/槽坐标(玩家格)/寿命 13/旧神飘走/luck 修正/
+        //   case15 没收全部道具卡片 + 死神插图旁白
         if (a4 != 0 && type == 15) {
-            Player& pl = state.players[a4 - 1];
-            pl.cellTableIdx = static_cast<uint8_t>(slot + 1);
-            e[4] = 13;
+            attachObject(app, a4 - 1, cellEntId, slot + 1);
         }
         return slot + 1;
     }

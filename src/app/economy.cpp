@@ -331,7 +331,7 @@ void releaseCellTableSlot(Application& app, int slot) {
         const int pairType = ((idx & 1) != 0) ? idx + 1 : idx + 2;
         const int newEnt = randomCellEnt(st, entId);
         if (newEnt > 0) {
-            createMapObject(st, pairType, newEnt, 0, 0);
+            createMapObject(app, pairType, newEnt, 0, 0);
         }
     }
     RICH4_LOGI("deleteMapObject: slot %d type %u ent %u occ %u (RE 0x40E14D)", slot, type, entId,
@@ -661,9 +661,12 @@ void surrenderPlayer(Application& app) {
     }
     eliminatePlayer(app, cur); // [RE 0x411AE9 sub_40CD87]
     st.playerActionState[cur] = 0; // [迁移] 清回合状态机残留（重写原投降分支行为）
-    int aliveHumans = 0;       // [RE 0x40DFDA] 存活人类数
+    // [RE 0x40DFDA] 存活且**已入场**的人类数：原版 g_playerAlive 跳伞落地才置位，未入场玩家
+    //   不计；重写 alive 开局即 1，用落地坐标（spriteX/Y，finishParachute 才设）判入场
+    int aliveHumans = 0;
     for (int i = 0; i < st.playerCount && i < 9; ++i) {
-        if ((st.players[i].alive & 1) != 0) {
+        const Player& pl = st.players[i];
+        if ((pl.alive & 1) != 0 && (pl.spriteX != 0 || pl.spriteY != 0)) {
             ++aliveHumans;
         }
     }
@@ -675,10 +678,14 @@ void surrenderPlayer(Application& app) {
         return;
     }
     const int old = st.currentPlayer;
+    // [防御] 渲染会经 0x40829D 对未落地玩家触发出生点分配+跳伞（pendingSpawnPlayer）；
+    //   候选已排除未入场者，仍暂存/恢复以防副作用（原版 g_playerAlive 天然排除）
+    const int savedPending = st.pendingSpawnPlayer;
     st.currentPlayer = target - 1; // [RE 0x411B1F]
     renderGameFrame(app);          // [RE 0x411B26 sub_41906A(1)]
-    createMapObject(st, 15, 0, 7, static_cast<uint8_t>(target)); // [RE 0x411B35]
-    st.currentPlayer = old;                                     // [RE 0x411B3D]
+    createMapObject(app, 15, 0, 7, static_cast<uint8_t>(target)); // [RE 0x411B35]
+    st.pendingSpawnPlayer = savedPending;
+    st.currentPlayer = old; // [RE 0x411B3D]
     RICH4_LOGI("surrender: p%d eliminated, death god attached to p%d (RE 0x411AE0)", cur, target - 1);
 }
 

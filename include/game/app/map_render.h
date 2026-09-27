@@ -14,7 +14,8 @@ struct GameState;
 void renderMap(Application& app, int centerX, int centerY);
 
 // [RE 0x40E033] createMapObject（定义见 src/app/map_render.cpp）
-int createMapObject(GameState& state, int type, int cellEntId, uint8_t a3, uint8_t a4);
+//   a4 != 0 且 type==15（死神）→ attachObject 完整附身（原版 0x40E0CB 分支）
+int createMapObject(Application& app, int type, int cellEntId, uint8_t a3, uint8_t a4);
 
 // [RE 0x40AA6C] randomCellEnt（定义见 src/app/map_render.cpp）
 int randomCellEnt(const GameState& state, int nearCellEnt);

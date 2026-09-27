@@ -868,9 +868,12 @@ void magicHouseVisit(Application& app) {
 //   data.mkf[2]；musicPlayScene(7) 压栈；runModal(0x433088 状态机) 返回选中玩家+1。
 int deathGodSummonDialog(Application& app, int from) {
     GameState& st = app.gameState();
+    // 候选 = 存活且**已入场**（spriteX/Y 落地后非 0）且非发起者 —— 原版 g_playerAlive 跳伞
+    //   落地才置位，未入场（未轮到跳伞）的玩家不列入；重写 alive 开局即 1，用坐标判入场
     std::vector<int> candidates;
     for (int i = 0; i < st.playerCount && i < 4; ++i) {
-        if (st.players[i].alive != 0 && i != from) {
+        const Player& pl = st.players[i];
+        if (pl.alive != 0 && i != from && (pl.spriteX != 0 || pl.spriteY != 0)) {
             candidates.push_back(i);
         }
     }

@@ -3743,7 +3743,7 @@ void advanceDay(Application& app) {
             releaseCellTableSlot(app, slot);
             const int newEnt = randomCellEnt(st, oldEnt);
             if (newEnt > 0) {
-                createMapObject(st, slot, newEnt, 0, 0);
+                createMapObject(app, slot, newEnt, 0, 0);
             }
         }
         ++st.stockDivPeriod; // [RE 0x499084] 分红期数递增
