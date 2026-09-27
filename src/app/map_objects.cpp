@@ -10,6 +10,7 @@
 #include "game/app/card_lines.h"
 #include "game/app/item_lines.h"
 #include "game/app/economy.h"
+#include "game/app/event_common.h"
 #include "game/app/event_stack.h"
 #include "game/app/game_loop.h"
 #include "game/app/game_panel.h"
@@ -788,7 +789,8 @@ void damagePlayer(Application& app, int p) {
 
 // [RE 0x40AB4A] demolishAtObjId：住宅用地（2000..3999）/商業用地（4000..5999）拆除
 //   mode 0 = 降一级；1 = 没收重置；2 = 拆建筑留地（type≠0 一并清）
-// 差异: 原版小地图即时重绘（重写绘制时重建）；corp sub_40DFFA（费用统计）未建模
+//   corp 任一模式使 sub→0 时 forceHotelCheckout（0x40DFFA=强制退房，非"费用统计"——旧注释
+//   误读；2026-09-27 审计修正）；mode1 没收 → rebuildMiniMap(0)（重写 buildMiniMapMarks）
 bool demolishAtObjId(Application& app, int objId, int mode) {
     GameState& st = app.gameState();
     bool changed = false;
@@ -821,20 +823,26 @@ bool demolishAtObjId(Application& app, int objId, int mode) {
             cp.sub = 0;
             cp.type = 0;
             cp.expireDate = 0;
+            forceHotelCheckout(st);  // [RE 0x40AC4D]
             changed = true;
         } else if (mode == 2) {
             if (cp.sub != 0) {
                 cp.sub = 0;
                 cp.type = 0;
+                forceHotelCheckout(st);  // [RE 0x40AC6C]
                 changed = true;
             }
         } else if (mode == 0 && cp.sub != 0) {
             --cp.sub;
             if (cp.sub == 0) {
                 cp.type = 0;
+                forceHotelCheckout(st);  // [RE 0x40AC33]
             }
             changed = true;
         }
+    }
+    if (changed && mode == 1) {
+        buildMiniMapMarks(app);  // [RE 0x40ABBE/0x40AC54] rebuildMiniMap(0)（没收改归属）
     }
     return changed;
 }

@@ -148,6 +148,29 @@ bits 24-31 = 光标 idx-1
 3. **拾取/占用**：`occMask` 全生命周期；三道具"无法指定道路位置"✅ 2026-09-27 实机
    复测通过（§8：归一化撤销 + 吸附回退 + 传送机 special 检查撤销）。
 
+## 9. occMask 全生命周期审计 + flag 蒙膜（2026-09-27 彻查，本批）
+
+**occMask 写入点逐一比对（原版 ↔ 重写）——全部一致，无泄漏**：
+spawn `|=256<<p`（0x40829D）/ moveOneStep 清旧设新（0x40C05C，`alive&0x30` 分支**不占位**、
+NPC 仅 `v65<4` 占位、槽 8 跳过）/ createMapObject `|=(slot+1)<<16` / deleteMapObject
+`&=~0x00FF0000` / attachObject 清旧格 / hospitalize·jail（真人清 `~(256<<p)`、NPC 清
+`~(4096<<i)`）/ releaseEventNpc 置位 / relocatePlayer 清旧设新 / 旅館走进 0x40D5A5 清、
+走出 0x40D6BE `|=256<<p` / fate 出國 0x40D399 清 / teleport 玩家+物件 / eliminatePlayer
+**置**死亡占位（0x40CD87，出生点排除用）/ 读档 rebuildEventNpcFromSlots 重建——均对齐。
+
+**本批发现并修复**：
+1. **flag 蒙膜渲染缺失**：原版 `sub_40829D` estate(+23)/corp(+28) `flag!=0` →
+   `sub_456C33` 按 g_pickMask 形状 `像素 |= 颜色`（涨价 0x7C00 红 / 查封 0x003F 蓝，
+   `word_488EF0` 表）。重写数据层齐但无渲染 → 新增 `orColorMask`（`map_render.cpp`，
+   详见 `map-object-refresh.md` §14）。
+2. **`demolishAtObjId`（0x40AB4A）缺两处**：corp 任一模式使 sub→0 时
+   `forceHotelCheckout`（0x40DFFA=强制退房，旧注释"费用统计"系误读）；mode1 没收后
+   `rebuildMiniMap(0)`。已补。
+3. **已知差异（不修，低频+视觉）**：跨状态转移（坐牢中住院/住院中坐牢）原版
+   `sub_40D761→sub_40BF93` 会把 walkRes slot1 替换为出监/出院专用行走资源
+   （data.mkf[128+21*char+19/20]）并重载；重写未替换（走出动画用普通资源）。
+4. `demolishEstate`/`advanceDay` 地块到期均**不触 occMask**（原版核实）✓。
+
 ## 8. 道路格"无法瞄准"根因与修复（2026-09-27，按 IDB 撤销归一化）
 
 **根因（IDB 证据链 + 原版实机截图几何对齐 + Python 复现）**：

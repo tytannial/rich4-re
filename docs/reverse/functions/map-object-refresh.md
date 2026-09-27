@@ -361,3 +361,17 @@ BIG5 双字节字符第二字节可落在 `\x5C`(反斜杠) 等干扰 IDA 字符
 建设施 0x41A261 / 设施升级）原版统一调 0x40FA61：附身 idx 7/8/15（小衰神/大衰神/死神）→
 showMessage(sprintf aS_14 = "%s顯靈\n\n投資失敗！", 1500) → 返回阻止。重写同名 helper
 `checkCarriedGod(app, st, carried)`（turn_system.cpp）。
+
+## 14. flag 蒙膜渲染（0x456C33，2026-09-27 地图专项②补）
+
+原版 `sub_40829D` estate/corp 收集循环内：`flag(+23/+28) != 0` →
+`sub_456C33(backbuffer, 12*(v138&1)+g_pickMask+12, sx, sy, flag&1)`——
+按 g_pickMask 形状（estate 帧 `(8-(rot+dir))&1`、corp `+2`）非透明像素
+`屏幕像素 |= 颜色`（OR 出半透明色彩蒙膜，区别于 0x456384 整色绘制）。
+
+- 颜色 = `word_488EF0[4*(flag&1)+色深]`（RGB555 色深列 0）：
+  - `flag&1=0`（涨价卡 flag=0x50）→ **0x7C00 红**
+  - `flag&1=1`（查封卡 flag=0x51）→ **0x003F 蓝**
+- 图层：地砖/cellEnt 图块之上、物件绘制列表之下（原版在排序前绘制）
+- 重写：`map_render.cpp orColorMask`（匿名 ns）+ renderMap 内 estate/corp flag 循环；
+  裁剪 = 全局裁剪矩形（地图区，与原版 dword_4861B8..C4 一致）

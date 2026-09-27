@@ -869,6 +869,21 @@ UI 音效与游戏音效槽**是两套**，勿混：
   仅**按住**投标区时出现；棋子头像实参 (66,150+72p)；⑧ 详情价格值带「元」（格式串 `aS_43` 0x463EE0
   IDA 显示 "%s" 实为 "%s元"——BIG5 格式串视图截断坑）；⑨ 挂单数据操作一律先 `clearInvalidTradeOrders`。
 
+## 37. 色彩蒙膜叠加（0x456C33 / 0x4554FC）
+- 原版语义：按 SPR 掩膜形状非透明像素对目标像素做 **`|= 颜色`**（OR 半透明色彩叠加），
+  两个使用者：① estate/corp `flag` 蒙膜（涨价红 0x7C00 / 查封蓝 0x003F，颜色表
+  `word_488EF0[4*(flag&1)+色深]`，0x456C33）；② 高亮闪烁（pickBuffer==0xFFFF 像素按
+  `byte_476380[i]` 索引查 `unk_485D68+32*k` 表变换，0x4554FC——**非线性含通道压缩，
+  不是线性偏移**，重写曾误用 `k>>2` 致幅度 1/4）
+- 资源：形状 = `g_pickMask`（MAP.MKF[26]）帧 0/1（71×47/51 estate）、2/3（143×103
+  corp/specPt）、4（51×51 cellEnt）；SPR 8bit 索引，判定用 `frameBytes` 非零
+- 交互：无（纯渲染叠加）；裁剪 = 全局裁剪矩形（地图区）；落点 = 实参 − 帧 offset
+- 重写位置：`src/app/map_render.cpp:orColorMask`（flag 蒙膜，renderMap 内 estate/corp
+  循环，位于 items 绘制前）；`drawEstateHighlight`（闪烁查表，`kHlTable` dump 自 0x485D68）
+- 经验/坑：① OR 与"整色绘制"（0x456384 blitColorMask）不同，勿混用；② 蒙膜在物件
+  绘制列表**之下**（原版排序前绘制），放 items 之后会被建筑盖住；③ flag 颜色选择是
+  `flag&1`（高位 nibble 只是倒计时）
+
 ## 新增控件模板（发现新控件时复制填写）
 
 ```

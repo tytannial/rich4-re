@@ -77,6 +77,39 @@ int pickSpawnCellEnt(const GameState& state) {
     return cand[std::rand() % n];
 }
 
+// [RE 0x456C33] flag 掩膜：SPR 掩膜形状非透明像素对屏幕像素 **|= color**（OR 出半透明
+//   色彩蒙膜；区别于 blitColorMask 0x456384 的整色绘制）；裁剪 = 全局裁剪矩形
+//   （原版 dword_4861B8..C4，地图区）；目标 = (x - offX, y - offY)
+void orColorMask(Surface& dst, const UiImage& spr, int frame, int x, int y, uint16_t color) {
+    const UiFrameView& src = spr.frame(frame);
+    const uint8_t* mask = spr.frameBytes(frame);
+    if (mask == nullptr) {
+        return;
+    }
+    int left = 0;
+    int top = 0;
+    int right = 0;
+    int bottom = 0;
+    getClipRect(left, top, right, bottom);
+    const int dx = x - src.offsetX;
+    const int dy = y - src.offsetY;
+    for (int row = 0; row < src.height; ++row) {
+        const int py = dy + row;
+        if (py < top || py >= bottom) {
+            continue;
+        }
+        uint16_t* drow = dst.pixels() + static_cast<size_t>(py) * Surface::kWidth;
+        const uint8_t* mrow = mask + static_cast<size_t>(row) * src.width;
+        for (int col = 0; col < src.width; ++col) {
+            const int px = dx + col;
+            if (px < left || px >= right || mrow[col] == 0) {
+                continue;
+            }
+            drow[px] |= color;
+        }
+    }
+}
+
 } // namespace
 
 // [RE 0x40829D] spawnPlayerAt：为未放置玩家分配出生格并标记待入场（跳伞）
@@ -278,6 +311,36 @@ void renderMap(Application& app, int centerX, int centerY) {
         }
         items.push_back({spr, frame, sx, sy, colorIdx, id, hitSpr, hitFrame});
     };
+
+    // [RE 0x40829D estate/corp 循环 + 0x456C33] flag 蒙膜：estate(+23)/corp(+28) flag≠0
+    //   → 按 g_pickMask 形状（estate 帧 (8-(rot+dir))&1、corp 帧 +2）非透明像素 |= 颜色。
+    //   颜色 = word_488EF0[4*(flag&1)+色深]（RGB555 列）：flag&1=0 涨价 → 0x7C00 红；
+    //   flag&1=1 查封 → 0x003F 蓝。图层=地砖/cellEnt 图块之上、物件绘制列表之下
+    //   （原版在 estate/corp 收集循环内即时绘制、排序绘制前）
+    for (size_t i = 1; i < state.estates.size(); ++i) {
+        const Estate& es = state.estates[i];
+        if (es.flag == 0) {
+            continue;
+        }
+        int sx = 0;
+        int sy = 0;
+        if (projectItem(es.x, es.y, sx, sy)) {
+            orColorMask(dst, state.flagTiles, (8 - (state.mapRotation + es.dir)) & 1, sx, sy,
+                        (es.flag & 1) != 0 ? 0x003F : 0x7C00);
+        }
+    }
+    for (size_t i = 1; i < state.corps.size(); ++i) {
+        const Corp& cp = state.corps[i];
+        if (cp.flag == 0) {
+            continue;
+        }
+        int sx = 0;
+        int sy = 0;
+        if (projectItem(cp.x, cp.y, sx, sy)) {
+            orColorMask(dst, state.flagTiles, ((8 - (state.mapRotation + cp.dir)) & 1) + 2, sx, sy,
+                        (cp.flag & 1) != 0 ? 0x003F : 0x7C00);
+        }
+    }
 
     // [RE 0x40829D] 玩家棋子：资源 = walkRes[j][2*state + group]，
     //   帧 = byte_498EA3 + ((8 - dword_499088 + byte_496B78) & 7) * 每方向帧数
