@@ -11,4 +11,10 @@ class Application;
 // 依据: docs/reverse/functions/43380a-magic-house.md §1..§4
 void magicHouseVisit(Application& app);
 
+// [RE 0x4339D9 → 0x433088] deathGodSummonDialog：投降召唤死神对话框（surrenderPlayer
+//   0x411AE0 调用）。复用魔法屋场景（panel[18] 帧 0/1 女巫 + 帧 8 选择区 + 帧 2 确认罩，
+//   panel[20] 退出 FLC，data.mkf[2] 头像）+ FloatMessage #0042/#0043/#0041。
+//   候选 = 存活且非发起者玩家；返回选中玩家+1（createMapObject 附身参数）；0 = 取消/无目标。
+int deathGodSummonDialog(Application& app, int from);
+
 } // namespace rich4

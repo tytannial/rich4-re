@@ -5,6 +5,7 @@
 #include "game/app/ai_dialog.h"
 #include "game/app/card_bag_dialog.h"
 #include "game/app/debug_keys.h"
+#include "game/app/economy.h"
 #include "game/app/event_stack.h"
 #include "game/app/game_panel.h"
 #include "game/app/help_dialog.h"
@@ -455,13 +456,12 @@ bool gameEventHandler(const SDL_Event* event, void* user) {
             return true;
         }
         if (st.surrenderRequest) {
-            // [RE 0x411AE0] 認輸投降：当前玩家出局并交棒（原版 sub_41906A(1) 轮换）
+            // [RE 0x411AE0] 認輸投降：淘汰当前玩家（演出/资产清算/拍卖）→ 多人类时死神复仇 → 交棒
             st.surrenderRequest = false;
-            if (st.currentPlayer >= 0 && st.currentPlayer < st.playerCount) {
-                st.players[st.currentPlayer].alive &= ~1;
-                st.playerActionState[st.currentPlayer] = 0;
+            surrenderPlayer(app);
+            if (st.sceneRequest == 0) { // 无人类存活时 sceneRequest=1，交由下一 tick 回主菜单
+                nextPlayer(app);
             }
-            nextPlayer(app);
             renderGameFrame(app);
             return true;
         }

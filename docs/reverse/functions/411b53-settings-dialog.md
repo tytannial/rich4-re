@@ -77,7 +77,9 @@ dword_474D74   当前按下控件索引
 - `settingsEventHandler`：悬停/拖动/点击分发；確定/取消专用音效（2/4）
 - 返回值分发在 `settingsDialog`（page!=0 时 1/2/3 → 重新游戏/投降/结束游戏）
 - **结束游戏**：`quitGame` → `game_loop` 检测后 `app.quit()` 直接退出（对齐原版 LABEL_27）
-- **投降**：出局 + `nextPlayer` 交棒
+- **投降 ✅ 2026-09-27**：`surrenderPlayer` 0x411AE0 —— `eliminatePlayer` 淘汰（含演出/资产
+  清算/拍卖）+（humanCount>1 且存活人类非 0）死神召唤对话框 0x4339D9/0x433088 选目标 →
+  `createMapObject(15,0,7,target)` 死神附身复仇 → `nextPlayer` 交棒（单人战败界面 M3）
 - **重新游戏**：`sceneRequest=1` → 回主菜单（原版 `_WinMain` LABEL_5 语义）；
   `newGameInit` 重置 `mapRotation`/骰子/回合/音乐计时器等残留状态
 - **音乐**：取消不改动音乐；確定仅静音 0↔非0 时停/重播（避免「从头播放」）

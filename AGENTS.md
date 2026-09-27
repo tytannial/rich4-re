@@ -105,7 +105,8 @@ owner 停留 type4 逐级解锁选 1（`corp.sub` 门槛**灰度**）→ `resear
   银行/小游戏/樂透/百貨/新聞/命運/魔法屋全链 ✅；**魔法屋+拍卖 2026-09-26**：
   `magic_house_dialog.cpp` 0x43380A + `auction_dialog.cpp` 0x43BDE5（新闻 idx 7 激活），
   `43380a-magic-house.md`/`43bde5-auction.md`、`ui-controls.md` §33/§34，调试 `Ctrl+Shift+0`；
-  面板底座 `ui-controls.md` §25，事件槽 NPC 四大恶人 ✅ 2026-09-26；投降召唤死神 0x433088 → P4）
+  面板底座 `ui-controls.md` §25，事件槽 NPC 四大恶人 ✅ 2026-09-26；**投降召唤死神 ✅ 2026-09-27**
+  （`surrenderPlayer` 0x411AE0 + `deathGodSummonDialog` 0x4339D9/0x433088））
 - **P2 樂透（case 9）✅ 2026-09-25**：`lottery_dialog.cpp` + `lottery.h`——投注界面
   （0x42F7FC：9×4 网格选号/红圈帧 7/已售 -10 变暗/panel[14] FLC 循环/装饰闪烁/钱不足链；AI
   `cash>1000` 自动随机号）+ 15 号开奖（0x431712+0x43010C：panel[15/16/17]、摇号算法

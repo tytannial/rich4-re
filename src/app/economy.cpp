@@ -1,15 +1,23 @@
 #include "game/app/economy.h"
 
+#include <SDL3/SDL.h>
+
 #include <cstdlib>
+#include <cstring>
 #include <vector>
 
+#include "game/app/auction_dialog.h"
+#include "game/app/game_loop.h"
 #include "game/app/game_panel.h"
+#include "game/app/magic_house_dialog.h"
 #include "game/app/map_objects.h"
+#include "game/app/stock_system.h"
 #include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
 #include "game/core/log.h"
+#include "game/render/blit.h"
 
 namespace rich4 {
 
@@ -445,7 +453,13 @@ void expireAssets(Application& app, int cx, int cy, int radius, int flags, int d
 }
 
 // [RE 0x40CD87] eliminatePlayer
-// 依据: 0x40CD87 反编译; 详见 economy.h 注释
+// 依据: 0x40CD87 反编译; 详见 economy.h 注释。完整流程：
+//   ① 占用位/监医标志/解除同盟/保释 NPC 关回/释放附身·挂身槽；
+//   ② 清财务与状态字段（原版 sub_456F60 +28..+103）、角色遗留标记、死亡行走资源、清欠款列；
+//   ③ 淘汰演出：musicPlayScene(2) + 重绘（视口临时切破产者）+ data.mkf[555] FLC + 停留 2s；
+//   ④ 存活人类非 0：资产归公收集（estate/corp）、小地图、清仓持股、没收道具/卡片、乐透作废、
+//      资产 >3 件随机拍卖 3 件（卖方=系统）、棋子精灵灰度；
+//   ⑤ 失败/胜利分支（无存活人类 → sceneRequest=1；失败界面 defeatFlow/胜利流程属 M3）
 void eliminatePlayer(Application& app, int p) {
     GameState& st = app.gameState();
     if (p < 0 || p >= 9) {
@@ -455,6 +469,7 @@ void eliminatePlayer(Application& app, int p) {
     if (!pl.alive) {
         return;
     }
+    const uint8_t charIndex = pl.charIndex;
     // 原版 cellEnt +36 |= 256<<p（死亡占用位；重写用于出生点排除）
     if (pl.cellEntId < st.cellEnts.size()) {
         st.cellEnts[pl.cellEntId].occMask |= (256u << p);
@@ -487,17 +502,100 @@ void eliminatePlayer(Application& app, int p) {
     if (pl.cellNo) {
         releaseCellTableSlot(app, pl.cellNo);
     }
-    // 清空名下资产（原版 g_estates/g_corps/g_specPts 遍历）
-    for (auto& e : st.estates) {
+    // [RE 0x40CEF0] 清财务/状态字段（原版 sub_456F60(&g_players[26*p+7], 0, 76)：
+    //   字节 +28..+103；保留 name/颜色/位置/朝向/charIndex/alive/AI 配置等 +0..+27）
+    pl.cash = 0;
+    pl.bank = 0;
+    pl.loan = 0;
+    pl.bankAdvance = 0;
+    pl.loanDate = 0;
+    pl.points = 0;
+    pl.stateFlags = 0;
+    pl.byte54 = 0;
+    pl.state37 = 0;
+    pl.skipMove = 0;
+    pl.fixedStep = 0;
+    pl.byte58 = 0;
+    pl.bankRefuseDays = 0;
+    pl.bankFinanceFlags = 0;
+    pl.allyActive = 0;
+    pl.insuranceDays = 0;
+    pl.cellTableIdx = 0;
+    pl.cellNo = 0;
+    pl.ally = 0;
+    pl.byte66 = 0;
+    pl.pad67 = 0;
+    pl.luckA = 0;
+    pl.luckB = 0;
+    pl.luckC = 0;
+    pl.stayCorpIdx = 0;
+    std::memset(pl.pad76, 0, sizeof(pl.pad76));
+    pl.monthSettleA = 0;
+    pl.monthSettleB = 0;
+    pl.kind = 0;
+    pl.vehicleRestore = 0;
+    pl.diceRestore = 1;
+    pl.pad103 = 0;
+    // [RE 0x40CF30] g_charState[角色] = 2：下局选人灰度不可选（重写 = newGameConfig.aiUsed）
+    if (charIndex < 12) {
+        st.newGameConfig.aiUsed[charIndex] = true;
+    }
+    loadWalkResources(st, p); // [RE 0x40CF35] alive=0 → 死亡站立资源
+    // [RE 0x40CF3E] 清 p 的欠款列（原版 g_playerDebts[26*k + p] = 0，k ≠ p）
+    for (int k = 0; k < 8; ++k) {
+        if (k != p) {
+            st.playerDebt[k][p] = 0;
+        }
+    }
+    // [RE 0x40CFA8..0x40CFC9] 淘汰演出：切视口到破产者 → musicPlayScene(2) → 重绘 →
+    //   data.mkf[555] FLC(440×440 10 帧) @(0,40) sound 100 → sub_45285E(2000) 停留 2 秒
+    {
+        const int oldCur = st.currentPlayer;
+        st.currentPlayer = p;
+        app.audio().playSceneMusic(2);
+        renderGameFrame(app);
+        playEventFlc(app, 555, 0, 40, 100);
+        for (int t = 0; t < 2000; t += 5) {
+            app.audio().update();
+            SDL_Delay(5);
+        }
+        st.currentPlayer = oldCur;
+    }
+    // [RE 0x40D0A9] 淘汰台词 off_4808AE[角色] → [TODO(P4 语音专项)]
+    // ---- 存活统计（原版 v13=存活人类数 / result=总存活数）----
+    int aliveHumans = 0;
+    int aliveTotal = 0;
+    for (int i = 0; i < st.playerCount && i < 9; ++i) {
+        if (st.players[i].alive != 0) {
+            ++aliveTotal;
+            if ((st.players[i].alive & 1) != 0) {
+                ++aliveHumans;
+            }
+        }
+    }
+    if (aliveHumans == 0) {
+        // 无存活人类 → 回主菜单（原版 sceneRequest=1；失败界面 defeatFlow 属 M3）
+        st.sceneRequest = 1;
+        RICH4_LOGI("eliminatePlayer: p%d no human alive -> scene 1 (RE 0x40CD87)", p);
+        return;
+    }
+    // ---- [RE 0x40D0E5..0x40D3F6] 资产归公 + 拍卖 ----
+    // 注: 原版仅当总存活 > 1 时收集（==1 → 胜利流程 checkVictory/M3）；重写无条件收集防残留
+    std::vector<uint16_t> auctionIds;
+    for (size_t i = 1; i < st.estates.size(); ++i) {
+        Estate& e = st.estates[i];
         if (e.owner == p + 1) {
             e.owner = 0;
             e.expireDate = 0;
+            auctionIds.push_back(static_cast<uint16_t>(2000 + i));
         }
     }
-    for (auto& c : st.corps) {
+    for (size_t i = 1; i < st.corps.size(); ++i) {
+        Corp& c = st.corps[i];
         if (c.owner == p + 1) {
             c.owner = 0;
             c.expireDate = 0;
+            auctionIds.push_back(static_cast<uint16_t>(4000 + i));
         }
     }
     for (auto& s : st.specPts) {
@@ -505,24 +603,83 @@ void eliminatePlayer(Application& app, int p) {
             s.owner = 0;
         }
     }
-    // [RE 0x40D1AA] 破产者所购乐透号码作废（g_miscTable36A[n] == p+1 → 0，不退款）
+    buildMiniMapMarks(app); // [RE 0x40D1D4] rebuildMiniMap(0)
+    // [RE 0x40D1E0] 卖出全部持股（toBank=false → 入系统/公库）
+    for (int m = 0; m < 12; ++m) {
+        const int32_t hold = st.playerShares[p][m];
+        if (hold != 0) {
+            sellStock(app, p, m, hold, false);
+        }
+    }
+    confiscateItems(app, p); // [RE 0x40D2A4]
+    confiscateCards(app, p); // [RE 0x40D2A9]
+    // [RE 0x40D1AA] 破产者所购乐透号码作废（不退款）
     for (int n = 0; n < 36; ++n) {
         if (st.lotteryNumbers[n] == p + 1) {
             st.lotteryNumbers[n] = 0;
         }
     }
-    // 失败流程（原版：无存活玩家 → 1；仅剩人类 → 2/3；重写仅在全灭时回主菜单）
-    int aliveCount = 0;
-    for (int i = 0; i < st.playerCount && i < 9; ++i) {
-        if (st.players[i].alive) {
-            ++aliveCount;
+    // [RE 0x40D2D5] 资产 > 3 件 → musicPlayScene(5) + 随机抽 3 件拍卖（卖方 = -1 系统）
+    if (auctionIds.size() > 3) {
+        app.audio().playSceneMusic(5);
+        for (int t = 0; t < 3; ++t) {
+            size_t pick = 0;
+            do {
+                pick = static_cast<size_t>(std::rand()) % auctionIds.size();
+            } while (auctionIds[pick] == 0);
+            runAuction(app, -1, auctionIds[pick], false);
+            auctionIds[pick] = 0;
         }
     }
-    if (aliveCount == 0) {
-        st.sceneRequest = 1;
+    // [RE 0x40D2C4] 棋子精灵 frame0 灰度（淘汰者棋子变灰；0 像素保持）
+    if (st.pieceAnim[p].frameCount() > 0) {
+        UiImage& img = st.pieceAnim[p];
+        std::vector<uint8_t> copy = img.data();
+        const UiFrameView& f = img.frame(0);
+        const size_t off = static_cast<size_t>(
+            reinterpret_cast<const uint8_t*>(f.pixels) - copy.data());
+        grayscaleImage(reinterpret_cast<uint16_t*>(copy.data() + off),
+                       static_cast<size_t>(f.width) * f.height);
+        img.load(std::move(copy));
     }
-    RICH4_LOGI("eliminatePlayer: %d alive %d scene %d (RE 0x40CD87, simplified)", p, aliveCount,
-               st.sceneRequest);
+    renderGameFrame(app); // [RE 0x40D3F0 sub_41906A(1)]
+    RICH4_LOGI("eliminatePlayer: p%d aliveHumans=%d aliveTotal=%d auction=%zu (RE 0x40CD87)", p,
+               aliveHumans, aliveTotal, auctionIds.size());
+}
+
+// [RE 0x411AE0] surrenderPlayer：認輸投降 = 淘汰自己 +（多人类时）召唤死神送他人复仇
+// 依据: 0x411AE0 反编译; ① sub_40CD87 淘汰当前玩家；② g_humanCount > 1 且存活人类数
+//   （sub_40DFDA）非 0 时弹死神对话框（0x4339D9）；③ 选中目标 → 临时切 currentPlayer 到目标 →
+//   重绘（sub_41906A(1)）→ createMapObject(15, 0, 7, target)（死神对象创建即附身 target-1）→
+//   还原 currentPlayer
+// 差异: 单人投降的战败界面 defeatFlow 属 M3；回合推进由调用方 nextPlayer 承担（原版无显式调用）
+void surrenderPlayer(Application& app) {
+    GameState& st = app.gameState();
+    const int cur = st.currentPlayer;
+    if (cur < 0 || cur >= 4) {
+        return;
+    }
+    eliminatePlayer(app, cur); // [RE 0x411AE9 sub_40CD87]
+    st.playerActionState[cur] = 0; // [迁移] 清回合状态机残留（重写原投降分支行为）
+    int aliveHumans = 0;       // [RE 0x40DFDA] 存活人类数
+    for (int i = 0; i < st.playerCount && i < 9; ++i) {
+        if ((st.players[i].alive & 1) != 0) {
+            ++aliveHumans;
+        }
+    }
+    if (st.humanCount <= 1 || aliveHumans == 0) { // [RE 0x411AF8/0x411B01]
+        return;
+    }
+    const int target = deathGodSummonDialog(app, cur); // [RE 0x411B0A → 0x4339D9]
+    if (target == 0) {
+        return;
+    }
+    const int old = st.currentPlayer;
+    st.currentPlayer = target - 1; // [RE 0x411B1F]
+    renderGameFrame(app);          // [RE 0x411B26 sub_41906A(1)]
+    createMapObject(st, 15, 0, 7, static_cast<uint8_t>(target)); // [RE 0x411B35]
+    st.currentPlayer = old;                                     // [RE 0x411B3D]
+    RICH4_LOGI("surrender: p%d eliminated, death god attached to p%d (RE 0x411AE0)", cur, target - 1);
 }
 
 } // namespace rich4

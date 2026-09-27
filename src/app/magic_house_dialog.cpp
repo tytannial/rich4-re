@@ -611,6 +611,194 @@ bool magicHandler(const SDL_Event* event, void* user) {
     }
 }
 
+// ===== 投降召唤死神对话框（0x4339D9 启动器 + 0x433088 wndproc）=====
+
+// [RE 0x4757D8] 候选头像按钮 x（按候选数分组：2 人 = {238,330}；3 人 = {211,284,357}）
+const int kDeathX2[2] = {238, 330};
+const int kDeathX3[3] = {211, 284, 357};
+// [RE 0x464667/0x464688] #0042/#0043（#0041 复用魔法屋 kTextCast）
+constexpr char kTextDeathAsk[] = "#0042你想召喚死神，\n為你復仇嗎？";
+constexpr char kTextDeathWho[] = "#0043你要死神附身在誰身上？";
+constexpr int kDeathSelX = 180; // [RE 0x43320D Rect] 选择区 = panel[18] 帧 8 落点
+constexpr int kDeathSelY = 298;
+constexpr int kDeathSelW = 280;
+constexpr int kDeathSelH = 173;
+constexpr int kDeathBtnW = 72;   // [RE 0x4334FA] 按钮命中宽 72
+constexpr int kDeathHitY0 = 348; // [RE 0x4334EA] 命中 y 348..420
+constexpr int kDeathHitY1 = 420;
+constexpr int kDeathBoxY = 346;  // [RE 0x433598] hover 双描边 y（外框 346 高 76 / 内框 347 高 74）
+constexpr int kDeathAvY = 348;   // 头像落点 y（画布内 50 + 298）
+
+struct DeathGodCtx {
+    Application* app = nullptr;
+    UiImage sheet;               // panel[18]
+    UiImage avatars;             // data.mkf[2]（12 帧 72×72 头像）
+    FliDecoder flc;              // panel[20]
+    bool flcStarted = false;
+    int state = 0;               // 1=#0042 → 3=#0043 → 4=选择 → 5=退出 FLC
+    int hover = 0;               // 1-based 选中候选
+    int mouthT = 0;              // 口型驻留拍数（同魔法屋 0x432894）
+    std::vector<int> candidates; // 存活且非发起者玩家索引
+    FloatMessage msg;
+};
+
+int deathButtonX(const DeathGodCtx& ui, int i) {
+    return ui.candidates.size() == 2 ? kDeathX2[i] : kDeathX3[i];
+}
+
+// [RE 0x432511 magicDrawBase] 场景底：帧 0 背景 + 帧 1 女巫（与魔法屋初始一致）
+void deathDrawBase(DeathGodCtx& ui) {
+    Surface& dst = ui.app->surface();
+    blitElementOpaque(dst, ui.sheet.frame(kFrameBg), 0, 0);
+    blitElement(dst, ui.sheet.frame(kFrameBall), 241, 140, false);
+}
+
+// [RE 0x43324A] 选择区：帧 8 底 @(320,384 实参 → 180,298) + 各候选头像（帧 = charIndex）
+void deathDrawChoice(DeathGodCtx& ui) {
+    Application& app = *ui.app;
+    Surface& dst = app.surface();
+    if (ui.sheet.frameCount() > kFrameMsg) {
+        blitElement(dst, ui.sheet.frame(kFrameMsg), 320, 384, false);
+    }
+    const GameState& st = app.gameState();
+    for (size_t i = 0; i < ui.candidates.size(); ++i) {
+        const int ci = st.players[ui.candidates[i]].charIndex;
+        if (ci >= 0 && ci < ui.avatars.frameCount()) {
+            blitElementOpaque(dst, ui.avatars.frame(ci), deathButtonX(ui, static_cast<int>(i)),
+                              kDeathAvY);
+        }
+    }
+}
+
+bool deathGodHandler(const SDL_Event* event, void* user) {
+    DeathGodCtx& ui = *static_cast<DeathGodCtx*>(user);
+    Application& app = *ui.app;
+    Surface& dst = app.surface();
+    if (!event) { // [RE 0x433177/0x4331B5] 初始：#0042（0x401 初始化 + PostMessage 0x405）
+        ui.state = 1;
+        ui.msg.setup(ui.sheet, kFrameMsg, 320, 384, 0, 0, 14737632, 2105376);
+        deathDrawBase(ui);
+        ui.msg.show(app, kTextDeathAsk);
+        app.renderFrame();
+        return true;
+    }
+    switch (event->type) {
+    case kModalTimerEvent: {
+        // [RE 0x4332E9] 女巫口型装饰（同魔法屋 0x432894；state 5 不播）
+        if (ui.state != 5 && (ui.msg.active() || ui.mouthT != 0)) {
+            if (ui.mouthT != 0) {
+                if (ui.mouthT == 1) {
+                    blitElement(dst, ui.sheet.frame(kFrameMouthClosed), 286, 220, false);
+                }
+                --ui.mouthT;
+            } else if ((std::rand() >> 11) < 4) {
+                if ((std::rand() & 1) != 0) {
+                    blitElementRegionOpaque(dst, ui.sheet.frame(kFrameBall), 286, 217, 45, 77, 60,
+                                            21, false);
+                } else {
+                    blitElement(dst, ui.sheet.frame(kFrameMouthOpen), 286, 217, false);
+                }
+                ui.mouthT = (std::rand() & 7) + 1;
+            }
+        }
+        // [RE 0x4331B5] 浮字完成推进状态（1→#0043→选择区→#0041→FLC 退出）
+        if (ui.msg.advance(app)) {
+            if (ui.state == 1) {
+                ui.state = 3;
+                ui.msg.show(app, kTextDeathWho);
+            } else if (ui.state == 3) {
+                ui.state = 4; // [RE 0x433206] 显示选择区（setPauseDraw(1) 由重写模态天然阻塞）
+                deathDrawChoice(ui);
+            } else if (ui.state == 5) {
+                // [RE 0x433293] #0041 播完 → panel[20] FLC（音效 59）→ postModalExit
+                if (!ui.flcStarted) {
+                    ui.flcStarted = true;
+                    app.audio().playEffect(59);
+                    blitFlcFrame(dst, ui.flc, 0, 0, false);
+                    app.renderFrame();
+                    return true;
+                }
+                const int per =
+                    ui.flc.speedMs() > 0 ? (100 + ui.flc.speedMs() - 1) / ui.flc.speedMs() : 1;
+                bool done = true;
+                for (int i = 0; i < per; ++i) {
+                    done = decodeFlcOnce(ui.flc);
+                    if (done) {
+                        break;
+                    }
+                }
+                blitFlcFrame(dst, ui.flc, 0, 0, false);
+                app.renderFrame();
+                if (done) {
+                    app.events().requestExit(
+                        ui.candidates[static_cast<size_t>(ui.hover - 1)] + 1);
+                }
+                return true;
+            }
+        }
+        app.renderFrame();
+        return true;
+    }
+    case SDL_EVENT_MOUSE_MOTION: { // [RE 0x43345E] 状态 4 悬停
+        if (ui.state != 4) {
+            return true;
+        }
+        const int mx = static_cast<int>(event->motion.x);
+        const int my = static_cast<int>(event->motion.y);
+        int hit = 0;
+        if (my >= kDeathHitY0 && my <= kDeathHitY1) {
+            for (size_t i = 0; i < ui.candidates.size(); ++i) {
+                const int x = deathButtonX(ui, static_cast<int>(i));
+                if (mx >= x && mx <= x + kDeathBtnW) {
+                    hit = static_cast<int>(i) + 1;
+                    break;
+                }
+            }
+        }
+        if (hit == ui.hover) {
+            return true;
+        }
+        const int old = ui.hover;
+        ui.hover = hit;
+        deathDrawChoice(ui); // 恢复选择区（擦旧框）
+        if (hit != 0) {
+            const int x = deathButtonX(ui, hit - 1);
+            // [RE 0x433598] 双描边黄框（76×74 / 74×72）
+            drawRectBorder(dst, x - 2, kDeathBoxY, 0x4C, 76, rgb888To555(0xFFFF00));
+            drawRectBorder(dst, x - 1, kDeathBoxY + 1, 0x4A, 74, rgb888To555(0xFFFF00));
+        }
+        if (old != hit) {
+            app.audio().playEffect(0); // [RE 0x433536] g_uiSoundHover
+        }
+        app.renderFrame();
+        return true;
+    }
+    case SDL_EVENT_MOUSE_BUTTON_DOWN: { // [RE 0x433654] 状态 4 确认
+        if (event->button.button != SDL_BUTTON_LEFT || ui.state != 4 || ui.hover == 0) {
+            return true;
+        }
+        app.audio().playEffect(1); // [RE 0x43366E] g_uiSoundClick
+        // [RE 0x4336D6] 擦选择区（帧 0 区域 patch）+ 确认罩帧 2 @(182,142) → 浮字 #0041
+        blitElementRegionOpaque(dst, ui.sheet.frame(kFrameBg), kDeathSelX, kDeathSelY, kDeathSelX,
+                                kDeathSelY, kDeathSelW, kDeathSelH, false);
+        blitElement(dst, ui.sheet.frame(kFrameConfirm), 182, 142, false);
+        ui.state = 5;
+        ui.msg.show(app, kTextCast);
+        app.renderFrame();
+        return true;
+    }
+    case SDL_EVENT_MOUSE_BUTTON_UP: { // [RE 0x43376A] 右键取消
+        if (event->button.button == SDL_BUTTON_RIGHT) {
+            app.audio().playEffect(4); // g_uiSoundCancel
+            app.events().requestExit(0);
+        }
+        return true;
+    }
+    default:
+        return true;
+    }
+}
+
 } // namespace
 
 // [RE 0x43380A] magicHouseVisit
@@ -673,6 +861,39 @@ void magicHouseVisit(Application& app) {
     applyMagicPenalty(app, pen, targets, cur);
     RICH4_LOGI("magicHouse: cond pen=%d targets=%zu entrant=%d (RE 0x43380A)", pen,
                targets.size(), cur);
+}
+
+// [RE 0x4339D9] deathGodSummonDialog（定义见头文件注释）
+// 依据: 0x4339D9 反编译; 候选 = 存活且 ≠ 发起者（≤1 人返回 0）；资源 panel[18]/[20] +
+//   data.mkf[2]；musicPlayScene(7) 压栈；runModal(0x433088 状态机) 返回选中玩家+1。
+int deathGodSummonDialog(Application& app, int from) {
+    GameState& st = app.gameState();
+    std::vector<int> candidates;
+    for (int i = 0; i < st.playerCount && i < 4; ++i) {
+        if (st.players[i].alive != 0 && i != from) {
+            candidates.push_back(i);
+        }
+    }
+    if (candidates.size() <= 1) { // [RE 0x433A04] v2 <= 1 → 无目标
+        return 0;
+    }
+    DeathGodCtx ui;
+    ui.app = &app;
+    ui.candidates = candidates;
+    auto blob18 = st.panel.read(18);
+    auto blob20 = st.panel.read(20);
+    auto blobAv = st.data.read(2);
+    if (!blob18 || !ui.sheet.load(std::move(*blob18)) || ui.sheet.frameCount() < 9 || !blob20 ||
+        !blobAv || !ui.avatars.load(std::move(*blobAv)) || ui.avatars.frameCount() < 12) {
+        RICH4_LOGW("deathGod: panel[18/20] / data.mkf[2] unavailable (RE 0x4339D9)");
+        return 0;
+    }
+    ui.flc.open(std::move(*blob20));
+    app.audio().pushSceneMusic(7); // [RE 0x433B1E musicPlayScene(7)]
+    const int r = runModal(app, &deathGodHandler, &ui, 100);
+    app.audio().resumeSceneMusic();
+    RICH4_LOGI("deathGod: from=%d candidates=%zu -> %d (RE 0x4339D9)", from, candidates.size(), r);
+    return r > 0 ? r : 0;
 }
 
 } // namespace rich4

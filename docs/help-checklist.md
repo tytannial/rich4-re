@@ -55,7 +55,7 @@
 | 10 | 卡片 | 使用卡片（30 种，上限 10 张，额满舍弃） | ✅ | 卡片栏 UI ✅（case8 `useCardDialog` 0x441BAA：15 槽网格/选卡/`showCardGet`/效果表分派）；**30 卡效果全实现 ✅ 2026-09-26**（档A/B/C，`card_effects.cpp`；被动 18復仇/19嫁祸/20免費/21免罪随惩罚·收费链；红黑卡选股 `stockPickDialog`；**AI/托管自动用卡链 ✅**（`ai_card.cpp` 0x41E69E + 目标表 `dword_475324`，回合开始 rand 用卡/道具）；**角色台词 ✅**（`card_lines.cpp` 生成表 + `playCardLine`，含对方/受害者槽与语音前缀）；见 `441baa-card-effects.md`）。额满舍弃最低价 `giveCardToBag`；卡槽上限 15（帮助"10 张"为旧值） |
 | 11 | 交易 | 公佈欄：玩家间公开交易房产/股票/卡片/道具 | ✅ | **2026-09-27 `trade_market.cpp`**（工具条 case 9；0x4284BE/0x427C21/0x42704E/0x4255DA：主面板网格 + 详情 + 股票/地产/道具/卡片 4 子对话框 + AI 自动 + 每日 age + 存档/时光机；见 `4284be-trade-market.md`） |
 | 12 | 地圖 | 调整地图角度（旋转）、观察各角落 | ✅ | `mapDialog`（大地图）+ 小地图左右旋转箭头（`mapRotation`） |
-| 13 | 系統 | 速度/動畫過程/音樂/音效/自動存檔/重新遊戲/認輸投降/結束遊戲 | ✅ | `settings_dialog.cpp`（原始設定页 + 游戏内系统菜单页）；認輸投降为简化实现（出局+交棒，未接死神/魔法屋） |
+| 13 | 系統 | 速度/動畫過程/音樂/音效/自動存檔/重新遊戲/認輸投降/結束遊戲 | ✅ | `settings_dialog.cpp`（原始設定页 + 游戏内系统菜单页）；**認輸投降 ✅ 2026-09-27**（`surrenderPlayer` 0x411AE0：淘汰 + 死神召唤对话框 0x4339D9/0x433088 复仇附身 + 交棒；单人战败界面 M3） |
 | 14 | 股市 | 股票买卖 | ✅ | `stock_market_dialog.cpp`（0x42B58F/0x42AAFF 行情/持股切换·買/賣·走勢圖饼+折线·休市·浮雕按钮）+ `stock_system.cpp`（stockTick/buyStock/sellStock/refreshBankStockShares 交易量）+ `spec_pt_dialog.cpp`（一级市场认购 + 数字输入框）+ 控股/经营権；`advanceDay` 每日维护；详见 `42b58f-stock-panel.md` |
 | 15 | 前進 | 依载具选择骰子数（步行 1 / 机车 2 / 轿车 3） | ✅ | 前进面板 GO + 骰子选择（`game_loop.cpp` + `drawAdvancePanel`） |
 | 16 | 查詢 | 資產清單 / 地產清單 / 股票清單 | ✅ | **查詢面板 ✅ 2026-09-25**（工具条 case 6 `sub_424492`→`runModal(sub_423CF3)`：`query_dialog.cpp`；3 页签 + 地產 5 子页签/翻页 + 玩家条；資產清單 12 字段/道具 13 格/卡片 15 槽；地產清單 5 列（地點/開發狀況/價格/收費/租期）；股票清單 12 行；控件见 `ui-controls.md` §27） |
@@ -96,7 +96,7 @@
 | 35 | 銀行 | 14 | 路过可提现金/存款；停留可贷款（100 万/3 月/免息）；假日停业 | ✅ | **路过柜员机 ✅**（`bank_dialog.cpp` 0x436EF8：存入/取出双模式+数字键盘+滑条+数字滚动动画，panel[24]）；**停留主 UI ✅**（`bank_stay_dialog.cpp` 0x435062：申请/偿还贷款 `numberInputDialog` + 右侧双面板滑动 + 柜员动画 + AI 贷款/提前还款）；**週轉現金 ✅**（`sub_434492`，自家银行=帮助「董事長特別融資」：控股银行后走到自家银行停留 → 帘子打开 → 点中央区）；**催收窗 ✅**（0x43695E 到期前 3 天）；贷款到期/停业/週轉结算数据层 ✅；"100 万"以 IDA 公式（总资产−已贷）为准 |
 | 36 | 樂透 | 9 | 现金 1000 投注，每月开奖，奖金累积 | ✅ 2026-09-25 | case 9 `lotteryVisit`/`lotteryDrawMeeting`（`lottery_dialog.cpp`）|
 | 37 | 醫院 | 5 | 住院丧失收租，每天 1000 医药费；门外可办出院 | ✅ | 住院 `hospitalizePlayer` ✅（移格/天数/FLC 524/标志/保险理赔 2000×M/天，帮助"1000"与实现不符）；回合递减+免收租 ✅；**门外办理出院 ✅**（`jail_dialog.cpp` 0x43E9A4 阶段机+护士动画；开局默认在院 流氓/間諜；**NPC 出院动画 ✅** panel[64] 全身像+答谢消息；事件槽行走/抓回 ✅ 2026-09-26） |
-| 38 | 魔法屋 | 16 | 女巫水晶球按条件施法，玩家决定惩罚对象 | ✅ 2026-09-26 | magicHouseVisit 0x43380A（施法 UI 0x4325C2 + 12 条件 0x431842 + 12 惩罚 0x431CAA + 拍卖 0x43BDE5；magic_house_dialog.cpp/uction_dialog.cpp；投降召唤死神 0x433088 → P4） |
+| 38 | 魔法屋 | 16 | 女巫水晶球按条件施法，玩家决定惩罚对象 | ✅ 2026-09-26 | magicHouseVisit 0x43380A（施法 UI 0x4325C2 + 12 条件 0x431842 + 12 惩罚 0x431CAA + 拍卖 0x43BDE5；magic_house_dialog.cpp/auction_dialog.cpp；**投降召唤死神 ✅ 2026-09-27**：surrenderPlayer 0x411AE0 + deathGodSummonDialog 0x4339D9/0x433088） |
 
 ## 5. 特殊人物（idx 39..56）—— P3/P4
 
@@ -210,8 +210,8 @@
 | P1 | 自己住宅用地升級/加盖（level<5、`priceBase*moneyMul`）；他人住宅用地收租 | ✅ 升级 ✅（实机确认加盖外观）；**收租 ✅**（landingEvent 0x419A67：同路段 `fees[level]` 联合计算 / 连锁店数量×2000 / flag 翻倍 / 地主状态免收 / 付款方神明调整 / showMessage / transferMoney flags=0 收款入银行）；**联动高亮 ✅**（0x451985）；**连锁店创建 ✅**（改建卡 0x44309B + `Ctrl+4` + 卡片栏）；case 3 仅记账不转账（原版语义）；死神代付 ✅（`resolveFeePayer` 三步：免費→嫁祸→死神）；免租卡片 ✅；**同盟房地产联合收费 ✅ 2026-09-27**（idx59：同盟者租金并入 + 分账转账 + 消息 0x46399A + 高亮含同盟地块） |
 | P1.5 | 商業用地 corp：购地/建设施/升级/收费/旅館住宿 | ✅ 全流程（`selectFacilityDialog` + `roulettePrompt` UI 完整还原；住宿状态倒计时/恢复）；研究所研发 ✅ 2026-09-26 / 流程+面板修正 2026-09-27（0x44101D，收尾触发+帧7/帧5+灰度，见 `44101d-lab-develop.md`）|
 | P2 | 特殊地点 case 2..16（16 类，见 §4） | ✅ **全部实现 2026-09-26**（cellType 分派 2/3/4/5/6-8/9/10-12/13/14/15/16 全部接线；新聞/命運/魔法屋含拍賣/小游戏/樂透/百貨/銀行/監獄·醫院/得點券/卡片格；事件槽 NPC 恶人在 onPhase 独立分派 ✅） |
-| P3 | 移动中落地：医院/监狱回合、破产金、同格传染、cellTable 物件显灵 | ✅（`updatePlayerStates` 0x41C84F + `endPlayerState`；物件生命周期 `map-object-refresh.md`；定时炸弹挂身+同格传染 ✅；破产淘汰 ✅ `eliminatePlayer` 0x40CD87——简化：全灭回主菜单，失败分支/接管流程待补） |
-| P4 | 卡片/道具/神明使用（见 §5/§6/§7） | ✅ **全实现 2026-09-26**（卡片 30 卡 `card_effects.cpp` + AI 用卡 `ai_card.cpp` + 台词 `card_lines.cpp`；道具 13 `item_effects.cpp` + AI 用道具 `ai_item.cpp`；神明携带/显灵/持续效果（P3/P3.5）；被动链 18-21 接入惩罚·收费管线）；**剩余：投降召唤死神 0x433088**（認輸投降为简化实现，未接死神/魔法屋） |
+| P3 | 移动中落地：医院/监狱回合、破产金、同格传染、cellTable 物件显灵 | ✅（`updatePlayerStates` 0x41C84F + `endPlayerState`；物件生命周期 `map-object-refresh.md`；定时炸弹挂身+同格传染 ✅；**破产清算 ✅ 2026-09-27** `eliminatePlayer` 0x40CD87 全流程：清字段/角色遗留/欠款列/淘汰演出 FLC555/资产归公/清仓股票/没收道具卡片/乐透作废/资产>3 随机拍 3 件/棋子灰度；**剩余：失败界面 defeatFlow/胜利流程 M3**） |
+| P4 | 卡片/道具/神明使用（见 §5/§6/§7） | ✅ **全实现 2026-09-26**（卡片 30 卡 `card_effects.cpp` + AI 用卡 `ai_card.cpp` + 台词 `card_lines.cpp`；道具 13 `item_effects.cpp` + AI 用道具 `ai_item.cpp`；神明携带/显灵/持续效果（P3/P3.5）；被动链 18-21 接入惩罚·收费管线）；**投降召唤死神 ✅ 2026-09-27**（`surrenderPlayer`+`deathGodSummonDialog`）；剩余全局语音尾批 → D 批标记 |
 | P5 | AI 自动行动、存档完整恢复、事件槽 NPC | 🟡 **AI 自动行动 ✅**（回合主链 `beginPlayerTurn` case 2/5 自动掷骰→移动→结算 + `rand()&1` 用卡/道具 + 各对话框 AI 分支；`ai_card.cpp`/`ai_item.cpp`）；**事件槽 NPC／四大恶人 ✅ 2026-09-26**（`498df0-event-slot-npc.md`：开局关押/保释行走/同类建筑抓回/`LABEL_88` 恶行/物件分支/回合联动/渲染面板/存档 NPC 单源+读档恢复）；**存档完整恢复 ❌**（`loadGameFromSlot` 现恢复地图/模式/玩家数/股票重建 + NPC 槽，其余状态仍 TODO） |
 | F | ~~建造菜单~~ 查詢面板（舊稱「建造菜單」有誤）、连锁店（改建卡） | ✅ 查詢面板 2026-09-25（`sub_424492/423CF3/423070/4225A3/423B3B/422443` → `query_dialog.cpp`：資產/地產/股票清單 3 页签 + 右侧資訊面板 4 页签；见 `ui-controls.md` §27）；连锁店创建/收费 ✅（改建卡 0x44309B + `Ctrl+4` + 卡片栏流程 ✅） |
 
