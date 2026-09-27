@@ -273,7 +273,9 @@ FateLuckResult fateLuckRoll(const GameState& st, int p, uint8_t sel) {
 
 // [RE 0x40D375] 强迫出国/外星人绑架（首次：清占用 + 停载具 + 罚款 2000×M×天 + FLC）
 //   kind: false=出國 FLC 558 @(0,40) sound 96 switchFrame 20；true=綁架 FLC 533 sound 84 switchFrame 28
-void fateStartTravelState(Application& app, Player& pl, int player, int days, bool abducted) {
+//   （匿名空间实现；导出包装见文件尾 fateStartTravelState，供 turn_system specPt 航空 0x41B05A 调用）
+void fateStartTravelStateLocal(Application& app, Player& pl, int player, int days,
+                               bool abducted) {
     GameState& st = app.gameState();
     const uint8_t v9 =
         static_cast<uint8_t>((abducted ? 1u : 0u) << 6) | static_cast<uint8_t>(days & 0x3F);
@@ -601,7 +603,7 @@ void fateApplyTravel(FateCtx& ctx, bool abducted) {
     if (t == -1) {
         return;
     }
-    fateStartTravelState(app, st.players[t], t, days, abducted);
+    fateStartTravelStateLocal(app, st.players[t], t, days, abducted);
 }
 
 void fateApplyVehicleLost(FateCtx& ctx, int idx) {
@@ -1001,6 +1003,12 @@ void fateDebugFire(Application& app, int idx) {
         return;
     }
     fateRun(app, idx >= 49 ? 48 : idx);
+}
+
+// [RE 0x40D375] 导出包装（实现见匿名空间 fateStartTravelStateLocal）
+// 调用点: 命运/绑架事件 + specPt 航空付款后（0x41B05A，由 turn_system 调用）
+void fateStartTravelState(Application& app, Player& pl, int player, int days, bool abducted) {
+    fateStartTravelStateLocal(app, pl, player, days, abducted);
 }
 
 } // namespace rich4

@@ -291,9 +291,9 @@ owner 自己停留（0x41A9C0 段，✅ 2026-09-26 实现）：index4 → 轮盘
 |------|---------|
 | 购地/升级/联合租金/连锁/flag 翻倍/神明/转账 | ✅ `turn_system.cpp`（见 `41982d-estate-rent.md`） |
 | 商業用地（corp）购买/建设/升级/收费（type1..3） | ✅ 本文 §4（landingEvent corp 分支 0x41A86B/0x41A1E0/0x41A2B3/0x41A370；`selectFacilityDialog` UI 完整还原） |
-| 旅館住宿状态（BYTE0 天数） | ✅ 收费后设置（0x41A761）；住宿欠款/保险理赔仅日志（欠款矩阵/保险期 P4） |
+| 旅館住宿状态（BYTE0 天数） | ✅ 收费后设置（0x41A761）；**住宿欠款 20×M×days ✅ 2026-09-27**（`addPlayerDebt(cur, 地主, …)` 0x41A7BC）；保险理赔已接（`insurancePayout` 0x44BA63） |
 | 研究所（corp type4）研发 `labDevelopDialog` | ✅ 本文 §4 + `44101d-lab-develop.md`（`lab_dialog.cpp` 0x44101D 逐级解锁选择框；`updatePlayerStates` 0x41C84F 尾倒计时 → `givePlayerItem(researchItem+8)`，5 非卖品唯一入口）|
-| 行業設施點（specPt）收费 | ✅ 本文 §5（`landingEvent` 6000..7999：航空/保險轮盘、電腦 `dayCount`、汽車/石油载具×步数、房地產按地价、index12；公库 `fund` 收款）；出國 n 天状态 `sub_40D375` ❌ 未接入（仅完成付款） |
+| 行業設施點（specPt）收费 | ✅ 本文 §5（`landingEvent` 6000..7999：航空/保險轮盘、電腦 `dayCount`、汽車/石油载具×步数、房地產按地价、index12；公库 `fund` 收款）；**出國 n 天状态 ✅ 2026-09-27**（航空付款后 `fateStartTravelState` 0x40D375，调用点 0x41B05A；条件 costType==1 && 天数≠0 && 付款人存活 && !sceneRequest） |
 | 監獄/醫院罚款（保险理赔）+ 保险期 | ✅ 入狱/住院 `jailPlayer`/`hospitalizePlayer`（`turn_system.cpp`）+ `insurancePayout` 0x44BA63；保险期（+62 `g_playerCardCnt`，非卡片数）递减 0x41CC4B |
 | `g_moneyMul` 更新 | ✅ 本文 §1.1（`updateMoneyIndex` 0x423ACF 每日接入 `advanceDay`；已消除"恒 1"） |
 | `playerTotalAssets` | ✅ `economy.cpp`（股票市值 + 地产 + 公司；贷款/存款已计入） |

@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "game/app/confirm_dialog.h"
+#include "game/app/economy.h"
 #include "game/app/event_stack.h"
 #include "game/app/float_message.h"
 #include "game/app/map_tables.h"
@@ -170,9 +171,11 @@ void releasePrisoner(BailCtx& ui, int i) {
         days = 1;
     }
     const int pay = 100 * days * st.moneyMul;
-    RICH4_LOGI("bail: player %d released by %d, pays back %d to prisoner "
-               "(addPlayerDebt matrix TODO, RE 0x43CF4D/0x40DF69)",
-               i, st.currentPlayer, pay);
+    // [RE 0x43CF4D] 保释返还（欠款矩阵）：addPlayerDebt(囚犯 i, 保释人 cur, -100×M×days)
+    //   负数 = 冲销保释人代付时的记账（clamp≥0；原债为 0 时 addPlayerDebt 跳过）
+    addPlayerDebt(st, i, st.currentPlayer, -pay);
+    RICH4_LOGI("bail: player %d released by %d, repay %d (RE 0x43CF4D)", i, st.currentPlayer,
+               pay);
     pr.stateFlags = (sf & 0xFF00FFFFu) | 0x800000u; // BYTE2 = 0x80（到期恢复，走出在 0x40D6BE）
     st.jailFlags[i] = 0;
     st.players[st.currentPlayer].points = static_cast<uint16_t>(st.players[st.currentPlayer].points -
@@ -612,9 +615,10 @@ void doDischarge(HospCtx& ui) {
             days = 1;
         }
         const int pay = 100 * days * st.moneyMul;
-        RICH4_LOGI("hospital visit: patient %d released by %d, pays back %d "
-                   "(addPlayerDebt matrix TODO, RE 0x43F0xx/0x40DF69)",
-                   i, st.currentPlayer, pay);
+        // [RE 0x43DE8D] 出院返还（欠款矩阵）：addPlayerDebt(病人 i, 探病人 cur, -100×M×days)
+        addPlayerDebt(st, i, st.currentPlayer, -pay);
+        RICH4_LOGI("hospital visit: patient %d released by %d, repay %d (RE 0x43DE8D)", i,
+                   st.currentPlayer, pay);
         pr.stateFlags = (sf & 0x00FFFFFFu) | 0x80000000u; // BYTE3 = 0x80
         st.hospitalFlags[i] = 0;
         ui.released = true;

@@ -2165,10 +2165,17 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                 int32_t fee = applyGodRentModifier(app, p, total, kFeeName);
                 // [RE 0x41A003] 转账：付款人 → 地主/同盟（flags=0，收款入银行存款）
                 if (fee > 0) {
+                    // [RE 0x419DB1/0x419DD8] 记账（欠款矩阵）：付款人 → 地主/同盟，按神明调整后
+                    //   金额拆分 /100（免费卡/嫁祸后仍保留；clamp≥0）
+                    if (ally != 0) {
+                        addPlayerDebt(st, p, es.owner - 1, (fee - allyRent) / 100);
+                        addPlayerDebt(st, p, ally - 1, allyRent / 100);
+                    } else {
+                        addPlayerDebt(st, p, es.owner - 1, fee / 100);
+                    }
                     // [RE 0x419E58/0x419EB8/0x419ECC] 免费卡/嫁祸卡/死神代付（见 resolveFeePayer）
                     const int payer = resolveFeePayer(app, p, fee, kFeeName);
                     // [RE 0x419F42] 付款人 = 地主/同盟（嫁祸卡转嫁收款人）→ 不转账、不更新租金
-                    // [RE 0x419DB1/0x419DD8] 记账 addPlayerDebt 拆分重写不建模（单人路径同）
                     if (payer >= 0 && payer != es.owner - 1 &&
                         (ally == 0 || payer != ally - 1)) { // -1 = 免費卡抵用免付
                         int32_t allyShare = 0;
@@ -2378,9 +2385,11 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                                   rent, feeName);
                     showMessage(app, text, 1500);
                 }
-                // [RE 0x41A581] 通用后处理：神明调整 → 转账（flags=0 收款入银行）→ corp+48
+                // [RE 0x41A581] 通用后处理：神明调整 → 记账 → 转账（flags=0 收款入银行）→ corp+48
                 rent = applyGodRentModifier(app, p, rent, feeName);
                 if (rent > 0) {
+                    // [RE 0x41A5C0] 记账（欠款矩阵）：付款人 → 地主 金额/100
+                    addPlayerDebt(st, p, cp.owner - 1, rent / 100);
                     // [RE 0x41A62E/0x41A683/0x41A6A4] 免费卡/嫁祸卡/死神代付
                     const int payer = resolveFeePayer(app, p, rent, feeName);
                     if (payer >= 0) {  // -1 = 免費卡抵用免付
@@ -2397,8 +2406,9 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                     const uint8_t stay = static_cast<uint8_t>(hotelDays - 1);
                     pl.stateFlags = static_cast<uint32_t>(stay != 0 ? stay : 0x80);
                     pl.byte66 = static_cast<uint8_t>(pl.byte66 + hotelDays); // byte_496BAA
-                    // [RE 0x41A7BC] 住宿欠款 20×M×days（addPlayerDebt 矩阵未建模，仅日志）
-                    RICH4_LOGI("hotel stay: player %d days %d owe %d (RE 0x41A7F4)", p, hotelDays,
+                    // [RE 0x41A7BC] 住宿欠款（欠款矩阵）：当前玩家 → 地主 20×M×days
+                    addPlayerDebt(st, p, cp.owner - 1, 20 * st.moneyMul * hotelDays);
+                    RICH4_LOGI("hotel stay: player %d days %d owe %d (RE 0x41A7BC)", p, hotelDays,
                                20 * st.moneyMul * hotelDays);
                     // [RE 0x40D5A5] 走进旅館：清原格占用（消失）+ 保存朝向 + 面向旅館 +
                     //   记录旅館索引（word_496BB2）+ 启动走进移动（状态 1，慢速插值到旅館坐标）
@@ -2445,15 +2455,15 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                 const char* feeName = (spIdx < 16) ? kCostNames[kSpecPtCostMap[spIdx]] : "";
                 char text[192];
                 int32_t fee = 0;
+                int airlineDays = 0; // [RE 0x41B05A v135] 航空轮盘天数（付款后出國用）
                 if (spIdx == 1) {
                     // 航空公司：转盘(0) 天数；0 → 不用出國
-                    const int days = roulettePrompt(app, 0, spName.c_str());
-                    if (days == 0) {
+                    airlineDays = roulettePrompt(app, 0, spName.c_str());
+                    if (airlineDays == 0) {
                         showMessage(app, "不用出國！", 1500); // [RE 0x463A5F]
                         goto landingTail;
                     }
-                    fee = sp.feeBase * days * st.moneyMul;
-                    // TODO(RE 0x40D375): 付款后出國 n 天（M3 状态）
+                    fee = sp.feeBase * airlineDays * st.moneyMul;
                 } else if (spIdx == 3) {
                     // 電腦公司：+34 × g_dayCount（不乘 M）
                     fee = sp.feeBase * st.dayCount;
@@ -2514,6 +2524,14 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                         const int payer = resolveFeePayer(app, p, fee, feeName);
                         if (payer >= 0) {  // -1 = 免費卡抵用免付
                             transferMoney(app, payer, objId - 5900, fee, 0); // 收款入公库
+                        }
+                        // [RE 0x41B05A] 航空付款后：付款人出國 airlineDays 天（免费卡免付时
+                        //   = 当前玩家；条件：costType==1 && 天数≠0 && 付款人存活 && 非场景切换）
+                        const int payTarget = (payer >= 0) ? payer : p;
+                        if (spIdx == 1 && airlineDays != 0 &&
+                            st.players[payTarget].alive != 0 && st.sceneRequest == 0) {
+                            fateStartTravelState(app, st.players[payTarget], payTarget, airlineDays,
+                                                 false);
                         }
                         RICH4_LOGI("specPt fee: player %d -> fund %d amount %d (specPt %d idx %u, "
                                    "RE 0x41A168)",
