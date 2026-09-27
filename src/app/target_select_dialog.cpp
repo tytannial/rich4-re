@@ -214,45 +214,11 @@ void setCursor(TargetSelCtx& c, int type, int frames, int delay) {
     }
 }
 
-// [USER 魔改 2026-09-27] 就近吸附：实际地图的 cellEnt 节点稀疏（台湾图相邻节点屏幕
-//   距离可达 130px），路面中段不在任何格菱形（g_pickMask 帧4 = 51x51，**原版同样如此**，
-//   见 writePickBuffer 0x456A1C 无缩放）内 → 用户点"路"却得到 X（实机截图反馈）。
-//   本函数在**完全无命中**时取屏幕距离最近的格命中记录（<=maxDist）返回其 id；
-//   吸附结果仍走 targetAllowed/BYTE1 过滤（地块格照旧拒绝、玩家格照旧可选中）。
-//   注意：只吸附"格命中"（cellId != 0，含道路/医院/监狱/事件格与地块格），
-//   不吸附玩家/挂身物件（cellId == 0）。
-int snapNearestCell(const GameState& st, int mx, int my, int maxDist) {
-    int best = 0;
-    int bestD2 = maxDist * maxDist;
-    for (const GameState::MapHitRegion& it : st.mapHitRegions) {
-        if (it.cellId == 0 || it.cellId >= st.cellEnts.size()) {
-            continue;
-        }
-        const int dx = mx - it.anchorX;
-        const int dy = my - it.anchorY;
-        const int d2 = dx * dx + dy * dy;
-        if (d2 < bestD2) {
-            bestD2 = d2;
-            best = it.id;
-        }
-    }
-    return best;
-}
-
 // [RE 0x445E4D LABEL_53..LABEL_140] 悬停判定：拾取 → 筛选 → 记录选中 + 光标
 // （模态进入初始判定与 WM_MOUSEMOVE 共用；原版 WM_USER+1 用 PostMessage(0x200) 触发一次）
 void updateTargetHover(TargetSelCtx& c, int mx, int my) {
     GameState& st = c.app->gameState();
-    uint16_t v = pickMapObject(st, mx, my);  // [RE 0x40A9D7]
-    bool snapped = false;
-    if (v == 0) {
-        // 阈值 72px：覆盖最长格间距（本图实测 132px）的中点（66px）+ 余量
-        const int sv = snapNearestCell(st, mx, my, 72);  // [USER 魔改] 就近吸附
-        if (sv != 0) {
-            v = static_cast<uint16_t>(sv);
-            snapped = true;
-        }
-    }
+    const uint16_t v = pickMapObject(st, mx, my);  // [RE 0x40A9D7]
     // [RE 0x445E4D] BYTE1 非 0 → 高字节过滤**取代**低 flags 判定（原版 v14 被清 0）
     bool allowed = (c.filter != 0) ? byte1FilterPass(st, v, c.filter)
                                    : targetAllowed(st, v, c.flags);
@@ -265,14 +231,14 @@ void updateTargetHover(TargetSelCtx& c, int mx, int my) {
         c.dbgLastAllowed = allowed;
         if (v > 0 && v < static_cast<int>(st.cellEnts.size())) {
             const CellEnt& ce = st.cellEnts[v];
-            RICH4_LOGI("targetSel: mouse(%d,%d) pick=%u allowed=%d%s cell(special=%u sprite=%u "
+            RICH4_LOGI("targetSel: mouse(%d,%d) pick=%u allowed=%d cell(special=%u sprite=%u "
                        "occ=0x%08X) flags=0x%X filter=%u (RE 0x445E4D)",
-                       mx, my, v, allowed ? 1 : 0, snapped ? " snap" : "", ce.special, ce.sprite,
-                       ce.occMask, c.flags, c.filter);
+                       mx, my, v, allowed ? 1 : 0, ce.special, ce.sprite, ce.occMask, c.flags,
+                       c.filter);
         } else {
-            RICH4_LOGI("targetSel: mouse(%d,%d) pick=%u allowed=%d%s flags=0x%X filter=%u "
+            RICH4_LOGI("targetSel: mouse(%d,%d) pick=%u allowed=%d flags=0x%X filter=%u "
                        "(RE 0x445E4D)",
-                       mx, my, v, allowed ? 1 : 0, snapped ? " snap" : "", c.flags, c.filter);
+                       mx, my, v, allowed ? 1 : 0, c.flags, c.filter);
         }
     }
     if (allowed) {
