@@ -201,9 +201,6 @@ struct TargetSelCtx {
     // [RE 0x445E4D WM_USER+1] 进入时 PostMessage(WM_MOUSEMOVE) 初始判定（重写等价：
     //   首次绘制后以当前鼠标位置拾取一次）
     bool hoverInit = false;
-    // [DIAG 2026-09-27 三道具放置] 拾取结果变化时才打印（避免鼠标移动刷屏）
-    int dbgLastV = -1;
-    bool dbgLastAllowed = false;
 };
 
 // 拾取 id 规范化函数定义见文件顶部（导出供 AI 预选使用）
@@ -224,22 +221,6 @@ void updateTargetHover(TargetSelCtx& c, int mx, int my) {
                                    : targetAllowed(st, v, c.flags);
     if (!allowed && c.filter == 0 && c.allowEmptyLand && v < 6000) {
         allowed = isEmptyLandObject(st, v);  // [USER] 无主空地（傳送機人物/神明/物品目的地）
-    }
-    // [DIAG 2026-09-27 三道具放置排查] 拾取结果变化时打印（含来源格占用位）
-    if (static_cast<int>(v) != c.dbgLastV || allowed != c.dbgLastAllowed) {
-        c.dbgLastV = static_cast<int>(v);
-        c.dbgLastAllowed = allowed;
-        if (v > 0 && v < static_cast<int>(st.cellEnts.size())) {
-            const CellEnt& ce = st.cellEnts[v];
-            RICH4_LOGI("targetSel: mouse(%d,%d) pick=%u allowed=%d cell(special=%u sprite=%u "
-                       "occ=0x%08X) flags=0x%X filter=%u (RE 0x445E4D)",
-                       mx, my, v, allowed ? 1 : 0, ce.special, ce.sprite, ce.occMask, c.flags,
-                       c.filter);
-        } else {
-            RICH4_LOGI("targetSel: mouse(%d,%d) pick=%u allowed=%d flags=0x%X filter=%u "
-                       "(RE 0x445E4D)",
-                       mx, my, v, allowed ? 1 : 0, c.flags, c.filter);
-        }
     }
     if (allowed) {
         // [RE 0x445E4D LABEL_140] 命中：记选中（规范化为原版编码）+ 光标换类型
@@ -398,8 +379,6 @@ int selectTargetDialog(Application& app, int mode, bool allowEmptyLand) {
     st.viewSmoothY = c.savedViewY;
     st.viewScrolling = false;
     app.cursor().select(41, 1, 0);
-    // [DIAG 2026-09-27 三道具放置排查] 返回结果（0=取消）
-    RICH4_LOGI("selectTargetDialog: mode=0x%X -> %d (RE 0x445E4D)", mode, r);
     return r;
 }
 
