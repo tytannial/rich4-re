@@ -63,7 +63,8 @@
 **M2 银行/月度经济 ✅（2026-09-23）**：`bank_dialog.cpp`（柜员机 0x436EF8）+ `bank_stay_dialog.cpp`
 （停留 0x435062/週轉 0x434492/催收 0x436034）+ `month_settle_dialog.cpp`（月初结息
 0x439BFA/0x437E61：存款 ×1.1 + 悲情/冠军排行演出 + FLC 全身像）+ `dividend_dialog.cpp`
-（15 号分红 0x42BA97/0x42B3EB）；`advanceDay` 接入 15 号分红/新月结息/卡片格·銀行格换位；
+（15 号分红 0x42BA97/0x42B3EB，**含公司亏损由股东分担=负 fund 负分红**，2026-09-27 IDA
+复核待实机）；`advanceDay` 接入 15 号分红/新月结息/卡片格·銀行格换位；
 AI 买地 0x41D7D4；`transferMoney` 累计 monthSettleA/B；详见 `bank-system.md`。
 
 **M2 P3 地图物件生命周期 ✅（2026-09-24）**：`map_objects.cpp`（attachObject 0x40EAD7 附身/
@@ -92,7 +93,7 @@ owner 停留 type4 逐级解锁选 1（`corp.sub` 门槛**灰度**）→ `resear
 **2026-09-27 修正（实机验证通过）**：触发移到收尾 loc_41B077（`turn_system.cpp labDevelopAfterLanding`）——
 先弹通用升级询问、首次建设施即弹研究；面板改帧7 底图(不透明)+帧5 标题、未解锁灰度（非变暗）、悬停黄框、按下下沉。
 
-**功能总览**：`docs/help-checklist.md`（帮助文档 99 条 → 实现状态，当前 ✅ 93 / 🟡 5 / ❌ 1）。
+**功能总览**：`docs/help-checklist.md`（帮助文档 99 条 → 实现状态，当前 ✅ 94 / 🟡 4 / ❌ 1）。
 
 **M2 执行计划**：见 `docs/m2-plan.md`
 

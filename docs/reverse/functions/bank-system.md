@@ -405,6 +405,15 @@ runModal(sub_42B3EB)                    // 确认界面（动画待查）
 ```
 
 - `g_specPts + 40` = **公司累积盈余（分红池）**（收费入账累积，见 `spec_pt` 收费研究）
+- **公司亏损由股东分担（[HELP 20]「公司若有虧損，負債也必須由股東們負擔」，
+  2026-09-27 IDA 复核）**：无独立亏损流程——**同一公式的负数路径**：
+  `specPt+40 < 0`（来源：新闻 idx30/32/33/34 公司罚款/投资亏损 `applySpecPtChange`，
+  或 `transferMoney from>100` 公司付款）→ 每玩家分红为负 → `bank += 负数` → 现金补 →
+  不足 `eliminatePlayer`；`fund` 同样在总持股非 0 时清零。`sub_40CD87` 第一参数
+  （负数余额）**未被函数体使用**，重写 `eliminatePlayer(app, p)` 不带金额正确。
+- **负数数值口径（2026-09-27 对齐）**：原版比例**先截成 float** 再 `(double)fund × (float)ratio`
+  → `(int)` 截断；重写原先全程 double 会偶发差 1 元，已改为 float ratio + double 乘法。
+  千分位 `sub_452793` 对负数与重写 `formatMoney` 同构（如 `-50,000`）。
 - **待查**：`sub_42B3EB` 确认界面细节；上市公司判定（`word_496984` 表来源）；
   分红与"经营权/董事长"联动
 

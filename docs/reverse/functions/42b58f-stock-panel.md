@@ -171,7 +171,10 @@
 - 差异：
   - 休市事件源（`sub_44808A/448544/44B0A0` 设 `dword_4990DC`）属卡片/事件系统，暂未接入；
     当前休市仅 `isSpecialDate`（周末/节日）触发，`stockMarketClosed` 预留。
-  - 公司分红/月末结算（`sub_42BA97/431712/439BFA`）未实现，走势图"累積盈餘/本月盈餘"暂用 specPts 现值。
+  - ~~公司分红/月末结算（`sub_42BA97/431712/439BFA`）未实现，走势图"累積盈餘/本月盈餘"暂用 specPts 现值。~~
+    **已订正（2026-09-27）**：三者均已实现（分红 `dividend_dialog.cpp` 含亏损分担 / 乐透
+    `lottery_dialog.cpp` / 月初结息 `month_settle_dialog.cpp`）；走势图"累積盈餘"= `specPts+40`、
+    "本月盈餘"= `specPts+44 / dword_499084` 已按原版口径读取（`stock_market_dialog.cpp`）。
   - 走勢圖公司图标表 `off_47552C` 与 `dword_499084` 除数语义待实机核对。
 
 ## 实机校正（第 2 轮）

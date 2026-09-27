@@ -106,10 +106,17 @@ void drawDividendTable(DividendCtx& ui) {
         col = 0;
         for (int i = 0; i < ui.alive; ++i) {
             const int32_t shares = st.playerShares[ui.order[i]][s];
-            const double ratio = shares != 0 ? static_cast<double>(shares) /
-                                                   static_cast<double>(totalShares)
-                                             : 0.0; // 总持股 0 → 比例 0（原版 total 非 0 才除）
-            const int32_t dividend = static_cast<int32_t>(sp.fund * ratio);
+            // [RE 0x42BA97] 原版比例先存 **float**（`*(float*)&chText[...] = shares/(double)total`），
+            //   再 `(double)fund * (float)ratio` → int 截断；重写须同样截成 float 才能逐分对齐
+            const float ratio =
+                shares != 0
+                    ? static_cast<float>(static_cast<double>(shares) /
+                                         static_cast<double>(totalShares))
+                    : 0.0f; // 总持股 0 → 比例 0（原版 total 非 0 才除）
+            // [HELP 20] 公司若有虧損，負債由股東們負擔：fund 为负 → 负分红按持股比例
+            //   从股东扣款（结算见函数尾：银行 → 现金 → 破产 sub_40CD87）
+            const int32_t dividend =
+                static_cast<int32_t>(static_cast<double>(sp.fund) * ratio);
             char buf[32];
             formatMoney(buf, dividend);
             app.text().drawText(dst, buf, ox + 198 + col * 98, y, 6);
@@ -164,7 +171,10 @@ bool dividendConfirmHandler(const SDL_Event* event, void* user) {
 
 } // namespace
 
-// [RE 0x42BA97] 15 号股东大会分红
+// [RE 0x42BA97] 15 号股东大会分红（含 [HELP 20] 公司亏损由股东分担：负 fund → 负分红）
+// 依据: 0x42BA97 反编译；逐存活玩家 × 12 家上市公司：比例 = 持股/总持股（存 float）、
+//   分红 = (double)fund × ratio → int 截断（正负同式）；总持股≠0 → fund 清零；
+//   runModal(sub_42B3EB) 后统一入银行（不足现金补 → 破产 sub_40CD87，其 a1 参数未被使用）。
 void dividendMeeting(Application& app) {
     GameState& st = app.gameState();
     if (st.playerCount <= 0) {

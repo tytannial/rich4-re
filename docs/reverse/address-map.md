@@ -2,7 +2,7 @@
 
 > 由 `python tools/re_map.py` 自动生成，勿手改。
 
-## RE 映射（233 条）
+## RE 映射（234 条）
 
 | 地址 | 原符号 | 重写位置 | 依据 |
 |------|--------|----------|------|
@@ -126,6 +126,7 @@
 | `0x4291D6` | stockTick | `src/app/stock_system.cpp:98` | 0x4291D6 反编译; ① 停市判定 sub_428D01（dword_4990DC \|\| isSpecialDate）→ 跳过； ② 全局扰动 dword_4990EC = (rand()-0x4000)/4097； ③ 每支：昨收 = 当前价 → 停牌（动量 = 0）/新闻（bit4 ? +10 : -10）/正常（个股扰动 (rand()-0x4000)/1171 → 动量 += 扰动×波动率 + 全局扰动；价格远离基准（上市=面值/10000、 非上市=基准价）时动量 ×0.5 或 ×2）→ clamp ±10 → 当前价 = sub_428EC5(昨收,动量) → stockHistory[144*i + turnCounter]； ④ turnCounter = (+1) % 144；大盘 = Σ价格 × 10 差异: 休市 = stockMarketClosed \|\| isSpecialDate（已接入）；事件设 stockMarketClosed 待卡片系统 |
 | `0x4294D5` | updateSpecPtControl | `src/app/stock_system.cpp:193` | 0x4294D5 反编译; ① 从 shareholders[4] 移除该玩家（memmove 压缩）； ② 若持股 > 0：从索引 2 倒序比较（空位跳过、持股 >= 我则停、否则后移）→ 插入； ③ owner = shareholders[0]（第一大股东）；owner 变化 → rebuildMiniMap 并返回 1 |
 | `0x42BA97` | 15 | `include/game/app/dividend.h:7` | 0x42BA97/0x42B3EB 反编译；详见 docs/reverse/functions/bank-system.md §6。 |
+| `0x42BA97` | 15 | `src/app/dividend_dialog.cpp:174` | 0x42BA97 反编译；逐存活玩家 × 12 家上市公司：比例 = 持股/总持股（存 float）、 分红 = (double)fund × ratio → int 截断（正负同式）；总持股≠0 → fund 清零； runModal(sub_42B3EB) 后统一入银行（不足现金补 → 破产 sub_40CD87，其 a1 参数未被使用）。 |
 | `0x42D145` | 卖卡 | `src/app/shop_dialog.cpp:178` | 0x42D145 反编译; sub_441343 移除 + dbl_464364=0.9 |
 | `0x42D1B2` | 卖道具 | `src/app/shop_dialog.cpp:189` | 0x42D1B2 反编译; g_playerCards[15p+id] -= n（基址 0x49915B = itemStock-1）; g_cardPool[id] += n（= misc8A[id-1]，id≤8） |
 | `0x42D237` | 买卡 | `src/app/shop_dialog.cpp:158` | 0x42D237 反编译（尾共享 0x42D25C：points -= price; return 10*price） |
