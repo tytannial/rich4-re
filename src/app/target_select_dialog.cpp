@@ -14,6 +14,24 @@
 #include "game/render/surface.h"
 
 namespace rich4 {
+
+// 拾取 id 规范化：重写 mapHitRegions 编码 → 原版目标编码（下游 getObjectPosition/
+//   传送机/飞弹/卡片效果/AI 预选均按原版语义解析）
+//   - 玩家 0xF000|j（map_render）→ 0x8000 | (1<<j)（原版玩家位掩码）
+//   - 物件 0xA100|(槽+1)（map_render）→ 0x8000 | ((槽+1)<<8)（原版 BYTE1=槽+1）
+//   定义见头文件（AI 预选目标也须转换，见 ai_card.cpp tgtDemolish）
+int normalizeHitId(uint16_t v) {
+    if ((v & 0xF000) == 0xF000) {
+        const int j = v & 0x0F;
+        return (j >= 0 && j < 9) ? (0x8000 | (1 << j)) : 0;
+    }
+    if ((v & 0xFF00) == 0xA100) {
+        const int slot = v & 0xFF;
+        return (slot >= 1 && slot <= 46) ? (0x8000 | (slot << 8)) : 0;
+    }
+    return v;
+}
+
 namespace {
 
 // [RE 0x445E4D] 命中筛选（flags 低 16 位；重写拾取 id 编码见 map_render/mapHitRegions）
@@ -46,6 +64,96 @@ bool targetAllowed(const GameState& st, uint16_t v, uint16_t flags) {
     return false;
 }
 
+// [RE 0x445E4D BYTE1 switch case 1..8] 高字节过滤：BYTE1 非 0 时**取代**低 flags 判定
+//   （原版先 `v14 = 0` 再 switch，仅 case 内 goto LABEL_140 才可选中）
+//   依据: 0x445E4D case 1..8 反编译；重写拾取编码：地块 = 归一化对象 id（2000+/4000+）；
+//   挂身物件 = 0xA100|槽+1；玩家 = 0xF000|玩家号（原版为位掩码 0x8000|(1<<j)，单玩家等价）
+bool byte1FilterPass(const GameState& st, uint16_t v, uint8_t filter) {
+    const int cur = st.currentPlayer;
+    auto estate = [&](int i) -> const Estate* {
+        return (i > 0 && i < static_cast<int>(st.estates.size())) ? &st.estates[i] : nullptr;
+    };
+    auto corp = [&](int i) -> const Corp* {
+        return (i > 0 && i < static_cast<int>(st.corps.size())) ? &st.corps[i] : nullptr;
+    };
+    const bool isPlayer = (v & 0xF000) == 0xF000;
+    const int pi = v & 0x0F;
+    switch (filter) {
+        case 1:  // 自己的住宅 / 自己的有设施商业 [0x446330 case1]
+            if (v > 2000 && v < 4000) {
+                const Estate* e = estate(v - 2000);
+                return e && e->owner == cur + 1;
+            }
+            if (v > 4000 && v < 6000) {
+                const Corp* c = corp(v - 4000);
+                return c && c->owner == cur + 1 && c->sub != 0;
+            }
+            return false;
+        case 2: {  // 换地/换屋：与所站格同类型（住宅/商业）且非同一格 [0x446330 case2]
+            if (cur < 0 || cur >= 4) {
+                return false;
+            }
+            const Player& pl = st.players[cur];
+            const uint16_t here =
+                (pl.cellEntId > 0 && pl.cellEntId < st.cellEnts.size())
+                    ? st.cellEnts[pl.cellEntId].special
+                    : 0;
+            if (v > 2000 && v < 4000) {
+                return here > 2000 && here < 4000 && here != v;
+            }
+            if (v > 4000 && v < 6000) {
+                return here > 4000 && here < 6000 && here != v;
+            }
+            return false;
+        }
+        case 4:  // 玩家目标且不是自己（均貧/搶奪/查稅/同盟）[0x446330 case4]
+            return isPlayer && pi != cur;
+        case 5:  // 他人的有建筑住宅/商业（怪獸 0x0506）[0x446330 case5]
+            if (v > 2000 && v < 4000) {
+                const Estate* e = estate(v - 2000);
+                return e && e->owner != cur + 1 && e->level != 0;
+            }
+            if (v > 4000 && v < 6000) {
+                const Corp* c = corp(v - 4000);
+                return c && c->owner != cur + 1 && c->sub != 0;
+            }
+            return false;
+        case 6: {  // case5 + 路面道具（路障16/地雷17/炸彈18）——拆除卡 0x0626 [0x446330 case6]
+            if ((v & 0xFF00) == 0xA100) {
+                const int slot = v & 0xFF;
+                if (slot >= 1 && slot <= 46) {
+                    const uint8_t type = st.cellTable[24 * (slot - 1)];
+                    return type == 16 || type == 17 || type == 18;
+                }
+                return false;
+            }
+            if (v > 2000 && v < 4000) {
+                const Estate* e = estate(v - 2000);
+                return e && e->owner != cur + 1 && e->level != 0;
+            }
+            if (v > 4000 && v < 6000) {
+                const Corp* c = corp(v - 4000);
+                return c && c->owner != cur + 1 && c->sub != 0;
+            }
+            return false;
+        }
+        case 7:  // 玩家目标且不是自己（冬眠/陷害 0x0710）[0x446330 case7]
+            return isPlayer && pi != cur;
+        case 8:  // 无主无建筑地块（传送机房屋目的地 0x0802/0x0804）[0x446330 case8]
+            if (v > 2000 && v < 4000) {
+                const Estate* e = estate(v - 2000);
+                return e && e->owner == 0 && e->level == 0;
+            }
+            if (v > 4000 && v < 6000) {
+                const Corp* c = corp(v - 4000);
+                return c && c->owner == 0 && c->sub == 0;
+            }
+            return false;
+        default:
+            return true;  // 无 BYTE1 过滤
+    }
+}
+
 // [USER 魔改] 无主空地判定（傳送機人物/神明/物品目的地；[HELP 94]「空道路/空地」）
 //   依据: 住宅 Estate owner==0&&level==0 / 商業 Corp owner==0&&sub==0（与 teleportSourceValid 对称）
 bool isEmptyLandObject(const GameState& st, uint16_t v) {
@@ -75,6 +183,7 @@ constexpr uint64_t kScrollIntervalMs = 50;
 struct TargetSelCtx {
     Application* app = nullptr;
     uint16_t flags = 0;
+    uint8_t filter = 0;  // [RE 0x445E4D BYTE1] 高字节 case 1..8 过滤（非 0 时取代 flags 判定）
     int cursorType = 0;
     int selected = 0;   // dword_48C584
     int curCursor = -1; // dword_48C580
@@ -97,22 +206,7 @@ struct TargetSelCtx {
     bool dbgLastAllowed = false;
 };
 
-// 拾取 id 规范化：重写 mapHitRegions 编码 → 原版目标编码（下游 getObjectPosition/
-//   传送机/飞弹均按原版语义解析）
-//   - 玩家 0xF000|j（map_render）→ 0x8000 | (1<<j)（原版玩家位掩码）
-//   - 物件 0xA100|(槽+1)（map_render）→ 0x8000 | ((槽+1)<<8)（原版 BYTE1=槽+1）
-int normalizeHitId(uint16_t v) {
-    if ((v & 0xF000) == 0xF000) {
-        const int j = v & 0x0F;
-        return (j >= 0 && j < 9) ? (0x8000 | (1 << j)) : 0;
-    }
-    if ((v & 0xFF00) == 0xA100) {
-        const int slot = v & 0xFF;
-        return (slot >= 1 && slot <= 46) ? (0x8000 | (slot << 8)) : 0;
-    }
-    return v;
-}
-
+// 拾取 id 规范化函数定义见文件顶部（导出供 AI 预选使用）
 void setCursor(TargetSelCtx& c, int type, int frames, int delay) {
     if (c.curCursor != type) {
         c.curCursor = type;
@@ -125,9 +219,11 @@ void setCursor(TargetSelCtx& c, int type, int frames, int delay) {
 void updateTargetHover(TargetSelCtx& c, int mx, int my) {
     GameState& st = c.app->gameState();
     const uint16_t v = pickMapObject(st, mx, my);  // [RE 0x40A9D7]
-    bool allowed = targetAllowed(st, v, c.flags);
-    if (!allowed && c.allowEmptyLand && v < 6000) {
-        allowed = isEmptyLandObject(st, v);  // [USER] 无主空地（傳送機目的地）
+    // [RE 0x445E4D] BYTE1 非 0 → 高字节过滤**取代**低 flags 判定（原版 v14 被清 0）
+    bool allowed = (c.filter != 0) ? byte1FilterPass(st, v, c.filter)
+                                   : targetAllowed(st, v, c.flags);
+    if (!allowed && c.filter == 0 && c.allowEmptyLand && v < 6000) {
+        allowed = isEmptyLandObject(st, v);  // [USER] 无主空地（傳送機人物/神明/物品目的地）
     }
     // [DIAG 2026-09-27 三道具放置排查] 拾取结果变化时打印（含来源格占用位）
     if (static_cast<int>(v) != c.dbgLastV || allowed != c.dbgLastAllowed) {
@@ -136,11 +232,13 @@ void updateTargetHover(TargetSelCtx& c, int mx, int my) {
         if (v > 0 && v < static_cast<int>(st.cellEnts.size())) {
             const CellEnt& ce = st.cellEnts[v];
             RICH4_LOGI("targetSel: mouse(%d,%d) pick=%u allowed=%d cell(special=%u sprite=%u "
-                       "occ=0x%08X) flags=0x%X (RE 0x445E4D)",
-                       mx, my, v, allowed ? 1 : 0, ce.special, ce.sprite, ce.occMask, c.flags);
+                       "occ=0x%08X) flags=0x%X filter=%u (RE 0x445E4D)",
+                       mx, my, v, allowed ? 1 : 0, ce.special, ce.sprite, ce.occMask, c.flags,
+                       c.filter);
         } else {
-            RICH4_LOGI("targetSel: mouse(%d,%d) pick=%u allowed=%d flags=0x%X (RE 0x445E4D)", mx,
-                       my, v, allowed ? 1 : 0, c.flags);
+            RICH4_LOGI("targetSel: mouse(%d,%d) pick=%u allowed=%d flags=0x%X filter=%u "
+                       "(RE 0x445E4D)",
+                       mx, my, v, allowed ? 1 : 0, c.flags, c.filter);
         }
     }
     if (allowed) {
@@ -274,6 +372,7 @@ int selectTargetDialog(Application& app, int mode, bool allowEmptyLand) {
     c.app = &app;
     c.allowEmptyLand = allowEmptyLand;
     c.flags = static_cast<uint16_t>(mode & 0xFFFF);
+    c.filter = static_cast<uint8_t>((mode >> 8) & 0xFF);  // [RE 0x445E4D BYTE1]
     if ((c.flags & 0x40) != 0) {
         // [RE 0x445E4D] 0x40 → 全可选 + 滚动模式（0x80 | 0x37）
         c.flags = static_cast<uint16_t>(0x80 | 0x37);

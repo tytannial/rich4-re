@@ -7,6 +7,7 @@
 #include "game/app/game_panel.h"
 #include "game/app/map_objects.h"
 #include "game/app/map_tables.h"
+#include "game/app/target_select_dialog.h"
 #include "game/application.h"
 #include "game/core/log.h"
 #include "game/game_state.h"
@@ -568,13 +569,15 @@ int tgtDemolish(GameState& st) {  // [RE 0x41F6A9] 怪兽优先；否则路面�
         if (oid > 2000 && oid < 4000) {
             const uint8_t o = st.estates[oid - 2000].owner;
             if (o != static_cast<uint8_t>(cur + 1)) {
-                st.aiCardTarget = hit.id;
+                // mapHitRegions 编码（0xA100|槽+1）→ 原版目标编码（0x8000|(槽+1)<<8）
+                //（cardEffectDemolish 按原版编码解析槽号；误用会让槽号错=拆错物件）
+                st.aiCardTarget = normalizeHitId(hit.id);
                 return 1;
             }
         } else if (oid > 4000 && oid < 6000) {
             const uint8_t o = st.corps[oid - 4000].owner;
             if (o != static_cast<uint8_t>(cur + 1)) {
-                st.aiCardTarget = hit.id;
+                st.aiCardTarget = normalizeHitId(hit.id);
                 return 1;
             }
         }

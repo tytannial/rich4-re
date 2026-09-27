@@ -163,11 +163,11 @@
 | `0x444D1A` | pickNearestAttachable | `src/app/map_objects.cpp:1034` | 0x444D1A 反编译; 原版遍历视口拾取表 word_48B8C4（高位置位 + 槽号）—— 重写遍历渲染期 mapHitRegions（同为视口内记录，id=0xA100\|槽+1）； 距离 = cellEnt 世界坐标与玩家 spriteX/Y 欧氏距离平方 |
 | `0x444E1A` | useInviteGodCard | `src/app/map_objects.cpp:1068` | 0x444E1A 反编译; 人类选择走 0x444D1A（AI → sub_41E6F2 [TODO P5]）； 选中 → cardBagRemove(cur,23) 丢卡 → 台词（off_481292 → [TODO P4]）→ flyObjectSprite（神明格 → 玩家屏幕位置，无停留）→ attachObject 附身（走完整效果） 差异: 无候选时原版静默返回（不丢卡） |
 | `0x445A4D` | givePlayerItem | `src/app/map_objects.cpp:1152` | 0x445A4D 反编译; 原版 g_playerCards 基址 0x49915B、重写 itemStock 基址 0x49915C（索引 = 15p+id-1）；g_cardPool[1..8] = misc8A[0..7] |
-| `0x445E4D` | selectTargetDialog（mode | `src/app/target_select_dialog.cpp:266` | 0x445E4D 反编译；WM_USER+1 解析 mode → flags/光标类型；WM_MOUSEMOVE 拾取 + 光标切换； LBUTTONUP 确认（仅未处于延迟输入状态）；RBUTTON/MBUTTON 取消；光标默认 5、确认 41； 0x80 地图滚动模式（飞弹/核弹）：鼠标出视口 → 方向箭头光标 + SetTimer(50ms) 逐帧滚动， 回视口内 KillTimer 并立即判定；滚动中不可确认（提示音） |
+| `0x445E4D` | selectTargetDialog（mode | `src/app/target_select_dialog.cpp:364` | 0x445E4D 反编译；WM_USER+1 解析 mode → flags/光标类型；WM_MOUSEMOVE 拾取 + 光标切换； LBUTTONUP 确认（仅未处于延迟输入状态）；RBUTTON/MBUTTON 取消；光标默认 5、确认 41； 0x80 地图滚动模式（飞弹/核弹）：鼠标出视口 → 方向箭头光标 + SetTimer(50ms) 逐帧滚动， 回视口内 KillTimer 并立即判定；滚动中不可确认（提示音） |
 | `0x446E4A` | 機車（id5） | `src/app/item_effects.cpp:173` | 0x446E4A 反编译；消耗 = itemStock[15p+4]--（不还礼物池，池归还见 confiscateItems） |
 | `0x446F05` | 汽車（id6） | `src/app/item_effects.cpp:198` | 0x446F05 反编译（尾部共享 0x446EFF 返回 1） |
 | `0x447428` | 傳送機（id11） | `src/app/item_effects.cpp:529` | 0x447428 反编译；AI 分支 = 0x8000\|(1<<cur)；玩家传送后 dir=最优出口朝向、 prevCellEnt=另一出口、state=1 触发落地结算；**传送自己前保存时光机快照** （0x4477C3 sub_44808A，位置更新前）；神明/物品旧格清 occMask bit16-23（0x44793B） ；目的地拾取语义 = occMask bit8-23 干净（医院/监狱/事件格原版可传，落地触发事件） 差异（保留魔改，用户确认）: ① 源 = 完全空的无主地拒绝（teleportSourceValid）； ② 房屋/设施目的地限**无主空地**；人物/神明/物品限**空道路或无主空地**（[HELP 94] "空道路/空地"；原版大菱形覆盖空地 → 不可选，[USER] 2026-09-26 放开空地： selectTargetDialog(allowEmptyLand) + resolveTeleportDest；有主/有建筑地块拒绝） 差异（待补）: AI 目的地 sub_420EEE（P5）；事件槽玩家 4..7 作为卡片/道具目标（P5，不影响四大恶人本体） |
-| `0x4479D2` | 工程車（id12） | `src/app/item_effects.cpp:953` | 0x4479D2 反编译；原载具/骰子暂存 kind(+100)/byte_496BCD(+101)（重写独立字段） |
+| `0x4479D2` | 工程車（id12） | `src/app/item_effects.cpp:929` | 0x4479D2 反编译；原载具/骰子暂存 kind(+100)/byte_496BCD(+101)（重写独立字段） |
 | `0x447C6E` | drawItemBagAt | `src/app/item_bag_dialog.cpp:144` | 0x447C6E 反编译; 工具条 (14,130) / 百货商店 (bagX,293) 共用；visibleMap 非空时写映射 |
 | `0x44808A` | saveTurnSnapshot | `src/app/turn_system.cpp:2959` | 0x44808A 反编译; 仅 currentPlayer<4 且 alive&1 保存；原版写 g_playerMapBlocks （2502 dword/玩家）+ mapDat 副本 |
 | `0x448544` | restoreTurnSnapshot | `src/app/turn_system.cpp:3003` | 0x448544 反编译; 恢复全部快照字段 + 全员 loadWalkResources + sub_40C03B/rebuildMiniMap |

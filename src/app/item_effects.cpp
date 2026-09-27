@@ -575,22 +575,11 @@ int useItemTeleport(Application& app) {
     }
     bool done = false;
     if (v40 > 2000 && v40 < 4000) {
-        // ---- 住宅用地搬迁（目的地须无主空地 [HELP 94]）----
-        int dest = 0;
-        for (int guard = 0; guard < 64; ++guard) {
-            dest = selectTargetDialog(app, 0x2090002);  // [RE 0x446AE8]
-            if (dest == 0) {
-                return 0;
-            }
-            const int d = dest - 2000;
-            if (d > 0 && d < static_cast<int>(st.estates.size()) &&
-                st.estates[d].owner == 0 && st.estates[d].level == 0) {
-                break;
-            }
-            showMessage(app, "只能移到無主空地！", 1000);
-            dest = 0;
-        }
-        if (dest == 0) {
+        // ---- 住宅用地搬迁（原版 mode **0x2090802** = flags 2 + BYTE1=8 case8：
+        //   拾取层只允许无主空地 owner==0&&level==0；取消不消耗。原重写误记 0x2090002
+        //   并把"限无主空地"当作魔改自行 guard 重选——实为原版 BYTE1 过滤语义）----
+        const int dest = selectTargetDialog(app, 0x2090802);  // [RE 0x446AE8(0x2090802)]
+        if (dest <= 2000 || dest >= 4000) {
             return 0;
         }
         const int si = v40 - 2000;
@@ -613,22 +602,9 @@ int useItemTeleport(Application& app) {
             RICH4_LOGI("teleport estate %d -> %d (RE 0x447428)", si, di);
         }
     } else if (v40 > 4000 && v40 < 6000) {
-        // ---- 商業用地搬迁（目的地须无主空地 [HELP 94]）----
-        int dest = 0;
-        for (int guard = 0; guard < 64; ++guard) {
-            dest = selectTargetDialog(app, 0x2090004);
-            if (dest == 0) {
-                return 0;
-            }
-            const int d = dest - 4000;
-            if (d > 0 && d < static_cast<int>(st.corps.size()) && st.corps[d].owner == 0 &&
-                st.corps[d].sub == 0) {
-                break;
-            }
-            showMessage(app, "只能移到無主空地！", 1000);
-            dest = 0;
-        }
-        if (dest == 0) {
+        // ---- 商業用地搬迁（原版 mode **0x2090804** = flags 4 + BYTE1=8 case8）----
+        const int dest = selectTargetDialog(app, 0x2090804);  // [RE 0x446AE8(0x2090804)]
+        if (dest <= 4000 || dest >= 6000) {
             return 0;
         }
         const int si = v40 - 4000;

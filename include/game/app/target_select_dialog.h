@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 namespace rich4 {
 
 class Application;
@@ -14,5 +16,11 @@ class Application;
 //   owner==0&&sub==0；原版大菱形拾取覆盖 → flags=1 不选）。傳送機人物/神明/物品目的地用
 //   （[HELP 94]「须移至空道路/空地」；调用方负责把 2000+/4000+ 对象 id 解析为格）
 int selectTargetDialog(Application& app, int mode, bool allowEmptyLand = false);
+
+// [RE 0x445E4D/0x40B066] 拾取命中 id（mapHitRegions 编码）→ **原版目标编码**
+//   （玩家 0xF000|j → 0x8000|(1<<j)；物件 0xA100|槽+1 → 0x8000|(槽+1)<<8；其余原样）
+// 用途：模态确认返回值 & AI 预选目标（dword_48BE58 语义；ai_card/ai_item 直接存
+//   mapHitRegions 命中时须转换，否则效果函数按原版编码解析会取错槽/玩家）
+int normalizeHitId(uint16_t v);
 
 } // namespace rich4

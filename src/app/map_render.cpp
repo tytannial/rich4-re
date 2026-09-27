@@ -350,8 +350,9 @@ void renderMap(Application& app, int centerX, int centerY) {
             continue;
         }
         const int frame = (8 - (state.mapRotation + sp.dir)) & 7;
-        // 同 estate：拾取形状改用帧 4（51x51）
-        const int pickFrame = 4;
+        // [RE 0x409B18] 拾取形状 = g_pickMask 帧 ((8-(rot+dir))&1)+2（specPt 6000+ 与 corp
+        //   同分支，帧 2/3 大菱形 143x103）；重写曾用帧 4（51x51）"体感调整"，现对齐原版
+        const int pickFrame = ((8 - (state.mapRotation + sp.dir)) & 1) + 2;
         addItem(&state.specTiles[sp.sprite], frame, sp.x, sp.y, sp.owner,
                 static_cast<uint16_t>(6000 + i), &state.flagTiles, pickFrame);
     }
@@ -453,10 +454,9 @@ void renderMap(Application& app, int centerX, int centerY) {
     for (size_t i = 1; i < state.estates.size(); ++i) {
         const Estate& es = state.estates[i];
         const int frame = (8 - (state.mapRotation + es.dir)) & 7;
-        // [RE 0x409B18] 原版拾取/高亮形状：estate = g_pickMask 帧 (8-(rot+dir))&1（71x47/71x51）、
-        //   corp = +2（帧 2/3，143x103 菱形）；实机拾取体感范围过大易误盖道路格 →
-        //   命中矩形改用帧 4（51x51，约一个地块），高亮仍用原版帧（见 hl* 赋值）
-        const int pickFrame = 4;
+        // [RE 0x409B18] 拾取形状 = g_pickMask 帧 (8-(rot+dir))&1（estate 帧 0/1，71x47/71x51）；
+        //   重写曾用帧 4（51x51）"体感调整"导致道路/地块边界判定与原版不一致，现对齐原版
+        const int pickFrame = (8 - (state.mapRotation + es.dir)) & 1;
         if (es.owner == 0 && es.level == 0) {
             // [RE 0x40829D/0x409B18] 无主空地：tile=0 不绘制但**仍登记 drawList id=2000+n**，
             //   rebuildPickBuffer 照写 g_pickMask → 拾取与 highlightBlink 均有效
@@ -514,8 +514,8 @@ void renderMap(Application& app, int centerX, int centerY) {
             continue;
         }
         const int frame = (8 - (state.mapRotation + cp.dir)) & 7;
-        // 同 estate：拾取形状改用帧 4（51x51）
-        const int pickFrame = 4;
+        // [RE 0x409B18] 拾取形状 = g_pickMask 帧 ((8-(rot+dir))&1)+2（corp 帧 2/3，143x103 菱形）
+        const int pickFrame = ((8 - (state.mapRotation + cp.dir)) & 1) + 2;
         if (cp.owner == 0 && cp.sub == 0) {
             // [RE 0x40829D/0x409B18] 无主公司同上：不绘制但登记 id=4000+n，高亮形状 = 原版 corp 帧 2/3
             int sx = 0;

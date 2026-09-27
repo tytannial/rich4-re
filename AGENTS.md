@@ -236,6 +236,8 @@ python tools/re_map.py
 - `docs/reverse/functions/gameplay-map-mechanics.md` — 地块机制总览与验收检查表
 - `docs/reverse/functions/pricing-formulas.md` — **收费/价格公式总汇**（物价指数、轮盘、住宅用地/商業用地/行業設施點、到期清算、MAPDAT 数值）
 - `docs/reverse/functions/41982d-p2-events.md` — P2 事件格（case 2..16）专项研究
+- `docs/reverse/functions/map-target-audit.md` — **地图目标判定专项**（0x445E4D mode/BYTE1
+  过滤/32 调用点矩阵/批次清单；道具·卡牌·事件"以地图为目标"的统一核查入口）
 - `docs/reverse/functions/41982d-estate-rent.md` — 收租/收费专项（case 0 他人住宅用地收租全流程）
 - `docs/reverse/functions/stock-system.md` — **股市系统**（行情 stockTick/控股/认购/行情界面/交易市场/数字输入框）
 - `docs/reverse/functions/42b58f-stock-panel.md` — **股市面板**（0x42B58F 行情/持股/买卖/走勢圖/休市 精确实现）

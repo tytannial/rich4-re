@@ -44,10 +44,11 @@ uint32_t landExpireDate(const GameState& st) {
 
 // 目标选择：人类弹目标对话框；AI/托管读 aiCardSelect 预选（[RE 0x441BAA AI 分支 sub_41E6F2(0)]
 //   = dword_48BE58）
+// 注: 原 9bc150a 起人类分支误写成自递归（cardPickTarget 调自身）→ 栈溢出；2026-09-27 修
 int cardPickTarget(Application& app, int mode) {
     GameState& st = app.gameState();
     if (st.players[st.currentPlayer].alive == 1) {
-        return cardPickTarget(app, mode);
+        return selectTargetDialog(app, mode);  // [RE 0x446AE8/0x445E4D]
     }
     return st.aiCardTarget;
 }
@@ -319,15 +320,18 @@ int cardEffectMonster(Application& app) {
 int cardEffectDemolish(Application& app) {
     GameState& st = app.gameState();
     const int cur = st.currentPlayer;
-    // [RE 0x443B28 sub_446AE8(0x0E0C0526)] 选目标（地/路面道具）
-    const int v = cardPickTarget(app, 0x0E0C0526);
+    // [RE 0x443B28 sub_446AE8(0x0E0C0626)] 选目标：他人有建筑地块 / 路面道具（BYTE1=6
+    //   case6：路障16/地雷17/炸彈18；原重写误记 0x0526=case5 导致路面道具过滤缺失）
+    const int v = cardPickTarget(app, 0x0E0C0626);
     if (v == 0) {
         return 0;
     }
     cardBagRemove(st, cur, 12);  // [RE 0x443B47 sub_441343(cur,12)]
     playCardLine(app, cur, 11);  // [RE 使用者台词 拆除]
-    if ((v & 0x8000) != 0 && v < 2000) {  // 路面道具（0x8000|槽<<8）
-        const int slot = (v & 0x7F00) >> 8;  // [RE 0x443B6F]
+    // [RE 0x443D27] 路面道具：原版仅判 `(v8 & 0x8000) != 0`——编码 0x8000|槽<<8，
+    //   槽 1 = 0x8100 > 2000。原重写误加 `v < 2000` 导致永远不匹配（拆不掉路面道具）
+    if ((v & 0x8000) != 0) {
+        const int slot = (v & 0x7F00) >> 8;  // [RE 0x443D36]
         releaseCellTableSlot(app, slot);      // [RE 0x443BC5 deleteMapObject]
         renderGameFrame(app);                 // [RE 0x443BD0 refreshGameUi(0,0,1)]
         RICH4_LOGI("cardDemolish: road item slot=%d (RE 0x443B0F)", slot);
