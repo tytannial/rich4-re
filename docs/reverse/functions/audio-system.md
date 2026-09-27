@@ -87,7 +87,7 @@
 | `sub_4544B9`（Status&PLAYING；完成即释放） | `Audio::voicePlaying()` | 语音声部 = `voices[slot == -2]`，播完由 update 清理 |
 | `sub_454493`（Stop+Release） | `Audio::stopVoice()` | |
 | `sub_4549CF`（musicPlayScene；当前可选曲目时先 `sub_454B1A` push；**bit15 `0x8000\|scene` = 不压栈**） | `Audio::playSceneMusic(i, saveCurrent=true)` / `Audio::pushSceneMusic(i)`（转发） | **压栈在 playSceneMusic 内**（track 1-8 → push，对齐 byte_47E772<0 判定）；已确认 bit15 调用点：`newGameInit` 0x40711A（`0x8001`→saveCurrent=false）、`sub_452444` 节日音乐（重写未实现）；其余调用点（魔法屋/拍卖/银行/乐透/监医/月刊/小游戏/破产淘汰 0x40CF88 等）均无 bit15 = 自动压栈 |
-| `sub_454B1A`（push {曲目\|0x80, 播放位置 dword_48CB50}） | 栈仅记曲目索引 | **差异：OGG 从头播放**（MIDI 位置续播省略）；破产流程 `musicPlayScene(2)` 依赖此步保存投降前游戏曲目，魔法屋 dialog 退出 pop 恢复（2026-09-27 实机修复） |
+| `sub_454B1A`（push {曲目\|0x80, 播放位置 dword_48CB50}） | 栈仅记曲目索引 | **差异：OGG 从头播放**（MIDI 位置续播省略）；破产流程 `musicPlayScene(2)` 依赖此步保存投降前游戏曲目，魔法屋 dialog 退出 pop 恢复（2026-09-27 修复并实机验证通过） |
 | `sub_454BCC`（弹栈恢复可选曲目） | `Audio::resumeSceneMusic()` | 栈空不动作（原版无条件弹栈） |
 
 - 接线：`gameInit` `setSpeakingArchive(&state.speaking)` + `app.text().setAudio(&app.audio())`
