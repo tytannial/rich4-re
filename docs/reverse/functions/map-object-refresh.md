@@ -227,7 +227,9 @@ slot<12 → 配对轮替重建（§2.1）
 **调用时机**（精确实测）：`landingEvent` 公共末尾 `loc_41B077`（0x41B077）——**estate/corp/specPt
 各结算路径（含买地失败/拒绝/守卫等所有 `jmp loc_41B074` 汇聚点）在事件处理完毕后统一执行一次**；
 事件格 case（4/5/10..14 等）直接 `jmp loc_41B111` **不经过**。另一补充调用点 =
-`sub_418EBD+0x9C`（回合尾、`alive & 0x30` 临时载具分支，重写载具计时未建模 [TODO]）。
+`sub_418EBD+0x9C`（回合尾、`alive & 0x30` 临时载具/旅館走出分支）→ **✅ 2026-09-27 接入**
+（`nextPlayer`：重绘 → 恢复朝向 `byte27` → `landAfterMove` → `landingSpecialMove`(0x448A7E) →
+`alive &= 0x0F`）。
 
 前置守卫：`stateFlags.BYTE0(住宿)==0` 且 `alive != 0`。按附身字段（slot+1）分派，仅 3 个神明有动作：
 

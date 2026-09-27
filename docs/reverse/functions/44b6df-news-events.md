@@ -272,7 +272,9 @@ newsEvent:
 
 - [x] `sub_43BDE5` / `sub_43A2DD` 拍卖 UI —— **2026-09-26 完成**（`auction_dialog.cpp`，
       见 `43bde5-auction.md`）
-- [ ] `sub_441210` 卡片分支（`sub_4413AD`/`sub_444BB2`/`sub_44476A`）→ P4
-- [ ] `dword_4990DC`（idx 26 暂停交易天数）消费点与 `advanceDay` 递减
-- [ ] `stockNewsApply` 与重写 `stockTick` 的精确对齐（`flt_49699C` 动量字段是否已建模）
-- [ ] 角色台词表 `off_480856`（业主倒霉台词，idx 5/15/19/21）→ P4
+- [ ] `sub_441210` 卡片分支（`sub_4413AD`/`sub_444BB2`/`sub_44476A`）→ E 批逆向中
+- [x] `dword_4990DC`（idx 26 暂停交易天数）消费点与 `advanceDay` 递减 —— **已实现**
+      （`newsEvt26 → st.stockMarketClosed = 10`；`advanceDay` 递减/bit7：`turn_system.cpp`；
+      `stockTick`/面板判定消费）
+- [x] `stockNewsApply` 与重写 `stockTick` 的精确对齐 —— 已实现（`st.stocks[i][7]` 动量字段）
+- [ ] 角色台词表 `off_480856`（业主倒霉台词，idx 5/15/19/21）→ P4 语音专项（`p4-voice-batch.md`）

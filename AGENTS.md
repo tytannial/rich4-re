@@ -97,7 +97,8 @@ owner 停留 type4 逐级解锁选 1（`corp.sub` 门槛**灰度**）→ `resear
 **2026-09-27 修正（实机验证通过）**：触发移到收尾 loc_41B077（`turn_system.cpp labDevelopAfterLanding`）——
 先弹通用升级询问、首次建设施即弹研究；面板改帧7 底图(不透明)+帧5 标题、未解锁灰度（非变暗）、悬停黄框、按下下沉。
 
-**功能总览**：`docs/help-checklist.md`（帮助文档 99 条 → 实现状态，当前 ✅ 94 / 🟡 4 / ❌ 1）。
+**功能总览**：`docs/help-checklist.md`（帮助文档 99 条 → 实现状态，当前 ✅ 97 / 🟡 2 / ❌ 0；
+剩余 🟡 = idx8/9 读档·存档完整恢复，见专项）。
 
 **M2 执行计划**：见 `docs/m2-plan.md`
 

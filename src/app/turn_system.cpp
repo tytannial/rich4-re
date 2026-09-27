@@ -3762,13 +3762,79 @@ void advanceDay(Application& app) {
                st.dayCount);
 }
 
+// [RE 0x448A7E] landingSpecialMove：移动结束特殊移动（原版 nextPlayer 0x418F78 与
+//   updateGameState case 3 / 0x40DA4B 共用）。条件：临时载具计时中（travel&0x83==3）+
+//   state37==0 + 未住宿/出國（stateFlags.BYTE0==0）+ 落在他人有建筑住宅/商業用地 →
+//   ① 记账 30×M（房主欠工程车主，欠款矩阵）② 保存朝向 → 面向建筑 ③ FLC 526 工程车拆房
+//   （第 3 帧降级 → demolishAtObjId 拆一级）④ 恢复朝向（landingEvent 照常收过路费）
+static void landingSpecialMove(Application& app, int p) {
+    GameState& st = app.gameState();
+    Player& pl = st.players[p];
+    bool hit = false;
+    uint16_t objId = 0;
+    int32_t dx = 0;
+    int32_t dy = 0;
+    int32_t wx = 0;
+    int32_t wy = 0;
+    if (((pl.travel & 0x83) == 3) && pl.state37 == 0 && (pl.stateFlags & 0xFF) == 0 &&
+        p < 4 && pl.cellEntId > 0 && pl.cellEntId < st.cellEnts.size()) {
+        const CellEnt& ce = st.cellEnts[pl.cellEntId];
+        objId = ce.special;
+        if (objId > 2000 && objId < 4000) {
+            const int i = objId - 2000;
+            if (i > 0 && i < static_cast<int>(st.estates.size())) {
+                const Estate& es = st.estates[i];
+                if (es.owner != 0 && es.owner - 1 != p && es.level != 0) {
+                    addPlayerDebt(st, es.owner - 1, p, 30 * st.moneyMul);  // [RE 0x40DB35]
+                    dx = es.x - ce.x;
+                    dy = es.y - ce.y;
+                    wx = es.x;
+                    wy = es.y;
+                    hit = true;
+                }
+            }
+        } else if (objId > 4000 && objId < 6000) {
+            const int i = objId - 4000;
+            if (i > 0 && i < static_cast<int>(st.corps.size())) {
+                const Corp& cp = st.corps[i];
+                if (cp.owner != 0 && cp.owner - 1 != p && cp.sub != 0) {
+                    addPlayerDebt(st, cp.owner - 1, p, 30 * st.moneyMul);
+                    dx = cp.x - ce.x;
+                    dy = cp.y - ce.y;
+                    wx = cp.x;
+                    wy = cp.y;
+                    hit = true;
+                }
+            }
+        }
+    }
+    if (hit) {
+        pl.byte27 = pl.dir;                                         // [RE 0x40DB45]
+        pl.dir = static_cast<uint8_t>(facingFromDelta(dx, dy));     // [RE 0x454FB4]
+        int sx = 0;
+        int sy = 0;
+        if (!projectMapPoint(st, wx, wy, sx, sy)) {
+            sx = wx;
+            sy = wy;
+        }
+        app.audio().playEffectSlot(22);                             // [RE 0x40DC32 敲打音]
+        // 先播工程车"打拳"动画（FLC 526；保帧期间保持未降级画面），播完再降级
+        playEventFlc(app, 526, sx - 55, sy - 55, -1, false, 3);     // [RE 0x450CED flags 0xFF0001]
+        demolishAtObjId(app, objId, 2);                             // [RE 0x40DC19]
+        renderGameFrame(app);  // 降级结果立即刷新
+        pl.dir = pl.byte27;                                         // [RE 0x40DCA8]
+        RICH4_LOGI("bulldozer demolish: p%d obj %u (RE 0x40DA4B)", p, objId);
+    }
+}
+
 // [RE 0x418EBD] nextPlayer
 // 依据: 0x418EBD 反编译; 当前玩家 +1；越过 g_playerCount 进入事件槽 4；
 //       4..7 检查 byte_498DF2 占用；8 → 回 0 并过天；跳过死亡玩家；
 //       byte_46CAFF（跳过请求）→ sub_41906A(1) + alive[0]&=~4；
 //       v1 时 advanceDay；sub_41C84F 状态效果倒计时；自动存档；末尾 byte_498EA0|=0x80
-// 差异: sub_41C84F（状态效果倒计时）、sub_40F381/sub_448A7E（槽渲染）、
-//       自动存档（saveGameToSlot）待接入
+//       alive&0x30（载具/旅館走出）分支：重绘 → （alive&0x10）恢复朝向 + landAfterMove +
+//       sub_448A7E → alive&=0x0F
+// 差异: 自动存档（saveGameToSlot）待接入
 void nextPlayer(Application& app) {
     GameState& st = app.gameState();
     st.manualView = false;
@@ -3786,15 +3852,20 @@ void nextPlayer(Application& app) {
         RICH4_LOGI("worker end: back to player %d (RE 0x418EBD)", st.currentPlayer);
         return;
     }
-    // 有状态效果 0x30 分支
+    // [RE 0x418EFB] alive&0x30 分支（临时载具/旅館走出收尾）：无条件重绘；
+    //   alive&0x10（走出）→ 恢复朝向（byte27）→ landAfterMove（落地神明效果 0x418F59）→
+    //   landingSpecialMove（sub_448A7E 0x418F78，工程车拆房判定）→ 清 0x30
     if (cur < 4 && (st.players[cur].alive & 0x30) != 0) {
+        renderGameFrame(app); // [RE 0x418F16 sub_41906A(1)]
         if ((st.players[cur].alive & 0x10) != 0) {
             const uint8_t v0 = st.players[cur].byte27 & 0xF;
             if (v0 != 15) {
                 st.players[cur].dir = v0;
             }
+            landAfterMove(app, cur, st.players[cur].cellEntId); // [RE 0x418F59]
+            landingSpecialMove(app, cur);                       // [RE 0x418F78]
         }
-        st.players[cur].alive &= 0x0F;
+        st.players[cur].alive &= 0x0F; // [RE 0x418F87]
         st.playerActionFlags[cur] |= 0x80;
         return;
     }
@@ -4018,68 +4089,9 @@ void updateGameState(Application& app) {
             break;
         }
         case 3: {
-            // [RE 0x40DA4B ← 0x448A7E] 移动结束特殊移动（**临时载具计时中** travel&0x83==3）
-            //   落在他人有建筑（estate.level!=0 / corp.sub!=0）的住宅/商業用地：
-            //   ① 记账 30*M（房主欠工程车主，欠款矩阵）② 保存朝向 → 面向建筑 ③ demolishEstate
-            //   (cur, objId, 2) 拆一级（原版在 FLC 第 3 帧 0x40DC19）④ FLC 526 @建筑屏幕坐标
-            //   (x-55, y-55) + 槽 22 敲打音 ⑤ 恢复朝向 → 状态 0（landingEvent 照常收过路费）
-            // 注意: 普通步行/機車/汽車（travel=0/1/2）不满足条件 → 直接转状态 0
-            Player& pl = st.players[p];
-            bool hit = false;
-            uint16_t objId = 0;
-            int32_t dx = 0;
-            int32_t dy = 0;
-            int32_t wx = 0;
-            int32_t wy = 0;
-            if (((pl.travel & 0x83) == 3) && pl.state37 == 0 && (pl.stateFlags & 0xFF) == 0 &&
-                p < 4 && pl.cellEntId > 0 && pl.cellEntId < st.cellEnts.size()) {
-                const CellEnt& ce = st.cellEnts[pl.cellEntId];
-                objId = ce.special;
-                if (objId > 2000 && objId < 4000) {
-                    const int i = objId - 2000;
-                    if (i > 0 && i < static_cast<int>(st.estates.size())) {
-                        const Estate& es = st.estates[i];
-                        if (es.owner != 0 && es.owner - 1 != p && es.level != 0) {
-                            addPlayerDebt(st, es.owner - 1, p, 30 * st.moneyMul);  // [RE 0x40DB35]
-                            dx = es.x - ce.x;
-                            dy = es.y - ce.y;
-                            wx = es.x;
-                            wy = es.y;
-                            hit = true;
-                        }
-                    }
-                } else if (objId > 4000 && objId < 6000) {
-                    const int i = objId - 4000;
-                    if (i > 0 && i < static_cast<int>(st.corps.size())) {
-                        const Corp& cp = st.corps[i];
-                        if (cp.owner != 0 && cp.owner - 1 != p && cp.sub != 0) {
-                            addPlayerDebt(st, cp.owner - 1, p, 30 * st.moneyMul);
-                            dx = cp.x - ce.x;
-                            dy = cp.y - ce.y;
-                            wx = cp.x;
-                            wy = cp.y;
-                            hit = true;
-                        }
-                    }
-                }
-            }
-            if (hit) {
-                pl.byte27 = pl.dir;                                         // [RE 0x40DB45]
-                pl.dir = static_cast<uint8_t>(facingFromDelta(dx, dy));     // [RE 0x454FB4]
-                int sx = 0;
-                int sy = 0;
-                if (!projectMapPoint(st, wx, wy, sx, sy)) {
-                    sx = wx;
-                    sy = wy;
-                }
-                app.audio().playEffectSlot(22);                             // [RE 0x40DC32 敲打音]
-                // 先播工程车"打拳"动画（FLC 526；保帧期间保持未降级画面），播完再降级
-                playEventFlc(app, 526, sx - 55, sy - 55, -1, false, 3);     // [RE 0x450CED flags 0xFF0001]
-                demolishAtObjId(app, objId, 2);                             // [RE 0x40DC19]
-                renderGameFrame(app);  // 降级结果立即刷新
-                pl.dir = pl.byte27;                                         // [RE 0x40DCA8]
-                RICH4_LOGI("bulldozer demolish: p%d obj %u (RE 0x40DA4B)", p, objId);
-            }
+            // [RE 0x40DA4B ← 0x448A7E] 移动结束特殊移动（逻辑见 landingSpecialMove；
+            //   普通步行/機車/汽車 travel=0/1/2 不满足条件 → 直接转状态 0）
+            landingSpecialMove(app, p);
             st.playerActionWait[p] = 5;
             st.playerActionState[p] = 0;
             break;

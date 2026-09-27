@@ -169,8 +169,9 @@
 - 每帧全量重绘（不预渲染文字到底图，参照 `help_dialog.cpp`）。
 - 颜色：原版 0xRRGGBB 经 `convertColor`→RGB555；本表已给 0xRRGGBB，绘制前转 555。
 - 差异：
-  - 休市事件源（`sub_44808A/448544/44B0A0` 设 `dword_4990DC`）属卡片/事件系统，暂未接入；
-    当前休市仅 `isSpecialDate`（周末/节日）触发，`stockMarketClosed` 预留。
+- 休市事件源 ✅ 2026-09-27：`newsEvt26_stockHaltAll`（0x44B0A0）设 `dword_4990DC = 10` →
+  重写 `stockMarketClosed`（`news_dialog.cpp`）；`advanceDay` 递减/bit7（`turn_system.cpp`）；
+  `stockTick`/面板判定已消费。`sub_44808A/448544` 时光机快照含该字段（存档专项）。
   - ~~公司分红/月末结算（`sub_42BA97/431712/439BFA`）未实现，走势图"累積盈餘/本月盈餘"暂用 specPts 现值。~~
     **已订正（2026-09-27）**：三者均已实现（分红 `dividend_dialog.cpp` 含亏损分担 / 乐透
     `lottery_dialog.cpp` / 月初结息 `month_settle_dialog.cpp`）；走势图"累積盈餘"= `specPts+40`、

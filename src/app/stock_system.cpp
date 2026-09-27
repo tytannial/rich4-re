@@ -103,7 +103,8 @@ void refreshStockSpecPtMap(Application& app) {
 //      非上市=基准价）时动量 ×0.5 或 ×2）→ clamp ±10 → 当前价 = sub_428EC5(昨收,动量) →
 //      stockHistory[144*i + turnCounter]；
 //   ④ turnCounter = (+1) % 144；大盘 = Σ价格 × 10
-// 差异: 休市 = stockMarketClosed || isSpecialDate（已接入）；事件设 stockMarketClosed 待卡片系统
+// 差异: 无（休市事件源 = 新闻 idx26 newsEvt26_stockHaltAll 0x44B0A0 → st.stockMarketClosed=10，
+//   news_dialog.cpp；advanceDay 递减/bit7 见 turn_system.cpp）
 void stockTick(Application& app) {
     GameState& st = app.gameState();
     // [RE 0x428D01] 休市：stockMarketClosed（事件设的剩余天数）或周末/节日 → 跳过行情
