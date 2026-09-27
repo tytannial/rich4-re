@@ -16,7 +16,7 @@
 | 调用者 | 收尾 `0x41B108`（landingEvent 0x41982D）；产出 `0x41CE25`→`0x445A4D` |
 | 被调用 | `0x450441`(读 panel[11]) / `0x451A5A`(allocUiElement) / `0x456280`(blitBackground) / `0x4562A5`(blitElement 色键) / `0x4553FE`(区域灰度) / `0x456418`(色键 blit) / `0x44F9D8`(setTextFont) / `0x44FABC`(drawText) / `0x4018E7`(runModal) / `0x451E7E`(overlay) / `0x451EDB` / `0x456E11`(free) |
 | 重写符号 | `src/app/lab_dialog.cpp` `labDevelopDialog` / `labEventHandler`；触发 `turn_system.cpp` `labDevelopAfterLanding`（landingTail 内）；产出 `turn_system.cpp` `updatePlayerStates` 尾 |
-| 状态 | 已实现（帧号/灰度/颜色 2026-09-27 修正） |
+| 状态 | 已实现 + 实机验证通过（帧号/灰度/颜色 2026-09-27 修正） |
 
 ## 功能与完整流程（**顺序是语义**）
 
@@ -216,7 +216,7 @@ for (each corp) {
 - 升级询问的封顶台词 `sub_44EF41`（`off_480886`）与随机祝福台词仍为 [TODO P4] 语音批次。
 - AI 研究所是否会主动升级 `sub`：AI 升级走通用设施升级分支（自动，无询问），与研发独立。
 
-## 验收
+## 验收（2026-09-27 实机验证通过）
 
 1. `--debug` 建研究所（造 type4），owner 停留 → **先**弹「升級費用…是否升級？」，
    拒绝/同意后 → 弹选择框；`sub=1` 仅機器工人可点、其余 4 灰度；右键取消不改状态。

@@ -89,7 +89,7 @@ damagePlayer/demolish/givePlayerItem）；`economy.cpp` deleteMapObject **配对
 研究所研发道具 ✅（2026-09-26，`lab_dialog.cpp` 0x44101D + `updatePlayerStates` 0x41C84F 尾倒计时产出）：
 owner 停留 type4 逐级解锁选 1（`corp.sub` 门槛**灰度**）→ `researchItem/researchLeft=5` → 归零
 `givePlayerItem(researchItem+8)`；机器工人/時光機/傳送機/工程車/核子飛彈 5 非卖品唯一入口，**道具 13 获取闭环**（`44101d-lab-develop.md`、`ui-controls.md` §35）；
-**2026-09-27 修正**：触发移到收尾 loc_41B077（`turn_system.cpp labDevelopAfterLanding`）——
+**2026-09-27 修正（实机验证通过）**：触发移到收尾 loc_41B077（`turn_system.cpp labDevelopAfterLanding`）——
 先弹通用升级询问、首次建设施即弹研究；面板改帧7 底图(不透明)+帧5 标题、未解锁灰度（非变暗）、悬停黄框、按下下沉。
 
 **功能总览**：`docs/help-checklist.md`（帮助文档 99 条 → 实现状态，当前 ✅ 93 / 🟡 5 / ❌ 1）。
