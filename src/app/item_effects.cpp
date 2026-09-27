@@ -318,7 +318,7 @@ int useItemRobotWorker(Application& app) {
     if (st.players[p].alive == 1) {
         v = selectTargetDialog(app, 0x2090006);  // [RE 0x446AE8] flags=2|4、光标类型 9
     } else {
-        v = 0;  // [RE 0x420EEE] AI 预选（P5）
+        v = st.aiItemTarget;  // [RE 0x420EEE] AI 预选（ai_item.cpp tgtRobotWorker = 对象 id）
     }
     if (v == 0) {
         return 0;

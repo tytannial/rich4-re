@@ -264,7 +264,7 @@ int tgtRobotWorker(GameState& st) {  // id9 機器工人 [RE 0x421BA6]：自己�
                 const int fee = es.fees[es.level < 6 ? es.level : 0];
                 if (fee > bestFee) {
                     bestFee = fee;
-                    best = cid;
+                    best = oid;  // 对象 id（useItemRobotWorker → angelUpgrade/getObjectPosition）
                 }
             }
         } else if (oid > 4000 && oid < 6000) {
@@ -274,7 +274,7 @@ int tgtRobotWorker(GameState& st) {  // id9 機器工人 [RE 0x421BA6]：自己�
                 const int fee = cp.feeTable[cp.sub < 6 ? cp.sub : 0];
                 if (fee > bestFee) {
                     bestFee = fee;
-                    best = cid;
+                    best = oid;  // 对象 id
                 }
             }
         }
