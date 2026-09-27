@@ -190,7 +190,7 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
 | `sub_448A7E` | case 3 触发：步行（travel&0x83==3）落在他人有建筑的住宅用地/商業用地 → state=3 | 0x448A7E | case 3 入口 ✅ |
 | `roulettePrompt` | **转盘 UI**：帧 `(a1&3)+68` 弹轮盘（0..3 主题），指针逐格步进+减速停止，读数 = `byte_475D0C` 终格值；供航空/保險/旅館/購物 费用乘数 | 0x44090E | ✅（`roulette_dialog.cpp` 完整还原；神明 `slotMachineValue` 4 滚轮 0x43F23E ❌ 未接入） |
 | `selectFacilityDialog` | 「請選擇設施類別」建设选择 UI（返回 corp type） | 0x440AAC | ✅（`facility_dialog.cpp`；0x41A22A 建设施接入，改建卡 flag=1 0x4431C4） |
-| `labDevelopDialog` | 研究所（corp type4）「請選擇欲開發道具」：逐级研发槽选 1（可选数=`corp.sub`，未解锁变暗），写 +29/+30；`updatePlayerStates`(0x41C84F 尾) 倒计时归零 `givePlayerItem(researchItem+8)` | 0x44101D | ✅（`lab_dialog.cpp`；`44101d-lab-develop.md`）|
+| `labDevelopDialog` | 研究所（corp type4）「請選擇欲開發道具」：逐级研发槽选 1（可选数=`corp.sub`，未解锁灰度），写 +29/+30；触发在收尾 loc_41B077（先升级询问、建设施后即弹）；`updatePlayerStates`(0x41C84F 尾) 倒计时归零 `givePlayerItem(researchItem+8)` | 0x44101D | ✅（`lab_dialog.cpp`；`44101d-lab-develop.md`；2026-09-27 帧7/帧5/灰度修正）|
 | `updateMoneyIndex` | **物价指数**：`g_moneyMul = max(M, Σ存活 playerTotalAssets / 存活数 / g_startMoneyVal)`（只升不降；**每日** advanceDay 0x41CFBF） | 0x423ACF | ✅（`economy.cpp`；玩家面板 idx 5 显示 ❌） |
 | `playerTotalAssets` | 总资产 = 现金+存款−贷款+Σ持股×现价+Σestate(+28+30×级/连锁)+Σcorp(+34+36×级) | 0x4239B9 | ✅（`economy.cpp`） |
 | `expireAssets` | **屏幕可见地块批量破坏**（旧标"到期清算"有误）：`word_48B8C4` = `sub_40A0B1` 收集的视口内有主地块列表（`sub_40A45C` 计数）；flags&2 estate / flags&4 corp：a3≠0 归公（地主欠 `30×M×level`）+ rebuildMiniMap，a3==0 降级（连锁→清 type+level）；flags&0x20 事件槽释放（damagePlayer/住院/deleteMapObject）。调用点 = 卡片/道具全屏破坏效果（0x446FBC/447ACE/44913D/44AB2C）→ P4 | 0x40AC7B | ✅（`economy.cpp`；飛彈/核彈/新聞灾害已接入）|
@@ -287,7 +287,7 @@ evtCell 21 项。特殊地点格（type 1..16）的 objId 均为 0；`special=80
 - [x] **建设施**（0x41A1E0，`type==0`）：付 `+34×M` → `selectFacilityDialog`（人类选 0..4 / AI `rand()%4+1`）
       → `type`、`++sub`（建设施即 1 级）；音效槽 18
 - [x] **设施选择 UI**（`selectFacilityDialog` 0x440AAC，新文件 `facility_dialog.cpp`）：帧 4 图标底图 (43,279) +
-      帧 5 标题框 + 「請選擇設施類別」(220,122) + 悬停三层边框（`word_46CAEC`=0x280）+ 设施名 (220,154)
+      帧 5 标题框 + 「請選擇設施類別」(220,122) + 悬停三层边框（0xFFFF00 黄）+ 设施名 (220,154)
 - [x] **设施升级**（0x41A2B3）：`+36 feeTable[0]×M`，上限 `kFacilityMaxLevel={1,5,5,1,5}[type]`；
       询问文本 `"%s\n\n升級費用:%d元\n\n是否升級？"`（estate 升级同步修正为该原版文本）
 - [x] **他人收费**（0x41A370）：守卫 `sub!=0` 且 `type 1..3`（公園/研究所免收）；费用名 `kCostNames[kCorpCostMap[type]]`；

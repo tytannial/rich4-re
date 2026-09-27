@@ -20,8 +20,9 @@ constexpr int kIconX0 = 50;
 constexpr int kIconY = 286;
 constexpr int kIconStep = 68;
 constexpr int kIconCount = 5;
-// [RE 0x46CAEC] word_46CAEC 悬停边框色（RGB555 = 0x0280 绿色）
-constexpr uint16_t kHoverColor = 0x0280;
+// [RE 0x43FC98/0x43FCB7 push 0FFFF00h] 悬停三层边框色 = RGB888 黄 0xFFFF00；
+//   ⚠ word_46CAEC 是 640x480 surface 描述符（首 word = 宽 640），不是颜色（旧实现误读为 0x0280）
+constexpr uint16_t kHoverColor = rgb888To555(0xFFFF00);
 
 struct FacilityState {
     Application* app = nullptr;
@@ -33,15 +34,17 @@ void redrawFacility(FacilityState& st) {
     Surface& dst = st.app->surface();
     const UiImage& tip = st.app->gameState().estateTiles; // [RE 0x48BAD8] data.mkf[517]
     if (tip.frameCount() > 5) {
-        blitElement(dst, tip.frame(4), 43, 279, false);  // 帧 4（5 图标底图）
-        blitElement(dst, tip.frame(5), 220, 140, false); // 帧 5（标题框）
+        // [RE 0x440B25] blitElementFullscreen(g_tipFrame+60=帧4) 不透明铺底（5 图标面板）
+        blitElementOpaque(dst, tip.frame(4), 43, 279);
+        // [RE 0x440B47] sub_456418(g_tipFrame+72=帧5) 色键标题框
+        blitElement(dst, tip.frame(5), 220, 140, false);
     }
     st.app->text().setFont(16, 0xF0F0F0, 0x101010, kTextStyleShadow | kTextStyleBold, 1);
     // [RE 0x43FAE4] drawText(0, &byte_465289, 220, 122, 2)（左对齐于 220,122）
     st.app->text().drawText(dst, "請選擇設施類別", 220, 122, 2);
     if (st.hover >= 0 && st.hover < kIconCount) {
         const int x = kIconX0 + kIconStep * st.hover;
-        // 原版三层边框 68/66/64（drawRectBorder(word_46CAEC, ...)）
+        // [RE 0x43FC7C..] 原版三层边框 68/66/64（drawRectBorder(surface, ...)，颜色 0xFFFF00 黄）
         drawRectBorder(dst, x, kIconY, 68, 68, kHoverColor);
         drawRectBorder(dst, x + 1, kIconY + 1, 66, 66, kHoverColor);
         drawRectBorder(dst, x + 2, kIconY + 2, 64, 64, kHoverColor);

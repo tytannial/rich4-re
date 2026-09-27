@@ -47,7 +47,7 @@
 | 选人对话框（横排头像+绿框悬停） | 0x440E1A/0x43FF56 | `player_select_dialog.cpp` | 嫁祸卡/命运 | §32 |
 | 径向图标选择（RAW pick + 悬停大图/名称） | 0x4325C2/0x431842 | `magic_house_dialog.cpp` | 魔法屋惩罚选择 | §33 |
 | 拍卖竞价面板（7 按钮/AI 出价/头像翻滚/落槌） | 0x43BDE5/0x43A2DD/0x439F0D | `auction_dialog.cpp` | 魔法屋惩罚 11 / 新聞 idx 7 | §34 |
-| 图标条选择框（等级门槛变暗禁用） | 0x44101D/0x4402D7 | `lab_dialog.cpp` | 研究所研发道具 | §35 |
+| 图标条选择框（等级门槛灰度禁用） | 0x44101D/0x4402D7 | `lab_dialog.cpp` | 研究所研发道具 | §35 |
 
 ## 1. 渲染原语速查（`render/blit.h` / `surface.h`）
 
@@ -163,7 +163,8 @@ void pressDown(Surface& dst, int x, int y, int w, int h, int shift, const uint8_
 ### 3.5 图标行选择
 
 `facility_dialog`（0x43FAE4）：N 个等宽图标一行，`x = x0 + step*i`；命中 `hover=(x-x0)/step`。
-悬停画**多层 `drawRectBorder`**（原版 68/66/64 三层，色 `word_46CAEC` 绿 0x0280）+ 名称文本；
+悬停画**多层 `drawRectBorder`**（原版 68/66/64 三层，颜色 = 调用点 `push 0FFFF00h` 黄；
+⚠ `word_46CAEC` 只是 640×480 surface 描述符，不是颜色）+ 名称文本；
 左键返回 `hover`，右键/ESC 返回 -1（§6、§15）。
 
 ## 4. 开关与选择类
@@ -344,9 +345,11 @@ void pressDown(Surface& dst, int x, int y, int w, int h, int shift, const uint8_
 | 卡片获得显示 `showCardGet` | 0x441F73 | 卡片图 `data.mkf[570+id]`（165×256 **无头 RGB555** @(138,200) 不透明拷贝）+ 帧 5 提示框 @(220,129) + 文本；音效槽 23；`runModal(...,16ms)` 停留 1500ms 吞输入（重写逐帧 `renderGameFrame` 免背景保存/恢复） |
 | 角色台词气泡 `playLine` | 0x44EF41 | `data.mkf[517]` **帧 6 云朵气泡**（`+84`，271×199，**非帧 5 消息框**）@(220,130) + 头像 `pieceSprites[13p]` 帧 `expr+1` @(170,130) + 文本 @(200,130) 或 `@MM` 表情 `data.mkf[519]` 帧 MM-1 @(240,130)；`#NNNN` 前缀播语音；同指针去重（`dword_4762C8`）；监/院/挂起态不显示；1000ms |
 
-**提示框族资源**：`data.mkf[517]`（`g_tipFrame`，`st.estateTiles`）——帧 4 设施图标底、**帧 5 通用提示框**（249×170
-绿装饰框，`showMessage`/`askDialog`/`roulettePrompt`/`showCardGet`/老虎机/设施标题共用，`+72`）、
+**提示框族资源**：`data.mkf[517]`（`g_tipFrame`，`st.estateTiles`）——帧头偏移 = `12 + 12*n`：
+帧 4 设施图标底（355×83，设施选择，`+60`）、**帧 5 通用提示框**（249×170 绿装饰框，
+`showMessage`/`askDialog`/`roulettePrompt`/`showCardGet`/老虎机/设施标题/研究所标题共用，`+72`）、
 **帧 6 角色台词气泡**（271×199 红边云朵带下指尾，`sub_44EF41` 专用，`+84`，勿与帧 5 混用）、
+**帧 7 研究所五格面板**（400×89 木纹底，`labDevelopDialog` 不透明铺底，`+96`）、
 帧 0..3 方向气泡、帧 8..17 数字、帧 18..21 小地图旋转箭头。
 
 ## 16. HUD 常驻控件（`renderGameFrame`/`renderGamePanel`，0x417E26/0x416E6D…）
@@ -733,8 +736,8 @@ UI 音效与游戏音效槽**是两套**，勿混：
   提示 = `sub_456418(g_tipFrame 帧 5, 220, 140)` + `drawText(220,140,align 4)`；
   `runModal(sub_43FF56)`。
 - **交互**：命中 x∈[220-offX+12, +80n)、y∈[320-offY+12, +72)；悬停 `g_uiSoundHover` +
-  三层绿框 80×78（`word_46CAEC`=0x0280）；左键 `g_uiSoundClick` → 返回玩家索引；
-  右键 `g_uiSoundCancel` → -1。
+  三层黄框 80×78（颜色 = 调用点 `push 0FFFF00h`；⚠ `word_46CAEC` 只是 640×480 surface 描述符）；
+  左键 `g_uiSoundClick` → 返回玩家索引；右键 `g_uiSoundCancel` → -1。
 - **重写位置**：`src/app/player_select_dialog.cpp:selectPlayerDialog`
   （嫁祸卡调用；`resolvePenaltyTarget` 0x441210 → `passOnCardDialog` 0x44476A）。
 - **经验/坑**：① 帧头 offset 参与落点（`blitElementOpaque` 实参 − offset），命中起点按
@@ -786,25 +789,34 @@ UI 音效与游戏音效槽**是两套**，勿混：
   ④ 赢家表情帧原版 blit 实参传 Rect.right/bottom=(223,95) 为笔误（同医院 bug），重写按 (183,65)；
    ⑤ 法槌闪烁双车道（帧 26/27 @(163,45) 28×15 + @(127,90) 16×14）纯装饰，相位 3=patch 恢复。
 
-## 35. 图标条选择框（等级门槛变暗禁用，0x44101D / 0x4402D7）
+## 35. 图标条选择框（等级门槛灰度禁用，0x44101D / 0x4402D7）
 
 - **用途**：研究所（corp type4）研发道具选择（`labDevelopDialog`），`44101d-lab-develop.md`。
   与 `selectFacilityDialog`（0x440AAC）同族（图标横条 + 悬停描边 + 居中名 + hover/click/cancel 音效），
-  **增量 = "可选数 = 等级 `corp.sub`" 的门槛禁用**（未解锁图标变暗且点击无效）。
+  **增量 = "可选数 = 等级 `corp.sub`" 的门槛禁用**（未解锁图标灰度且点击无效）。
+  触发在 landingEvent 收尾（loc_41B077，0x41B0B3..0x41B106）：升级询问/建设施等 owner 路径
+  汇聚后判定 type4 → 弹本框（首次建研究所即弹；先"是否升級？"后研究）。
 - **资源**：图标 = panel.mkf[11] 帧 10..14（**帧 = 道具 id + 1**，id=researchItem+8=9..13，
   機器工人/時光機/傳送機/工程車/核子飛彈，与道具栏 `kItemBagNames`/帧序一致）；
-  底图 = estateTiles(data.mkf[517]) 帧 8 `@(20,280)`、标题框 帧 6 `@(220,140)`（色键 `blitElement`）。
+  底图 = estateTiles(data.mkf[517]) **帧 7（`+96`，400×89 五格木纹面板）@(20,280)，不透明
+  `blitElementOpaque`（原版 blitBackground）**；标题框 **帧 5（`+72`，249×170）@(220,140)** 色键。
+  帧头公式 = `12 + 12*n`。⚠ 曾把 +96 误当帧8（数字 '0'）→ 面板裸奔成黑块、+72 误当帧6 → 大气泡，
+  2026-09-27 修正。
 - **命中/布局**：5 格步进 76；图标 `blitElement` 实参 `(68+76i, 324)`（panel[11] 帧头 offset ≈(33,30)
-  → 实际像素落 ≈ `(35+76i, 294)`，即描边/命中起点）；悬停命中 `x∈[35,407] y∈[297,351]`，`idx=(x-35)/76`；
-  双描边 `drawRectBorder(32+76i, 294, 0x47, 59)` + `(33, 295, 0x45, 57)`（`word_46CAEC`=0x0280）；
-  名 `drawText(kItemBagNames[9+idx], 220, 154)`。
-- **变暗禁用（关键）**：`redraw` 顺序 = 底图帧8 → 逐图标 blit → **未解锁区**（`i>=sub`）
-  `scaleSurfaceChannels(35+76i, 297, 65, 53, kChannelHalf)` → 标题框帧6 → 标题 → 悬停描边/名。
-  变暗必须在**底图之上**做（否则暗到下层游戏地图）；点击 `hover < sub` 才 `requestExit(hover)`，
-  AI（`alive!=1`）不弹框、`idx = sub-1`。
+  → 实际像素落 ≈ `(35+76i, 294)`，即描边/命中起点）；悬停命中 `x∈[35,406] y∈[297,351]`（原版含端点），
+  `idx=(x-35)/76`；双描边 `drawRectBorder(32+76i, 294, 0x47, 59)` + `(33, 295, 0x45, 57)`
+  （**颜色 = 调用点 `push 0FFFF00h` 黄**）；名 `drawText(kItemBagNames[9+idx], 220, 154)`。
+- **灰度禁用（关键）**：`redraw` 顺序 = 底图帧7（不透明）→ 逐图标色键 blit → **未解锁区**（`i>=sub`）
+  对 (35+76i, 297) 66×54 逐像素**灰度** `gray=(R+G+B+16)>>2`
+  （原版 `sub_4553FE → funcs_4553F1[dword_47637C=0]=0x455442`，**不是**通道减半变暗）
+  → 标题框帧5 → 标题 → 悬停描边/名 → 按住格 `pressDown(1px, kChannelHalf)`（`0x451B9E`）。
+  灰度必须在**底图之上**做；交互：`LBUTTONDOWN`（`hover<sub`）播 click+下沉、`LBUTTONUP` 退出
+  （**无音效**）、右键/ESC 取消；AI（`alive!=1`）不弹框、`idx = sub-1`。
 - **重写位置**：`src/app/lab_dialog.cpp:labDevelopDialog/labEventHandler/redrawLab`。
 - **经验/坑**：① 图标帧 `10+i` ≠ 选择框 index，是"道具 id+1"（id=idx+9），跨"研究所/道具栏"两套序勿混；
-  ② `researchLeft` 写入恒 5，产出倒计时在 `updatePlayerStates`（非本控件）。
+  ② `researchLeft` 写入恒 5，产出倒计时在 `updatePlayerStates`（非本控件）；
+  ③ **`word_46CAEC` 不是颜色**——它是 640×480 surface 描述符首地址（首 word=640），
+  描边色须看调用点 `push` 的 RGB888 值（本控件/设施/选人 = 0xFFFF00 黄，股市行选中 = 0xFFFFFF 白）。
 
 ## 新增控件模板（发现新控件时复制填写）
 

@@ -263,7 +263,8 @@ passOnCardDialog(p)：
 
 - 资源 `data.mkf[518]`（候选数 2..8 → 帧 `count-2` 横排框）+ `data.mkf[2]`（角色头像帧 charIndex）；
   框 @(220,320)、头像 @框内 (12+80i,12)；命中 x∈[220-offX+12, +80n)、y∈[320-offY+12, +72)；
-  hover 播 `g_uiSoundHover` + 三层绿框（`word_46CAEC`=0x0280）80×78；点击返回槽对应玩家、右键 -1。
+  hover 播 `g_uiSoundHover` + 三层黄框（`push 0FFFF00h`；`word_46CAEC` 只是 640×480 surface）80×78；
+  点击返回槽对应玩家、右键 -1。
 - 提示框 = `g_tipFrame`（data.mkf[517]）帧 5 @(220,140) + drawText align 4。
 
 ## 6. 重写实现与差异

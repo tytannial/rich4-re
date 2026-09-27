@@ -87,8 +87,10 @@ damagePlayer/demolish/givePlayerItem）；`economy.cpp` deleteMapObject **配对
 请神/送神符效果函数 ✅（0x444E1A/0x444C45，`useInviteGodCard`/`useBanishGodCard`，
 调试 `Ctrl+Shift+I/H` 直调）；cellTable 拾取 id 改 0xA100|槽+1 修段重叠。
 研究所研发道具 ✅（2026-09-26，`lab_dialog.cpp` 0x44101D + `updatePlayerStates` 0x41C84F 尾倒计时产出）：
-owner 停留 type4 逐级解锁选 1（`corp.sub` 门槛变暗）→ `researchItem/researchLeft=5` → 归零
-`givePlayerItem(researchItem+8)`；机器工人/時光機/傳送機/工程車/核子飛彈 5 非卖品唯一入口，**道具 13 获取闭环**（`44101d-lab-develop.md`、`ui-controls.md` §35）。
+owner 停留 type4 逐级解锁选 1（`corp.sub` 门槛**灰度**）→ `researchItem/researchLeft=5` → 归零
+`givePlayerItem(researchItem+8)`；机器工人/時光機/傳送機/工程車/核子飛彈 5 非卖品唯一入口，**道具 13 获取闭环**（`44101d-lab-develop.md`、`ui-controls.md` §35）；
+**2026-09-27 修正**：触发移到收尾 loc_41B077（`turn_system.cpp labDevelopAfterLanding`）——
+先弹通用升级询问、首次建设施即弹研究；面板改帧7 底图(不透明)+帧5 标题、未解锁灰度（非变暗）、悬停黄框、按下下沉。
 
 **功能总览**：`docs/help-checklist.md`（帮助文档 99 条 → 实现状态，当前 ✅ 93 / 🟡 5 / ❌ 1）。
 
@@ -233,6 +235,13 @@ python tools/re_map.py
 - **帧头公式**：精灵/元素帧头 = `资源基址 + 12 + 12*帧号`
   （如 `+84`=帧6、`+72`=帧5、`+24`=帧1）；结构数组内偏移如
   `&dword_48231A + 8*控件 + 8`。误读会画错帧或错位。
+  **反查帧号时先列资源帧表**（Python 解析 SMP/SPR w/h + offsetX/Y）对号入座：
+  `g_tipFrame`(data.mkf[517]) `+96` = **帧7**（400×89 研究所面板）不是帧8（数字'0'）、
+  `+72` = 帧5（249×170 提示框）——2026-09-27 研究所面板"裸奔成黑块+大气泡"根因。
+- **`word_46CAEC` 不是颜色**：它是 640×480 surface 描述符首地址（首 word=宽 640），
+  `drawRectBorder(surface,x,y,w,h)` 的颜色来自调用点 `push` 的 RGB888 值（经 `convertColor`）——
+  研究所/设施/选人悬停 = `0xFFFF00` 黄、股市行选中 = `0xFFFFFF` 白。曾把 640 误当
+  RGB555 绿 `0x0280`（2026-09-27 修正）。
 - **帧锚点 offset**：SMP/SPR 帧头 `x/y` 是**锚点偏移**，原版与重写 blit 的落点都是
   **实参 − offset**（重写见 `blit.cpp` `clipBlit`）→ **移植直接抄原版实参，勿自行加减
   offset**（曾双重补偿踩坑）。元素错位用 `python tools/frame_align.py align` 做像素差扫描

@@ -299,6 +299,7 @@
   `economy.cpp`（飛彈/核彈接入；地块期限到期回收在 `advanceDay` 内联——语义订正见 `gameplay-map-mechanics.md`）
 - ~~银行贷款/存款利息（case 14 銀行格）~~ ✅ 2026-09-23 全链；~~每月 15 号分红~~ ✅ 2026-09-23（`dividend_dialog.cpp`）；~~月初结息~~ ✅ 2026-09-23（`month_settle_dialog.cpp`）；~~资产清单（idx 16）~~ ✅ 2026-09-25（查詢面板 `query_dialog.cpp`）；股市交易市场/挂单待做
 - ~~研究所研发 `labDevelopDialog`（P4 道具系统）~~ ✅ 2026-09-26（`lab_dialog.cpp` 0x44101D + `updatePlayerStates` 0x41C84F 产出；道具 13 获取入口闭环，非卖品 5 项；见 `44101d-lab-develop.md`）
+  - 修正 2026-09-27：触发移到收尾 loc_41B077（先升級询问后研究、首次建设施即弹）；面板帧7 底图(不透明)+帧5 标题+未解锁灰度+黄框+按下下沉
 - 收租的同盟分账 / 死神代付 / 免租卡片 / 浮动数字（P4 卡片与神明系统）
 - 角色语音 `sub_44EF41` / 卡片获得语音 `sub_44F230`（P4）
 - ~~P4 卡片栏/道具栏 UI + 使用流程外壳~~ ✅ 2026-09-24（工具条 case7/8：`useCardDialog` 0x441BAA /

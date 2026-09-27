@@ -1812,6 +1812,28 @@ int realtyPickUpgrade(Application& app, int sel, int times) {
     return flags;
 }
 
+// [RE 0x41B0B3..0x41B106] landingEvent 收尾（loc_41B077）内的研究所研发判定：
+//   objId ∈ (4000,6000)（商業用地）且 corp.owner == currentPlayer+1 且 state37 == 0
+//   且 type == 4（研究所）且 sub != 0 且 (flag & 0x0F) == 0 → labDevelopDialog(0x44101D)。
+//   位于 landAfterMove / sub_448A7E / refreshGameUi 之后（0x41B086→0x41B0A5→0x41B0B3）。
+//   升级询问、建设施（首次建研究所）、购地失败等全部路径都汇聚到收尾 →
+//   即「先提示升級(加蓋)后研究」；首次建成研究所立即弹研究面板（sub=1 仅機器工人）。
+static void labDevelopAfterLanding(Application& app, int p, uint16_t objId) {
+    if (objId <= 4000 || objId >= 6000) {
+        return;
+    }
+    GameState& st = app.gameState();
+    const int ci = static_cast<int>(objId) - 4000;
+    if (ci <= 0 || ci >= static_cast<int>(st.corps.size())) {
+        return;
+    }
+    Corp& cp = st.corps[ci];
+    if (cp.owner == static_cast<uint8_t>(p + 1) && st.players[p].state37 == 0 && cp.type == 4 &&
+        cp.sub != 0 && (cp.flag & 0x0F) == 0) {
+        labDevelopDialog(app, cp);  // [RE 0x44101D] 人类选/未解锁灰度，AI 恒选最高解锁项
+    }
+}
+
 // [RE 0x41982D] landingEvent
 // 依据: 0x41982D 反编译; 停留格结算。switch(cellEnt+36 低字节 格子类型 0..16)：
 //   入口先按 g_cellTypeSound[type]（0x475299）播放格子音效（type 2..16）
@@ -2182,6 +2204,11 @@ int landingEvent(Application& app, uint16_t cellEntId) {
             RICH4_LOGI("buy corp: corp %d price %d owner %d (RE 0x41A86B)", idx, price, p + 1);
         } else if (cp.owner == static_cast<uint8_t>(p + 1)) {
             // ---- 自己的商業用地 ----
+            // [RE 0x41A1DE] state37（住院/監獄/出國等）非 0 → 跳过加盖/建设施交互，
+            //   直接进收尾（收尾内的研究判定另有 state37 守卫，不会弹研究面板）
+            if (pl.state37 != 0) {
+                goto landingTail;
+            }
             if (cp.type == 0) {
                 // 建设施（0x41A1E0）：付 +34×M → selectFacilityDialog（AI rand%4+1）→ type、++sub
                 const int32_t cost = static_cast<int32_t>(cp.buildPrice) * st.moneyMul;
@@ -2217,15 +2244,11 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                 godBlessUpgrade(app, p, cellEntId);
                 RICH4_LOGI("build facility: corp %d type %u sub %u cost %d (RE 0x41A1E0)", idx,
                            cp.type, cp.sub, cost);
-            } else if (cp.type == 4) {
-                // 研究所（type4）owner 停留：研发道具（labDevelopDialog 0x44101D）
-                // 条件：sub!=0 且 flag(+28) 低半字节为 0（0x41B0FC）
-                if (cp.sub != 0 && (cp.flag & 0x0F) == 0) {
-                    labDevelopDialog(app, cp);  // [RE 0x44101D] 人类选/变暗未解锁，AI 恒选最高解锁项
-                }
-                goto landingTail;
             } else {
                 // 设施升级（0x41A2B3）：+36 feeTable[0]×M，上限 kFacilityMaxLevel[type]
+                //   **type4 研究所同样走此分支**（maxLevel=5）：先弹「是否升級？」询问，
+                //   拒绝/满级/现金不足/升级成功后均汇聚收尾 loc_41B077
+                //   → 收尾内研究所判定再弹研究面板（0x41B0B3）——即「先加盖(升級)后研究」
                 const uint8_t maxLv = (cp.type < 5) ? kFacilityMaxLevel[cp.type] : 1;
                 if (cp.sub >= maxLv) {
                     goto landingTail;
@@ -2494,6 +2517,8 @@ int landingEvent(Application& app, uint16_t cellEntId) {
 landingTail:  // loc_41B077（estate/corp/specPt 各路径含失败/拒绝汇聚点）
     // [RE 0x41B077] 落地公共末尾：神明持续效果（天使加盖/惡魔拆毀/土地公強佔）
     landAfterMove(app, p, cellEntId);
+    // [RE 0x41B0B3..0x41B106] 研究所研发判定：升级询问/建设施完成后统一在此弹研究面板
+    labDevelopAfterLanding(app, p, objId);
     // loc_41B111：等待 kLandingWait 帧
     return kLandingWait;
 }

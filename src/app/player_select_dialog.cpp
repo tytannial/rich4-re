@@ -2,7 +2,7 @@
 // 依据: 0x440E1A 反编译; 资源 data.mkf[518]（候选数 2..8 → 帧 0..6 横排框，帧内头像
 //   @(12+80i,12)）、data.mkf[2]（角色头像帧 charIndex）、g_tipFrame(data.mkf[517]) 帧 5
 //   提示框 @(220,140) + drawText(220,140,align 4)；命中区 x∈[220-offX+12, +80n)、
-//   y∈[320-offY+12, +72)；hover 播 g_uiSoundHover + 三层边框 80×78（word_46CAEC=0x0280）；
+//   y∈[320-offY+12, +72)；hover 播 g_uiSoundHover + 三层边框 80×78（颜色 0xFFFF00 黄）；
 //   左键 g_uiSoundClick → 返回玩家；右键 g_uiSoundCancel → -1。
 // 迁移: 原版保存 (0,40,440,480) 背景 + 逐模态 WM_PAINT → 重写单 Surface 每事件重绘。
 
@@ -35,7 +35,9 @@ constexpr int kSlotW = 80;
 constexpr int kSlotH = 72;
 constexpr int kBorderW = 0x4E; // 78 [RE 0x43FF56]
 constexpr int kBorderH = 78;
-constexpr uint16_t kBorderColor = 0x0280; // [RE 0x46CAEC] word_46CAEC 悬停边框色
+// [RE 0x440114/0x44012C/0x44014A push 0FFFF00h] 悬停三层边框色 = RGB888 黄 0xFFFF00；
+//   ⚠ word_46CAEC 是 640x480 surface 描述符（首 word = 宽 640），不是颜色（旧实现误读为 0x0280）
+constexpr uint16_t kBorderColor = rgb888To555(0xFFFF00);
 
 struct SelectState {
     Application* app = nullptr;
@@ -69,7 +71,7 @@ void redraw(SelectState& s) {
             blitElementOpaque(dst, s.avatars.frame(ch), s.boxX + kSlotW * i, s.boxY);
         }
     }
-    // [RE 0x43FF56] hover 三层边框（word_46CAEC 绿）
+    // [RE 0x43FF56] hover 三层边框（0xFFFF00 黄）
     if (s.hover >= 0 && s.hover < s.count) {
         const int x = s.boxX + kSlotW * s.hover - 3;
         const int y = s.boxY - 3;
