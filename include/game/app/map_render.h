@@ -17,6 +17,11 @@ void renderMap(Application& app, int centerX, int centerY);
 //   a4 != 0 且 type==15（死神）→ attachObject 完整附身（原版 0x40E0CB 分支）
 int createMapObject(Application& app, int type, int cellEntId, uint8_t a3, uint8_t a4);
 
+// [RE 0x40829D] spawnPlayerAt：为未放置玩家（spriteX/Y==0）分配出生格 + 标记待入场
+//   （跳伞）；调用点：renderMap 视口计算 + updateGameState 回合开始（须在 beginPlayerTurn
+//   之前，原版 beginPlayerTurn 0x418C55 内部处理 dword_475114 跳伞）——返回是否新分配
+bool spawnPlayerAt(GameState& state, int p);
+
 // [RE 0x40AA6C] randomCellEnt（定义见 src/app/map_render.cpp）
 int randomCellEnt(const GameState& state, int nearCellEnt);
 

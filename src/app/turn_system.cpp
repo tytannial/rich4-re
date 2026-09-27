@@ -3950,6 +3950,14 @@ void updateGameState(Application& app) {
     if (p < 0 || p >= 9) {
         return;
     }
+    // [RE 0x40829D/0x418C55] 玩家尚未放置（未跳伞入场）→ 先分配出生格 + 标记待入场：
+    //   原版 beginPlayerTurn 内部处理 dword_475114（跳伞），落地才置 g_playerAlive
+    //   （0x418D07）；重写必须在 beginPlayerTurn 之前触发，否则未入场 alive=0 会被
+    //   checkPlayerAction 判为"无行动"而跳过该玩家回合
+    if (p < 4 && st.pendingSpawnPlayer == 0 && st.players[p].spriteX == 0 &&
+        st.players[p].spriteY == 0) {
+        spawnPlayerAt(st, p);
+    }
     // [RE 0x475114] 待入场玩家 → 播放跳伞动画（原版 sub_418C55 阻塞播放）
     if (st.pendingSpawnPlayer != 0) {
         updateParachute(app);

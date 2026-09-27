@@ -457,9 +457,11 @@ void expireAssets(Application& app, int cx, int cy, int radius, int flags, int d
 //   ① 占用位/监医标志/解除同盟/保释 NPC 关回/释放附身·挂身槽；
 //   ② 清财务与状态字段（原版 sub_456F60 +28..+103）、角色遗留标记、死亡行走资源、清欠款列；
 //   ③ 淘汰演出：musicPlayScene(2) + 重绘（视口临时切破产者）+ data.mkf[555] FLC + 停留 2s；
-//   ④ 存活人类非 0：资产归公收集（estate/corp）、小地图、清仓持股、没收道具/卡片、乐透作废、
-//      资产 >3 件随机拍卖 3 件（卖方=系统）、棋子精灵灰度；
-//   ⑤ 失败/胜利分支（无存活人类 → sceneRequest=1；失败界面 defeatFlow/胜利流程属 M3）
+//   ④ 终局判定（原版顺序）：单人局且破产者人类 → defeatFlow（重写近似 sceneRequest=1，界面 M3）；
+//      无存活人类 → sceneRequest=1；仅剩 1 个存活玩家 → 胜利 sceneRequest=2/3（结算 M3，
+//      不做清算）；总存活 >1 → 资产归公收集（estate/corp）、小地图、清仓持股、没收道具/卡片、
+//      乐透作废、资产 >3 件随机拍卖 3 件（卖方=系统）、棋子精灵灰度
+// 注: 存活统计直接用 alive（未入场玩家 alive=0，与原版 g_playerAlive 跳伞落地才置位一致）
 void eliminatePlayer(Application& app, int p) {
     GameState& st = app.gameState();
     if (p < 0 || p >= 9) {
@@ -470,6 +472,7 @@ void eliminatePlayer(Application& app, int p) {
         return;
     }
     const uint8_t charIndex = pl.charIndex;
+    const uint8_t wasAlive = pl.alive; // [RE v32] 破产前存活标志（defeatFlow 条件用）
     // 原版 cellEnt +36 |= 256<<p（死亡占用位；重写用于出生点排除）
     if (pl.cellEntId < st.cellEnts.size()) {
         st.cellEnts[pl.cellEntId].occMask |= (256u << p);
@@ -561,8 +564,16 @@ void eliminatePlayer(Application& app, int p) {
         }
         st.currentPlayer = oldCur;
     }
+    // [RE 0x40CFB0] 单人局且破产者是人类 → defeatFlow 失败界面（返回 1=回主菜单 / 4=读档，
+    //   见 victory-flow.md；界面属 M3）——重写近似为 sceneRequest=1 回主菜单
+    if (st.humanCount == 1 && (wasAlive & 1) != 0) {
+        st.sceneRequest = 1;
+        RICH4_LOGI("eliminatePlayer: p%d single-human defeat -> scene 1 (RE 0x40CD87/defeatFlow)",
+                   p);
+        return;
+    }
     // [RE 0x40D0A9] 淘汰台词 off_4808AE[角色] → [TODO(P4 语音专项)]
-    // ---- 存活统计（原版 v13=存活人类数 / result=总存活数）----
+    // ---- 存活统计（原版 v13=存活人类数 / result=总存活数；alive 未入场=0 → 自动只算已入场）----
     int aliveHumans = 0;
     int aliveTotal = 0;
     for (int i = 0; i < st.playerCount && i < 9; ++i) {
@@ -574,13 +585,21 @@ void eliminatePlayer(Application& app, int p) {
         }
     }
     if (aliveHumans == 0) {
-        // 无存活人类 → 回主菜单（原版 sceneRequest=1；失败界面 defeatFlow 属 M3）
+        // 无存活人类 → 回主菜单（原版 sceneRequest=1）
         st.sceneRequest = 1;
         RICH4_LOGI("eliminatePlayer: p%d no human alive -> scene 1 (RE 0x40CD87)", p);
         return;
     }
-    // ---- [RE 0x40D0E5..0x40D3F6] 资产归公 + 拍卖 ----
-    // 注: 原版仅当总存活 > 1 时收集（==1 → 胜利流程 checkVictory/M3）；重写无条件收集防残留
+    if (aliveTotal == 1) {
+        // [RE 0x40D3E0] 仅剩一个存活玩家 → 该玩家直接胜利：sceneRequest = 2（单人）/3（多人）；
+        //   不做资产清算/拍卖（原版 result==1 分支）；胜利演出（胜利台词 sub_44EF41 + 通关结算
+        //   gameClearFlow）属 M3
+        st.sceneRequest = (st.humanCount == 1) ? 2 : 3;
+        RICH4_LOGI("eliminatePlayer: p%d eliminated -> last player wins, scene %d (RE 0x40CD87)",
+                   p, st.sceneRequest);
+        return;
+    }
+    // ---- [RE 0x40D0E5..0x40D3F6] 资产归公 + 拍卖（仅当总存活 > 1）----
     std::vector<uint16_t> auctionIds;
     for (size_t i = 1; i < st.estates.size(); ++i) {
         Estate& e = st.estates[i];
@@ -661,8 +680,15 @@ void surrenderPlayer(Application& app) {
     }
     eliminatePlayer(app, cur); // [RE 0x411AE9 sub_40CD87]
     st.playerActionState[cur] = 0; // [迁移] 清回合状态机残留（重写原投降分支行为）
-    // [RE 0x40DFDA] 存活且**已入场**的人类数：原版 g_playerAlive 跳伞落地才置位，未入场玩家
-    //   不计；重写 alive 开局即 1，用落地坐标（spriteX/Y，finishParachute 才设）判入场
+    if (st.sceneRequest != 0) {
+        // 终局（单人 defeatFlow 近似 / 无存活人类 / 唯一存活者胜利）→ 不再召唤死神
+        //   （原版靠候选不足兜底返回 0，等价）
+        RICH4_LOGI("surrender: p%d eliminated -> scene %d, no death god (RE 0x411AE0)", cur,
+                   st.sceneRequest);
+        return;
+    }
+    // [RE 0x40DFDA] 存活人类数（未入场玩家 alive=0，与原版 g_playerAlive 一致；
+    //   spriteX/Y 双保险：跳伞未落地者即便被异常置 alive 也不计）
     int aliveHumans = 0;
     for (int i = 0; i < st.playerCount && i < 9; ++i) {
         const Player& pl = st.players[i];

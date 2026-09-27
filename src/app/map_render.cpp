@@ -79,6 +79,45 @@ int pickSpawnCellEnt(const GameState& state) {
 
 } // namespace
 
+// [RE 0x40829D] spawnPlayerAt：为未放置玩家分配出生格并标记待入场（跳伞）
+// 依据: 0x40829D 首次渲染放置（pickSpawnCellEnt → 占用位 → 来向/朝向 → dword_475114）；
+//   调用点：renderMap 视口计算 + updateGameState 回合开始（必须在 beginPlayerTurn 之前，
+//   原版 beginPlayerTurn 0x418C55 内部处理 dword_475114 跳伞、落地才置 g_playerAlive）
+// 返回 true = 本次完成分配
+bool spawnPlayerAt(GameState& state, int p) {
+    if (p < 0 || p >= 4 || p >= state.playerCount) {
+        return false;
+    }
+    Player& pl = state.players[p];
+    if (pl.spriteX != 0 || pl.spriteY != 0 || state.pendingSpawnPlayer != 0) {
+        return false;
+    }
+    const int ce = pickSpawnCellEnt(state);
+    pl.cellEntId = static_cast<uint16_t>(ce);
+    state.cellEnts[ce].occMask |= (256u << p);
+    // [RE 0x40829D] 放置时即设来向(word_496B76=随机出口)与朝向(byte_496B78=面向格内)，
+    //   跳伞/落地不改朝向（原版仅此处设一次）
+    uint16_t ex[4];
+    int ne = 0;
+    for (int k = 0; k < 4; ++k) {
+        if (state.cellEnts[ce].exits[k]) {
+            ex[ne++] = state.cellEnts[ce].exits[k];
+        }
+    }
+    if (ne > 0) {
+        const uint16_t from = ex[std::rand() % ne];
+        pl.prevCellEnt = from;
+        pl.dir = static_cast<uint8_t>(facingBetween(state, from, ce));
+    } else {
+        pl.prevCellEnt = 0;
+    }
+    // [RE 0x475114] 标记待入场（跳伞动画由 beginPlayerTurn/updateGameState 播放）
+    state.pendingSpawnPlayer = p + 1;
+    RICH4_LOGI("spawn: player %d cellEnt %d at (%d,%d) prevEnt %d dir %d (RE 0x40829D)", p, ce,
+               state.cellEnts[ce].x, state.cellEnts[ce].y, pl.prevCellEnt, pl.dir);
+    return true;
+}
+
 void renderMap(Application& app, int centerX, int centerY) {
     // [RE 0x40829D] 依据: 视口中心 = 当前玩家像素坐标; 首次时随机出生点并占用
     GameState& state = app.gameState();
@@ -98,32 +137,13 @@ void renderMap(Application& app, int centerX, int centerY) {
     }
     if (state.currentPlayer < 4 && centerX == 0 && centerY == 0 &&
         state.pendingSpawnPlayer == 0) {
-        const int ce = pickSpawnCellEnt(state);
-        Player& p = state.players[state.currentPlayer];
-        p.cellEntId = static_cast<uint16_t>(ce);
-        state.cellEnts[ce].occMask |= (256u << state.currentPlayer);
-        // [RE 0x40829D] 放置时即设来向(word_496B76=随机出口)与朝向(byte_496B78=面向格内)，
-        //   跳伞/落地不改朝向（原版仅此处设一次）
-        uint16_t ex[4];
-        int ne = 0;
-        for (int k = 0; k < 4; ++k) {
-            if (state.cellEnts[ce].exits[k]) {
-                ex[ne++] = state.cellEnts[ce].exits[k];
+        if (spawnPlayerAt(state, state.currentPlayer)) {
+            const int ce = state.players[state.currentPlayer].cellEntId;
+            if (ce > 0 && ce < static_cast<int>(state.cellEnts.size())) {
+                centerX = state.cellEnts[ce].x;
+                centerY = state.cellEnts[ce].y;
             }
         }
-        if (ne > 0) {
-            const uint16_t from = ex[std::rand() % ne];
-            p.prevCellEnt = from;
-            p.dir = static_cast<uint8_t>(facingBetween(state, from, ce));
-        } else {
-            p.prevCellEnt = 0;
-        }
-        // [RE 0x475114] 标记待入场（跳伞动画由 sub_418C55 播放，落地后设 spriteX/Y）
-        state.pendingSpawnPlayer = state.currentPlayer + 1;
-        centerX = state.cellEnts[ce].x;
-        centerY = state.cellEnts[ce].y;
-        RICH4_LOGI("spawn: player %d cellEnt %d at (%d,%d) prevEnt %d dir %d (RE 0x40829D)",
-                   state.currentPlayer, ce, centerX, centerY, p.prevCellEnt, p.dir);
     }
     state.viewX = centerX;
     state.viewY = centerY;

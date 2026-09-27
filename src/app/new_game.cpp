@@ -267,8 +267,10 @@ bool newGameInit(Application& app, bool mode1) {
             --state.misc8A[3 + travel];
         }
         state.players[k].diceCount = static_cast<uint8_t>(travel + 1);
-        // [RE 0x406DE7] 玩家存活标志（g_charData +21 = 0，进入游戏时置 1）
-        state.players[k].alive = 1;
+        // [RE 0x406DE7/0x418D07] 存活标志沿用 g_charData +21 = 0，**跳伞落地才置位**
+        //   （beginPlayerTurn 0x418C55 落地设 g_playerAlive = g_playerKind）——未入场玩家
+        //   在原版对所有目标/统计/排行不可见（g_playerAlive 语义）；kind 已在上方设定
+        state.players[k].alive = 0;
     }
 
     // [RE 0x47ECEC] g_miscTable80 = unk_47ECEC：开局关押初值（槽4/5 busy=1 監獄、槽6/7 busy=2 醫院、

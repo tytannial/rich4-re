@@ -319,6 +319,14 @@ python tools/re_map.py
 
 ### 常见坑
 
+- **`g_playerAlive` 时序 = 跳伞落地才置位**：原版 newGameInit 后 alive=0（g_charData +21=0），
+  `beginPlayerTurn`（0x418C55）播完跳伞 FLC 才 `g_playerAlive = g_playerKind`（0x418D07）；
+  **未入场玩家对所有目标/统计/排行不可见**（全文 231 处引用：投降候选 sub_4339D9、AI 用卡
+  目标、物价指数 updateMoneyIndex、拍卖/保释名单…）。重写曾开局即 `alive=1`，导致未跳伞 AI
+  被列为死神候选/AI 目标/统计样本（2026-09-27 实机"开局投降可选未跳伞 AI"暴露）；
+  修复 = newGameInit 置 0、落地置位，并把出生点分配抽为 `spawnPlayerAt` 于
+  `updateGameState` 回合开始前触发（重写 tick 顺序 update→render，否则 `beginPlayerTurn`
+  早于渲染分配，未入场 alive=0 会被 `checkPlayerAction` 判无行动而跳过回合）。
 - **FLC 解码越界**：部分 FLC 数据尾部含超出声明帧数的 chunk，必须按
   `m_frameCount` 封顶，否则会多播一帧（回绕成第0帧，表现为「闪回首帧」）。
 - **`rewind()` 只重置偏移不清像素**；播完应冻结末帧（不回绕）。

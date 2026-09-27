@@ -38,7 +38,9 @@ void releaseCellTableSlot(Application& app, int slot);
 void expireAssets(Application& app, int cx, int cy, int radius, int flags, int dump, int payer);
 
 // [RE 0x40CD87] eliminatePlayer（定义见 src/app/economy.cpp）
-// 玩家破产/淘汰：标记占用位、释放携带物件、清空住宅用地/商業用地/行業設施點、全灭时 sceneRequest
+// 玩家破产/淘汰：清字段/资产归公（>1 存活时收集+拍卖）、淘汰演出；终局判定 =
+//   单人局人类破产 → sceneRequest=1（defeatFlow 近似）；无存活人类 → 1；
+//   仅剩 1 存活 → 胜利 sceneRequest=2（单人）/3（多人）；存活统计用 alive（未入场=0）
 void eliminatePlayer(Application& app, int p);
 
 // [RE 0x411AE0] surrenderPlayer：認輸投降 = eliminatePlayer(自己) →（humanCount>1 且存活人类
