@@ -637,10 +637,10 @@ int useItemTeleport(Application& app) {
             RICH4_LOGI("teleport corp %d -> %d (RE 0x447428)", si, di);
         }
     } else if ((v40 & 0x8000) != 0 && (v40 & 0xFF) != 0) {
-        // ---- 玩家传送（含 AI 自己）----
+        // ---- 玩家/事件槽 NPC 传送（含 AI 自己；原版 0x4477B5 按 pi>=4 分支）----
         const int pi = bitScanPlayer(static_cast<uint32_t>(v40) & 0xFF);  // [RE 0x40D293]
-        if (pi < 0 || pi >= 4) {
-            return 0;  // 事件槽 4..7（P5）
+        if (pi < 0 || pi >= 8) {
+            return 0;
         }
         // [HELP 94] 人物必须移至空道路/空地（[USER] 空地 = 无主地块；allowEmptyLand +
         //   resolveTeleportDest 把 2000+/4000+ 对象 id 解析为该地块所在格）
@@ -676,7 +676,8 @@ int useItemTeleport(Application& app) {
             }
             bit >>= 1;
         }
-        const int curDir = st.players[pi].dir;
+        // [RE 0x4476E1] 朝向：NPC（>=4）取 npcSlots.dir，普通玩家取 g_player dir
+        const int curDir = (pi >= 4) ? st.npcSlots[pi - 4].dir : st.players[pi].dir;
         int bestIdx = -1;
         int bestDelta = 8;
         int bestDir = 0;
@@ -705,35 +706,60 @@ int useItemTeleport(Application& app) {
                 }
             }
         }
-        Player& pl = st.players[pi];
         const uint32_t mask = 256u << pi;
-        // [RE 0x4477C3] 传送自己：位置/占用更新**前**保存时光机快照（sub_44808A；原版顺序
-        //   = sub_44808A → g_stepsRemaining=0 → state=1 → 再改 cellEntId/占位）
-        if (pi == p) {
-            saveTurnSnapshot(st, p);
-        }
-        if (pl.cellEntId > 0 && pl.cellEntId < st.cellEnts.size()) {
-            st.cellEnts[pl.cellEntId].occMask &= ~mask;
-        }
-        pl.cellEntId = static_cast<uint16_t>(dest);
-        pl.prevCellEnt = prevExit;
-        pl.dir = static_cast<uint8_t>(bestDir);
-        pl.spriteX = st.cellEnts[dest].x;
-        pl.spriteY = st.cellEnts[dest].y;
-        updatePlayerCarriedObjects(st, pi);  // [RE 0x40FC00]
-        if (pl.alive != 0) {
+        if (pi >= 4) {
+            // [RE 0x447857] 事件槽 NPC：旧格清位 → npcSlots 更新（cell/prev/dir/pixel）→
+            //   新格占位 + 行走资源；players[pi] 运行时镜像同步
+            NpcSlot80& slot = st.npcSlots[pi - 4];
+            if (slot.cell > 0 && slot.cell < st.cellEnts.size()) {
+                st.cellEnts[slot.cell].occMask &= ~mask;
+            }
+            slot.cell = static_cast<uint16_t>(dest);
+            slot.prevCell = prevExit;
+            slot.dir = static_cast<uint8_t>(bestDir);
+            slot.pixelX = st.cellEnts[dest].x;
+            slot.pixelY = st.cellEnts[dest].y;
             st.cellEnts[dest].occMask |= mask;
+            Player& np = st.players[pi];
+            np.cellEntId = static_cast<uint16_t>(dest);
+            np.prevCellEnt = prevExit;
+            np.dir = static_cast<uint8_t>(bestDir);
+            np.spriteX = st.cellEnts[dest].x;
+            np.spriteY = st.cellEnts[dest].y;
+            loadWalkResources(st, pi);  // [RE 0x4478BC]
+            done = true;
+            RICH4_LOGI("teleport NPC %d -> cell %d dir %d prev %u (RE 0x447857)", pi, dest,
+                       bestDir, prevExit);
+        } else {
+            Player& pl = st.players[pi];
+            // [RE 0x4477C3] 传送自己：位置/占用更新**前**保存时光机快照（sub_44808A；原版顺序
+            //   = sub_44808A → g_stepsRemaining=0 → state=1 → 再改 cellEntId/占位）
+            if (pi == p) {
+                saveTurnSnapshot(st, p);
+            }
+            if (pl.cellEntId > 0 && pl.cellEntId < st.cellEnts.size()) {
+                st.cellEnts[pl.cellEntId].occMask &= ~mask;
+            }
+            pl.cellEntId = static_cast<uint16_t>(dest);
+            pl.prevCellEnt = prevExit;
+            pl.dir = static_cast<uint8_t>(bestDir);
+            pl.spriteX = st.cellEnts[dest].x;
+            pl.spriteY = st.cellEnts[dest].y;
+            updatePlayerCarriedObjects(st, pi);  // [RE 0x40FC00]
+            if (pl.alive != 0) {
+                st.cellEnts[dest].occMask |= mask;
+            }
+            loadWalkResources(st, pi);  // [RE 0x40B93B]
+            if (pi == p) {
+                // [RE 0x44759D] 自己传送：state=1（steps=0 → 立即落地结算）
+                st.remainingSteps = 0;
+                st.playerActionState[pi] = 1;
+                st.gameStateActive = true;
+            }
+            done = true;
+            RICH4_LOGI("teleport player %d -> cell %d dir %d prev %u (RE 0x447428)", pi, dest,
+                       bestDir, prevExit);
         }
-        loadWalkResources(st, pi);  // [RE 0x40B93B]
-        if (pi == p) {
-            // [RE 0x44759D] 自己传送：state=1（steps=0 → 立即落地结算）
-            st.remainingSteps = 0;
-            st.playerActionState[pi] = 1;
-            st.gameStateActive = true;
-        }
-        done = true;
-        RICH4_LOGI("teleport player %d -> cell %d dir %d prev %u (RE 0x447428)", pi, dest,
-                   bestDir, prevExit);
     } else if ((v40 & 0x8000) != 0 && (v40 & 0x3F00) != 0) {
         // ---- 神明/物品传送（[HELP 94] 必须移至空道路/空地，同玩家分支）----
         int dest = 0;

@@ -86,7 +86,9 @@ damagePlayer/demolish/givePlayerItem）；`economy.cpp` deleteMapObject **配对
 气泡 ✅（`playItemLine` 0x44EF41）；**機器娃娃槽8 并入事件槽模型核证 ✅ 2026-09-27**
 （`item-effects.md` §1.6：0x446AFB 写槽8/9步/踢物件/收尾等 flyCount/循环音槽9）；
 **事件槽 NPC 四大恶人 ✅ 2026-09-26**（`498df0-event-slot-npc.md`；
-剩余 P5：AI 目的地/卡片·道具选 NPC 目标）。
+**传送机 NPC 传送 ✅ 2026-09-27**（0x447857 分支：npcSlots cell/prev/dir/pixel + 镜像）；
+AI 目的地 `sub_420EEE`=表读取 ✅ 已接；卡片/道具选 NPC 保持拒绝（原版双记录空转，见
+`item-effects.md` §4.3 已知差异））。
 请神/送神符效果函数 ✅（0x444E1A/0x444C45，`useInviteGodCard`/`useBanishGodCard`，
 调试 `Ctrl+Shift+I/H` 直调）；cellTable 拾取 id 改 0xA100|槽+1 修段重叠。
 研究所研发道具 ✅（2026-09-26，`lab_dialog.cpp` 0x44101D + `updatePlayerStates` 0x41C84F 尾倒计时产出）：
