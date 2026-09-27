@@ -14,6 +14,9 @@ LINES_VA = 0x480D5A
 VALUE_VA = 0x48084A
 CHAR_N, COL_N = 12, 13
 TOUCH_COLS = (14, 15, 16)  # 路障/地雷/定時炸彈被踩中（0x480D92/96/9A）
+# 金额/状态台词（off_48084A 家族 27 列）：6/7/8 收款（高/中/低）· 9/10/11 付款 ·
+#   15 满级 · 16/17 连锁吐槽（必播/1/3 概率）· 18 欠债
+MONEY_COLS = (6, 7, 8, 9, 10, 11, 15, 16, 17, 18)
 VALUE_STRIDE, VALUE_COL_N = 27, 3
 
 
@@ -61,6 +64,11 @@ def main() -> None:
         row = [cstr(u32(LINES_VA + 4 * (26 * c + k))) for k in TOUCH_COLS]
         touches.append("    {" + ", ".join(cpp(s) for s in row) + "},")
 
+    money = []
+    for c in range(CHAR_N):
+        row = [cstr(u32(VALUE_VA + 4 * (VALUE_STRIDE * c + k))) for k in MONEY_COLS]
+        money.append("    {" + ", ".join(cpp(s) for s in row) + "},")
+
     values = []
     for c in range(CHAR_N):
         row = [cstr(u32(VALUE_VA + 4 * (VALUE_STRIDE * c + k))) for k in range(VALUE_COL_N)]
@@ -89,6 +97,14 @@ def main() -> None:
         "\n"
         "const char* const kValueLines[12][3] = {\n"
         + "\n".join(values)
+        + "\n};\n"
+        "\n"
+        "// [RE 0x480862/86A/86E/876/87A/882/886/88A/88E/892] 金额/状态台词（off_48084A 家族列）：\n"
+        "//   0/1/2 = 收款高/中/低（sub_44F354）；3/4/5 = 付款高/中/低（sub_44F42D）；\n"
+        "//   6 = 住宅满级（0x4199F1）；7 = 欠债者面对最大债主（sub_44F4ED）；\n"
+        "//   8/9 = 同路段≥3 连锁吐槽（sub_44F627 必播列16 / 1/3 概率列17）\n"
+        "const char* const kMoneyLines[12][10] = {\n"
+        + "\n".join(money)
         + "\n};\n"
         "\n"
         "} // namespace rich4\n"

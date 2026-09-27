@@ -2091,8 +2091,8 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                 es.expireDate = static_cast<uint32_t>(d);
             }
             pl.cash -= price;
-            // [RE 0x41A13E] sub_44F627(estate.name, 0)：同路段住宅用地 ≥3 时角色感想
-            //   （sub_44EF41 角色语音/表情，P4 待实现）
+            // [RE 0x41A13E] sub_44F627(estate.name, 0)：同路段住宅用地 ≥3 时角色感想（必播）
+            playEstateChainSpeech(app, es.name, 0);
             // [RE 0x41A154 → 0x419A48] 购地成功也进**福神免费追加**：附身小/大福神 →
             //   estate 免费加盖一层（level 0→1）——原先只在付费升级/建设施路径调用（修）
             godBlessUpgrade(app, p, cellEntId);
@@ -2141,11 +2141,15 @@ int landingEvent(Application& app, uint16_t cellEntId) {
             ++es.level;                          // [RE 0x4199D1] inc byte ptr [esi+1Ah]
             app.audio().playEffectSlot(18);      // [RE 0x4823DA] 升级音效
             if (es.level == 5) {
-                // [RE 0x4199F1] 封顶台词 off_480886[角色]（sub_44EF41 [TODO P4]）
-                //   + 施工 FLC 523（sub_40B0CD，经 loc_41B077）
+                // [RE 0x4199F1] 封顶台词 off_480886[角色]（列15、expr0）+ 施工 FLC 523
+                //   （sub_40B0CD，经 loc_41B077）
+                if (pl.charIndex >= 0 && pl.charIndex < 12) {
+                    playLine(app, p, kMoneyLines[pl.charIndex][6], 0);
+                }
                 playEventFlc(app, 523, 0, 40, 90);
             } else {
-                // [RE 0x419A2B] estateChainSpeech(name,1)：同路段≥3 感想（sub_44F627 [TODO P4]）
+                // [RE 0x419A2B] estateChainSpeech(name,1)：同路段≥3 感想（1/3 概率）
+                playEstateChainSpeech(app, es.name, 1);
                 godBlessUpgrade(app, p, cellEntId);  // [RE 0x419A48 → 0x40F8BE] 福神免费追加
             }
             RICH4_LOGI("upgrade: estate %d level %d cost %d (RE 0x419911)", idx, es.level, cost);
@@ -2217,14 +2221,23 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                     // [RE 0x419F42] 付款人 = 地主/同盟（嫁祸卡转嫁收款人）→ 不转账、不更新租金
                     if (payer >= 0 && payer != es.owner - 1 &&
                         (ally == 0 || payer != ally - 1)) { // -1 = 免費卡抵用免付
+                        // [RE 0x419F59/0x419F67] 付款方台词：欠债者面对最大债主（50%）优先，
+                        //   否则按金额档（expr2）；同盟分账仅供地主收款台词
+                        if (!playDebtorLine(app, payer, es.owner - 1, fee)) {
+                            playPayerLine(app, payer, fee);
+                        }
                         int32_t allyShare = 0;
                         if (ally != 0) {
                             // [RE 0x419F7D] 同盟份额 = trunc(费用 × 比例)，地主拿余数
                             allyShare = static_cast<int32_t>(
                                 static_cast<double>(fee) * allyRatio);
+                            // [RE 0x419FA1] 收款方台词（地主份额档位；同盟无收款台词）
+                            playCollectorLine(app, es.owner - 1, fee - allyShare);
                             transferMoney(app, payer, es.owner - 1, fee - allyShare, 0);
                             transferMoney(app, payer, ally - 1, allyShare, 0);
                         } else {
+                            // [RE 0x419FF0] 收款方台词
+                            playCollectorLine(app, es.owner - 1, fee);
                             transferMoney(app, payer, es.owner - 1, fee, 0);
                         }
                         es.price = fee; // [RE 0x41A00B] estate+44 = 本次租金
@@ -2426,12 +2439,21 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                 }
                 // [RE 0x41A581] 通用后处理：神明调整 → 记账 → 转账（flags=0 收款入银行）→ corp+48
                 rent = applyGodRentModifier(app, p, rent, feeName);
+                int payer = -1;  // 付款人（原版 edi；住宿台词条件 payer==cur）
                 if (rent > 0) {
                     // [RE 0x41A5C0] 记账（欠款矩阵）：付款人 → 地主 金额/100
                     addPlayerDebt(st, p, cp.owner - 1, rent / 100);
                     // [RE 0x41A62E/0x41A683/0x41A6A4] 免费卡/嫁祸卡/死神代付
-                    const int payer = resolveFeePayer(app, p, rent, feeName);
+                    payer = resolveFeePayer(app, p, rent, feeName);
                     if (payer >= 0) {  // -1 = 免費卡抵用免付
+                        // [RE 0x41A710/0x41A71E/0x41A735] 付款/收款台词（嫁祸反弹付款人=地主
+                        //   时原版 0x41A709 跳过台词）
+                        if (payer != cp.owner - 1) {
+                            if (!playDebtorLine(app, payer, cp.owner - 1, rent)) {
+                                playPayerLine(app, payer, rent);
+                            }
+                            playCollectorLine(app, cp.owner - 1, rent);
+                        }
                         transferMoney(app, payer, cp.owner - 1, rent, 0);
                     }
                     cp.lastFee = rent; // [RE 0x41A75E] corp+48 = 最近收费
@@ -2442,6 +2464,10 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                 if (cp.type == 1 && hotelDays > 0 && pl.alive != 0 && st.sceneRequest == 0) {
                     // [RE 0x40D761] 设置新状态前清除旧状态（住宿/監獄/醫院）
                     pl.stateFlags = 0;
+                    // [RE 0x41A7E0] 住宿天数台词（付款人=本人时；expr2）
+                    if (payer == p) {
+                        playStatusDaysLine(app, p, hotelDays);
+                    }
                     const uint8_t stay = static_cast<uint8_t>(hotelDays - 1);
                     pl.stateFlags = static_cast<uint32_t>(stay != 0 ? stay : 0x80);
                     pl.byte66 = static_cast<uint8_t>(pl.byte66 + hotelDays); // byte_496BAA
@@ -3309,7 +3335,8 @@ void jailPlayer(Application& app, int player, int days) {
     st.jailFlags[player] = 0;
     st.hospitalFlags[player] = 0;
     pl.stateFlags = 0;
-    // [RE 0x44F2C2] 入狱语音（P4）
+    // [RE 0x43D5F9] 入狱天数台词（sub_44F2C2，expr2；>6 天惨 / 4..6 随机 / 1..3 轻描淡写）
+    playStatusDaysLine(app, player, days);
     pl.alive &= 0x0F; // [RE 0x43D601]
     if (pl.cellEntId > 0 && pl.cellEntId < st.cellEnts.size()) {
         st.cellEnts[pl.cellEntId].occMask &= ~(256u << player); // [RE 0x43D61D]
@@ -3371,6 +3398,8 @@ void hospitalizePlayer(Application& app, int player, int days) {
     st.jailFlags[player] = 0;
     st.hospitalFlags[player] = 0;
     pl.stateFlags = 0;
+    // [RE 0x43ECA5] 住院天数台词（sub_44F2C2，expr2）
+    playStatusDaysLine(app, player, days);
     pl.alive &= 0x0F; // [RE 0x43ECAD]
     if (pl.cellEntId > 0 && pl.cellEntId < st.cellEnts.size()) {
         st.cellEnts[pl.cellEntId].occMask &= ~(256u << player); // [RE 0x43ECC9]

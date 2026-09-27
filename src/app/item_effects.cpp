@@ -170,6 +170,126 @@ void playValueLine(Application& app, int player, int price) {
     playLine(app, player, line);
 }
 
+// [RE 0x44F354] playCollectorLine：收款方台词（金额档；>=9000M / 5000..9000M 随机 / >=2000M）
+void playCollectorLine(Application& app, int player, int32_t amount) {
+    GameState& st = app.gameState();
+    if (player < 0 || player >= 4) {
+        return;
+    }
+    const int ci = st.players[player].charIndex;
+    if (ci < 0 || ci >= 12) {
+        return;
+    }
+    const int32_t m = st.moneyMul;
+    const char* line = nullptr;
+    if (amount >= 9000 * m) {
+        line = kMoneyLines[ci][0];
+    } else if (amount >= 5000 * m) {
+        line = (std::rand() & 1) ? kMoneyLines[ci][1] : kMoneyLines[ci][0];
+    } else if (amount >= 2000 * m) {
+        line = kMoneyLines[ci][2];
+    }
+    if (line != nullptr) {
+        playLine(app, player, line, 3);  // [RE 0x44EF41] expr 3（收款笑）
+    }
+}
+
+// [RE 0x44F42D] playPayerLine：付款方台词（金额档；>=9000M / 5000..9000M 随机 / >0）
+void playPayerLine(Application& app, int player, int32_t amount) {
+    GameState& st = app.gameState();
+    if (player < 0 || player >= 4) {
+        return;
+    }
+    const int ci = st.players[player].charIndex;
+    if (ci < 0 || ci >= 12) {
+        return;
+    }
+    const int32_t m = st.moneyMul;
+    const char* line = nullptr;
+    if (amount >= 9000 * m) {
+        line = kMoneyLines[ci][3];
+    } else if (amount >= 5000 * m) {
+        line = (std::rand() & 1) ? kMoneyLines[ci][4] : kMoneyLines[ci][3];
+    } else if (amount > 0) {
+        line = kMoneyLines[ci][5];
+    }
+    if (line != nullptr) {
+        playLine(app, player, line, 2);  // [RE 0x44EF41] expr 2（付款哭）
+    }
+}
+
+// [RE 0x44F4ED] playDebtorLine：欠债者面对最大债主（50%）——返回 true 时调用方不再播付款台词
+bool playDebtorLine(Application& app, int player, int creditor, int32_t amount) {
+    GameState& st = app.gameState();
+    if (player < 0 || player >= 4 || creditor < 0) {
+        return false;
+    }
+    const int ci = st.players[player].charIndex;
+    if (ci < 0 || ci >= 12) {
+        return false;
+    }
+    if (findMaxCreditor(st, player) == creditor && amount >= 5000 * st.moneyMul &&
+        (std::rand() & 1)) {
+        playLine(app, player, kMoneyLines[ci][7], 1);  // [RE 0x44EF41] expr 1（欠债怨念）
+        return true;
+    }
+    return false;
+}
+
+// [RE 0x44F2C2] playStatusDaysLine：状态天数台词（>6 / 4..6 随机 / 1..3）
+void playStatusDaysLine(Application& app, int player, int days) {
+    GameState& st = app.gameState();
+    if (player < 0 || player >= 4) {
+        return;
+    }
+    const int ci = st.players[player].charIndex;
+    if (ci < 0 || ci >= 12) {
+        return;
+    }
+    const char* line = nullptr;
+    if (days > 6) {
+        line = kMoneyLines[ci][3];
+    } else if (days > 3) {
+        line = (std::rand() & 1) ? kMoneyLines[ci][4] : kMoneyLines[ci][3];
+    } else if (days > 0) {
+        line = kMoneyLines[ci][5];
+    }
+    if (line != nullptr) {
+        playLine(app, player, line, 2);  // [RE 0x44EF41] expr 2
+    }
+}
+
+// [RE 0x44F627] playEstateChainSpeech：同名地产 ≥3 块（自家）感想
+void playEstateChainSpeech(Application& app, const char* name, int flag) {
+    GameState& st = app.gameState();
+    const int p = st.currentPlayer;
+    if (p < 0 || p >= 4 || name == nullptr) {
+        return;
+    }
+    int count = 0;
+    for (size_t i = 1; i < st.estates.size(); ++i) {
+        const Estate& es = st.estates[i];
+        if (std::strcmp(name, es.name) == 0 && es.owner == static_cast<uint8_t>(p + 1)) {
+            ++count;
+        }
+    }
+    if (count < 3) {
+        return;
+    }
+    const int ci = st.players[p].charIndex;
+    if (ci < 0 || ci >= 12) {
+        return;
+    }
+    if (flag != 0) {
+        // [RE 0x44F627] 1/3 概率（升级路径）
+        if ((std::rand() % 3) == 0) {
+            playLine(app, p, kMoneyLines[ci][9], 0);
+        }
+    } else {
+        playLine(app, p, kMoneyLines[ci][8], 0);  // 买地路径必播
+    }
+}
+
 // [RE 0x446E4A] 機車（id5）：travel=1 / 骰子数 2；已是机车 → 0；原汽车 → 归还一辆汽车
 // 依据: 0x446E4A 反编译；消耗 = itemStock[15p+4]--（不还礼物池，池归还见 confiscateItems）
 int useItemFoot(Application& app) {

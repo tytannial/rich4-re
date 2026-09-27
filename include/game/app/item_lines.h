@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 namespace rich4 {
 
 class Application;
@@ -12,6 +14,11 @@ extern const char* const kItemLines[12][13];
 // [RE 0x480D92/96/9A] 被踩中台词表（列14 路障 / 列15 地雷 / 列16 定時炸彈；
 //   同 off_480D5A 表，角色 stride 26）；onPlayerActionPhase case16/17/18 播
 extern const char* const kItemTouchLines[12][3];
+
+// [RE 0x480862..892] 金额/状态台词表（off_48084A 家族 27 列中的 10 列，见生成器注释）：
+//   0/1/2 收款高/中/低、3/4/5 付款高/中/低、6 住宅满级、7 欠债、
+//   8/9 同路段≥3 连锁吐槽（必播/1/3 概率）
+extern const char* const kMoneyLines[12][10];
 
 // [RE 0x48084A] off_48084A 角色价值台词表（12 角色 x 27 列，取列 0..2）
 //   由 tools/gen_item_lines.py 生成（src/app/item_lines.cpp）
@@ -30,5 +37,26 @@ void playItemLine(Application& app, int player, int itemId, int exprFrame = 0);
 //   price > 100 → kValueLines[char][0]；51..100 → [0]/[1] 随机；<= 50 → [2]；
 //   经 playLine 显示气泡并播放语音（原版 sub_44EF41 type=0）
 void playValueLine(Application& app, int player, int price);
+
+// [RE 0x44F354] playCollectorLine：收款方台词（金额档，expr3）——>=9000M 列6；
+//   5000..9000M 列6/7 随机；2000..5000M 列8；<2000M 无
+void playCollectorLine(Application& app, int player, int32_t amount);
+
+// [RE 0x44F42D] playPayerLine：付款方台词（expr2）——>=9000M 列3；5000..9000M 列3/4 随机；
+//   0<金额<5000M 列5；<=0 无
+void playPayerLine(Application& app, int player, int32_t amount);
+
+// [RE 0x44F4ED] playDebtorLine：欠债者面对最大债主台词（expr1，50% 概率）——
+//   findMaxCreditor(player)==creditor 且金额>=5000M 且 rand&1 → 播列7 并返回 true（调用方
+//   不再播付款方台词）；否则返回 false
+bool playDebtorLine(Application& app, int player, int creditor, int32_t amount);
+
+// [RE 0x44F2C2] playStatusDaysLine：状态天数台词（expr2；住宿/入狱/住院共用）——
+//   days>6 列3；4..6 列3/4 随机；1..3 列5；0 无
+void playStatusDaysLine(Application& app, int player, int days);
+
+// [RE 0x44F627] playEstateChainSpeech：统计与 name 同名的住宅用地中属于当前玩家的块数，
+//   >=3 → 角色感想（expr0）：flag!=0 时 1/3 概率列9（列17 台词），flag==0 必播列8（列16）
+void playEstateChainSpeech(Application& app, const char* name, int flag);
 
 } // namespace rich4

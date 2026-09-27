@@ -16,21 +16,26 @@
   画 data.mkf[519] 帧 MM-1。
 - 观察到的 expr 习惯（供 D1..D3 填参）：收款类 `sub_44F354`=3、付款类 `sub_44F42D`=2、
   欠债者 `sub_44F4ED`=1、路障/地雷=1、炸彈=2、神明笑=3/哭=2、状态提示（监/医/冬眠）=2/1、
+  状态天数 `sub_44F2C2`=2（住宿/入狱/住院）、连锁吐槽 `sub_44F627`=0、封顶列15=0、
   价值/道具/卡牌=0。
 - 表步长 27 列/角色（`off_4812xx` 家族）；文本含 BIG5，提取用 `get_bytes` cp950（勿用 `get_string`）。
 
 ## 2. 剩余调用点清单
 
-### D1 收租 / 付费（优先）
+### D1 收租 / 付费 —— **P4-B ✅ 2026-09-27**
 
-| 重写位置 | 原版 | 缺什么 |
+| 重写位置 | 原版 | 状态 |
 |---|---|---|
-| `turn_system.cpp` 收租段（约 2121-2124 注释） | 0x419F59/0x419F67（付款方 `sub_44F4ED`/`sub_44F42D`）、0x419FA1（收款方 `sub_44F354`） | 住宅收租三方台词（地主/同盟分账时收款方各一次） |
-| `turn_system.cpp` corp 收费段（约 2381） | 0x41A710/0x41A71E/0x41A735 | 商業用地收费付款/收款台词 |
-| `turn_system.cpp:2067`（买地询问） | 0x4198xx 询问后语音（`sub_44EF41` 索引 0） | 买地/升级询问台词 |
-| `turn_system.cpp:2105`（升级封顶） | 0x4199F1 `off_480886` | 住宅满级台词 |
-| `turn_system.cpp:2099`（`estateChainSpeech` 0x44F627） | 0x419A2B | 同路段≥3 吐槽（1/3 概率） |
-| `turn_system.cpp:2400` 住宿段（可选） | 0x41A7E0 `sub_44F2C2` | 住宿消费台词 |
+| 住宅收租（付款/收款） | 0x419F59/0x419F67（`sub_44F4ED`/`sub_44F42D`）、0x419FA1/0x419FF0（`sub_44F354`） | ✅ `playDebtorLine`/`playPayerLine`/`playCollectorLine`；同盟分账**地主份额**收款档、同盟无收款台词（对齐原版） |
+| corp 收费 | 0x41A710/0x41A71E/0x41A735 | ✅ 嫁祸反弹（payer==owner）不播（原版 0x41A709） |
+| 升级封顶 | 0x4199F1 `off_480886`（列15、expr0） | ✅ + FLC523 |
+| 同路段≥3 吐槽 | 0x41A13E（必播列16）/0x419A2B（1/3 列17） | ✅ `playEstateChainSpeech` |
+| 住宿/入狱/住院 | 0x41A7E0/0x43D5F9/0x43ECA5 `sub_44F2C2`（天数档、expr2） | ✅ `playStatusDaysLine`；住宿仅付款人==本人时播 |
+| 买地/升级询问语音 | 0x4198xx（`sub_44EF41` 索引 0） | ⬜ 待核（未必存在独立调用） |
+| 出国 `startTravelState` | 0x40D3F8 `sub_44F2C2` | ⬜ 归 P4-C（命运批） |
+| 大財神超额收款 | 0x40ED85 `sub_44F354`（attachObject） | ⬜ 归 P4-C（神明批） |
+| 神明租金调整 | 0x41D7C1 `sub_44F567`（列12/13/14 意外之财） | ⬜ 归 P4-C（`applyGodRentModifier`） |
+| 新闻/命运收款付款 | 0x449A80 等 / `sub_44CD99`/`sub_44CF1E` / fate 438/459 | ⬜ 归 P4-D |
 
 ### D2 移动落地 / 物件 / 神明
 
@@ -67,8 +72,11 @@
 
 1. **P4-A ✅ 2026-09-27**：路障/地雷/炸彈踩中台词（`kItemTouchLines` 列14/15/16）+ `playLine`
    expr 表情帧参数（原版 a2 → 帧 a2+1，`card_lines`/`item_lines` 全透传）。
-2. **P4-B（D1）**：收租/付费三连台词（`sub_44F354` expr3 / `sub_44F42D` expr2 /
-   `sub_44F4ED` expr1，9000/5000/2000×M 档选句）——5 表提取 + 收租/corp 收费/封顶/连锁/住宿调用点。
+2. **P4-B（D1）✅ 2026-09-27**：金额/状态台词表 `kMoneyLines[12][10]`（off_48084A 列
+   6/7/8 收款、9/10/11 付款、15 封顶、16/17 连锁、18 欠债）+ 五个函数
+   `playCollectorLine`/`playPayerLine`/`playDebtorLine`/`playStatusDaysLine`/
+   `playEstateChainSpeech`；接入住宅收租（含同盟分账）、corp 收费、升级封顶、连锁吐槽、
+   住宿/入狱/住院。剩余调用点见 D1 表 ⬜（出国/大財神/神明租金/新闻命运）。
 3. **P4-C（D2）**：状态提示 `checkPlayerActionStatus`（列19/20/21 台词 50%）、神明哭/笑
    （`attachObject`/`attachEnd`）、老虎机（`off_48086A`/`sub_44F354`）、`godBlessUpgrade`、
    土地公/恶魔；恶犬咬伤确认无台词。
