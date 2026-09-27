@@ -996,26 +996,31 @@ int facingBetween(GameState& st, int fromId, int toId) {
 // [RE 0x419A67] startRouteHighlight：收租联动高亮收集与启动
 // 依据: 0x419A67 高亮循环（rebuildPickBuffer(1) + sub_456C0A 标记同组地块 →
 //       v141 > 1 时 sub_451985 播放 16 帧闪烁）；组定义：
-//       住宅用地 = 同 owner + 同名 + type==0；连锁店 = 同 owner + type!=0（跨街道）
-// 差异: 原版高亮含同盟地块（v140）→ P4
+//       住宅用地 = 同 owner + 同名 + type==0；连锁店 = 同 owner + type!=0（跨街道）；
+//       **地主同盟者（+65，v140）的同组地块一并标记**（0x419C44/0x419BE2），
+//       两组计数合计 > 1 才闪烁
 void startRouteHighlight(GameState& st, const Estate& es) {
     st.highlightEstates.clear();
     st.highlightCorps.clear();
-    if (es.type == 0) {
+    const uint8_t ally = st.players[es.owner - 1].ally; // [RE 0x419AAF] v140
+    auto collect = [&](uint8_t owner) {
+        if (owner == 0) {
+            return;
+        }
         for (size_t j = 1; j < st.estates.size(); ++j) {
             const Estate& e = st.estates[j];
-            if (e.type == 0 && e.owner == es.owner &&
-                std::strncmp(e.name, es.name, sizeof(e.name)) == 0) {
+            if (es.type == 0) {
+                if (e.type == 0 && e.owner == owner &&
+                    std::strncmp(e.name, es.name, sizeof(e.name)) == 0) {
+                    st.highlightEstates.push_back(static_cast<int>(j));
+                }
+            } else if (e.type != 0 && e.owner == owner) {
                 st.highlightEstates.push_back(static_cast<int>(j));
             }
         }
-    } else {
-        for (size_t j = 1; j < st.estates.size(); ++j) {
-            if (st.estates[j].type != 0 && st.estates[j].owner == es.owner) {
-                st.highlightEstates.push_back(static_cast<int>(j));
-            }
-        }
-    }
+    };
+    collect(es.owner);
+    collect(ally); // [RE 0x419C44/0x419BE2] 同盟者同组地块
     st.highlightFrame = (st.highlightEstates.size() > 1) ? 0 : -1;
 }
 
@@ -1847,15 +1852,16 @@ static void labDevelopAfterLanding(Application& app, int p, uint16_t objId) {
 //   自己住宅用地升級（0x419911）：见下
 //   他人住宅用地收租（loc_419A67）：音效槽 20 → ownerCanCollectRent（0x41D559 地主状态免收）
 //     → estateRouteRent（0x419744 同路段 fees[level] 之和 / 连锁店数×2000）× moneyMul
-//     → flag(+23) 翻倍 → applyGodRentModifier（0x41D709 付款方神明调整）
-//     → showMessage("此地屬%s請付%d元過路費") → transferMoney(flags=0 收款入银行)
+//     → flag(+23) **仅地主侧**翻倍 → 同盟分账（地主 +65 对象的联合租金 v134 并入总额，
+//       按 v132 = v134/(v8+v134) 拆分转账；消息 0x46399A「屬%s與%s」）→ applyGodRentModifier
+//       （0x41D709 付款方神明调整，作用于双方总额）→ showMessage → transferMoney(flags=0
+//       收款入银行)
 //   事件格 case 10/11/12 得點券（0x41B184/0x41B21E/0x41B2A3）：data.mkf[537] FLC（阻塞）+
 //     showMessage("得點券ＮＮ點") + 点券 50/30/10；角色语音 sub_44EF41 待 P4（case 12 原版无）
 //   事件格 case 13 卡片（0x41B302）：data.mkf[536] FLC + drawFreeCard（0x441E12 赠卡池抽卡，
 //     满 15 舍弃最低价，见 cardBag* 辅助）+ showCardGet（0x441F73 卡片图/提示框/1500ms）；
 //     卡片获得语音 sub_44F230 待 P4
-// 差异: 事件格 case 2..9/14..16（P2 后续）、商業用地/行業設施點特殊点（loc_41A168）、
-//       AI 决策（sub_41D7D4）、收租的同盟分账/死神代付/免租卡片/浮动数字（P4）
+// 差异: 收租角色台词（付款方 sub_44F4ED/sub_44F42D、收款方 sub_44F354）待 P4
 int landingEvent(Application& app, uint16_t cellEntId) {
     GameState& st = app.gameState();
     const int p = st.currentPlayer;
@@ -2107,45 +2113,79 @@ int landingEvent(Application& app, uint16_t cellEntId) {
         } else {
             // ---- 他人住宅用地收租（loc_419A67）----
             // [RE 0x419A67] 收租音效 dword_4823EA = 槽 20 → sub_41D559 地主状态免收检查 →
-            //   sub_419744 联合租金（同路段 fees[level] 之和 / 连锁店数×2000）→
-            //   flag(+23) 非 0 翻倍 → sub_41D709 付款方神明调整 →
-            //   showMessage("%s\n\n此地屬%s\n\n請付%d元過路費") → sub_41D2C6 转账（flags=0
-            //   收款入银行）→ estate+44 = 本次租金
-            // 差异: 原版同盟分账（g_playerVehicle 双方按比例拆分）、死神代付（sub_40FBB8）、
-            //       免租/分期卡片（sub_4413AD/sub_444A60/sub_44476A）、同路段高亮
-            //       （rebuildPickBuffer + sub_456C0A）与浮动数字（sub_44F354）待 P4
+            //   sub_419744 联合租金（同路段 fees[level] 之和 / 连锁店数×2000；地主同盟者
+            //   同组另算 v134）→ flag(+23) 非 0 **仅翻倍地主侧** v8 → 高亮 →
+            //   【同盟分账】v8 += v134、v132 = v134/v8 → sub_41D709 付款方神明调整（作用于
+            //   双方总额）→ showMessage（同盟时 0x46399A「屬%s與%s」）→ 按 v132 拆分
+            //   sub_41D2C6 转账（flags=0 收款入银行）→ estate+44 = 本次租金
+            // 差异: 收租角色台词（付款方 sub_44F4ED/sub_44F42D、收款方 sub_44F354；
+            //       sub_44F354 实为按金额档选句的台词表，非浮动数字）待 P4
             app.audio().playEffectSlot(20);
             static const char kFeeName[] = "過路費"; // [RE 0x47517C] off_47517C 初值
             if (ownerCanCollectRent(app, es.owner - 1, es.flag, kFeeName)) {
-                int32_t rent = estateRouteRent(st, es.owner, es);
+                const uint8_t ally = st.players[es.owner - 1].ally; // [RE 0x419AAF] 地主同盟对象
+                const int32_t ownRent = estateRouteRent(st, es.owner, es); // [RE 0x419ACE/0x419AEE]
+                const int32_t allyRent =
+                    ally != 0 ? estateRouteRent(st, ally, es) : 0; // [RE 0x419ADC/0x419AFA]
+                int32_t total = ownRent;
                 if (es.flag != 0) {
-                    rent *= 2;
+                    total *= 2; // [RE 0x419B0F] 仅地主侧联合租金翻倍（同盟侧不翻）
                 }
-                // [RE 0x419A67] 先播放联动闪烁（阻塞，原版 sub_451985 在收费提示之前完成）
+                total += allyRent; // [RE 0x419CBD]
+                // [RE 0x419A67] 先播放联动闪烁（阻塞，原版 sub_451985 在收费提示之前完成；
+                //   原版 v141 > 1 的判据含同盟地块，见 startRouteHighlight）
                 startRouteHighlight(st, es);
                 playHighlightBlink(app);
-                // 收费提示（原版显示神明调整前的金额 v8）
-                if (rent > 0) {
+                // 收费提示（原版显示神明调整前的总额 v8；**同盟者无同路段地也显示「與B」**——
+                //   原版以 ally 非 0 选格式而非 v134 > 0，照抄）
+                if (total > 0) {
                     const std::string label = big5ToUtf8(es.name, sizeof(es.name));
                     const Player& owner = st.players[es.owner - 1];
                     const char* ownerName = owner.name ? owner.name : "";
                     char text[192];
-                    std::snprintf(text, sizeof(text), "%s\n\n此地屬%s\n\n請付%d元%s", label.c_str(),
-                                  ownerName, rent, kFeeName);
+                    if (ally != 0) {
+                        const Player& mate = st.players[ally - 1];
+                        const char* mateName = mate.name ? mate.name : "";
+                        // [RE 0x46399A] "%s\n\n屬%s與%s\n\n請付%d元%s"
+                        std::snprintf(text, sizeof(text), "%s\n\n屬%s與%s\n\n請付%d元%s",
+                                      label.c_str(), ownerName, mateName, total, kFeeName);
+                    } else {
+                        // [RE 0x4639B3] "%s\n\n此地屬%s\n\n請付%d元%s"
+                        std::snprintf(text, sizeof(text), "%s\n\n此地屬%s\n\n請付%d元%s",
+                                      label.c_str(), ownerName, total, kFeeName);
+                    }
                     showMessage(app, text, 1500);
                 }
-                // [RE 0x41D709] 付款方神明调整（内部可能弹神明提示）
-                rent = applyGodRentModifier(app, p, rent, kFeeName);
-                // [RE 0x41A003] 转账：付款人 → 地主（flags=0，收款入银行存款）
-                if (rent > 0) {
+                // [RE 0x419CDD] 同盟分成比例 = 同盟租金 / 总额（浮点；转账时截断）
+                const double allyRatio =
+                    (ally != 0 && total > 0)
+                        ? static_cast<double>(allyRent) / static_cast<double>(total)
+                        : 0.0;
+                // [RE 0x41D709] 付款方神明调整（作用于双方总额，内部可能弹神明提示）
+                int32_t fee = applyGodRentModifier(app, p, total, kFeeName);
+                // [RE 0x41A003] 转账：付款人 → 地主/同盟（flags=0，收款入银行存款）
+                if (fee > 0) {
                     // [RE 0x419E58/0x419EB8/0x419ECC] 免费卡/嫁祸卡/死神代付（见 resolveFeePayer）
-                    const int payer = resolveFeePayer(app, p, rent, kFeeName);
-                    if (payer >= 0) {  // -1 = 免費卡抵用免付
-                        transferMoney(app, payer, es.owner - 1, rent, 0);
+                    const int payer = resolveFeePayer(app, p, fee, kFeeName);
+                    // [RE 0x419F42] 付款人 = 地主/同盟（嫁祸卡转嫁收款人）→ 不转账、不更新租金
+                    // [RE 0x419DB1/0x419DD8] 记账 addPlayerDebt 拆分重写不建模（单人路径同）
+                    if (payer >= 0 && payer != es.owner - 1 &&
+                        (ally == 0 || payer != ally - 1)) { // -1 = 免費卡抵用免付
+                        int32_t allyShare = 0;
+                        if (ally != 0) {
+                            // [RE 0x419F7D] 同盟份额 = trunc(费用 × 比例)，地主拿余数
+                            allyShare = static_cast<int32_t>(
+                                static_cast<double>(fee) * allyRatio);
+                            transferMoney(app, payer, es.owner - 1, fee - allyShare, 0);
+                            transferMoney(app, payer, ally - 1, allyShare, 0);
+                        } else {
+                            transferMoney(app, payer, es.owner - 1, fee, 0);
+                        }
+                        es.price = fee; // [RE 0x41A00B] estate+44 = 本次租金
+                        RICH4_LOGI("rent: player %d -> owner %d %d / ally %u %d (estate %d, "
+                                   "RE 0x419A67)",
+                                   p, es.owner - 1, fee - allyShare, ally, allyShare, idx);
                     }
-                    es.price = rent; // [RE 0x41A00B] estate+44 = 本次租金
-                    RICH4_LOGI("rent: player %d -> %d amount %d (estate %d, RE 0x419A67)", p,
-                               es.owner - 1, rent, idx);
                 }
             }
         }

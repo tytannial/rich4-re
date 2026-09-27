@@ -128,7 +128,7 @@ if 非人类: flyObjectSprite; highlightBlink(); refreshGameUi(0,0,1); return v
 **已实现、可直接复用**：`angelUpgrade`/`demolishEstate`/`forceHotelCheckout`/`deleteMapObject`/`jailPlayer`/`runAuction`/`stockNewsApply`/`selectCardOrItemDialog`/`passOnCardDialog`/`applyExemptCard`/`turnToAdjacentCell`/`giveCardToBag`/`cardBagRemove`/`takePlayerCard`/`givePlayerItem`/`transferMoney`/`addPlayerDebt`/`rebuildMiniMap`/`refreshGameUi`/`showMessage`/`showCardGet`/`flyObjectSprite`/`markPickBuffer`+`highlightBlink`（联动高亮）。
 
 **需新建 / 补齐（按阻塞度）**：
-1. **天数递减管线**：`estate.flag`/`corp.flag` 高/低半字节 5 天、`allyActive` 7 天 —— `updatePlayerStates`/`advanceDay` 当前不递减 flag/allyActive（同盟天数 P4 待补注释）。漲價/查封/同盟 阻塞于此。
+1. ~~**天数递减管线**：`estate.flag`/`corp.flag` 高/低半字节 5 天、`allyActive` 7 天~~ ✅ 已补齐（`updatePlayerStates` 递减，含同盟双向 -20×M）。
 2. **状态写入 helper**：`skipMove`(停留14)/`fixedStep`(烏龜30)/`state37`(夢遊16)/`byte54`(冬眠15) 载体字段已在，缺效果函数写入 + 回合消费已就绪。
 3. **`sub_446AE8` 选地块模式**（C 范式）+ **`sub_40B4F8`**（换屋筛有建筑地）+ **`sub_40D293`**（选玩家返回值解码）—— B/C 范式入口，需先验现有实现覆盖度。
 4. **被动链** `sub_444691`（復仇）+ `sub_444A60`（免費，接住宅/corp/specPt 三收费管线）。
@@ -151,7 +151,8 @@ if 非人类: flyObjectSprite; highlightBlink(); refreshGameUi(0,0,1); return v
 - **档B（13 主 + 2 被动）**：天使（整路段批量 `level++`/corp `angelUpgrade` + FLC 523）、惡魔（整段
   夷平 + 记债 30×M×level）、停留（`skipMove`）、冬眠（全体 `byte54=5` + 150×M）、夢遊（`state37=4/5`
   + 清载具）、陷害（`jailPlayer` 5/4 天）、查稅（`cash×0.2` + 免费/嫁祸链）、漲價（`flag=0x50`）、
-  查封（`flag=0x51` + 研究所停研发）、同盟（`ally/allyActive=7`，先解旧盟）、烏龜（`fixedStep=2/3`）、
+  查封（`flag=0x51` + 研究所停研发）、同盟（`ally/allyActive=7`，先解旧盟；**收租房地产联合
+  收费 ✅ 2026-09-27**：收租分账 + 消息 0x46399A + 高亮含同盟地块 + 破产解除 0x40CE74）、烏龜（`fixedStep=2/3`）、
   紅/黑（选股 → `stockNews=0x30`/`0x03` + `stockNewsApply`；黑卡持股损失记债 股数×跌幅/200）。
 - **档C（2）**：換地（交换同类地块 owner）；換屋（交换 `level/sub+type`，地权不变，0x40B4F8 动画）。
 - **被动链**：18 復仇 `triggerRevengeCard`（梦游/陷害宿主触发，反伤由调用方执行）、19 嫁祸

@@ -5,7 +5,9 @@
 > 全量收费公式（物價指數/轮盘/商業用地/行業設施點/到期）见 `pricing-formulas.md`。
 > **实现状态**：他人住宅用地收租 ✅（`src/app/turn_system.cpp`）；商業用地 corp / 行業設施點 specPt 收费 ✅
 > （`turn_system.cpp` + `facility_dialog.cpp`/`roulette_dialog.cpp`，公式见 `pricing-formulas.md` §4/§5）；
-> 同盟分账 / 死神代付 / 卡片免租 → P4（本文档保留结论供后续接入）。
+> **同盟分账 ✅ 2026-09-27**（同盟者联合租金并入 + 按 v132 拆分转账 + 消息 0x46399A；高亮含
+> 同盟地块；破产解除同盟 0x40CE74）；死神代付 / 卡片免租 ✅（`resolveFeePayer`）；
+> 收租角色台词（付款方 `sub_44F4ED`/`sub_44F42D`、收款方 `sub_44F354`）→ P4。
 
 ## 0. 时机与入口
 
@@ -40,27 +42,28 @@ if (estate.type(+24)) {                                      // 连锁店
     v8   = estateRouteRent(owner, estate.name(+4));          // 同路段 fees[level] 之和
     v134 = estateRouteRent(v140, estate.name(+4));
 }
-if (estate.flag(+23)) v8 *= 2;
+if (estate.flag(+23)) v8 *= 2;                               // **仅地主侧**，v134 不翻
 rebuildPickBuffer(1);                                        // 同路段高亮准备
 for (每块地产) if (同 owner 或 v140 且同名/连锁) sub_456C0A(pickBuffer, ..., 2000+idx, 0xFFFF);
 if (v141 > 1) sub_451985();                                  // 多块联合 → 动画延时
-sprintf(text, "%s\n\n此地屬%s\n\n請付%d元%s", 地名, 地主名, v8, "過路費");   // 0x4639B3
-// 有同盟分账（v140）时用 0x46399A: "%s\n\n屬%s與%s\n\n請付%d元%s"
+if (v140) { v8 += v134; v132 = v134/v8; }                    // 同盟：总额 + 分成比例
+sprintf(text, "%s\n\n此地屬%s\n\n請付%d元%s", 地名, 地主名, v8, "過路費");   // 0x4639B3（单人）
+// v140 非 0 时改用 0x46399A: "%s\n\n屬%s與%s\n\n請付%d元%s"（含 v134==0 也显示「與B」）
 showMessage(text, 1500);
-v12 = applyGodRentModifier(cur, "過路費", v8);               // 0x41D709 付款方神明
+v12 = applyGodRentModifier(cur, "過路費", v8);               // 0x41D709 付款方神明（作用总额）
 if (v12) {
-    addPlayerDebt(cur, owner-1, v12/100);                    // 0x40DF69 记账（金额/100）
-    // ---- 卡片检查（未实现，P4）----
+    addPlayerDebt(cur, owner-1, v12/100);                    // 0x40DF69 记账（同盟时 v140 另记一笔）
+    // ---- 卡片检查（✅ resolveFeePayer）----
     if ((v12 >= 2000*g_moneyMul || v12 > 现金+存款) && sub_4413AD(cur, 20) && sub_444A60(cur, owner-1, v12))
         v12 = 0;                                             // 免費卡（租金超 2000×物价时抵用）
     if ((v12 >= 2000*g_moneyMul || v12 > 现金+存款) && sub_4413AD(cur, 19))
         v15 = sub_44476A(cur, 1, v12);                       // 嫁禍卡（换付款人）
-    // ---- 死神/恶魔代付（P4）----
+    // ---- 死神/寶箱代付（✅ resolveFeePayer）----
     v15 = findDeathGodCarrier(cur);                          // 0x40FBB8 找携带槽 14/15 的其他玩家
     if (v15 != -1) { showMessage("死神顯靈\n\n由%s賠償%s"); }
-    if (v15 != owner-1 && v15 != v140-1) {
-        sub_44F4ED(v15, owner-1, v12); sub_44F354(owner-1, v12);
-        if (v140) { sub_41D2C6(v15, owner-1, v12 - v12*v132); sub_41D2C6(v15, v140-1, v12*v132); }
+    if (v15 != owner-1 && v15 != v140-1) {                   // 付款人=收款人 → 不转账不更新租金
+        sub_44F4ED(v15, owner-1, v12); sub_44F354(owner-1, v12);   // 付款/收款方台词 [P4]
+        if (v140) { sub_41D2C6(v15, owner-1, v12 - trunc(v12*v132)); sub_41D2C6(v15, v140-1, trunc(v12*v132)); }
         else      { sub_41D2C6(v15, owner-1, v12, 0); }
         estate.price(+44) = v12;                             // 最近租金
     }
@@ -68,8 +71,11 @@ if (v12) {
 ```
 
 - **转账 flags=0**：`sub_41D2C6(from,to,amount,flags)` 中 flags&1=收款方入现金、否则入银行；
-  收租用 0 → **地主收进银行存款**（付款方仍现金优先，不足扣银行）。
-- `v132 = v134 / (v8+v134)`：同盟分账比例（同盟也持同路段地块时）。
+  收租用 0 → **地主/同盟收进银行存款**（付款方仍现金优先，不足扣银行）。
+- **同盟分账 ✅ 2026-09-27**（`turn_system.cpp` 收租段）：`v132 = v134/(v8+v134)`（分母 v8 已含
+  flag 翻倍与同盟租金）；`trunc(v12*v132)` 给同盟、余额给地主；`estate+44` 仅在付款人
+  ≠ 地主/同盟时更新。差异：记账 `addPlayerDebt` 拆分不建模（单人路径同）；
+  免費卡前置门槛 `2000*M/现金` 未移植（`resolveFeePayer` 直接询问，AI 用自身阈值）。
 - 记账 `addPlayerDebt(cur, owner-1, v12/100)` 与转账方向相反（矩阵语义 `[a1][a2]` = a2 欠 a1），
   推测为面板"应付"显示/破产清算用；重写不建模。
 
@@ -187,7 +193,7 @@ return g_moneyMul * 总和
   缓冲 440×440，`193600` 字节）：
   - 住宅用地 = 同 owner + 同名 + `type==0`
   - 连锁店 = 同 owner + `type!=0`（**跨街道全部连锁店**）
-  - 同盟地块（`v140`）也标记 → P4
+  - **同盟地块（`v140`）同组一并标记 ✅**（0x419C44/0x419BE2；两组计数合计 > 1 才闪烁）
 - **闪烁**（`highlightBlink` 0x451985，仅标记数 `v141 > 1` 时）：
   - 16 帧亮度偏移 `g_highlightLut`（0x476380）= `{4,8,12,16,12,8,4,0,-4,-8,-12,-16,-12,-8,-4,0}`
   - 每帧 30ms（`sub_4528B9(30)`），用 `blitHighlightedMap`（0x4554FC）按标记 + 亮度调色板重绘
@@ -206,16 +212,18 @@ return g_moneyMul * 总和
 
 ## 5. 重写差异与 P4 待办
 
-- **已实现**：音效槽 20、地主状态免收、联合租金（同路段/連鎖店）、flag 翻倍、付款方神明调整、
-  showMessage 提示、`transferMoney(p, owner, rent, 0)`、`estate.price = rent`、
-  **联动高亮**（`highlightBlink` 还原）、**连锁店收费 + Ctrl+4 创建**（debug）、`estateRouteRent` 诊断日志、
+- **已实现**：音效槽 20、地主状态免收、联合租金（同路段/連鎖店）、flag 翻倍（仅地主侧）、
+  付款方神明调整、showMessage 提示（含同盟 0x46399A）、`transferMoney(..., 0)` 拆分、
+  `estate.price = fee`、**联动高亮**（`highlightBlink` 还原，含同盟地块）、
+  **连锁店收费 + Ctrl+4 创建**（debug）、`estateRouteRent` 诊断日志、
+  **同盟分账 ✅ 2026-09-27**（比例拆分/收款人守卫）、**破产解除同盟 ✅**（0x40CE74）、
   **商業用地 / 行業設施點收费**（0x41A168，公式 `pricing-formulas.md` §4/§5，含旅館轮盘+住宿/購物轮盘/
   加油站步数/6 行业公式 + 公库 `fund`）。
 - **未实现（P4）**：
-  - 同盟分账（`g_playerAlly` 双方按 `v134/(v8+v134)` 拆分；重写字段已建模）
-  - 死神/恶魔代付（`findDeathGodCarrier`）
-  - 免費卡/嫁禍卡检查（依赖卡片系统 `useCardFlow`）
-  - 浮动数字（`sub_44F354`）
+  - 收租角色台词（付款方 `sub_44F4ED`/`sub_44F42D`、收款方 `sub_44F354`；**勘误：`sub_44F354`
+    实为按金额档选句的台词表，非"浮动数字"**——`map-object-refresh.md` §5 已正确描述）
+  - 收租记账 `addPlayerDebt` 拆分（单人路径同；仅日志语义）
+  - 免費卡前置门槛 `2000*M/现金`（`resolveFeePayer` 直接询问）
 - **case 3 语义修正**：早期重写在 case 3 立即转账 30×`moneyMul`，与 landingEvent 收租重复；
   已移除（保留面向 + 记账日志 + `stepDwell`）。
 - **调试**：`estateRouteRent` 打印每个匹配地块明细 + 联动块数/总额（定位"整条街未联动"类问题）；

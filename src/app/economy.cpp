@@ -463,6 +463,11 @@ void eliminatePlayer(Application& app, int p) {
     // [RE 0x40CE22/0x40CE28] 清破产者監獄/醫院标志
     st.jailFlags[p] = 0;
     st.hospitalFlags[p] = 0;
+    // [RE 0x40CE74] 破产者若有同盟 → clearAllyPair 解除（清双方 +65/+61）
+    if (pl.ally != 0) {
+        clearAllyPair(st, p);
+        RICH4_LOGI("eliminatePlayer: ally of p%d dissolved (RE 0x40CE74)", p);
+    }
     // [RE 0x40CE3E..0x40CEE8] 保释人破产 → 其保释的事件槽 NPC 自动关回原生建筑
     //   条件 = 自由（busy==0，原版 !byte_498E32）且 bailer==破产者（byte_498E30）:
     //   槽 0/1（小偷/強盜）→ jailPlayer；槽 2/3（流氓/間諜）→ hospitalizePlayer

@@ -273,11 +273,11 @@
 | 格子音效表 | `g_cellTypeSound` 0x475299（17 项）|
 | estate 绘制 | 0x4091DF：`level==0` 有主 → `pieceTiles`(map.mkf[25]) 帧=角色 ID、**不改调色板**；`level>0` → `dword_48AE48[level]`（type==0）/ `estateFlag`（type≠0），owner 色 |
 | 调色板 | `g_drawListPal`(0x48A852)：0xFF=不改 / 0=黑 / 1..8=`g_playerColor[owner-1]`（u32 RGB888 → `rgb888To555`）|
-| 收租（停留结算） | `landingEvent` 0x419A67：音效槽 20 → `ownerCanCollectRent`(0x41D559) → `estateRouteRent`(0x419744) 同路段 `fees[level]` 之和 / 连锁店数×2000，×`moneyMul` → flag(+23) 翻倍 → `applyGodRentModifier`(0x41D709) → showMessage → transferMoney |
+| 收租（停留结算） | `landingEvent` 0x419A67：音效槽 20 → `ownerCanCollectRent`(0x41D559) → `estateRouteRent`(0x419744) 同路段 `fees[level]` 之和 / 连锁店数×2000，×`moneyMul` → flag(+23) 仅地主侧翻倍 → **同盟分账**（+65 对象 v134 并入总额、按 `v134/(v8+v134)` 拆分）→ `applyGodRentModifier`(0x41D709) → showMessage → transferMoney ✅ |
 | 地主免收 | `ownerCanCollectRent` 0x41D559：查封/與付款人同盟(+65)/死神顯靈(槽15)/住宿/消失/坐牢/住院/冬眠/夢遊 |
 | 神明调整 | `applyGodRentModifier` 0x41D709：小財神减半 / 大財神免付 / 小窮神 +50% / 大窮神加倍 |
-| 收租消息 | 0x4639B3 `"%s\n\n此地屬%s\n\n請付%d元%s"`（%s=地名/地主/金额/"過路費"）；同盟分账用 0x46399A `"%s\n\n屬%s與%s\n\n請付%d元%s"` |
-| 收租联动高亮 | `highlightBlink` 0x451985：16 帧 `g_highlightLut`(0x476380) 亮度偏移 + `markPickBuffer`(0x456C0A) 标记联动组（住宅=同 owner+同名 / 连锁店=同 owner+type≠0）；标记数>1 触发，30ms/帧+400ms |
+| 收租消息 | 0x4639B3 `"%s\n\n此地屬%s\n\n請付%d元%s"`（%s=地名/地主/金额/"過路費"）；同盟分账 0x46399A `"%s\n\n屬%s與%s\n\n請付%d元%s"`（以 ally≠0 判断，即便同盟无同段地也显示） |
+| 收租联动高亮 | `highlightBlink` 0x451985：16 帧 `g_highlightLut`(0x476380) 亮度偏移 + `markPickBuffer`(0x456C0A) 标记联动组（住宅=同 owner+同名 / 连锁店=同 owner+type≠0；**含同盟者同组地块** 0x419C44/0x419BE2）；标记数>1 触发，30ms/帧+400ms |
 | 连锁店创建 | 改建卡 `cardRebuildEffect` 0x44309B：`level!=0` 时 `type^=1`（0住宅↔1连锁店），变连锁店 `level>1`→1；效果表 `g_cardEffectFuncs` 0x475D5C、流程 `useCardFlow` 0x441BAA |
 | 移动结束 case 3 | `sub_448A7E` 触发（步行 travel&0x83==3 + 他人有建筑）；`addPlayerDebt(owner-1, cur, 30*moneyMul)` **仅记账** + 面向 + FLC 526（不转账）|
 | 记账 | `sub_40DF69`（`addPlayerDebt`）→ `dword_496BB4[26*a1+a2]`（**a1 应收 a2**，不直接扣钱）|
@@ -310,8 +310,9 @@
   `ui-controls.md` §36；help-checklist idx 11 ✅（累计 95/99）
 - ~~研究所研发 `labDevelopDialog`（P4 道具系统）~~ ✅ 2026-09-26（`lab_dialog.cpp` 0x44101D + `updatePlayerStates` 0x41C84F 产出；道具 13 获取入口闭环，非卖品 5 项；见 `44101d-lab-develop.md`）
   - 修正 2026-09-27：触发移到收尾 loc_41B077（先升級询问后研究、首次建设施即弹）；面板帧7 底图(不透明)+帧5 标题+未解锁灰度+黄框+按下下沉
-- 收租的同盟分账 / 死神代付 / 免租卡片 / 浮动数字（P4 卡片与神明系统）
-- 角色语音 `sub_44EF41` / 卡片获得语音 `sub_44F230`（P4）
+- ~~收租的同盟分账 / 死神代付 / 免租卡片~~ ✅（2026-09-27 同盟分账收尾；死神/免租已由 `resolveFeePayer` 接入）
+- 收租角色台词（付款方 `sub_44F4ED`/`sub_44F42D`、收款方 `sub_44F354`——实为按金额档选句的台词表，
+  **非"浮动数字"**）与全局角色语音 `sub_44EF41` / 卡片获得语音 `sub_44F230`（P4）
 - ~~P4 卡片栏/道具栏 UI + 使用流程外壳~~ ✅ 2026-09-24（工具条 case7/8：`useCardDialog` 0x441BAA /
   `itemBagDialog` 0x447D97，panel.mkf[11] 5×3 网格；**改建卡(id7)/请神符(id23)/送神符(id22) 可用**，
   其余 27 卡 + 13 道具效果 stub；见 `441baa-inventory-panels.md`）

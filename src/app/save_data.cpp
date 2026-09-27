@@ -58,6 +58,7 @@ void serializePlayer(uint8_t out[kPlayerSize], const Player& p) {
     out[57] = p.fixedStep;
     out[59] = p.bankRefuseDays;
     out[60] = p.bankFinanceFlags;
+    out[61] = p.allyActive; // [RE 0x496BA5] 同盟生效天数（原版 +61，此前漏写）
     out[62] = p.insuranceDays;
     out[63] = p.cellTableIdx;   // [RE 0x496BA7] 附身神明物件
     out[64] = p.cellNo;         // [RE 0x496BA8] 挂身道具物件（路障/炸彈）

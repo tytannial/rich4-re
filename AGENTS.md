@@ -17,8 +17,10 @@
 非玩家控制期（AI 回合/掷骰/移动/结算）锁定交互（`g_playerControl`）。
 
 **M2（进行中）**：P0 买地 ✅、P1 升级 ✅ / **他人住宅用地收租 ✅**（`landingEvent` 0x419A67：
-同路段联合租金/连锁×2000/查封翻倍/免收状态/神明调整/showMessage/收款入银行；
-同盟分账/死神代付/卡片抵用 → P4）、收费公式全部逆向归档 ✅（`pricing-formulas.md`）；
+同路段联合租金/连锁×2000/查封翻倍（**仅地主侧**）/免收状态/神明调整/showMessage/收款入银行；
+**同盟分账 ✅ 2026-09-27**——地主 +65 对象的联合租金并入总额、按 `v134/(v8+v134)` 拆分转账、
+消息 0x46399A「屬%s與%s」、高亮含同盟地块、破产解除同盟 0x40CE74；死神代付/卡片抵用 ✅
+`resolveFeePayer`）、收费公式全部逆向归档 ✅（`pricing-formulas.md`）；
 **商業用地 corp 全流程 ✅**（购地/建设施 `selectFacilityDialog`/升级/他人收费/旅館住宿，
 `facility_dialog.cpp`+`roulette_dialog.cpp`）、**行業設施點 specPt 收费 ✅**（6 公式 + 公库 `fund`）、
 **连锁店 ✅**（改建卡 0x44309B + `Ctrl+4`）；Debug 工具（Ctrl+1..9 + Ctrl+Shift 扩展）✅、

@@ -97,7 +97,8 @@ int angelUpgrade(Application& app, uint16_t objId);
 //   轉向卡(6) 与魔法屋惩罚 7 复用（定义见 turn_system.cpp）；NPC 分支（a1>=4 犯人表）P5
 void turnToAdjacentCell(GameState& st, int p);
 
-// [RE 0x419A67] startRouteHighlight：收租联动高亮收集（同 owner 同名 estate / 连锁店）
+// [RE 0x419A67] startRouteHighlight：收租联动高亮收集（同 owner 同名 estate / 连锁店；
+//   含地主同盟者同组地块，两组合计 > 1 才闪烁）
 void startRouteHighlight(GameState& st, const Estate& es);
 
 // [RE 0x451985] playHighlightBlink：阻塞播放联动闪烁（16 帧 + 400ms 停留；
