@@ -505,11 +505,12 @@ int cardEffectAngel(Application& app) {
         return 0;
     }
     st.highlightFrame = (st.highlightEstates.empty() && st.highlightCorps.empty()) ? -1 : 0;
-    playHighlightBlink(app);  // [RE 0x4435B8/0x443624 highlightBlink]
+    playHighlightBlink(app, false);  // [RE 0x4435B8/0x443624 highlightBlink]（修改前画面）
+    // [RE 0x4436C6] refreshGameUi(0,0,1)：全量重绘 → 显示升级结果（原重写 FLC 与重绘顺序颠倒）
+    renderGameFrame(app);
     if (capped) {
-        playEventFlc(app, 523, 0, 40, 90, false, 0);  // [RE playGodBuildFlc]
+        playEventFlc(app, 523, 0, 40, 90, false, 0);  // [RE LABEL_27 playGodBuildFlc]
     }
-    renderGameFrame(app);  // [RE 0x44362C refreshGameUi(0,0,1)]
     RICH4_LOGI("cardAngel: objId=%d capped=%d (RE 0x4434C0)", v, capped ? 1 : 0);
     return 1;
 }
@@ -558,8 +559,8 @@ int cardEffectDevil(Application& app) {
         return 0;
     }
     st.highlightFrame = (st.highlightEstates.empty() && st.highlightCorps.empty()) ? -1 : 0;
-    playHighlightBlink(app);  // [RE 0x4438E0/0x4438F6 highlightBlink]
-    renderGameFrame(app);     // [RE refreshGameUi]
+    playHighlightBlink(app, false);  // [RE 0x4438E0/0x4438F6 highlightBlink]（修改前画面）
+    renderGameFrame(app);            // [RE refreshGameUi]（显示拆平结果）
     RICH4_LOGI("cardDevil: objId=%d (RE 0x4436E0)", v);
     return 1;
 }

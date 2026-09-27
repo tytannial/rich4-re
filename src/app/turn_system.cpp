@@ -1052,17 +1052,30 @@ void startRouteHighlight(GameState& st, const Estate& es) {
 //       期间 pumpEvents 保持窗口响应（收租时 gamePlayerControl=0，事件被吞/仅物件提示）
 // [PORT] 音频续喂：kTargetQueued=1024 字节（8bit mono @44.1kHz ≈ 23ms）——阻塞循环的
 //       30ms 间隔会超过缓冲导致音乐 underrun（卡顿）→ 延时拆为 5ms 小段逐段 audio.update()
-void playHighlightBlink(Application& app) {
+// preRedraw=false（整路段类卡片 天使/恶魔/漲價/查封）：原版闪烁 sub_4554FC 每帧从
+//   **上次绘制的地图表面**复制（= 数据修改前的画面）+ 高亮变换，新等级/拆除后的画面要等
+//   收尾 refreshGameUi(0,0,1)；重写对应 = 进入时快照整屏 → 每帧恢复快照 + 高亮变换
+//   （不 renderGameFrame，否则会画出刚改完的新数据）。调用方须已渲染过（目标选择模态
+//   退出时的画面即修改前画面，mapHitRegions 亦为当时记录）。
+void playHighlightBlink(Application& app, bool preRedraw) {
     GameState& st = app.gameState();
     if (st.highlightFrame < 0) {
         return; // 联动组 ≤ 1（原版 v141 > 1 才播放）
     }
     // [RE 0x451985] 形状快照（原版 pickBuffer 标记语义：启动时提取，播放期间不随地图数据
     //   重建——拆除后的地块仍显示高亮，如新闻 idx 19 山洪归公）
-    // 防御: 先按当前视口重建 mapHitRegions（部分事件路径可能自上次渲染后未重绘，
-    //   否则形状快照为空 → 高亮不可见）
-    renderGameFrame(app);
-    captureHighlightShapes(app);
+    Surface& dst = app.surface();
+    std::vector<uint16_t> snap;
+    if (preRedraw) {
+        // 防御: 先按当前视口重建 mapHitRegions（部分事件路径可能自上次渲染后未重绘，
+        //   否则形状快照为空 → 高亮不可见）
+        renderGameFrame(app);
+        captureHighlightShapes(app);
+    } else {
+        captureHighlightShapes(app);  // 用调用方现有记录（修改前画面）
+        snap.assign(dst.pixels(), dst.pixels() + static_cast<size_t>(Surface::kWidth) *
+                                                        Surface::kHeight);
+    }
     RICH4_LOGI("route highlight: %zu estates + %zu corps -> %zu shapes (RE 0x451985)",
                st.highlightEstates.size(), st.highlightCorps.size(), st.highlightShapes.size());
     auto waitAudio = [&app](int ms) {
@@ -1071,18 +1084,23 @@ void playHighlightBlink(Application& app) {
             SDL_Delay(5);
         }
     };
-    for (int f = 0; f < 16; ++f) {
+    auto presentFrame = [&](int f) {
         st.highlightFrame = f;
-        renderGameFrame(app);
+        if (!preRedraw) {
+            std::memcpy(dst.pixels(), snap.data(), snap.size() * sizeof(uint16_t));
+            drawEstateHighlight(app);  // 快照（修改前画面）+ 高亮变换
+        } else {
+            renderGameFrame(app);  // 内部已含 drawEstateHighlight
+        }
         app.renderFrame();
         app.pumpEvents();
+    };
+    for (int f = 0; f < 16; ++f) {
+        presentFrame(f);
         waitAudio(30);
     }
     // 停留期（原版 sub_4528B9(400)：最后一帧 byte_476380[15]=0 无偏移）
-    st.highlightFrame = 16;
-    renderGameFrame(app);
-    app.renderFrame();
-    app.pumpEvents();
+    presentFrame(16);
     waitAudio(400);
     st.highlightFrame = -1;
     st.highlightEstates.clear();

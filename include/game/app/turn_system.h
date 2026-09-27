@@ -103,7 +103,9 @@ void startRouteHighlight(GameState& st, const Estate& es);
 
 // [RE 0x451985] playHighlightBlink：阻塞播放联动闪烁（16 帧 + 400ms 停留；
 //   调用前需填 st.highlightEstates 且 st.highlightFrame=0；定义见 turn_system.cpp）
-void playHighlightBlink(Application& app);
+//   preRedraw=false：整路段类卡片（数据刚改、尚未重绘）——闪烁基于**修改前画面快照**
+//   （原版 sub_4554FC 从上次绘制的地图表面复制），新画面由收尾 refreshGameUi(0,0,1) 呈现
+void playHighlightBlink(Application& app, bool preRedraw = true);
 
 // [RE 0x45144F] playEventFlc：阻塞播放 data.mkf[mkfIndex] FLC（定义见 turn_system.cpp；
 //   事件格/神明插图共用；soundId<0 无声；freeze=true 播完冻结末帧至下次全量重绘；
