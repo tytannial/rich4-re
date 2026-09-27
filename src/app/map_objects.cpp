@@ -935,10 +935,20 @@ void addMoney(Application& app, int player, int32_t amount, bool cash) {
     }
 }
 
-// [RE 0x40E669] flyObjectSprite：物件精灵 A→B 直线插值动画（世界坐标，阻塞 24ms/帧）
+// [RE 0x40E669] flyObjectSprite：物件精灵 A→B 直线插值动画（背景快照叠加，阻塞 24ms/帧）
 // 依据: 0x40E669 反编译; 端点投影 = sub_409A23（视口外返回 (0,0) 原语义）；两端同点不退化播放；
 //   帧数 = 屏幕距离×0.125+1（flt_46324C），自起点向终点逐帧推进；朝向帧 =
-//   (物件dir + 8 - 视角) & 7；objId=0 原版用通用精灵（dword_49697C，未建模）
+//   (物件dir + 8 - 视角) & 7；objId=0 原版用通用精灵（dword_49697C，未建模）；
+//   saveBackground(地图区 0,40,440,440) → 每帧**只恢复上一帧精灵区域背景**(sub_456469)
+//   + 只画飞行精灵(sub_456770) + flip，**不重绘场景**；循环后 sub_45285E(holdMs) 停留；
+//   a1!=0（对象飞行）末帧精灵**保留屏上**（不清屏）——随后调用方 sub_41D546/renderGameFrame
+//   全屏重绘时物件才出现在目标格（"飞过去 → 出现"）
+// 迁移: saveBackground → 地图区 (0,40)-(440,480) 像素快照；每帧整区恢复（原版只恢复上一帧
+//   精灵矩形——背景本身不变，整区恢复等价）+ blit 精灵 + renderFrame；
+//   **不调 renderGameFrame**（原版飞行期间不重绘场景。否则 createMapObject 已写入的
+//   目标格物件会立即出现，表现为"目标先出现道具再飞过去"——2026-09-27 实机反馈）；
+//   不 pumpEvents（原版循环内不派发窗口消息，防状态机偷跑），仅 audio.update 喂流；
+//   holdMs>0 = 末帧停留毫秒（原版 sub_45285E(a6)，放置类传 100 / 请神传 0）
 void flyObjectSprite(Application& app, int objId, int fromX, int fromY, int toX, int toY,
                      int holdMs) {
     GameState& st = app.gameState();
@@ -976,26 +986,46 @@ void flyObjectSprite(Application& app, int objId, int fromX, int fromY, int toX,
     const int frames = static_cast<int>(dist * kFlyFrameScale) + 1;
     const double stepX = static_cast<double>(x1 - x0) / frames;  // 起点 → 终点
     const double stepY = static_cast<double>(y1 - y0) / frames;
+    // [RE 0x451A97 saveBackground] 地图区 (0,40)-(440,480) 像素快照
+    constexpr int kSnapX = 0;
+    constexpr int kSnapY = 40;
+    constexpr int kSnapW = 440;
+    constexpr int kSnapH = 440;
+    std::vector<uint16_t> background(static_cast<size_t>(kSnapW) * kSnapH);
+    for (int r = 0; r < kSnapH; ++r) {
+        std::memcpy(background.data() + static_cast<size_t>(r) * kSnapW,
+                    dst.pixels() + static_cast<size_t>(kSnapY + r) * Surface::kWidth + kSnapX,
+                    static_cast<size_t>(kSnapW) * sizeof(uint16_t));
+    }
     double px = x0;
     double py = y0;
-    setClipRect(0, 40, 440, 480);
+    setClipRect(kSnapX, kSnapY, kSnapX + kSnapW, kSnapY + kSnapH);
     for (int i = 0; i < frames; ++i) {
         px += stepX;
         py += stepY;
         const uint64_t end = SDL_GetTicks() + 24;
-        renderGameFrame(app);
+        // [RE 0x456469] 恢复背景（整区；原版只恢复上一帧精灵矩形，背景不变故等价）
+        for (int r = 0; r < kSnapH; ++r) {
+            std::memcpy(dst.pixels() + static_cast<size_t>(kSnapY + r) * Surface::kWidth + kSnapX,
+                        background.data() + static_cast<size_t>(r) * kSnapW,
+                        static_cast<size_t>(kSnapW) * sizeof(uint16_t));
+        }
         blitSpriteFrameClipped(dst, *img, dir, static_cast<int>(px), static_cast<int>(py), true);
         app.renderFrame();
-        app.pumpEvents();
         while (static_cast<int64_t>(SDL_GetTicks() - end) < 0) {
             app.audio().update();
             SDL_Delay(2);
         }
     }
     setClipRect(0, 0, 640, 480);
-    (void)holdMs;
-    RICH4_LOGI("flyObject: obj %d (%d,%d)->(%d,%d) %d frames (RE 0x40E669)", objId, x0, y0,
-               x1, y1, frames);
+    // [RE 0x45285E] 末帧停留；末帧精灵保留屏上（原版 a1!=0 不清屏，等调用方全屏重绘
+    //   才显示目标格物件）——屏幕即时模式必须显式冻结末帧
+    for (int t = 0; t < holdMs; t += 5) {
+        app.audio().update();
+        SDL_Delay(5);
+    }
+    RICH4_LOGI("flyObject: obj %d (%d,%d)->(%d,%d) %d frames hold %d (RE 0x40E669)", objId, x0,
+               y0, x1, y1, frames, holdMs);
 }
 
 
@@ -1068,12 +1098,18 @@ bool useInviteGodCard(Application& app) {
     // [RE 0x444EA8] 动画前临时摘除神明 cellEnt（防飞行途中原地残影），结束后还原
     st.cellTable[off + 2] = 0;
     st.cellTable[off + 3] = 0;
+    // [RE 0x444EB6] refreshGameUi(0, 0, 1)：飞行前全量重绘（气泡/旧神残影清除）
+    //   ——飞行背景快照必须是干净场景（0x40E669 saveBackground 的语义）
+    renderGameFrame(app);
     const CellEnt& ce = st.cellEnts[ent];
     Player& pl = st.players[p];
     flyObjectSprite(app, objId, ce.x, ce.y, pl.spriteX, pl.spriteY, 0);
     st.cellTable[off + 2] = static_cast<uint8_t>(ent & 0xFF);
     st.cellTable[off + 3] = static_cast<uint8_t>(ent >> 8);
     attachObject(app, p, ent, objId);
+    // [RE 0x444685 / 0x41D546] 卡片收尾：dword_48BE18=0 + 全屏重绘（子 JUMPOUT 目标）
+    st.manualView = false;
+    renderGameFrame(app);
     RICH4_LOGI("useInviteGodCard: god obj %d (type %u) invited to p%d (RE 0x444E1A)", objId,
                st.cellTable[off], p);
     return true;

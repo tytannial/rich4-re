@@ -9,6 +9,14 @@
 > 代码内道具 id 顺序（`kItemBagNames`）：1機器娃娃 2路障 3地雷 4定時炸彈 5機車 6汽車
 > 7飛彈 8遙控骰子 9機器工人 10時光機 11傳送機 12工程車 13核子飛彈。
 >
+> **P1 放置链修正（2026-09-27，待实机复测）**：
+> ① `flyObjectSprite` 改为原版背景快照叠加语义（飞行期间**不重绘场景/不 pumpEvents**、
+>  `holdMs` 停留、末帧精灵保留）——修复"目标先出现道具 → 再飞过去"；`placeMapItem` 收尾
+>  对齐 `sub_41D546`（视口复位+全屏重绘后物件才出现）；`useInviteGodCard` 补飞行前
+>  `refreshGameUi(0,0,1)` 干净背景 + 飞行后 `0x444685=sub_41D546` 收尾重绘；
+> ② 目标选择模态补**进入初始拾取**（原版 `PostMessage(0x200)` 等价）与 `[DIAG]` 日志
+>  （三道具"无法指定道路位置"排查用，见 §3 待办）。
+>
 > **实现状态（2026-09-25）：13 道具全部实现 ✅**（`src/app/item_effects.cpp` 分派 +
 > `playItemLine` 气泡台词 + `selectTargetDialog` 目标选择模态 + `expireAssets`/`getObjectPosition`
 > 公共依赖）。已知差异（待实机迭代）：① 目标选择模态地图滚动 ✅（0x80 模式：边缘方向光标
@@ -81,11 +89,21 @@ if (v) {
     obj = createMapObject(type, v, 0, 0)
     flyObjectSprite(obj, playerX, playerY, cellEnts[v].x, cellEnts[v].y, 100)  // 100 帧飞行
     audioPlayEffect(对应音效)   // 路障 dword_48236A / 地雷 dword_482372 / 炸弹 g_effectSlot2(0x48235A)
-    sub_41D546()               // 视口复位+面板刷新
+    sub_41D546()               // 视口复位+全屏重绘 → **物件此刻才出现在目标格**
     --itemStock[15cur + id-1]  // 直接扣（非 takePlayerCard）
 }
 return v;   // 0 = 取消 → 不消耗
 ```
+
+> **飞行时序（2026-09-27 修正，实机反馈）**：原版 0x40E669 **不重绘场景**——
+> `saveBackground` 保存地图区 → 每帧只恢复上一帧精灵区域背景（`sub_456469`）+ 画飞行精灵
+> （`sub_456770`）+ flip；循环后 `sub_45285E(a6)` 停留（放置类 a6=100）；a1≠0（对象飞行）
+> **末帧精灵保留屏上**，等调用方 `sub_41D546` 全屏重绘时物件才出现 = **"飞过去 → 出现"**。
+> 重写原先每帧 `renderGameFrame`（createMapObject 已把对象写入目标格并绑定坐标）导致
+> **"目标先出现道具 → 再飞"**；现已改为背景快照叠加（`map_objects.cpp flyObjectSprite`），
+> 飞行期间不重绘场景、不 pumpEvents（原版循环不派发窗口消息），仅 `audio.update` 喂流。
+> 请神符（0x444E1A）共用同一函数：飞行前 `refreshGameUi(0,0,1)` 全量重绘（干净背景）、
+> 飞行后 attachObject → `0x444685 = sub_41D546()` 收尾重绘。
 
 **飞弹/核弹公共尾部**（0x446FBC / 0x447ACE）：
 ```
@@ -152,6 +170,16 @@ return v;
 - 默认/离开光标 `cursorSelect(5,1,0)`；进入模态 `setPauseDraw(1)` + `rebuildPickBuffer(1)` +
   PostMessage(WM_MOUSEMOVE 真实鼠标位置) 初始化
 - 选择内存：`dword_48C584` = 选中 id；`dword_48C580` = 当前光标类型（变化才 cursorSelect）
+- **实机核对（2026-09-27）**：
+  - **进入初始拾取已补**（原版 WM_USER+1 的 `PostMessage(0x200)` 等价）：重写
+    `drawTargetSel` 首次绘制后用 `mouseLogicalPos` 做一次 `updateTargetHover`——此前缺失，
+    "不移动鼠标直接点"时 `selected` 恒 0；
+  - **光标资源实测**（Data.mkf[0]）：**帧 5 = 叉形**（默认/未命中，`cursorSelect(5)`）、
+    帧 0 = 实心选择块（路障 `cursorType=0` 命中）、帧 1 = 箭头、帧 41 = 系统箭头
+    （用户所述"鼠标判定是 X"= 未命中光标，非程序错误）；
+  - 诊断日志（`[DIAG]`）：`targetSel` 打印鼠标坐标/拾取 id/allowed/来源格
+    `special/sprite/occMask`（仅结果变化时），`selectTargetDialog` 打印 mode→返回值——
+    用于三道具放置排查（见 §3）。
 - **实机核对（2026-09-26）**：飞弹 id7（mode `0x300C0`）与核弹 id13（`0x400C0`）共用
   `launchMissile`，低 16 位同为 `0x00C0` → flags 均转 `0xB7`（滚动模式），仅 `cursorType`
   3/4 不同；用户复测「飞弹滚动→发射」正常，**无需修正**（差异仅重写方向切换时重置速度、
@@ -269,7 +297,12 @@ return v;
 - [ ] 高字节条件 BYTE1 case 1..8（当前道具不用；卡片重建可能用）
 - [ ] AI 分支 `sub_420EEE` = `dword_48BE64[0]`（AI 预选目标；P5）
 - [ ] `sub_40DFFA`（商业设施拆分）/ `sub_40C03B`（地图重建）
-- [ ] 光标资源 id 0..4/9/32 帧验证（data.mkf[0]）
+- [~] 光标资源 id 帧验证（data.mkf[0]）：帧 0（实心选择块）/1（箭头）/5（叉形=默认未命中）/
+  41（系统箭头）已实测；**9/32 未验证**
+- [ ] **三道具"无法指定道路位置"排查**（2026-09-27 用户实机）：现象=普通道路格悬停 X
+  （未命中）、个别格可放；已加 `[DIAG]` 日志（`targetSel`/`selectTargetDialog`/`place item`），
+  待实机日志定位（重点核查来源格 `occMask` 与 `mapHitRegions` 覆盖顺序）——属"地图类专项"
+  拾取/占用批次，S1/S2 合并提交内容
 - [ ] `sub_41D546`（视口/面板刷新）细节
 
 ## 4. 傳送機专项（0x447428，2026-09-26 彻查）

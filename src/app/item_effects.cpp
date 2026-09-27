@@ -266,7 +266,11 @@ int useItemWorker(Application& app) {
 
 // ===== 放置类公共（路障 0x446BAA / 地雷 0x446C88 / 定時炸彈 0x446D69）=====
 // 流程: 台词 → selectTargetDialog(mode) → createMapObject(type, cellEnt) →
-//       flyObjectSprite(玩家→目标格, 100) → 音效 → refreshGameUi → itemStock-1
+//       flyObjectSprite(玩家→目标格, hold 100) → 音效 → sub_41D546（视口复位+全屏重绘）
+//       → itemStock-1
+// **时序**（0x446BAA 逐行）：对象先写内存但屏幕不重绘；飞行期间只有精灵叠加在旧画面上
+//   （0x40E669 保存背景+只画精灵）；飞行结束 sub_41D546 全屏重绘后物件才出现在目标格
+//   ——"飞过去 → 出现"（重写 2026-09-27 修正前为"先出现 → 再飞"，实机反馈）
 // 返回目标格 id（0 = 取消，不消耗）
 int placeMapItem(Application& app, int itemId, int objType, int mode, int sfxSlot) {
     GameState& st = app.gameState();
@@ -282,16 +286,19 @@ int placeMapItem(Application& app, int itemId, int objType, int mode, int sfxSlo
         v = st.aiItemTarget;  // [RE 0x420EEE] AI 预选目标（dword_48BE64[0]；ai_item.cpp）
     }
     if (v == 0) {
+        RICH4_LOGI("place item %d: p%d cancelled (alive=%u stock=%d) (RE 0x446BAA)",
+                   itemId, p, st.players[p].alive, st.itemStock[15 * p + itemId - 1]);
         return 0;
     }
     const Player& pl = st.players[p];
     const int obj = createMapObject(app, objType, v, 0, 0);  // [RE 0x40E033]
     if (obj != 0 && v < static_cast<int>(st.cellEnts.size())) {
-        // [RE 0x40E669] 从玩家精灵位置飞向目标格世界坐标，100 帧
+        // [RE 0x40E669] 从玩家精灵位置飞向目标格世界坐标（背景快照叠加，目标格暂不显示）
         flyObjectSprite(app, obj, pl.spriteX, pl.spriteY, st.cellEnts[v].x, st.cellEnts[v].y, 100);
     }
     app.audio().playEffectSlot(sfxSlot);  // [RE 0x4542CE]
-    renderGameFrame(app);                 // [RE 0x41D546]
+    st.manualView = false;                // [RE 0x41D546] dword_48BE18=0（视口复位）
+    renderGameFrame(app);                 // [RE 0x41D546] sub_41906A(1) 全屏重绘 → 物件出现
     --st.itemStock[15 * p + itemId - 1];
     RICH4_LOGI("place item %d: p%d obj %d cell %d (RE 0x446BAA/C88/D69)", itemId, p, obj, v);
     return v;

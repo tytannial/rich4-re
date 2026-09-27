@@ -286,6 +286,18 @@ python tools/re_map.py
   窗口过程；重写 `playEventFlc` 循环 `pumpEvents` 会重入 gameEventHandler（状态机在动画
   下偷跑）且 `renderGameFrame` 把视口按**传送后**的玩家重居中（住院 524/入狱 538 一开演
   画面就跳到医院/监狱的根因）。修复三件套：timer 分支 `eventFlcActive` 守卫直接返回；`playEventFlc(switchFrame)` = 原版 flcOpen flags BYTE2 **场景切换帧**（保帧播放至第 N 帧做一次**视口锁定**的全量重绘：524=30 / 538=18 / 525/532/526=3 / 552=1——`sub_40829D(-1,0)` 用上次视口 dword_48B2AC，**不随传送后玩家位置重居中**：视口原地不动、仅重建绘制列表擦除角色，动画播完返回主循环后视口才切到医院/监狱；重写以临时 manualView+viewSmooth 锁视口实现）；**棋子守卫对齐 0x4086A1**（`stateFlags!=0 && !(alive&0x20)` 隐藏，原重写只查 BYTE0 住宿 → 住院/入狱角色不消失）。
+- **物件飞行（flyObjectSprite 0x40E669）是"背景快照叠加"不是"每帧重绘"**：原版
+  `saveBackground(地图区)` + 每帧只恢复上一帧精灵区域 + 只画精灵 + flip，**飞行期间场景不重绘**；
+  `createMapObject` 虽已把对象写入目标格（坐标绑定），但要等飞行结束调用方
+  `sub_41D546`/`refreshGameUi(0,0,1)` 全屏重绘后物件才出现 = **"飞过去 → 出现"**。
+  重写若每帧 `renderGameFrame`，已创建的对象立即显示 = "先出现 → 再飞"（2026-09-27 实机反馈）。
+  循环内也不要 `pumpEvents`（原版不派发窗口消息，防状态机偷跑）；结束 `sub_45285E(a6)`
+  是**停留毫秒**（放置类 100、请神 0），末帧精灵保留屏上。
+- **`refreshGameUi(x,y,flags)` 不是"重绘"**：`0x41D476` 只有 flags&1 才 `sub_40829D` 重绘
+  （`(0,0,1)` = 全量重绘）；`(x,y,0/2)` 仅设 `dword_48BE18/BE1C/BE20` 视口参数 + 小地图/面板
+  ——**画面仍停在旧表面**（FLC/破坏动画在旧视口背景上叠加，播完 `sub_41D546` 才切视口）。
+  且 `(x,y)` == 当前玩家坐标时 `dword_48BE18=0`（改回跟随玩家）。重写 `focusView` 直改
+  manualView+重绘会提前切视口（外星人/飞弹类差异来源，见地图类专项）。
 - **帮助文档是第一手机制依据**：`help.mkf` 99 条（8 分类，分类/标题表 `[RE 0x4761B4]`/`0x4761B8`）
   已提取为 `docs/help-checklist.md`；研究/实现时用 `[HELP idx]` 标注引用。
   但**帮助文本可能错**（idx 58 冬眠卡误用红卡文本）或与实现不符

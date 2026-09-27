@@ -9,6 +9,7 @@
 #include "game/app/game_loop.h"
 #include "game/app/object_tip.h"
 #include "game/application.h"
+#include "game/core/log.h"
 #include "game/render/cursor.h"
 #include "game/render/surface.h"
 
@@ -88,6 +89,12 @@ struct TargetSelCtx {
     int savedViewY = 0;
     // [USER 魔改] 允许无主空地（傳送機人物/神明/物品目的地）
     bool allowEmptyLand = false;
+    // [RE 0x445E4D WM_USER+1] 进入时 PostMessage(WM_MOUSEMOVE) 初始判定（重写等价：
+    //   首次绘制后以当前鼠标位置拾取一次）
+    bool hoverInit = false;
+    // [DIAG 2026-09-27 三道具放置] 拾取结果变化时才打印（避免鼠标移动刷屏）
+    int dbgLastV = -1;
+    bool dbgLastAllowed = false;
 };
 
 // 拾取 id 规范化：重写 mapHitRegions 编码 → 原版目标编码（下游 getObjectPosition/
@@ -106,14 +113,57 @@ int normalizeHitId(uint16_t v) {
     return v;
 }
 
-void drawTargetSel(TargetSelCtx& c) {
-    renderGameFrame(*c.app);
-}
-
 void setCursor(TargetSelCtx& c, int type, int frames, int delay) {
     if (c.curCursor != type) {
         c.curCursor = type;
         c.app->cursor().select(type, frames, delay);
+    }
+}
+
+// [RE 0x445E4D LABEL_53..LABEL_140] 悬停判定：拾取 → 筛选 → 记录选中 + 光标
+// （模态进入初始判定与 WM_MOUSEMOVE 共用；原版 WM_USER+1 用 PostMessage(0x200) 触发一次）
+void updateTargetHover(TargetSelCtx& c, int mx, int my) {
+    GameState& st = c.app->gameState();
+    const uint16_t v = pickMapObject(st, mx, my);  // [RE 0x40A9D7]
+    bool allowed = targetAllowed(st, v, c.flags);
+    if (!allowed && c.allowEmptyLand && v < 6000) {
+        allowed = isEmptyLandObject(st, v);  // [USER] 无主空地（傳送機目的地）
+    }
+    // [DIAG 2026-09-27 三道具放置排查] 拾取结果变化时打印（含来源格占用位）
+    if (static_cast<int>(v) != c.dbgLastV || allowed != c.dbgLastAllowed) {
+        c.dbgLastV = static_cast<int>(v);
+        c.dbgLastAllowed = allowed;
+        if (v > 0 && v < static_cast<int>(st.cellEnts.size())) {
+            const CellEnt& ce = st.cellEnts[v];
+            RICH4_LOGI("targetSel: mouse(%d,%d) pick=%u allowed=%d cell(special=%u sprite=%u "
+                       "occ=0x%08X) flags=0x%X (RE 0x445E4D)",
+                       mx, my, v, allowed ? 1 : 0, ce.special, ce.sprite, ce.occMask, c.flags);
+        } else {
+            RICH4_LOGI("targetSel: mouse(%d,%d) pick=%u allowed=%d flags=0x%X (RE 0x445E4D)", mx,
+                       my, v, allowed ? 1 : 0, c.flags);
+        }
+    }
+    if (allowed) {
+        // [RE 0x445E4D LABEL_140] 命中：记选中（规范化为原版编码）+ 光标换类型
+        c.selected = normalizeHitId(v);
+        setCursor(c, c.cursorType, 1, 10);
+    } else {
+        c.selected = 0;
+        setCursor(c, 5, 1, 0);  // 默认指针
+    }
+}
+
+void drawTargetSel(TargetSelCtx& c) {
+    renderGameFrame(*c.app);
+    // [RE 0x445E4D WM_USER+1] setPauseDraw(1) + rebuildPickBuffer(1) + PostMessage(0x200)：
+    //   进入后以**当前鼠标位置**做一次初始判定（重写等价：首次绘制后按新命中区拾取；
+    //   此前缺失会导致"不移动鼠标直接点"永远 selected=0）
+    if (!c.hoverInit) {
+        c.hoverInit = true;
+        int mx = 0;
+        int my = 0;
+        c.app->mouseLogicalPos(mx, my);
+        updateTargetHover(c, mx, my);
     }
 }
 
@@ -174,19 +224,7 @@ bool targetSelHandler(const SDL_Event* event, void* user) {
                 }
                 c.edgeDir = 0;  // [RE KillTimer] 鼠标回视口内 → 停止滚动
             }
-            const uint16_t v = pickMapObject(st, mx, my);  // [RE 0x40A9D7]
-            bool allowed = targetAllowed(st, v, c.flags);
-            if (!allowed && c.allowEmptyLand && v < 6000) {
-                allowed = isEmptyLandObject(st, v);  // [USER] 无主空地（傳送機目的地）
-            }
-            if (allowed) {
-                // [RE 0x445E4D LABEL_140] 命中：记选中（规范化为原版编码）+ 光标换类型
-                c.selected = normalizeHitId(v);
-                setCursor(c, c.cursorType, 1, 10);
-            } else {
-                c.selected = 0;
-                setCursor(c, 5, 1, 0);  // 默认指针
-            }
+            updateTargetHover(c, mx, my);
             return true;
         }
         case SDL_EVENT_MOUSE_BUTTON_UP: {
@@ -261,6 +299,8 @@ int selectTargetDialog(Application& app, int mode, bool allowEmptyLand) {
     st.viewSmoothY = c.savedViewY;
     st.viewScrolling = false;
     app.cursor().select(41, 1, 0);
+    // [DIAG 2026-09-27 三道具放置排查] 返回结果（0=取消）
+    RICH4_LOGI("selectTargetDialog: mode=0x%X -> %d (RE 0x445E4D)", mode, r);
     return r;
 }
 
