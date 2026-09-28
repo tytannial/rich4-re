@@ -1,0 +1,15 @@
+# id: 50_god_free_rent
+# covers: [HELP 42] 大財神——抵赖所有租金（0x41D709 / resolveFeePayer 免付路径）
+# timeout: 40000
+wait idle 1000
+player.cash 0 200000
+find.estate 0
+assert state selected >= 2000
+sel.owner 2
+sel.level 3
+player.god 0 2
+land
+wait frames 500
+assert no log "transferMoney"
+assert state players.0.cash == 200000
+quit

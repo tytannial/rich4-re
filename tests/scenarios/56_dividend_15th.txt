@@ -1,0 +1,10 @@
+# id: 56_dividend_15th
+# covers: [HELP 20] 15 号分红（dividendMeeting 0x42BA97）+ [HELP 14] 股票买卖（buyStock）
+# timeout: 60000
+wait idle 1000
+stock.buy 0 0 100
+assert state players.0.cash < 200000
+day 14
+wait frames 600
+assert log "dividend"
+quit

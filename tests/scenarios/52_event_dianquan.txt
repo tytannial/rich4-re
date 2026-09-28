@@ -1,0 +1,11 @@
+# id: 52_event_dianquan
+# covers: [HELP 31] 得五十點（landingEvent case 10，FLC 537 + 点券入账）
+# timeout: 40000
+wait idle 1000
+find.evtcell 10
+assert state selected >= 1
+land
+wait log "得點券" 8000
+assert trace "flc idx=537"
+assert state players.0.points >= 50
+quit

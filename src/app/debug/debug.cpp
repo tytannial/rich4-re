@@ -18,6 +18,7 @@
 #include "game/app/query_dialog.h"
 #include "game/app/shop_dialog.h"
 #include "game/app/stock_market_dialog.h"
+#include "game/app/stock_system.h"
 #include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/clock.h"
@@ -935,6 +936,31 @@ bool cmdFindEstate(Application& app, const std::vector<std::string>& a, std::str
     return true;
 }
 
+// ---- 事件格查找（occMask 低字节 cellType；直接得 cellEnt id，land 可无参用） ----
+bool cmdFindEvtCell(Application& app, const std::vector<std::string>& a, std::string& err) {
+    GameState& st = app.gameState();
+    if (!argCount(a, 1, err, "find.evtcell <type>")) return false;
+    const int want = parseInt(a[1]);
+    g_selected = 0;
+    for (size_t i = 1; i < st.cellEnts.size(); ++i) {
+        if (static_cast<int>(st.cellEnts[i].occMask & 0xFF) == want) {
+            g_selected = static_cast<uint16_t>(i);
+            RICH4_LOGI("debug: find.evtcell type=%d -> cell %zu", want, i);
+            return true;
+        }
+    }
+    RICH4_LOGI("debug: find.evtcell type=%d -> none", want);
+    return true;
+}
+
+bool cmdStockBuy(Application& app, const std::vector<std::string>& a, std::string& err) {
+    if (!argCount(a, 3, err, "stock.buy <p> <stock> <n>")) return false;
+    const int changed = buyStock(app, parseInt(a[1]), parseInt(a[2]), parseInt(a[3]), false);
+    RICH4_LOGI("debug: stock.buy p=%s stock=%s n=%s -> control=%d", a[1].c_str(), a[2].c_str(),
+               a[3].c_str(), changed);
+    return true;
+}
+
 bool cmdConfirm(Application& app, const std::vector<std::string>& a, std::string& err) {
     // 对当前栈顶模态直接应答（YES=1/NO=0，对应 0x401966 postModalExit lParam）
     (void)err;
@@ -1043,6 +1069,8 @@ const Cmd kCmds[] = {
     {"land", cmdLand},
     {"day", cmdDay},
     {"find.estate", cmdFindEstate},
+    {"find.evtcell", cmdFindEvtCell},
+    {"stock.buy", cmdStockBuy},
     {"sel.owner", cmdSelOwner},
     {"sel.level", cmdSelLevel},
     {"confirm", cmdConfirm},
@@ -1089,8 +1117,8 @@ uint16_t resolveTargetCell(Application& app) {
 }
 
 bool isBlockingCmd(const std::string& name) {
-    // 内部会 runModal 阻塞（弹框/动画）的命令：阻塞期间重入 tick 只放行非阻塞 step
-    // （click/confirm/assert/wait 等），阻塞命令本身留在 pc 等顶层执行，防止后续断言提前跑
+    // 内部会 runModal 阻塞（弹框/动画）的命令：阻塞期间重入 tick 只放行交互 step
+    // （click/confirm 等），其它 step 冻结 pc——保证断言严格晚于阻塞命令完成
     static const char* const kBlock[] = {"land",  "day",        "news",       "fate",    "magic",
                                          "lottery.draw",       "settle",      "dividend", "shop",
                                          "bank",               "jail",        "hosp",     "open.stock",
@@ -1103,9 +1131,25 @@ bool isBlockingCmd(const std::string& name) {
     return false;
 }
 
-bool stepFirstTokenIsBlocking(const std::string& line) {
+bool isInteractiveCmd(const std::string& name) {
+    // 阻塞模态期间仍需可执行的应答类命令
+    static const char* const kInter[] = {"click", "rclick", "move", "key", "confirm"};
+    for (const char* i : kInter) {
+        if (name == i) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool stepFirstIsBlocking(const std::string& line) {
     auto a = tokenize(line);
     return !a.empty() && isBlockingCmd(a[0]);
+}
+
+bool stepFirstIsInteractive(const std::string& line) {
+    auto a = tokenize(line);
+    return !a.empty() && isInteractiveCmd(a[0]);
 }
 
 // 单条命令执行（含事件触发类）
@@ -1505,9 +1549,10 @@ void tick(Application& app) {
     Step& st = sc.steps[sc.pc];
     switch (st.kind) {
         case Step::Cmd: {
-            const bool block = stepFirstTokenIsBlocking(st.a);
-            if (block && g_inBlock) {
-                return; // 阻塞命令期间：留在 pc，等顶层帧执行
+            const bool block = stepFirstIsBlocking(st.a);
+            // 阻塞命令进行中：只放行交互应答 step，其余冻结 pc（断言严格晚于阻塞完成）
+            if (g_inBlock && !stepFirstIsInteractive(st.a)) {
+                return;
             }
             ++sc.pc;
             if (block) {

@@ -131,9 +131,11 @@ magicHouse 惩罚/结息分红/小游戏 phase/…）随测试用例铺开。
 
 - 行式；`#` 注释（行首/空白后）；`id:/timeout:` 元数据；双引号 token 含空格。
 - 执行器挂在 `Application::renderFrame` 尾部每帧步进；**阻塞命令**（land/day/news/fate/
-  magic/jail/hosp/settle/dividend/shop/bank/lottery.draw/open.*）仅在顶层帧执行，
-  其阻塞期间重入帧只推进非阻塞步骤（click/confirm/assert/wait…）——
-  天然支持 `land`（内部弹框挂起）→ `confirm yes`/`click`（应答解除挂起）→ 继续断言的交错。
+  magic/jail/hosp/settle/dividend/shop/bank/lottery.draw/open.*）仅在顶层帧执行；
+  其阻塞期间重入帧**只放行交互应答 step**（`click/rclick/move/key/confirm` + wait 轮询），
+  其余 step（含 assert）冻结 pc——保证断言严格晚于阻塞命令完成
+  （典型：`land` 内部 FLC537 动画阻塞时，`assert points>=50` 不会提前读到未入账值）。
+  天然支持 `land`（内部弹框挂起）→ `confirm yes`/`click`（应答解除挂起）→ 继续断言。
 - 失败计数 → `main` 退出码（CI 契约）；`quit [code]` 结束脚本。
 
 **命令表**（`--exec "help"` 暂无，见代码 kCmds）：

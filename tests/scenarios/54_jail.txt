@@ -1,0 +1,9 @@
+# id: 54_jail
+# covers: [HELP 34] 監獄——jailPlayer 0x43D593（移格/FLC 538/stateFlags BYTE2）
+# timeout: 40000
+wait idle 1000
+jail 0 3
+wait frames 400
+assert trace "flc idx=538"
+assert state players.0.stateFlags >= 196608
+quit
