@@ -204,6 +204,36 @@ bool getStateInt(const GameState& st, const std::string& path, long long& out) {
         out = st.players[p].byte54;
         return true;
     }
+    if (matchPath(path, "players.*.skipMove", c, 1)) {  // +56 0x443F80 暫停卡
+        const int p = parseInt(c[0]);
+        if (p < 0 || p >= 9) return false;
+        out = st.players[p].skipMove;
+        return true;
+    }
+    if (matchPath(path, "players.*.fixedStep", c, 1)) {  // +57 0x4458DF 烏龜卡
+        const int p = parseInt(c[0]);
+        if (p < 0 || p >= 9) return false;
+        out = st.players[p].fixedStep;
+        return true;
+    }
+    if (matchPath(path, "players.*.dir", c, 1)) {  // +16 0x442F4D 轉得卡改行進方向
+        const int p = parseInt(c[0]);
+        if (p < 0 || p >= 9) return false;
+        out = st.players[p].dir;
+        return true;
+    }
+    if (matchPath(path, "players.*.ally", c, 1)) {  // +65 0x445710 同盟對象(1-based)
+        const int p = parseInt(c[0]);
+        if (p < 0 || p >= 9) return false;
+        out = st.players[p].ally;
+        return true;
+    }
+    if (matchPath(path, "players.*.allyActive", c, 1)) {  // +61 同盟剩餘天數
+        const int p = parseInt(c[0]);
+        if (p < 0 || p >= 9) return false;
+        out = st.players[p].allyActive;
+        return true;
+    }
     if (matchPath(path, "players.*.travel", c, 1)) {
         const int p = parseInt(c[0]);
         if (p < 0 || p >= 9) return false;

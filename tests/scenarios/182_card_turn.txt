@@ -1,0 +1,16 @@
+# id: 182_card_turn
+# covers: [HELP 78] 轉得卡 0x442F4D——选人→改行進方向 dir=4/prev=86（非傳送，
+#          turnToAdjacentCell 注釋誤導已糾正；assert players.1.dir）
+# timeout: 50000
+wait idle 1000
+player.alive 1 1
+player.teleport 1 85
+use.card turn
+wait frames 200
+clickplayer 1
+wait frames 260
+clickplayer 1
+wait log "cardTurn" 8000
+assert state players.1.dir == 4
+assert state errors == 0
+quit

@@ -1,0 +1,15 @@
+# id: 186_card_turtle
+# covers: [HELP 83] 烏龜卡 0x4458DF——选人→fixedStep=2/3（下回合固定步數）
+# timeout: 50000
+wait idle 1000
+player.alive 1 1
+player.teleport 1 85
+use.card turtle
+wait frames 200
+clickplayer 1
+wait frames 260
+clickplayer 1
+wait log "cardTurtle" 8000
+assert state players.1.fixedStep >= 2
+assert state errors == 0
+quit

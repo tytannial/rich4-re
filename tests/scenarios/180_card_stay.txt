@@ -1,0 +1,16 @@
+# id: 180_card_stay
+# covers: [HELP 76] 停留卡 0x443F80——选人(flags 0x10)→對他人 skipMove=1（下回合前方停靠）
+#          同步點 wait log "cardStay"；ISS-014 雙點規則複用
+# timeout: 50000
+wait idle 1000
+player.alive 1 1
+player.teleport 1 85
+use.card stay
+wait frames 200
+clickplayer 1
+wait frames 260
+clickplayer 1
+wait log "cardStay" 8000
+assert state players.1.skipMove == 1
+assert state errors == 0
+quit

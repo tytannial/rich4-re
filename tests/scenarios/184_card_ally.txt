@@ -1,0 +1,17 @@
+# id: 184_card_ally
+# covers: [HELP 82] 同盟卡 0x445710——选人→雙向 ally(1-based)+allyActive=7（收租分賬前提）
+# timeout: 50000
+wait idle 1000
+player.alive 1 1
+player.teleport 1 85
+use.card ally
+wait frames 200
+clickplayer 1
+wait frames 260
+clickplayer 1
+wait log "cardAlly" 8000
+assert state players.0.ally == 2
+assert state players.1.ally == 1
+assert state players.0.allyActive == 7
+assert state errors == 0
+quit
