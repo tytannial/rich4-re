@@ -20,7 +20,7 @@ class Application;
 //   K=买入指向 specPt 的股票 100 股（测试控股/经营権转移；先 Ctrl+7 备现金）
 //   M=打开股市面板  Q=打开查詢面板（資產/地產/股票清單）  N=月初结息  E=15 号分红
 //   P=点券+1000  O=当前格生成 cellTable 物件  X=附身/挂身寿命→1  F=发全部道具
-//   I=请神符效果  H=送神符效果  Y=dump cellTable
+//   I=清空卡包发前15张卡(1..15)  H=清空卡包发后15张卡(16..30)  Y=dump cellTable
 // code: 1..9（数字键）或 'a'..'z'（字母键）；返回 true 表示已处理（调用方需重绘）
 bool handleDebugKey(Application& app, int code, bool shift);
 

@@ -58,6 +58,22 @@ std::string nameAt(const uint8_t* p, int maxLen) {
     return big5ToUtf8(buf, n);
 }
 
+// [NEW] 清空指定玩家卡包并连续填入 15 种卡（firstId..firstId+14）。
+// 直写 cardState60 槽（不走 giveCardToBag 的赠卡池扣减/满则弃最低价逻辑），
+// propStock 不动——纯测试发牌；dump 见 Ctrl+Shift+Y / 卡片栏 case8 使用。
+void refillCardBag(GameState& st, int player, int firstId) {
+    if (player < 0 || player >= 4 || firstId < 1 || firstId + 14 > 30) {
+        RICH4_LOGW("debug: refillCardBag bad args p=%d first=%d", player, firstId);
+        return;
+    }
+    const size_t off = static_cast<size_t>(15 * player);
+    for (int i = 0; i < 15; ++i) {
+        st.cardState60[off + i] = static_cast<uint8_t>(firstId + i);
+    }
+    RICH4_LOGI("debug: card bag p%d cleared & filled id %d..%d (use 工具条 卡片 case8)", player,
+               firstId, firstId + 14);
+}
+
 // [NEW] 调试直调事件（命运/新闻）后的回合推进：正常路径经 landingEvent 返回 0x80
 //   （playerActionWait=-128）由状态机切下一位；直调时若事件使当前玩家入院/坐牢/出国
 //   （stateFlags != 0），必须走 [RE 0x40DEFE] 对齐的 beginPlayerTurn 状态分支，
@@ -385,16 +401,12 @@ bool handleDebugKey(Application& app, int code, bool shift) {
                            "(open 工具条 case7 道具栏使用)", cur);
                 return true;
             }
-            case 'i': { // [NEW] 使用请神符（0x444E1A：视野最近神明飞行附身；先塞卡走完整路径）
-                giveCardToBag(st, cur, 23);
-                const bool ok = useInviteGodCard(app);
-                RICH4_LOGI("debug: Ctrl+Shift+I useInviteGodCard -> %d", ok ? 1 : 0);
+            case 'i': { // [NEW] 清空卡包并填入前 15 种卡（id 1..15，逐卡实机测试用）
+                refillCardBag(st, cur, 1);
                 return true;
             }
-            case 'h': { // [NEW] 使用送神符（0x444C45：清挂身炸弹/送走负面神明；先塞卡）
-                giveCardToBag(st, cur, 22);
-                const bool ok = useBanishGodCard(app);
-                RICH4_LOGI("debug: Ctrl+Shift+H useBanishGodCard -> %d", ok ? 1 : 0);
+            case 'h': { // [NEW] 清空卡包并填入后 15 种卡（id 16..30）
+                refillCardBag(st, cur, 16);
                 return true;
             }
             case 'y': { // [NEW] dump cellTable（活动槽 + 玩家附身/挂件/三属性 + 池）

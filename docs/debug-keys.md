@@ -63,8 +63,8 @@
 | `Ctrl+Shift+C` | 清空玩家状态+神明 | `stateFlags`/`byte54`/`state37`/`cellTableIdx` 归零 |
 | `Ctrl+Shift+O` | **当前格生成物件** | `createMapObject` 类型 1..18 循环（神明/禮物/寶箱/死神/路障/地雷/炸彈），测附身挂身、渲染跟随、寿命 |
 | `Ctrl+Shift+X` | **附身/挂身寿命→1** | `cellTable[..].life` 置 1，下次落地/回合开始归零 → 测飘走轮替 / 炸弹爆炸链 |
-| `Ctrl+Shift+I` | **使用请神符** | 先 `giveCardToBag(23)` 再 `useInviteGodCard`（0x444E1A：视野内最近可附身神明 → 丢卡 → 飞行动画 → 附身全套效果） |
-| `Ctrl+Shift+H` | **使用送神符** | 先 `giveCardToBag(22)` 再 `useBanishGodCard`（0x444C45：清挂身炸弹 / 送走负面神明→轮替；正面神失败不丢卡） |
+| `Ctrl+Shift+I` | **清空卡包并填入前 15 种卡**（id 1..15） | 直写 `cardState60` 15 槽（不动赠卡池 `propStock`），配合工具条「卡片」case8 逐卡实测 |
+| `Ctrl+Shift+H` | **清空卡包并填入后 15 种卡**（id 16..30） | 同上；两键合起来覆盖 30 卡全效果 |
 | `Ctrl+Shift+W` | **打开百貨公司商店** | 扫描地图上的百货公司格（cellType 15）→ `shopDialog`（0x42E931）：自家赠礼 / 人类商店 UI / AI 自动买卖 |
 | `Ctrl+Shift+R` | **乐透保送中奖** | 清空号码表 → 当前玩家 11 注（>10 → 开奖从已售号随机 = 必中）→ 奖金池注入 3000 → 立即弹开奖界面（中奖演出 + 奖金入现金） |
 | `Ctrl+Shift+F` | **发放全部 13 种道具** | 当前回合玩家每种 ×2（`givePlayerItem`；id1..8 受礼物池限制）→ 开工具条「道具」按钮（case7）使用 |

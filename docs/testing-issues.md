@@ -123,14 +123,16 @@
 
 ## 4. 自动化挖出的产品 bug / 死锁（按发现记录）
 
-### BUG-001 请神符附身动画后回合状态机挂死（headless 实测 60000 帧无进展）
+### BUG-001 请神符附身动画后回合状态机挂死（headless 实测；**实机未复现**）
 - **复现**：`--headless --quickstart 0,4,1 --exec "wait idle 1000; use.god invite; quit"`
   → `fly obj=5` → `attachObject p0 type=5` 后**无** `debug: use.god invite -> 1`、无后续 tick
   日志、整脚本 60000 帧 TIMEOUT（attachEnd 0x40E32C 飘走/等待链）。
-- **疑因**：attachObject 置玩家 busy/等待标志，attachEnd 的 46 槽 flyCount 等待或回合推进条件
-  在 headless 快进下未满足——**也可能是正常模式同样存在的挂点**（人工用请神符若需等待极久即同源）。
-- **动作**：Q-J（新）待查 `attachEnd`/`useInviteGodCard` 收尾路径；场景 94_invite_god 暂 `[skip]`。
-- **状态**：🔴 未修。
+- **实机**：2026-09-28 用户 Ctrl+Shift+I 旧语义（请神符直调）**未复现**挂死 →
+  疑为**headless 虚拟时钟特有**（flyCount/attachEnd 等待条件与墙钟耦合，或 46 槽 fly 计数
+  在快进 tick 下未清）。转 headless 侧排查（对照 ISS-001 收口点：`map_objects` 飞行循环 /
+  `sub_40FAD6` 等待）；产品侧优先级降低。
+- **动作**：场景 94_invite_god 暂 `[skip]`；`use.god invite` 命令保留可复测。
+- **状态**：🟡 降级为 headless 疑点（非产品 bug 或低概率时序相关）。
 
 ### BUG-002（观察）96_priceup_flag 一次通过但**翻倍金额未断言**
 - 现断 cash<200000；更严格应 `assert trace "xfer ... amount=<2×fee>"`——
