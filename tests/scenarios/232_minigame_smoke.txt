@@ -1,0 +1,25 @@
+# id: 232_minigame_smoke
+# covers: [HELP 30] 小游戏格 case 6/7/8 動畫關閉(settings.anim 0)→0x415457 共享線：
+#          rng minigame 注入 score → 得點券 showMessage → points 入帳（三格輪測）
+# timeout: 120000
+wait idle 1000
+settings.anim 0
+player.cash 0 300000
+rng minigame 5
+find.evtcell 6
+assert state selected >= 1
+land
+wait log "minigame shared: cellType=6" 15000
+assert state players.0.points >= 55
+rng minigame 7
+find.evtcell 7
+land
+wait log "minigame shared: cellType=7" 15000
+assert state players.0.points >= 105  # 注入單發即耗(設計)，此段為隨機 50..69
+rng minigame 9
+find.evtcell 8
+land
+wait log "minigame shared: cellType=8" 15000
+assert state players.0.points >= 155
+assert state errors == 0
+quit

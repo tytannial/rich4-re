@@ -51,6 +51,7 @@
 #include "game/app/message_dialog.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/trace.h"
 #include "game/core/debug_hooks.h"
 #include "game/core/clock.h"
 #include "game/game_state.h"
@@ -1390,6 +1391,7 @@ void miniGameVisit(Application& app, int cellType) {
     if (score < 0) {
         // [RE 0x415457] 共享 else：score = rand()%20+50（50..69）
         score = dbg::roll(dbg::SlotMinigame, 20) + 50;
+                trace::logf("minigame shared: cellType=%d score=%d", cellType, score);
         char text[64];
         std::snprintf(text, sizeof(text), "得點券%d點", score);  // [RE 0x463797 cp950]
         showMessage(app, text, 2000);                            // [RE 0x41548E]
