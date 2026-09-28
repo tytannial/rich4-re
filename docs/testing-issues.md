@@ -101,7 +101,7 @@
 | Q-D | 交互密集 UI（樂透投注网格/魔法屋惩罚径向选择/百货买卖/银行数字框/股市买卖）脚本未覆盖 | **基座已通**：`registerRegion`+`clickr`+`dialog open name=`（90_topbar_query 绿）；百货/乐透/股市等**控件登记未铺开** | 各面板入口加一行登记（矩形同源）后补场景；逐面板清单见 testing.md §2.3 |
 | Q-E | corp 房地產费用公式标注过"简化"（pricing-formulas.md） | 未入场景 | 对照 IDA/实机核对该格收费；有出入先修代码再补 `assert trace "xfer amount=…"` |
 | Q-F | 同盟卡联合收费分账两笔 `xfer` | 未入场景 | 脚本雏形：`give.card 0 3; use?`（同盟需 UI）→ 依赖 named region；暂人工 |
-| Q-G | L2 长跑不变量未封装 | **已固化**：`80_autoplay_20d.txt`（全 AI 20+天，assert errors==0 / day 推进；seed 42/7/99/2024 四种子全绿） | 可扩至年尺度+`--repeat`；发现深层 bug 时补 assert |
+| **Q-G** | ~~L2 长跑未封装~~ **已升级**：`80_autoplay_60d.txt` 全 AI ~60 天两整月（跨分红/乐透/结息），assert errors==0/day 推进；4 种子全绿 | 回合主链 | 后续接 CI 自托管即可 | ✅ |
 | Q-H | `card.rebuild` 后**卡包应有 7 号卡才扣卡**——命令层直调不带卡时 cardBagRemove(7) 可能移除空槽（原版经 useCardFlow 先扣卡） | rebuild 场景未断卡包 | 实机走卡片栏用改建卡核对；脚本可补 `give.card 0 7 + dump` |
 | Q-I | trace `xfer to=` 语义：收款=玩家**索引0基**、=银行/公库时为其他编号（0x41D433 映射） | 72 场景断 `xfer from=0 to=1`（AI 玩家1=owner2-1）成立 | 银行收款场景先 `dump` 观察字段再写死断言；建议 testing.md §2.1 补"to 字段编号对照表" |
 | **Q-J** | 请神符"第一回合地图不该有大财神却请到"（用户 2026-09-28 实机反馈） | **已结案=非初始放置缺陷**：`loadMapData 0x407D6F` 开局仅放偶槽 1,3,5,7,9,11（小神+天使+惡犬），大神/惡魔/土地公**绝不预置**（`kCellTypeInit` 的 +0 类型常驻 ≠ 在场——空槽判定 `+2 cellEnt==0`，潜伏槽不绘制/不拾取）。"提前见/请到大神"根因=**`Ctrl+Shift+O` 调试直放**（1..18 循环、当前格、绕过配对，用户确认触发过）。请神符第一回合候选实为小神+天使（惡犬 `canAttach=0` 请不到），符合预期 | 结案；轮替方向缺陷另立 BUG-003（见 §4） |
@@ -140,6 +140,16 @@
 - **状态**：✅（110 绿）。配套：`--wall-cap` 墙钟上限定位挂死；场景 timeout 收敛 50000 帧。
 - **衍生教训（Q-R/Q-P 两案）**：应答 step 仍需**等模态真正出现**（`wait log "slotMachine:"`、
   `wait log "confirm dialog"` 等同步点先行），前瞻只解决顺序死锁不解决抢跑。
+
+### ISS-017 trace::logf 在 --trace 关闭时整体丢弃（wait log 半失效）
+- **现象**：84 场景 `wait log "xfer from=0"` 恒超时，但 transferMoney 明确执行（specPt fee 日志在）。
+- **根因**：`trace::logf`（xfer/debt/eliminate/stock/news/fate/dayevt…结构化事件文本）第一行
+  `if (!g_enabled) return;`——无 `--trace` 时文本既不进 trace 环**也不进 log 环**，`wait log` 永远匹配不到。
+- **修复**：格式化后无条件 `rich4::logMirror(buf)` 写入内存日志环（log.cpp，不写文件/stderr、
+  不计 ERROR 数）；`g_enabled` 门只管 trace 环（--trace-out 导出）。
+- **教训**：**双环（trace/log）系统里"同步点文本"必须保证两种运行模式都可见**；
+  结构化事件如需被 wait/assert 消费，落环应独立于导出开关。
+- **状态**：✅（84 随修复转绿；既有 62 等用 wait trace 的场景不受影响）
 
 ## 3. 阻塞模态人工干预点清单
 
