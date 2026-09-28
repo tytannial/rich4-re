@@ -1,0 +1,11 @@
+# id: 254_item_getoff
+# covers: [HELP 97] 乘坐中下车 0x447C00——travel=2(火車歸槽5)→use.item 14→travel=0/
+#          dice=1+走路資源載回（機器娃娃槽8 歸還鏈 208 的乘具側姊妹）
+# timeout: 60000
+wait idle 1000
+player.vehicle 0 2
+use.item 14
+wait log "itemGetOff:" 10000
+assert state players.0.travel == 0
+assert state errors == 0
+quit

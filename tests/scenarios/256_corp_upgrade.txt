@@ -1,0 +1,15 @@
+# id: 256_corp_upgrade
+# covers: [HELP 23] 商業用地升級——自有 corp 停留→詢問(0x41A31E)YES→扣款++sub
+#          (0x41A35D；封顶 sub5=FLC523+台詞)；godBless 追加鏈在 160 已驗
+# timeout: 90000
+wait idle 1000
+player.cash 0 500000
+select corp 2
+corp.build 2 1 1
+land
+wait log "confirm dialog" 20000
+confirm yes
+wait log "upgrade facility: corp" 20000
+assert state corps.2.sub == 2
+assert state errors == 0
+quit
