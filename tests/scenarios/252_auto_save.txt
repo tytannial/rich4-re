@@ -1,0 +1,12 @@
+# id: 252_auto_save
+# covers: [HELP 12] 自動存檔 0x41904C——nextPlayer 收尾 saveGameToSlot(0)=SAVE0.AUTO；
+#          rng dice=1→86 空地购地詢問(wait log 同步後答 no)→結算→nextPlayer 存檔
+# timeout: 90000
+wait idle 1500
+rng dice 0
+roll
+wait log "confirm dialog" 30000
+confirm no
+wait log "auto save -> SAVE0.DAT" 30000
+assert state errors == 0
+quit

@@ -1,0 +1,11 @@
+# id: 250_trade_open
+# covers: [HELP 11] 交易市場「公佈欄」工具條 case9 0x4284BE——top.9 開面板(登記擴到 10
+#          鍵)→panel[73]/[74] 就緒→右鍵退出；下單/成交深鏈見 testing-issues Q-W 專項
+# timeout: 60000
+wait idle 1500
+clickr top.9
+wait log "trade market open" 10000
+rclick 320 240
+wait frames 120
+assert state errors == 0
+quit

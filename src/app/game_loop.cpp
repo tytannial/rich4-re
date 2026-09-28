@@ -621,7 +621,7 @@ void enterGameLoop(Application& app) {
     //   不改任何产品命中逻辑——矩形与既有判断同源常量）
     {
         char nm[16];
-        for (int i = 0; i < 9; ++i) { // 工具条 [RE 0x417E26 dword_48BDE4 = x/40]
+        for (int i = 0; i < 10; ++i) { // 工具条 [RE 0x417E26 dword_48BDE4 = x/40]
             std::snprintf(nm, sizeof(nm), "top.%d", i);
             debug::registerRegion(nm, i * 40, 0, 40, 40);
         }

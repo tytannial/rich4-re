@@ -120,11 +120,11 @@
 | `0x4239B9` | playerTotalAssets | `src/app/economy.cpp:44` | 0x4239B9 反编译; bank + cash - loan + Σ(12股×现价 flt_496994) + 地产(priceAdd(+28) + [type(+24)? priceBase(+30) : level(+26)? priceBase×level]) + 公司(buildPrice(+34) + feeTable[0](+36) × sub(+26))；胜利判定输入 |
 | `0x423ACF` | updateMoneyIndex | `src/app/economy.cpp:80` | 0x423ACF 反编译; g_moneyMul = max(旧值, Σ存活 playerTotalAssets / 存活数 / g_startMoneyVal) （只升不降；advanceDay 每日调用 0x41CFBF） 差异: 存活数为 0 / 起始资金 ≤0 时保持原值（原版未防护除零） |
 | `0x423B3B` | collectOwnedAssetIds | `src/app/query_dialog.cpp:79` | 0x423B3B 反编译; mode 0=estate+corp 1=estate 2=corp 3=有建筑普通地产 （level≠0 && type==0） 4=有建筑连锁店（level≠0 && type≠0） |
-| `0x4246C5` | queueTradeOrder | `src/app/trade_market.cpp:1360` | 0x4246C5 反编译; 找空槽或同 (type,objId) 槽覆盖；满 7 槽 return 不写； type==2 记录 estate（+24/+26）或 corp（+24/+26）快照到 +10/+11 |
-| `0x4247D5` | removeTradeOrder | `src/app/trade_market.cpp:1403` | 0x4247D5 反编译; memcpy 12*(6-slot) 前移 + 末槽 12 字节清零 |
-| `0x42483E` | clearInvalidTradeOrders | `src/app/trade_market.cpp:1345` | 0x42483E 反编译; 每玩家 7 槽逐项校验（移除后原地重检，等价前移后继续） |
-| `0x4255DA` | executeTrade | `src/app/trade_market.cpp:1426` | 0x4255DA 反编译; 现金检查（人类提示 0x463E50）→ 按类型转移： case1 股票（持股/均价加权 + updateSpecPtControl 经营権提示 0x463E5F）/ case2 地产（owner 改）+ rebuildMiniMap(0) / case3 道具（库存 <9 转移，满 0x463E72）/ case4 卡片（卡数 <15 转移，满 0x463E89）→ transferMoney(cur, seller, price, 0) |
-| `0x428475` | ageTradeOrders | `src/app/trade_market.cpp:1413` | 0x428475 反编译; 存活玩家每个非空挂单 +1 字节年龄（原版无读取点） |
+| `0x4246C5` | queueTradeOrder | `src/app/trade_market.cpp:1361` | 0x4246C5 反编译; 找空槽或同 (type,objId) 槽覆盖；满 7 槽 return 不写； type==2 记录 estate（+24/+26）或 corp（+24/+26）快照到 +10/+11 |
+| `0x4247D5` | removeTradeOrder | `src/app/trade_market.cpp:1404` | 0x4247D5 反编译; memcpy 12*(6-slot) 前移 + 末槽 12 字节清零 |
+| `0x42483E` | clearInvalidTradeOrders | `src/app/trade_market.cpp:1346` | 0x42483E 反编译; 每玩家 7 槽逐项校验（移除后原地重检，等价前移后继续） |
+| `0x4255DA` | executeTrade | `src/app/trade_market.cpp:1427` | 0x4255DA 反编译; 现金检查（人类提示 0x463E50）→ 按类型转移： case1 股票（持股/均价加权 + updateSpecPtControl 经营権提示 0x463E5F）/ case2 地产（owner 改）+ rebuildMiniMap(0) / case3 道具（库存 <9 转移，满 0x463E72）/ case4 卡片（卡数 <15 转移，满 0x463E89）→ transferMoney(cur, seller, price, 0) |
+| `0x428475` | ageTradeOrders | `src/app/trade_market.cpp:1414` | 0x428475 反编译; 存活玩家每个非空挂单 +1 字节年龄（原版无读取点） |
 | `0x428CAF` | refreshStockSpecPtMap | `src/app/stock_system.cpp:61` | 0x428CAF 反编译; 遍历 12 支股票，对"上市公司"（kStockInit[s][1] != 0）按 specPt.stockNo == 股票号 反查 specPt 索引并回写 stocks[s][1]（迁移: 上市判断改用 kStockInit 表（不依赖运行时初值，幂等）； 股票表未初始化（如读档路径未经过 newGameInit）时用 kStockInit 重建） |
 | `0x428D2A` | buyStock | `src/app/stock_system.cpp:251` | 0x428D2A 反编译; viaBank=false（现金）：价格 = specPt.feeBase/10000 × count， sharesLeft -= count，现金扣款；viaBank=true：金额 = 当前价 × count，银行扣款， 交易量/保留股份(word_49698A/88) -= count； 末尾：持股 += count；均价 = (旧持股×旧均价 + 金额) / 新持股；再调 updateSpecPtControl 返回 1 表示经营権（owner）变化 |
 | `0x428E23` | sellStock | `src/app/stock_system.cpp:292` | 0x428E23 反编译; 持股 -= count（归零则均价清 0）；收入 = 现价(flt_496994) × count； word_49698A/88 += count（回归市场）；toBank 入 g_playerBank 否则入 dword_499080 公库； 末尾 updateSpecPtControl；返回 1 表示经营権变化 |

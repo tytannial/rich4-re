@@ -22,6 +22,7 @@
 #include "game/application.h"
 #include "game/core/encoding.h"
 #include "game/core/log.h"
+#include "game/core/trace.h"
 #include "game/core/debug_hooks.h"
 #include "game/core/clock.h"
 #include "game/render/blit.h"
@@ -1637,6 +1638,7 @@ void tradeMarketDialog(Application& app) {
         RICH4_LOGW("tradeMarket: panel.mkf[74] unavailable (RE 0x4284BE)");
     }
     RICH4_LOGI("trade market open (RE 0x4284BE)");
+    trace::logf("dialog open name=trade_market");
     runModal(app, &tradeMainEvent, &s);
 }
 
