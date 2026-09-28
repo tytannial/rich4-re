@@ -13,7 +13,11 @@ bool startGame(Application& app, bool mode1);
 // [RE 0x402AC5] loadGameFromSlot
 // 依据: 0x402AC5 反编译; showLoadingScreen + fseek(4) 读取全部存档状态 +
 //       loadMapData + 每玩家棋盘数据（10008B + 地图数据）; 由读档对话框返回后调用
-// 差异: 完整状态恢复（股票/卡片/骰子/地图物件）待后续，当前恢复地图/模式/玩家数
 bool loadGameFromSlot(Application& app, int slot);
+
+// [RE 0x417D65 case 3] 游戏内读档：重载存档数据/地图/回合机但**不重入游戏内循环**
+//   （主菜单读档经 loadGameFromSlot→enterGameLoop；游戏内 case3 复用本函数后由现有
+//   gameEventHandler 模态继续渲染新局）。loadGameFromSlot = 本函数 + enterGameLoop。
+bool reloadGameFromSlotData(Application& app, int slot);
 
 } // namespace rich4

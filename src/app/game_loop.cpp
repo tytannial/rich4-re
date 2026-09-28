@@ -14,6 +14,7 @@
 #include "game/app/map_dialog.h"
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
+#include "game/app/new_game.h"
 #include "game/app/object_tip.h"
 #include "game/app/query_dialog.h"
 #include "game/app/save_dialog.h"
@@ -171,9 +172,12 @@ void handleTopBarButton(Application& app, int index) {
             aiDialog(app);
             break;
         case 3: {
-            // [RE 0x417D65] case 3: loadDialog(1)（游戏内读档阶段 3 接入）
+            // [RE 0x417D65] case 3: loadDialog(1) → 选槽后重载存档（游戏内读档）
             const int slot = loadDialog(app);
-            RICH4_LOGI("in-game load dialog returned slot %d (TODO RE 0x417D65)", slot);
+            if (slot >= 0) {
+                // reloadGameFromSlotData 不重入游戏内循环：现有 gameEventHandler 模态继续渲染新局
+                reloadGameFromSlotData(app, slot);
+            }
             break;
         }
         case 4:

@@ -42,6 +42,8 @@
 #include "game/app/shop_dialog.h"
 #include "game/app/spec_pt_dialog.h"
 #include "game/app/stock_system.h"
+
+#include "game/app/save_data.h"
 #include "game/app/target_select_dialog.h"
 #include "game/app/trade_market.h"
 #include "game/core/encoding.h"
@@ -3062,40 +3064,9 @@ void saveTurnSnapshot(GameState& st, int p) {
     if (p < 0 || p >= 4 || (st.players[p].alive & 1) == 0) {
         return;
     }
-    TurnSnapshot& s = st.snapshots[p];
-    s.valid = true;
-    s.gameDate = st.gameDate;
-    for (int k = 0; k < 4; ++k) {
-        s.players[k] = st.players[k];
-    }
-    std::memcpy(s.npcSlots, st.npcSlots, sizeof(s.npcSlots));
-    std::memcpy(s.cellTable, st.cellTable.data(), st.cellTable.size());
-    std::memcpy(s.cardState60, st.cardState60, sizeof(s.cardState60));
-    std::memcpy(s.itemStock, st.itemStock, sizeof(s.itemStock));
-    std::memcpy(s.propStock, st.propStock, sizeof(s.propStock));
-    std::memcpy(s.misc8A, st.misc8A, sizeof(s.misc8A));
-    std::memcpy(s.misc8B, st.misc8B, sizeof(s.misc8B));
-    std::memcpy(s.tradeSlots, st.tradeSlots, sizeof(s.tradeSlots));  // g_miscTable336（0x44808A 含）
-    s.moneyMul = st.moneyMul;
-    s.dayCount = st.dayCount;
-    s.turnCounter = st.turnCounter;
-    s.stockDivPeriod = st.stockDivPeriod;
-    s.stockMarketClosed = st.stockMarketClosed;
-    s.stockTotalValue = st.stockTotalValue;
-    s.marketIndex = st.marketIndex;
-    s.publicFund = st.publicFund;
-    std::memcpy(s.lotteryNumbers, st.lotteryNumbers, sizeof(s.lotteryNumbers));
-    s.stockGlobalDrift = st.stockGlobalDrift;
-    std::memcpy(s.stocks, st.stocks, sizeof(s.stocks));
-    std::memcpy(s.stockHistory, st.stockHistory, sizeof(s.stockHistory));
-    std::memcpy(s.playerShares, st.playerShares, sizeof(s.playerShares));
-    std::memcpy(s.jailFlags, st.jailFlags, sizeof(s.jailFlags));
-    std::memcpy(s.hospitalFlags, st.hospitalFlags, sizeof(s.hospitalFlags));
-    s.cellEnts = st.cellEnts;
-    s.estates = st.estates;
-    s.corps = st.corps;
-    s.specPts = st.specPts;
-    s.evtCells = st.evtCells;
+    // [RE 0x44808A] 全状态写入 10008B mapBlocks buffer + mapDat 副本（save_data.cpp 序列化内核）
+    //   与 SAVE%d.DAT 尾段共用同一布局 → 读旧档即可喂时光机
+    writeSnapshotBlock(st, p, st.snapshots[p]);
     RICH4_LOGI("saveTurnSnapshot: p%d date=%u (RE 0x44808A)", p, st.gameDate);
 }
 
@@ -3106,49 +3077,18 @@ bool restoreTurnSnapshot(Application& app, int p) {
     if (p < 0 || p >= 4) {
         return false;
     }
-    const TurnSnapshot& s = st.snapshots[p];
-    if (!s.valid) {
+    // [RE 0x448544] 反序列化 10008B 快照 buffer 回灌（含 news/fate/mapDat 地块）
+    if (!readSnapshotBlock(st, st.snapshots[p])) {
         return false;
     }
-    st.gameDate = s.gameDate;
-    for (int k = 0; k < 4; ++k) {
-        st.players[k] = s.players[k];
-    }
-    std::memcpy(st.npcSlots, s.npcSlots, sizeof(st.npcSlots));
-    std::memcpy(st.cellTable.data(), s.cellTable, sizeof(s.cellTable));
-    std::memcpy(st.cardState60, s.cardState60, sizeof(st.cardState60));
-    std::memcpy(st.itemStock, s.itemStock, sizeof(st.itemStock));
-    std::memcpy(st.propStock, s.propStock, sizeof(st.propStock));
-    std::memcpy(st.misc8A, s.misc8A, sizeof(st.misc8A));
-    std::memcpy(st.misc8B, s.misc8B, sizeof(st.misc8B));
-    std::memcpy(st.tradeSlots, s.tradeSlots, sizeof(st.tradeSlots));  // g_miscTable336（0x448544 含）
-    st.moneyMul = s.moneyMul;
-    st.dayCount = s.dayCount;
-    st.turnCounter = s.turnCounter;
-    st.stockDivPeriod = s.stockDivPeriod;
-    st.stockMarketClosed = s.stockMarketClosed;
-    st.stockTotalValue = s.stockTotalValue;
-    st.marketIndex = s.marketIndex;
-    st.publicFund = s.publicFund;
-    std::memcpy(st.lotteryNumbers, s.lotteryNumbers, sizeof(st.lotteryNumbers));
-    st.stockGlobalDrift = s.stockGlobalDrift;
-    std::memcpy(st.stocks, s.stocks, sizeof(st.stocks));
-    std::memcpy(st.stockHistory, s.stockHistory, sizeof(st.stockHistory));
-    std::memcpy(st.playerShares, s.playerShares, sizeof(st.playerShares));
-    std::memcpy(st.jailFlags, s.jailFlags, sizeof(st.jailFlags));
-    std::memcpy(st.hospitalFlags, s.hospitalFlags, sizeof(st.hospitalFlags));
-    st.cellEnts = s.cellEnts;
-    st.estates = s.estates;
-    st.corps = s.corps;
-    st.specPts = s.specPts;
-    st.evtCells = s.evtCells;
+    rebuildEventNpcFromSlots(st);  // players[4..7] 镜像由 npcSlots 重建
     // [RE 0x448A53] 全员行走资源重载（j < playerCount 或 j >= 4 时）
     for (int j = 0; j < st.playerCount || j < 4; ++j) {
         if (j < 9) {
             loadWalkResources(st, j);
         }
     }
-    buildMiniMapMarks(app);  // [RE 0x40A4E1] sub_40C03B/rebuildMiniMap 等价
+    buildMiniMapMarks(app);  // [RE 0x40C03B] rebuildMiniMap 等价
     RICH4_LOGI("restoreTurnSnapshot: p%d -> date=%u day=%d (RE 0x448544)", p, st.gameDate,
                st.dayCount);
     return true;
@@ -4041,6 +3981,11 @@ void nextPlayer(Application& app) {
         advanceDay(app);
     }
     updatePlayerStates(app, cur); // [RE 0x41C84F] 回合开始状态倒计时（住宿/出國/監獄/醫院等）
+    // [RE 0x41904C] v1(过天) && byte_49715C(自动存档设置) → saveGameToSlot(0)（SAVE0=AUTO）
+    if (dayPassed && st.settings[4] != 0) {
+        saveGameToSlot(app.gameDir(), 0, st);
+        RICH4_LOGI("auto save -> SAVE0.DAT (RE 0x41904C)");
+    }
     st.playerActionFlags[cur] |= 0x80;
     RICH4_LOGI("next player: %d day=%d (RE 0x418EBD)", cur, dayPassed ? 1 : 0);
 }
@@ -4242,7 +4187,7 @@ void initTurnState(Application& app) {
         st.playerActionFlags[i] = 0;
         st.players[i].prevCellEnt = 0;
     }
-    st.currentPlayer = 0;
+    // currentPlayer 由调用方预设（新游戏=0 / 读档=存档值，对齐 0x402AC5 末 byte_498EA0[cur]）
     st.remainingSteps = 0;
     st.stepFrames = 0;
     st.stepActionPending = false;
@@ -4251,7 +4196,10 @@ void initTurnState(Application& app) {
     st.gameLoopActive = true;
     st.gamePanelReady = true;
     st.gameStateActive = true;
-    st.playerActionFlags[0] |= 0x80;
+    // [RE 0x402F92] byte_498EA0[52*currentPlayer] |= 0x80（用运行时 currentPlayer，非硬编码 0）
+    if (st.currentPlayer >= 0 && st.currentPlayer < 9) {
+        st.playerActionFlags[st.currentPlayer] |= 0x80;
+    }
     // [RE 0x475284] 前进面板初始位置（原版 .data 初值 180,120）
     st.advancePanelX = 180;
     st.advancePanelY = 120;

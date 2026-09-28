@@ -1,7 +1,10 @@
 # SAVE%d.DAT 存档格式
 
-> 状态：**头部与玩家表已解析**，完整游戏状态待深入。
-> 样本 `SAVE0.DAT` 为 90111 字节。读写见 `sub_403D74`(存档选择界面)、`sub_402AC5`(读档)。
+> 状态：**完整格式已解析并 1:1 实现（2026-09-28）**，逐字段序/偏移与原版一致
+>   （自产档与原版同尺寸、往返字节稳定、可读原版档）。详见
+>   [`docs/reverse/functions/402fd1-save-load.md`](../reverse/functions/402fd1-save-load.md)。
+> 写 `sub_402FD1`、读 `sub_402AC5`、界面 `sub_403D74`/`sub_403396`、自动存档 `sub_41904C`、
+>   时光机快照 `sub_44808A`/`sub_448544`、场景复位 `sub_4080F5`。样本 SAVE0.DAT = 89871 字节（4 人 map0）。
 
 ## 头部
 
@@ -37,11 +40,14 @@
 | `sub_402FD1` | 存档相关 |
 | `sub_403396` | 存档相关 |
 
-## 待逆向
+## 解析结果（详见 402fd1-save-load.md）
 
-- [ ] 玩家 104 字节字段明细
-- [ ] 地图 / 回合 / 股市 / 卡片等状态布局
-- [ ] 指针重定位规则（或改为固定偏移序列化）
+- [x] 玩家 104 字节字段明细（`game_state.h::Player` + `serializePlayer/deserializePlayer`）
+- [x] 地图 / 回合 / 股市 / 卡片等状态布局（version 起连续字段序，偏移实测）
+- [x] 指针处理：mapDat blob 内部全是相对偏移（直接解析）；玩家姓名/股票名指针读档按
+      `charIndex→g_charData`、`mode/map→off_47F072` 重建（存档写 0 安全，无需重定位）
+- [x] 地块状态 = mapDat blob（`buildMapDat`/`parseMapDatBlob`）；每玩家时光机快照
+      = `g_playerMapBlocks` 10008B + mapDat 副本，随存档尾部 dump
 
 ## 现代化方案
 

@@ -1,5 +1,10 @@
 #include "game/application.h"
 
+#include "game/app/save_data.h"
+#include "game/app/game_loop.h"
+#include "game/app/new_game.h"
+#include "game/game_state.h"
+
 #include "game/core/log.h"
 
 #include <cstdio>
@@ -71,12 +76,18 @@ int gameClick5Frame = 0;
 std::vector<std::pair<std::string, int>> gameKeys; // [NEW] --game-key "ctrl+5,1500"
     int gameEscFrame = -1;
     bool debugMode = false;
+    int selftestSlot = -1;
+    int loadGameSlot = -1;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--game" && i + 1 < argc) {
             gameDir = argv[++i];
         } else if (arg == "--debug") {
             debugMode = true;
+        } else if (arg == "--save-selftest" && i + 1 < argc) {
+            selftestSlot = std::atoi(argv[++i]);
+        } else if (arg == "--load-game" && i + 1 < argc) {
+            loadGameSlot = std::atoi(argv[++i]);
         } else if (arg == "--shot" && i + 1 < argc) {
             shotPath = argv[++i];
         } else if (arg == "--shot-frame" && i + 1 < argc) {
@@ -186,6 +197,67 @@ std::vector<std::pair<std::string, int>> gameKeys; // [NEW] --game-key "ctrl+5,1
         }
     }
 
+    if (selftestSlot >= 0) {
+        using namespace rich4;
+        char pn[128];
+        std::snprintf(pn, sizeof(pn), "%s/SAVE%d.DAT", gameDir.c_str(), selftestSlot);
+        std::vector<uint8_t> raw;
+        if (!readSaveFile(pn, raw)) {
+            std::printf("selftest: %s read/version fail\n", pn);
+            return 1;
+        }
+        GameState a;
+        if (!parseSaveBody(a, raw)) {
+            std::printf("selftest: parseSaveBody fail (size %zu)\n", raw.size());
+            return 1;
+        }
+        std::printf("selftest parse ok slot %d: map/mode=%d/%d players=%d humans=%d cur=%d "
+                    "date=%u turn=%d day=%d moneyMul=%d rot=%d publicFund=%d\n",
+                    selftestSlot, a.mapIndex, a.gameMode, a.playerCount, a.humanCount,
+                    a.currentPlayer, a.gameDate, a.turnCounter, a.dayCount, a.moneyMul,
+                    a.mapRotation, a.publicFund);
+        std::printf("  tables: cellEnts=%zu estates=%zu corps=%zu specPts=%zu evtCells=%zu "
+                    "cellTable=%zu newsPos=%d fatePos=%d\n",
+                    a.cellEnts.size(), a.estates.size(), a.corps.size(), a.specPts.size(),
+                    a.evtCells.size(), a.cellTable.size(), a.newsPos, a.fatePos);
+        std::printf("  p0 cash=%d bank=%d loan=%d pts=%u charIdx=%u alive=%u | stocks[0] cur=%.1f "
+                    "prev=%.1f spec=%d halt=%u news=%u reserved=%d vol=%d\n",
+                    a.players[0].cash, a.players[0].bank, a.players[0].loan, a.players[0].points,
+                    a.players[0].charIndex, a.players[0].alive, a.stocks[0][5], a.stocks[0][4],
+                    static_cast<int>(a.stocks[0][1]), a.stockHalted[0], a.stockNews[0],
+                    a.stockReserved[0], a.stockVolume[0]);
+        std::printf("  snapValid=%d/%d/%d/%d blkSize=%zu/%zu\n", a.snapshots[0].valid ? 1 : 0,
+                    a.snapshots[1].valid ? 1 : 0, a.snapshots[2].valid ? 1 : 0,
+                    a.snapshots[3].valid ? 1 : 0, a.snapshots[0].block.size(),
+                    a.snapshots[1].block.size());
+
+        // 往返稳定性：save(a)=t1, parse(t1)=b, save(b)=t2；t1==t2 → save∘parse∘save 字节稳定
+        if (!saveGameToSlot(".", 900, a)) {
+            std::printf("selftest: saveGameToSlot(900) fail\n");
+            return 1;
+        }
+        std::vector<uint8_t> r900;
+        GameState b;
+        if (!readSaveFile("./SAVE900.DAT", r900) || !parseSaveBody(b, r900)) {
+            std::printf("selftest: reparse SAVE900 fail\n");
+            std::remove("./SAVE900.DAT");
+            return 1;
+        }
+        if (!saveGameToSlot(".", 901, b)) {
+            std::printf("selftest: saveGameToSlot(901) fail\n");
+            std::remove("./SAVE900.DAT");
+            return 1;
+        }
+        std::vector<uint8_t> r901;
+        readSaveFile("./SAVE901.DAT", r901);
+        const bool stable = (r900 == r901);
+        std::printf("  roundtrip: orig=%zu  a->SAVE900=%zu  b->SAVE901=%zu  STABLE(t1==t2)=%s\n",
+                    raw.size(), r900.size(), r901.size(), stable ? "YES" : "NO");
+        std::remove("./SAVE900.DAT");
+        std::remove("./SAVE901.DAT");
+        return stable ? 0 : 2;
+    }
+
     rich4::Application app;
     if (!app.init(gameDir)) {
         RICH4_LOGE("Application init failed");
@@ -193,6 +265,23 @@ std::vector<std::pair<std::string, int>> gameKeys; // [NEW] --game-key "ctrl+5,1
     }
     // [NEW] 调试模式（--debug）：启用 Ctrl+1..8 测试热键
     app.gameState().debugMode = debugMode;
+    if (loadGameSlot >= 0) {
+        const bool ok = rich4::reloadGameFromSlotData(app, loadGameSlot);
+        std::printf("load-game slot %d: %s\n", loadGameSlot, ok ? "OK" : "FAIL");
+        if (ok) {
+            rich4::renderGameFrame(app);
+            const rich4::GameState& s = app.gameState();
+            const std::string dump = "load_shot_s" + std::to_string(loadGameSlot) + ".bmp";
+            app.surface().saveBmp(dump.c_str());
+            std::printf("  after load: map=%d cur=%d cellEnts=%zu estates=%zu p0cash=%d "
+                        "manualView=%d pendingSpawn=%d panelLoaded=%d -> %s\n",
+                        s.mapIndex, s.currentPlayer, s.cellEnts.size(), s.estates.size(),
+                        s.players[0].cash, s.manualView ? 1 : 0, s.pendingSpawnPlayer,
+                        s.panelLoaded ? 1 : 0, dump.c_str());
+        }
+        app.shutdown();
+        return ok ? 0 : 1;
+    }
     app.setAutoEsc(autoEsc, autoEscFrame);
     if (!autoKey.empty()) {
         app.setAutoKey(autoKey);

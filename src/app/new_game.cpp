@@ -100,39 +100,9 @@ void shuffleIndices(uint8_t* out, int n) {
     }
 }
 
-// [RE 0x498E80/0x498E84/0x498E88/0x498E7C/0x498E78] MAPDAT 五表解析
-// 依据: 0x407AD2 反编译; 头部 10 个 u32 = count/offset 对，各表 index 0 保留
-template <typename T>
-bool copyMapTable(std::vector<T>& out, const uint8_t* base, size_t size, uint32_t count,
-                  uint32_t offset) {
-    if (static_cast<size_t>(offset) + static_cast<size_t>(count + 1) * sizeof(T) > size) {
-        return false;
-    }
-    out.resize(count + 1);
-    std::memcpy(out.data(), base + offset, static_cast<size_t>(count + 1) * sizeof(T));
-    return true;
-}
-
+// [RE 0x407AD2] mapDat blob → 五表 vector（单源实现见 save_data.cpp parseMapDatBlob）
 bool parseMapDat(GameState& state, const std::vector<uint8_t>& d) {
-    if (d.size() < 40) {
-        return false;
-    }
-    const uint8_t* b = d.data();
-    const uint32_t cellEntCount = readI32(b + 0);
-    const uint32_t cellEntOff = readI32(b + 4);
-    const uint32_t estateCount = readI32(b + 8);
-    const uint32_t estateOff = readI32(b + 12);
-    const uint32_t corpCount = readI32(b + 16);
-    const uint32_t corpOff = readI32(b + 20);
-    const uint32_t specPtCount = readI32(b + 24);
-    const uint32_t specPtOff = readI32(b + 28);
-    const uint32_t evtCellCount = readI32(b + 32);
-    const uint32_t evtCellOff = readI32(b + 36);
-    return copyMapTable(state.cellEnts, b, d.size(), cellEntCount, cellEntOff) &&
-           copyMapTable(state.estates, b, d.size(), estateCount, estateOff) &&
-           copyMapTable(state.corps, b, d.size(), corpCount, corpOff) &&
-           copyMapTable(state.specPts, b, d.size(), specPtCount, specPtOff) &&
-           copyMapTable(state.evtCells, b, d.size(), evtCellCount, evtCellOff);
+    return parseMapDatBlob(state, d.data(), d.size());
 }
 
 // 加载地图预览图（JUMP.MKF[mapIndex + 4*gameMode] → state.mapPreview）。
@@ -278,7 +248,6 @@ bool newGameInit(Application& app, bool mode1) {
     //   槽8 busy=3 機器娃娃）；其余字段全 0（坐标/格 0 → 未释放前渲染跳过）。
     //   [RE 0x498DF2 == 0x498E32] busy 即旧文档误称的"DF2 槽占用"（原版无第二字段）。
     std::memcpy(state.npcSlots, kMiscTable80, sizeof(state.npcSlots));
-    std::memset(state.misc8B, 0, sizeof(state.misc8B));
 
     // [RE 0x40732D/0x40733E] memset(g_jailFlags, 0, 8) / memset(g_hospitalFlags, 0, 8)
     std::memset(state.jailFlags, 0, sizeof(state.jailFlags));
@@ -366,13 +335,50 @@ void showLoading(Application& app) {
                 static_cast<size_t>(raw.width) * raw.height * 2);
 }
 
+// [RE 0x4080F5] resetSceneForReload：退出游戏/读档/重开局前复位上局残留场景状态。
+// 依据: 0x4080F5（loadMapData 开头与 loadGameFromSlot 0x402B11 调用）；无条件复位
+//   dword_475114(pendingSpawnPlayer)/dword_48BE18(manualView)/dword_48BE1C-BE20(视口)。
+//   重写补充复位跳伞/事件 FLC/掷骰/高亮/状态机标志，杜绝视角错位、重复跳伞、动画串帧。
+//   注：每玩家回合快照（0x4080F5 memset g_playerMapBlocks）在 loadMap(fresh) 内清，
+//   读档路径保留存档恢复的快照，故本函数不动 snapshots[]。
+void resetSceneForReload(Application& app) {
+    GameState& st = app.gameState();
+    st.manualView = false;
+    st.viewScrolling = false;
+    st.viewTargetX = st.viewTargetY = 0;
+    st.viewSmoothX = st.viewSmoothY = 0;
+    st.viewX = st.viewY = 0;
+    st.pendingSpawnPlayer = 0;
+    st.parachute = FliDecoder{};
+    st.parachuteActive = false;
+    st.parachuteTimer = 0;
+    st.parachuteLastMs = 0;
+    st.eventFlc = FliDecoder{};
+    st.eventFlcActive = false;
+    st.eventFlcX = st.eventFlcY = 0;
+    st.diceAnim = FliDecoder{};
+    st.diceAnimActive = false;
+    st.diceAnimOpened = false;
+    st.dicePhase = 0;
+    st.showDice = false;
+    st.diceLandPlayed = false;
+    st.highlightFrame = -1;
+    st.highlightEstates.clear();
+    st.highlightCorps.clear();
+    st.highlightShapes.clear();
+    st.gameStateActive = false;
+    st.stepActionPending = false;
+}
+
 // [RE 0x407AD2] loadMap
 // 依据: 0x407AD2 反编译; sub_4502FE("MAP.MKF") + sub_450441(handle, 2*(4*mode+map))
 //       取 GND 地图数据; +1 取 MAPDAT（本作无独立 MAPDAT.MKF，走 fallback 分支）;
-//       加载图块/棋子精灵并初始化格子表
-// 差异: 玩家地图数据（10008B/玩家）与 sub_42915A/sub_428CAF 待后续
-bool loadMap(Application& app) {
+//       加载图块/棋子精灵并初始化格子表。
+// 参数: freshMapDat=true（新游戏）从 MAP.MKF 读 MAPDAT + 重置 cellTable/初始神明/specPt 初值
+//   （原版 if(!g_mapDat) 守卫）；false（读档）跳过该块，五表 vector 与 cellTable 已由存档填好。
+bool loadMap(Application& app, bool freshMapDat) {
     GameState& state = app.gameState();
+    resetSceneForReload(app); // [RE 0x4080F5] loadMapData 开头复位
     if (!state.map.load(app.gameDir() + "/Map.mkf")) {
         RICH4_LOGE("loadMap: Map.mkf load failed");
         return false;
@@ -389,17 +395,47 @@ bool loadMap(Application& app) {
     state.gndCellIndex = reinterpret_cast<const uint16_t*>(state.gnd.data() + 528);
     state.gndBitmaps = state.gnd.data() + 10896;
 
-    // MAPDAT（MAP.MKF 奇数索引；MAPDAT.MKF 不存在时原版走此 fallback）
-    auto mdat = state.map.read(gndIndex + 1);
-    if (!mdat || !parseMapDat(state, *mdat)) {
-        RICH4_LOGE("loadMap: MAPDAT resource %zu invalid", gndIndex + 1);
-        return false;
+    if (freshMapDat) {
+        // [RE 0x407AD2] 新游戏：MAPDAT 资源 + 格子表/初始神明/specPt 初值（原版 if(!g_mapDat)）
+        auto mdat = state.map.read(gndIndex + 1);
+        if (!mdat || !parseMapDat(state, *mdat)) {
+            RICH4_LOGE("loadMap: MAPDAT resource %zu invalid", gndIndex + 1);
+            return false;
+        }
+        for (int i = 0; i < 4; ++i) {
+            state.snapshots[i] = TurnSnapshot{};  // [RE 0x407CCF] 清每玩家回合快照基线
+        }
+        // [RE 0x496D08] g_cellTable：46 项 x 24 字节，+0 = kCellTypeInit
+        state.cellTable.assign(46 * 24, 0);
+        for (int j = 0; j < 46; ++j) {
+            state.cellTable[24 * j] = kCellTypeInit[j];
+        }
+        // [RE 0x407D6A] 初始物件放置：神明 1,3,5,7,9,11 + 13/14，位置随机 cellEnt
+        for (int t = 1; t <= 11; t += 2) {
+            createMapObject(app, t, randomCellEnt(state, 0), 0, 0);
+        }
+        createMapObject(app, 13, randomCellEnt(state, 0), 0, 0);
+        createMapObject(app, 14, randomCellEnt(state, 0), 0, 0);
+        // [RE 0x407AD2] specPt+48（sharesLeft）= 10000 - word_496988[18*stockNo]；fund 归零
+        {
+            const auto& stockInit = kStockInit[state.gameMode * 4 + state.mapIndex];
+            for (size_t i = 1; i < state.specPts.size(); ++i) {
+                const int sn = state.specPts[i].stockNo;
+                const int issued = (sn >= 0 && sn < 12) ? stockInit[sn][2] : 0;
+                state.specPts[i].sharesLeft = 10000 - issued;
+                state.specPts[i].fund = 0;
+                state.specPts[i].fundPaid = 0;
+            }
+        }
+        state.mapRotation = 0; // [RE 0x407E05]
     }
-    RICH4_LOGI("map data loaded: GND %zu B, cellEnts=%zu estates=%zu corps=%zu specPts=%zu "
-               "evtCells=%zu (Map.mkf[%zu/%zu])",
+
+    RICH4_LOGI("map loaded: GND %zu B, cellEnts=%zu estates=%zu corps=%zu specPts=%zu "
+               "evtCells=%zu fresh=%d (Map.mkf[%zu/%zu])",
                state.gnd.size(), state.cellEnts.size(), state.estates.size(), state.corps.size(),
-               state.specPts.size(), state.evtCells.size(), gndIndex, gndIndex + 1);
-    // [RE 0x408023..0x408068] loadMapData 扫描 special 8002（監獄）/ 8001（醫院）格 → word_48BAE0/E2
+               state.specPts.size(), state.evtCells.size(), freshMapDat ? 1 : 0, gndIndex,
+               gndIndex + 1);
+    // [RE 0x408023..0x408068] 扫描 special 8002（監獄）/ 8001（醫院）格 → word_48BAE0/E2
     state.jailCellEntId = 0;
     state.hospitalCellEntId = 0;
     for (size_t i = 1; i < state.cellEnts.size(); ++i) {
@@ -413,22 +449,6 @@ bool loadMap(Application& app) {
         RICH4_LOGW("loadMap: 監獄/醫院格缺失 jail=%u hospital=%u (RE 0x408023)",
                    state.jailCellEntId, state.hospitalCellEntId);
     }
-    // [RE 0x407AD2] specPt+48（sharesLeft）= 10000 - word_496988[18*stockNo]
-    //   word_496988（g_stocks +4）初值 = kStockInit[stockNo][2]（银行渠道初始发行量）
-    //   总股本固定 10000；现金认购剩余 = 10000 - 银行渠道发行量
-    //   （如臺灣人壽 face=5000 → 5000；中國信託/大宇百貨 face=10000 → 0，仅银行渠道）
-    {
-        const auto& stockInit = kStockInit[state.gameMode * 4 + state.mapIndex];
-        for (size_t i = 1; i < state.specPts.size(); ++i) {
-            const int sn = state.specPts[i].stockNo;
-            const int issued = (sn >= 0 && sn < 12) ? stockInit[sn][2] : 0;
-            state.specPts[i].sharesLeft = 10000 - issued;
-            state.specPts[i].fund = 0;
-            state.specPts[i].fundPaid = 0;
-        }
-    }
-    // [RE 0x428CAF] 股票→specPt 映射（按 specPt.stockNo 反查）
-    refreshStockSpecPtMap(app);
 
     // [RE 0x407AD2] 图块资源
     loadUiImage(state.miniMapRaw, state.map, static_cast<size_t>(base + 16));
@@ -483,21 +503,10 @@ bool loadMap(Application& app) {
         loadUiImage(state.cellTypeSprites[t], state.data, static_cast<size_t>(t + 395));
     }
 
-    // [RE 0x496D08] g_cellTable：46 项 x 24 字节，+0 = kCellTypeInit
-    state.cellTable.assign(46 * 24, 0);
-    for (int j = 0; j < 46; ++j) {
-        state.cellTable[24 * j] = kCellTypeInit[j];
-    }
-
-    // [RE 0x407D6A] 初始物件放置：类型 1,3,5,7,9,11（神明）+ 13/14，位置随机 cellEnt
-    for (int t = 1; t <= 11; t += 2) {
-        createMapObject(app, t, randomCellEnt(state, 0), 0, 0);
-    }
-    createMapObject(app, 13, randomCellEnt(state, 0), 0, 0);
-    createMapObject(app, 14, randomCellEnt(state, 0), 0, 0);
     // [RE 0x407AD2] 棋子动画资源初始化
     initMapEntities(app);
-    // TODO(RE 0x40A4E1): 小地图背景绘制（叠加住宅用地/商業用地标記）
+    refreshStockSpecPtMap(app); // [RE 0x428CAF] 股票→specPt 反查（fresh 初建 / 读档重建）
+    buildMiniMapMarks(app);     // [RE 0x40A4E1] rebuildMiniMap(0)
     return true;
 }
 
@@ -545,9 +554,10 @@ void playIntro(Application& app) {
 
 } // namespace
 
-bool loadGameFromSlot(Application& app, int slot) {
+bool reloadGameFromSlotData(Application& app, int slot) {
     // [RE 0x402AC5] 依据: 0x402AC5 反编译; sprintf("SAVE%d.DAT") → showLoadingScreen →
-    // fseek(4) 读取全部状态 → loadMapData → 每玩家棋盘数据; 返回 1 表示成功
+    //   sub_4080F5 → fseek(4) 读取全部状态 → mapDat 五表 + 每玩家棋盘数据 → loadMapData。
+    //   本函数只做数据/地图重载（不含 enterGameLoop），供主菜单与游戏内读档共用。
     GameState& state = app.gameState();
     char name[32];
     std::snprintf(name, sizeof(name), "SAVE%d.DAT", slot);
@@ -555,58 +565,47 @@ bool loadGameFromSlot(Application& app, int slot) {
 
     std::vector<uint8_t> raw;
     if (!readSaveFile(path, raw)) {
-        RICH4_LOGE("loadGameFromSlot: %s invalid", name);
+        RICH4_LOGE("reloadGameFromSlotData: %s invalid", name);
         return false;
     }
-    state.saveData = std::move(raw);
+    state.saveData = raw;
 
-    SaveSlot info;
-    if (!readSaveHeader(path, info)) {
+    showLoading(app);            // [RE 0x401543 / 0x402B03] 加载画面
+    resetSceneForReload(app);    // [RE 0x4080F5 / 0x402B11] 清上局视口/入场/动画
+
+    // [RE 0x402AC5] 全字段流式解析（含 mapDat→五表、每玩家 mapBlocks/mapDatCopies 快照）
+    if (!parseSaveBody(state, raw)) {
+        RICH4_LOGE("reloadGameFromSlotData: %s truncated/invalid body", name);
         return false;
     }
-    state.mapIndex = info.mapIndex;
-    state.gameMode = info.gameMode;
-    state.playerCount = static_cast<int>(info.playerCount);
-    state.currentPlayer = 0;
-    // TODO(RE 0x402AC5): 从存档恢复完整状态（dword_497160 时间戳/玩家/股票/卡片/骰子/
-    //   地图物件表/每玩家棋盘数据 10008B+dwSize）——当前仅恢复地图/模式/玩家数
-    RICH4_LOGI("load game slot %d: map=%d mode=%d players=%u (saveData %zu bytes)", slot,
-               info.mapIndex, info.gameMode, info.playerCount, state.saveData.size());
+    // [RE 0x402BAE] charIndex → 角色名（原版读档用 g_charData 指针表重定位 g_players[].name）
+    for (int k = 0; k < state.playerCount; ++k) {
+        const int ci = state.players[k].charIndex;
+        state.players[k].name = (ci >= 0 && ci < 12) ? kCharNames[ci] : nullptr;
+    }
 
-    // 原版链路：showLoadingScreen → loadMapData → （WinMain case 1）sub_401981(1)
     if (!loadMapPreview(app)) {
         return false;
     }
-    showLoading(app);
-    if (!loadMap(app)) {
+    if (!loadMap(app, false)) {  // mapDat/五表/cellTable 已由存档解析：仅载 GND/图块/walk/扫描
         return false;
     }
-    // [PORT] 事件槽 NPC 状态恢复（本期范围 = miscTable80/jail/hospitalFlags；完整读档仍 P5 TODO）：
-    //   偏移见 save_data.h SaveLayout（与 saveGameToSlot 写序对应）→ 重建 players[4..7] 镜像/占用位
-    if (state.saveData.size() >= SaveLayout::kNpcBlockEnd) {
-        std::memcpy(state.npcSlots, state.saveData.data() + SaveLayout::kNpcSlots,
-                    sizeof(state.npcSlots));
-        std::memcpy(state.jailFlags, state.saveData.data() + SaveLayout::kJailFlags, 8);
-        std::memcpy(state.hospitalFlags, state.saveData.data() + SaveLayout::kHospitalFlags, 8);
-        rebuildEventNpcFromSlots(state);
-        RICH4_LOGI("load game: NPC slots restored (busy %u/%u/%u/%u)", state.npcSlots[0].busy,
-                   state.npcSlots[1].busy, state.npcSlots[2].busy, state.npcSlots[3].busy);
+    rebuildEventNpcFromSlots(state);  // [PORT] players[4..7] 事件槽 NPC 镜像由 npcSlots 重建
+    loadPanelUi(app);          // [RE 0x4190CF] 游戏内面板资源（幂等）；读档链原缺此调用
+    initTurnState(app);          // 回合机重置 + flags[currentPlayer]|=0x80（enterGameLoop 再调幂等）
+    RICH4_LOGI("load game slot %d: map=%d mode=%d players=%d humans=%d cur=%d date=%u "
+               "cellEnts=%zu snapValid=%d/%d/%d/%d (RE 0x402AC5)",
+               slot, state.mapIndex, state.gameMode, state.playerCount, state.humanCount,
+               state.currentPlayer, state.gameDate, state.cellEnts.size(),
+               state.snapshots[0].valid ? 1 : 0, state.snapshots[1].valid ? 1 : 0,
+               state.snapshots[2].valid ? 1 : 0, state.snapshots[3].valid ? 1 : 0);
+    return true;
+}
+
+bool loadGameFromSlot(Application& app, int slot) {
+    if (!reloadGameFromSlotData(app, slot)) {
+        return false;
     }
-    // [PORT] 交易挂单恢复（g_miscTable336 336B；无效项由打开公佈欄时的
-    //   clearInvalidTradeOrders 清理——原版读档后同样处理）
-    if (state.saveData.size() >= SaveLayout::kTradeSlots + SaveLayout::kTradeSlotsSize) {
-        std::memset(state.tradeSlots, 0, sizeof(state.tradeSlots));
-        std::memcpy(state.tradeSlots, state.saveData.data() + SaveLayout::kTradeSlots,
-                    SaveLayout::kTradeSlotsSize);
-        RICH4_LOGI("load game: trade orders restored (RE 0x4967E0)");
-    }
-    // [PORT] 存档未保存股票表/持股/均价 → 用 kStockInit 重建 + 股票→specPt 映射
-    //   （loadMap 内的映射此时 stocks 全 0 无法反查；完整存档恢复待做）
-    std::memcpy(state.stocks, kStockInit[state.gameMode * 4 + state.mapIndex],
-                sizeof(state.stocks));
-    std::memset(state.playerShares, 0, sizeof(state.playerShares));
-    std::memset(state.playerAvgCost, 0, sizeof(state.playerAvgCost));
-    refreshStockSpecPtMap(app);
     enterGameLoop(app); // [RE 0x401981]
     return true;
 }
@@ -619,7 +618,7 @@ bool startGame(Application& app, bool mode1) {
         return false;
     }
     showLoading(app);
-    if (!loadMap(app)) {
+    if (!loadMap(app, true)) {
         return false;
     }
     loadPanelUi(app);

@@ -97,8 +97,8 @@ owner 停留 type4 逐级解锁选 1（`corp.sub` 门槛**灰度**）→ `resear
 **2026-09-27 修正（实机验证通过）**：触发移到收尾 loc_41B077（`turn_system.cpp labDevelopAfterLanding`）——
 先弹通用升级询问、首次建设施即弹研究；面板改帧7 底图(不透明)+帧5 标题、未解锁灰度（非变暗）、悬停黄框、按下下沉。
 
-**功能总览**：`docs/help-checklist.md`（帮助文档 99 条 → 实现状态，当前 ✅ 97 / 🟡 2 / ❌ 0；
-剩余 🟡 = idx8/9 读档·存档完整恢复，见专项）。
+**功能总览**：`docs/help-checklist.md`（帮助文档 99 条 → 实现状态，当前 ✅ 99 / 🟡 0 / ❌ 0；
+**存档/读档/自动存档/时光机专项 ✅ 2026-09-28**，见 `docs/reverse/functions/402fd1-save-load.md`）。
 
 **M2 执行计划**：见 `docs/m2-plan.md`
 
@@ -135,8 +135,12 @@ owner 停留 type4 逐级解锁选 1（`corp.sub` 门槛**灰度**）→ `resear
 - 经济系统剩余：无（股市交易市场/挂单已随公佈欄完成）；~~P4 卡片栏/道具栏 UI~~ ✅（2026-09-24，工具条 case7/8 `useCardDialog` 0x441BAA / `itemBagDialog` 0x447D97，panel.mkf[11] 5×3 网格 + `cardRebuildEffect`/神符；改建/请神/送神卡可用，**卡片效果 30 卡全实现 ✅ 2026-09-26**（档A/B/C：`card_effects.cpp` + 被动 18復仇/19嫁祸/20免費/21免罪接入惩罚·收费链 `resolvePenaltyTarget`/`resolveFeePayer`；红黑卡选股 `stockPickDialog`；**AI/托管用卡链 ✅ `ai_card.cpp`**（0x41E69E 性格判定 + `dword_475324[31]` 目标表，`beginPlayerTurn` rand 触发）；**角色台词 ✅**（`card_lines.cpp` 生成表 0x48123A + `playCardLine`）；逐卡见 `441baa-card-effects.md`）；**AI/托管用道具链 ✅ 2026-09-26**（`ai_item.cpp` 0x420E9A + `funcs_420EE6`@0x4753A0 13 目标函数 + `dword_48BE64`；`420e9a-item-ai.md`）；13 道具效果全实现 ✅（2026-09-25，`item_effects.cpp`：气泡台词/目标选择模态/expireAssets/遥控骰子/娃娃槽8/时光机快照，逐道具见 `item-effects.md`）**
 - AI 决策：AI 买地 ✅（`sub_41D7D4`，2026-09-23）；`alive & 6` 电脑/托管自动行动
   （`landingEvent` 0x41982D 回合主流程）
-- 存档完整恢复：`loadGameFromSlot` 目前恢复地图/模式/玩家数/股票重建 + **事件槽 NPC 记录**
-  （`npcSlots/jail/hospitalFlags`，2026-09-26），其余状态仍 TODO
+- ~~存档完整恢复~~ ✅ **2026-09-28**：`parseSaveBody`/`saveGameToSlot` 1:1 原版字段序，恢复玩家/地块
+  mapDat/卡片·道具/股票(均价·停牌·新闻·保留·交易量交织)/挂单/回合·日期/事件槽/**每玩家时光机快照**
+  （`snapshots[].block` 10008B）；自动存档 `nextPlayer`→SAVE0(AUTO) 0x41904C；游戏内工具条 case3 读档闭环；
+  `loadMap(app, fresh)` 拆分（读档保留存档地块/cellTable）；`resetSceneForReload` 0x4080F5 修视角/跳伞串局；
+  `initTurnState` 不再硬置 currentPlayer=0。时光机快照改 10008B blob 内核 + news/fate 纳入 + 删 `misc8B`。
+  **`--save-selftest` 验证 SAVE0..5 往返 STABLE=YES、与原版同尺寸**；`402fd1-save-load.md`。
 - ~~事件槽 NPC（玩家 4-7）~~ ✅ **2026-09-26 全链实现**（`498df0-event-slot-npc.md`：
   开局关押 busy=1/1/2/2 → 保释行走 → `LABEL_88` 恶行 → 同类建筑抓回；物件分支/回合联动/
   渲染面板/存档；调试 `Ctrl+Shift+8/9`）
@@ -241,6 +245,8 @@ python tools/re_map.py
 - `docs/reverse/functions/gameplay-map-mechanics.md` — 地块机制总览与验收检查表
 - `docs/reverse/functions/pricing-formulas.md` — **收费/价格公式总汇**（物价指数、轮盘、住宅用地/商業用地/行業設施點、到期清算、MAPDAT 数值）
 - `docs/reverse/functions/41982d-p2-events.md` — P2 事件格（case 2..16）专项研究
+- `docs/reverse/functions/402fd1-save-load.md` — **存档/读档/自动存档/时光机**（1:1 原版 SAVE%d.DAT
+  字段序 + mapDat blob 地块 + 每玩家 mapBlocks 10008B 快照 + 0x4080F5 复位；`--save-selftest` 往返验证）
 - `docs/reverse/functions/map-target-audit.md` — **地图目标判定专项**（0x445E4D mode/BYTE1
   过滤/32 调用点矩阵/批次清单；道具·卡牌·事件"以地图为目标"的统一核查入口）
 - `docs/reverse/functions/41982d-estate-rent.md` — 收租/收费专项（case 0 他人住宅用地收租全流程）

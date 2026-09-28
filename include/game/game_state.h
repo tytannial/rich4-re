@@ -244,42 +244,18 @@ struct TradeSlot {
 };
 static_assert(sizeof(TradeSlot) == 12, "TradeSlot 必须与 g_miscTable336 记录一致（12 字节）");
 
-// [RE 0x44808A 保存 / 0x448544 恢复] 時光機回合快照（原版 g_playerMapBlocks 2502 dword/玩家 +
-//   g_playerMapDatCopies 地图数据副本）。保存点 = startPlayerMove 掷骰前（人类玩家）；
-//   恢复 = 时光机全状态回滚。差异: 原版 news/fate 顺序表与位置未建模（P2 后期），跳过
+// [RE 0x44808A 保存 / 0x448544 恢复] 時光機回合快照
+//   原版布局 = g_playerMapBlocks[2502*i]（10008B：valid/date/players416/miscTable80/cellTable/
+//   card/item/prop/gift/turnCounter/stockHistory/shares/stocks/miscTable336/标量/lottery/jail/
+//   hosp/news·fate）+ g_playerMapDatCopies[2502*i]（mapDat 副本 dwSize）。
+//   重写持有原版**字节布局**（block/mapDatCopy），与 SAVE%d.DAT 尾段共用同一序列化内核
+//   （save_data.cpp writeSnapshotBlock/readSnapshotBlock）；存档 tail 直接搬运 block/mapDatCopy，
+//   读旧档 tail 即灌入 snapshots[i] → 时光机读档后立即可用（用户方案：用存档喂时光机）。
+//   保存点 = startPlayerMove 掷骰前（人类玩家）；恢复 = 时光机全状态回滚。
 struct TurnSnapshot {
     bool valid = false;
-    uint32_t gameDate = 0;               // dword_497160
-    Player players[4];                   // 原版 g_players 416B（4×104）
-    NpcSlot80 npcSlots[5] = {};          // g_miscTable80 80B
-    uint8_t cellTable[46 * 24] = {};     // g_cellTable 1104B
-    uint8_t cardState60[60] = {};
-    uint8_t itemStock[60] = {};
-    uint8_t propStock[30] = {};          // 原版 30B
-    uint8_t misc8A[8] = {};              // g_giftPool
-    uint8_t misc8B[8] = {};
-    TradeSlot tradeSlots[8][7] = {};     // g_miscTable336（0x44808A/0x448544 快照含挂单）
-    int32_t moneyMul = 1;
-    int32_t dayCount = 0;
-    int32_t turnCounter = 0;
-    int32_t stockDivPeriod = 1;          // dword_499084
-    int32_t stockMarketClosed = 0;       // dword_4990DC
-    int32_t stockTotalValue = 0;         // dword_49907C
-    int32_t marketIndex = 0;             // dword_499078
-    int32_t publicFund = 0;              // dword_499080
-    uint8_t lotteryNumbers[36] = {};     // g_miscTable36A 乐透号码归属（0=未售，N=玩家 N-1）
-    float stockGlobalDrift = 0.0f;       // dword_4990EC
-    float stocks[12][9] = {};
-    int32_t stockHistory[12][144] = {};
-    int32_t playerShares[4][12] = {};
-    uint8_t jailFlags[8] = {};
-    uint8_t hospitalFlags[8] = {};
-    // [PORT] 原版 mapDat 副本（cellEnts/estates/corps/specPts/evtCells 运行时数据 + 占用位）
-    std::vector<CellEnt> cellEnts;
-    std::vector<Estate> estates;
-    std::vector<Corp> corps;
-    std::vector<SpecPt> specPts;
-    std::vector<EvtCell> evtCells;
+    std::vector<uint8_t> block;       // 10008B g_playerMapBlocks 布局（0x44808A）
+    std::vector<uint8_t> mapDatCopy;  // mapDat blob 副本（dwSize；地块状态含五表 + 占用位）
 };
 
 // 全局游戏状态，对应原版 DGROUP 段的全局句柄区（0x48A0xx / 0x4990xx）。
@@ -540,6 +516,9 @@ struct GameState {
     // [RE 0x499080] dword_499080 系统公库：卖股入系统 + 意外损失（transferMoney to=-1）
     //   + 乐透投注/奖金池（sub_4315CC +1000 / 开奖发放清零）
     int32_t publicFund = 0;
+    // [RE 0x4990F0] g_clearedMaps 通关进度（每地图 1 字节；0x4075C1 标记、进存档、回主菜单清零）
+    //   通关结算界面属 M3，本字段先随存档字段序读写保偏移
+    uint8_t clearedMaps[4] = {};
     int32_t stockTotalValue = 0;     // [RE 0x49907C] dword_49907C 股票总市值（Σ基准价×10）
     int32_t marketIndex = 0;         // [RE 0x499078] dword_499078 大盘指数（Σ价格×10）
     float stockGlobalDrift = 0.0f;   // [RE 0x4990EC] dword_4990EC 全局扰动
@@ -580,7 +559,6 @@ struct GameState {
     // [RE 0x48BAE0 / 0x48BAE2] loadMapData 扫描 special 8002（監獄）/ 8001（醫院）的 cellEnt
     uint16_t jailCellEntId = 0;
     uint16_t hospitalCellEntId = 0;
-    uint8_t misc8B[8] = {};          // [RE 0x496B60] g_misc8B
 
     // [RE 0x499088] dword_499088 地图旋转方向（0-7）
     int mapRotation = 0;
