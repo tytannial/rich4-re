@@ -582,6 +582,7 @@ void doBuy(StockPanelState& s) {
     if (maxBuy <= 0) return;
     const int count = numberInputDialog(*s.app, maxBuy);
     if (count > 0) buyStock(*s.app, st.currentPlayer, stock, count, true);
+    trace::logf("stock trade buy stock=%d count=%d p=%d", stock, count, st.currentPlayer);
 }
 
 // [RE 0x42AAFF] 賣出
@@ -597,6 +598,7 @@ void doSell(StockPanelState& s) {
     }
     const int count = numberInputDialog(*s.app, held);
     if (count > 0) sellStock(*s.app, st.currentPlayer, stock, count, true);
+    trace::logf("stock trade sell stock=%d count=%d p=%d", stock, count, st.currentPlayer);
 }
 
 int hitButton(int x, int y) {
@@ -706,6 +708,18 @@ bool stockPanelHandler(const SDL_Event* event, void* user) {
 } // namespace
 
 void stockMarketDialog(Application& app) {
+    // [NEW] 主行情面板同源行命中登记（open.stock 鏈；與 stockPickDialog 同一 kSelX/kRowH）
+    {
+        static bool s_regMainRows = false;
+        if (!s_regMainRows) {
+            s_regMainRows = true;
+            for (int r = 1; r <= 12; ++r) {
+                char nm[16];
+                std::snprintf(nm, sizeof(nm), "stock.row.%d", r);
+                debug::registerRegion(nm, kSelX, kRowH * r + 48, kSelW, kRowH);
+            }
+        }
+    }
     // [NEW] named region：0x4754C8 Rect[5] 行情/持股/賣出·買入切换/所有公司資訊/EXIT
     //   （绝对坐标同源，脚本 stock.btn.<0..4>）
     {

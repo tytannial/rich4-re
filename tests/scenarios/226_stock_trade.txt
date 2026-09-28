@@ -1,0 +1,29 @@
+# id: 226_stock_trade
+# covers: [HELP 14] 股票買賣——panel[75] 選行→買入(stock.btn.1)→numkey 股數→buyStock；
+#          賣出(stock.btn.2)→numkey→sellStock（112 冒煙的成交鏈深版）
+# timeout: 90000
+wait idle 1000
+player.bank 0 200000
+day 4
+open.stock
+wait frames 300
+clickr stock.row.2
+wait frames 60
+clickr stock.btn.1
+wait log "number input dialog" 10000
+clickr numkey.1
+wait frames 30
+clickr numkey.0
+wait frames 30
+clickr numkey.ok
+wait log "stock trade buy" 10000
+clickr stock.btn.2
+wait log "number input dialog" 10000
+clickr numkey.5
+wait frames 30
+clickr numkey.ok
+wait log "stock trade sell" 10000
+clickr stock.btn.4
+wait frames 200
+assert state errors == 0
+quit
