@@ -1,0 +1,23 @@
+# id: 234_surrender
+# covers: [HELP 89] 投降 0x411AE0——p0 投降→淘汰+死神召喚對話框(0x4339D9 頭像
+#          dg.face.* 動態登記)→createMapObject(15) 死神掛 victim；
+#          構造=player.spawn 全員入場（跳傘演出由 80_autoplay 覆蓋）
+# quickstart: 0,4,2
+# timeout: 90000
+settings.anim 0
+wait idle 1000
+player.spawn 1
+player.spawn 2
+player.spawn 3
+player.alive 1 1
+player.alive 2 1
+player.alive 3 1
+surrender
+wait log "dialog open name=death_god_summon" 20000
+wait log "deathgod state4 choose" 20000
+clickr dg.face.1
+wait log "deathGod: from=0" 20000
+wait frames 800
+assert log "death god attached to p"
+assert state errors == 0
+quit

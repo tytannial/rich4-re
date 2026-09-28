@@ -714,6 +714,7 @@ bool deathGodHandler(const SDL_Event* event, void* user) {
                 ui.msg.show(app, kTextDeathWho);
             } else if (ui.state == 3) {
                 ui.state = 4; // [RE 0x433206] 显示选择区（setPauseDraw(1) 由重写模态天然阻塞）
+        trace::logf("deathgod state4 choose");
                 deathDrawChoice(ui);
             } else if (ui.state == 5) {
                 // [RE 0x433293] #0041 播完 → panel[20] FLC（音效 59）→ postModalExit
@@ -915,6 +916,16 @@ int deathGodSummonDialog(Application& app, int from) {
         return 0;
     }
     ui.flc.open(std::move(*blob20));
+    // [NEW] named region：候選頭像（deathButtonX 0x4335xx 動態置中同源；state4 命中帶）
+    {
+        char nm[14];
+        for (size_t i = 0; i < candidates.size(); ++i) {
+            std::snprintf(nm, sizeof(nm), "dg.face.%zu", i);
+            debug::registerRegion(nm, deathButtonX(ui, static_cast<int>(i)), kDeathHitY0,
+                                  kDeathBtnW, kDeathHitY1 - kDeathHitY0);
+        }
+    }
+    trace::logf("dialog open name=death_god_summon cands=%zu", candidates.size());
     app.audio().pushSceneMusic(7); // [RE 0x433B1E musicPlayScene(7)]
     const int r = runModal(app, &deathGodHandler, &ui, 100);
     app.audio().resumeSceneMusic();

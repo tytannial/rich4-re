@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "game/app/bank_stay_dialog.h"
+#include "game/app/economy.h"
 #include "game/app/bank_dialog.h"
 #include "game/app/card_bag_dialog.h"
 #include "game/app/card_effects.h"
@@ -1090,6 +1091,36 @@ bool cmdFindEvtCell(Application& app, const std::vector<std::string>& a, std::st
     return true;
 }
 
+// [NEW] surrender：當前玩家投降 0x411AE0（淘汰+死神召喚選受害者）
+bool cmdSurrender(Application& app, const std::vector<std::string>& a, std::string& err) {
+    // [FIX 234] 經 surrenderRequest 標誌交主循環 tick 處理（0x411AE0 真人路徑），
+    //   直呼 surrenderPlayer 會在腳本 step 內嵌套 runModal（死神對話框收不到 TIMER）
+    app.gameState().surrenderRequest = true;
+    return true;
+}
+
+// [NEW] player.spawn <p>：直接入場定位（spawnPlayerAt 0x40829D 純狀態部分，無跳傘演出）
+bool cmdPlayerSpawn(Application& app, const std::vector<std::string>& a, std::string& err) {
+    if (!argCount(a, 1, err, "player.spawn <p>")) return false;
+    GameState& st = app.gameState();
+    const int p = parseInt(a[1]);
+    if (p < 0 || p >= 9) {
+        err = "player.spawn: bad index";
+        return false;
+    }
+    st.pendingSpawnPlayer = 0;  // 構造用：跳過跳傘演出的串行閘（正常由 beginPlayerTurn 清空）
+    spawnPlayerAt(st, p);
+    // 構造用補全：跳傘 FLC 收尾才寫的 sprite/alive 直接置位（=已入場可選為目標/死神候選）
+    Player& sp = st.players[p];
+    sp.spriteX = st.cellEnts[sp.cellEntId].x;
+    sp.spriteY = st.cellEnts[sp.cellEntId].y;
+    sp.alive = static_cast<uint8_t>(sp.alive | 1);
+    st.pendingSpawnPlayer = 0;
+    RICH4_LOGI("debug: player.spawn %d -> cell %u alive=%u", p, st.players[p].cellEntId,
+               st.players[p].alive);
+    return true;
+}
+
 // [NEW] find.lab：找 type==4 行業設施點(研究所) corp 並選中（selected=4000+ci）
 bool cmdFindLab(Application& app, const std::vector<std::string>& a, std::string& err) {
     GameState& st = app.gameState();
@@ -1599,6 +1630,8 @@ const Cmd kCmds[] = {
     {"find.estate", cmdFindEstate},
     {"find.evtcell", cmdFindEvtCell},
     {"find.lab", cmdFindLab},
+    {"player.spawn", cmdPlayerSpawn},
+    {"surrender", cmdSurrender},
     {"find.road", cmdFindRoad},
     {"stock.buy", cmdStockBuy},
     {"sel.owner", cmdSelOwner},
