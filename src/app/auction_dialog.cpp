@@ -31,6 +31,9 @@
 #include "game/app/map_render.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/trace.h"
+#include "game/app/debug/debug.h"
+#include <cstdio>
 #include "game/core/debug_hooks.h"
 #include "game/game_state.h"
 #include "game/platform/audio.h"
@@ -597,6 +600,20 @@ bool auctionHandler(const SDL_Event* event, void* user) {
 
 // [RE 0x43BDE5] runAuction
 bool runAuction(Application& app, int seller, int objId, bool playMusic) {
+    // [NEW] named region：右列 7 按钮（0x475BA2 加价表；auc.btn.0=PASS 1..5=加價 6=放棄，
+    //   幾何=hover 命中 kBtnY[i]±19 @406 同源）+ 開框 trace
+    {
+        static bool s_reg = false;
+        if (!s_reg) {
+            s_reg = true;
+            for (int i = 0; i < 7; ++i) {
+                char nm[16];
+                std::snprintf(nm, sizeof(nm), "auc.btn.%d", i);
+                debug::registerRegion(nm, 406, kBtnY[i] - 19, 110, 38);
+            }
+        }
+    }
+    trace::logf("dialog open name=auction");
     GameState& st = app.gameState();
     if (objId <= 2000 || objId >= 6000) {
         return false;

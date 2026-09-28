@@ -1,0 +1,19 @@
+# id: 222_card_auction
+# covers: [HELP 79] 拍賣卡 id8 0x443225——站地塊→runAuction 0x43BDE5（AI 無人出價=no sale；
+#          auc.btn.1..5 加價=出價態種子相關）；land 先 confirm no 避购地拦截
+# 註：use.card 同步跑完整個拍賣（AI 自動決策收框），人爲 auc.btn.* 僅供出價幹預類場景
+# timeout: 60000
+wait idle 1000
+estate.owner 1 0
+estate.level 1 3
+select estate 1
+land
+wait log "confirm dialog" 8000
+confirm no
+wait log "land cell=" 10000
+give.card 0 8
+use.card auction
+wait log "dialog open name=auction" 10000
+wait log "cardAuction:" 20000
+assert state errors == 0
+quit

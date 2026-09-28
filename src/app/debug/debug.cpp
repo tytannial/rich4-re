@@ -2096,16 +2096,20 @@ void tick(Application& app) {
                 // （否则 assert 卡 pc → 关不掉打开的模态 → 互等死锁，110 实证）
                 for (size_t j = sc.pc + 1; j < sc.steps.size() && j <= sc.pc + 8; ++j) {
                     Step& nx = sc.steps[j];
-                    if (nx.kind == Step::Cmd && !nx.done && stepFirstIsInteractive(nx.a)) {
-                        nx.done = true;
-                        std::string perr;
-                        if (!execLine(app, nx.a, perr)) {
-                            ++g_failures;
-                            RICH4_LOGE("script %s line %d: %s (prefetch)", sc.id.c_str(),
-                                       nx.lineNo, perr.c_str());
-                        }
-                        break;
+                    if (nx.kind != Step::Cmd || nx.done) {
+                        continue;
                     }
+                    if (!stepFirstIsInteractive(nx.a)) {
+                        break;  // [FIX 222] 不可越过未执行的同步步骤（如 use.card 开框）
+                    }
+                    nx.done = true;
+                    std::string perr;
+                    if (!execLine(app, nx.a, perr)) {
+                        ++g_failures;
+                        RICH4_LOGE("script %s line %d: %s (prefetch)", sc.id.c_str(),
+                                   nx.lineNo, perr.c_str());
+                    }
+                    break;
                 }
                 return;
             }
