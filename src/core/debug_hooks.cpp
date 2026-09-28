@@ -1,0 +1,76 @@
+#include "game/core/debug_hooks.h"
+
+#include <array>
+#include <cstring>
+#include <cstdlib>
+
+// [NEW] 测试钩子实现（无原版对应；方案 docs/testing.md §4）
+namespace rich4 {
+namespace dbg {
+
+namespace {
+
+constexpr int kNoInject = -1;
+
+int g_seed = -1;
+std::array<int, SlotCount> g_inject;
+const char* const kSlotNames[SlotCount] = {
+    "any",   "dice",    "roulette", "card",   "item",     "lottery", "news",  "fate",
+    "magic", "minigame", "ai",      "aitrade", "corp",    "god",     "npc",   "spawn",
+    "jackpot", "luck",  "shop",     "stock",   "auction",
+};
+
+} // namespace
+
+void setSeed(int seed) { g_seed = seed; }
+int seed() { return g_seed; }
+
+void inject(Slot s, int value) {
+    if (s >= 0 && s < SlotCount) {
+        g_inject[static_cast<size_t>(s)] = value;
+    }
+}
+
+void clearInject() { g_inject.fill(kNoInject); }
+
+bool hasInject(Slot s) {
+    return s >= 0 && s < SlotCount && g_inject[static_cast<size_t>(s)] != kNoInject;
+}
+
+const char* slotName(Slot s) {
+    return (s >= 0 && s < SlotCount) ? kSlotNames[static_cast<size_t>(s)] : "?";
+}
+
+bool slotByName(const char* name, Slot& out) {
+    for (int i = 0; i < SlotCount; ++i) {
+        if (std::strcmp(kSlotNames[i], name) == 0) {
+            out = static_cast<Slot>(i);
+            return true;
+        }
+    }
+    return false;
+}
+
+int raw(Slot s) {
+    const int iv = (s >= 0 && s < SlotCount) ? g_inject[static_cast<size_t>(s)] : kNoInject;
+    if (iv != kNoInject) {
+        g_inject[static_cast<size_t>(s)] = kNoInject;
+        return iv;
+    }
+    const int av = g_inject[SlotAny];
+    if (av != kNoInject) {
+        g_inject[SlotAny] = kNoInject;
+        return av;
+    }
+    return std::rand();
+}
+
+int roll(Slot s, int n) {
+    if (n <= 0) {
+        return 0;
+    }
+    return ((raw(s) % n) + n) % n;
+}
+
+} // namespace dbg
+} // namespace rich4

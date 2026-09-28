@@ -10,6 +10,7 @@
 #include "game/app/object_tip.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/clock.h"
 #include "game/render/cursor.h"
 #include "game/render/surface.h"
 
@@ -257,7 +258,7 @@ bool targetSelHandler(const SDL_Event* event, void* user) {
     //   v7 = (mapRotation + 2*edgeDir - 2) & 7，视口中心按 16.16 向量位移，clamp [220,2084]
     if (event->type == kModalTimerEvent) {
         if (c.scrollMode && c.edgeDir != 0) {
-            const uint64_t now = SDL_GetTicks();
+            const uint64_t now = nowMs();
             if (now - c.lastScrollMs >= kScrollIntervalMs) {
                 c.lastScrollMs = now;
                 c.scrollSpeed = std::min(kScrollSpeedMax, c.scrollSpeed + 4);
@@ -296,7 +297,7 @@ bool targetSelHandler(const SDL_Event* event, void* user) {
                     if (c.edgeDir != dir) {
                         c.edgeDir = dir;
                         c.scrollSpeed = kScrollSpeedInit;
-                        c.lastScrollMs = SDL_GetTicks() - kScrollIntervalMs;  // 立即滚一次
+                        c.lastScrollMs = nowMs() - kScrollIntervalMs;  // 立即滚一次
                     }
                     setCursor(c, kEdgeCursor[dir], 1, 0);  // 方向箭头光标
                     return true;

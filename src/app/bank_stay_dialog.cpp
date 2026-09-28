@@ -16,6 +16,7 @@
 #include "game/app/number_input_dialog.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/debug_hooks.h"
 #include "game/game_state.h"
 #include "game/platform/audio.h"
 #include "game/render/blit.h"
@@ -1240,7 +1241,7 @@ void bankStayDialog(Application& app, int cellEntId) {
         }
         return;
     }
-    const int r = std::rand();
+    const int r = dbg::raw(dbg::SlotAi);
     if ((r % 10) == 0 || pl.bank + pl.cash < 30000) { // [RE 0x436893]
         if (pl.bankFinanceFlags == 0 && pl.aiLoanPct != 0) { // [RE 0x4368CE]
             const int32_t v = static_cast<int32_t>(static_cast<int64_t>(assets) * pl.aiLoanPct / 100);

@@ -42,6 +42,7 @@
 #include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/debug_hooks.h"
 #include "game/game_state.h"
 #include "game/platform/audio.h"
 #include "game/render/blit.h"
@@ -444,7 +445,7 @@ bool magicHandler(const SDL_Event* event, void* user) {
         // [RE 0x432713] 状态 4：倒计时（冥想闭眼 1s）→ 随机条件
         if (ui.state == 4 && ui.countdown > 0 && --ui.countdown == 0) {
             do {
-                ui.cond = std::rand() % 12;
+                ui.cond = dbg::roll(dbg::SlotMagic, 12);
                 ui.targets = magicSelectTargets(app, ui.cond);
             } while (ui.targets.empty());
             // [RE 0x432791] 重绘女巫全身帧（**重新睁眼**）后再叠条件图标（图标落点与女巫下半重叠）
@@ -834,7 +835,7 @@ void magicHouseVisit(Application& app) {
         // ===== AI/托管（[RE 0x43390B]）=====
         int cond = 0;
         do {
-            cond = std::rand() % 12;
+            cond = dbg::roll(dbg::SlotMagic, 12);
             targets = magicSelectTargets(app, cond);
         } while (targets.empty());
         for (int t : targets) {
@@ -844,7 +845,7 @@ void magicHouseVisit(Application& app) {
             }
         }
         if (pen < 0) {
-            pen = std::rand() % 11; // 0..10
+            pen = dbg::roll(dbg::SlotMagic, 11); // 0..10
             if (pen == 6) {
                 pen = 7; // 排除自肥档
             }

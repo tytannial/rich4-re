@@ -48,6 +48,9 @@
 #include "game/app/trade_market.h"
 #include "game/core/encoding.h"
 #include "game/core/log.h"
+#include "game/core/trace.h"
+#include "game/core/debug_hooks.h"
+#include "game/core/clock.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
 #include "game/render/text.h"
@@ -954,7 +957,7 @@ void updateParachute(Application& app) {
         return;
     }
     // 按真实时间推进（原版 sub_45144F 用 timeGetTime，与帧率无关）
-    const uint32_t now = static_cast<uint32_t>(SDL_GetTicks());
+    const uint32_t now = static_cast<uint32_t>(nowMs());
     const uint32_t interval = static_cast<uint32_t>(std::max(1, st.parachute.speedMs()));
     if (st.parachuteLastMs == 0) {
         st.parachuteLastMs = now;
@@ -1043,6 +1046,8 @@ void startRouteHighlight(GameState& st, const Estate& es) {
     collect(es.owner);
     collect(ally); // [RE 0x419C44/0x419BE2] 同盟者同组地块
     st.highlightFrame = (st.highlightEstates.size() > 1) ? 0 : -1;
+    trace::logf("hl owner=%u ally=%u type=%u estates=%d", es.owner, ally, es.type,
+                static_cast<int>(st.highlightEstates.size()));
 }
 
 // [RE 0x451985] playHighlightBlink：阻塞播放联动闪烁（先闪烁、后弹收费提示）
@@ -1083,7 +1088,7 @@ void playHighlightBlink(Application& app, bool preRedraw) {
     auto waitAudio = [&app](int ms) {
         for (int t = 0; t < ms; t += 5) {
             app.audio().update();
-            SDL_Delay(5);
+            delayMs(5);
         }
     };
     auto presentFrame = [&](int f) {
@@ -1137,6 +1142,8 @@ void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, boo
     st.eventFlcX = x;
     st.eventFlcY = y;
     st.eventFlcActive = true;
+    trace::logf("flc idx=%d x=%d y=%d sound=%d freeze=%d switch=%d (RE 0x45144F)", mkfIndex, x, y,
+                soundId, freeze ? 1 : 0, switchFrame);
     const bool preserve = switchFrame > 0;
     // 动画开始前的视口中心（= 原版 dword_48B2AC"上次绘制视口"，传送不改它）
     const int lockViewX = st.viewX;
@@ -1212,12 +1219,13 @@ void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, boo
         }
         for (int t = 0; t < interval; t += 5) {
             app.audio().update();
-            SDL_Delay(5);
+            delayMs(5);
         }
     }
     if (!freeze) {
         st.eventFlcActive = false;
     }
+    trace::logf("flc done idx=%d frames=%d", mkfIndex, frameNo);
     RICH4_LOGI("eventFlc: data.mkf[%d] played @(%d,%d)%s%s (RE 0x45144F)", mkfIndex, x, y,
                freeze ? " frozen" : "", switchFrame > 0 ? " switch" : "");
 }
@@ -1328,7 +1336,7 @@ int drawFreeCard(GameState& st, int player) {
     if (n == 0) {
         return 0;
     }
-    const int card = list[std::rand() % n] + 1;
+    const int card = list[dbg::roll(dbg::SlotCard, n)] + 1;
     giveCardToBag(st, player, card);
     return card;
 }
@@ -1380,12 +1388,12 @@ void cardGetDraw(CardGetCtx& ctx) {
 bool cardGetHandler(const SDL_Event* event, void* user) {
     CardGetCtx& ctx = *static_cast<CardGetCtx*>(user);
     if (!event) {
-        ctx.startMs = SDL_GetTicks();
+        ctx.startMs = nowMs();
         cardGetDraw(ctx);
         return true;
     }
     if (event->type == kModalTimerEvent) {
-        if (SDL_GetTicks() - ctx.startMs >= 1500) {
+        if (nowMs() - ctx.startMs >= 1500) {
             ctx.app->events().requestExit(0);
         } else {
             cardGetDraw(ctx);
@@ -1398,6 +1406,7 @@ bool cardGetHandler(const SDL_Event* event, void* user) {
 
 void showCardGet(Application& app, int cardId, const char* text) {
     GameState& st = app.gameState();
+    trace::logf("cardget id=%d text=\"%s\"", cardId, text ? text : "");
     CardGetCtx ctx;
     ctx.app = &app;
     ctx.text = text;
@@ -1547,7 +1556,7 @@ int angelUpgrade(Application& app, uint16_t objId) {
             } else {
                 Player& pl = st.players[st.currentPlayer];
                 if ((pl.alive & 6) != 0) {
-                    cp.type = static_cast<uint8_t>(std::rand() % 4 + 1);
+                    cp.type = static_cast<uint8_t>(dbg::roll(dbg::SlotCorp, 4) + 1);
                 } else {
                     const int r = selectFacilityDialog(app, 0);
                     cp.type = static_cast<uint8_t>(r >= 0 ? r : 0);
@@ -1935,6 +1944,7 @@ int landingEvent(Application& app, uint16_t cellEntId) {
     const CellEnt& ce = st.cellEnts[cellEntId];
     const uint16_t objId = ce.special; // +32
     const uint8_t cellType = static_cast<uint8_t>(ce.occMask & 0xFF); // +36 低字节
+    trace::logf("land cell=%u obj=%u type=%u p=%d", cellEntId, objId, cellType, p);
     // [RE 0x475299] g_cellTypeSound[type] → 音效槽
     static const uint8_t kCellTypeSound[17] = {9, 0, 10, 10, 10, 10, 10, 10, 10,
                                                10, 16, 16, 16, 16, 10, 10, 10};
@@ -2352,7 +2362,7 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                 uint8_t facility = 0;
                 bool chosen = false;
                 if ((pl.alive & 6) != 0) {
-                    facility = static_cast<uint8_t>(std::rand() % 4 + 1); // [RE 0x41A24D]
+                    facility = static_cast<uint8_t>(dbg::roll(dbg::SlotCorp, 4) + 1); // [RE 0x41A24D]
                     chosen = true;
                 } else if (pl.alive == 1) {
                     const int r = selectFacilityDialog(app, 0); // [RE 0x41A22A]
@@ -2710,7 +2720,7 @@ int rollDice(Application& app) {
     } else {
         const int n = std::max(1, static_cast<int>(st.players[p].diceCount));
         for (int i = 0; i < n; ++i) {
-            const int v = std::rand() % 6 + 1;
+            const int v = dbg::roll(dbg::SlotDice, 6) + 1;
             st.diceValues[i] = v;
             sum += v;
         }
@@ -2780,7 +2790,7 @@ bool moveOneStep(Application& app) {
                 }
                 exitBit >>= 1;
             }
-            uint16_t nextId = n ? cand[std::rand() % n] : pl.prevCellEnt;
+            uint16_t nextId = n ? cand[dbg::roll(dbg::SlotNpc, n)] : pl.prevCellEnt;
             if (nextId == 0 || nextId >= st.cellEnts.size()) {
                 nextId = pl.cellEntId;
             }
@@ -2834,7 +2844,7 @@ bool moveOneStep(Application& app) {
     //   原版游戏循环帧率低，走路动画约 16fps；按真实时间门控换帧，
     //   避免 16ms tick（~60fps）下动画循环偏快。
     {
-        const uint64_t now = SDL_GetTicks();
+        const uint64_t now = nowMs();
         if (now - st.walkAnimLastMs >= 60) {
             st.walkAnimLastMs = now;
             const int slot = 2 * st.playerActionState[p] + st.playerMoveGroup[p];
@@ -3027,7 +3037,7 @@ void beginPlayerTurn(Application& app) {
             tradeAiTurn(app);
             // [RE 0x418E18..0x418E21] rand()&1 → 用卡(useCardFlow 0x441BAA)/道具(itemPanelFlow 0x447D97)
             //   两函数内部自判 alive&6 + aiCardItem bit0/1；AI 用卡链见 ai_card.cpp
-            if ((std::rand() & 1) != 0) {
+            if (dbg::roll(dbg::SlotAi, 2) != 0) {
                 useCardDialog(app);
             } else {
                 itemBagDialog(app);
@@ -3133,7 +3143,7 @@ void startPlayerMove(Application& app) {
             st.playerActionState[p] = 0;
             st.playerActionWait[p] = -126;
         } else {
-            st.remainingSteps = st.npcSlots[s].timerD ? 1 : (std::rand() % 9 + 2);
+            st.remainingSteps = st.npcSlots[s].timerD ? 1 : (dbg::roll(dbg::SlotNpc, 9) + 2);
             st.playerActionState[p] = 1;
         }
         if (st.playerActionState[p]) {
@@ -3471,7 +3481,7 @@ void turnToAdjacentCell(GameState& st, int p) {
             cand[n++] = id;
         }
     }
-    pl.prevCellEnt = n != 0 ? cand[std::rand() % n] : 0;
+    pl.prevCellEnt = n != 0 ? cand[dbg::roll(dbg::SlotNpc, n)] : 0;
 }
 
 // [RE 0x41C84F] updatePlayerStates：回合开始状态倒计时（nextPlayer 切换玩家后调用）
@@ -4122,7 +4132,7 @@ void updateGameState(Application& app) {
                         st.diceAnim.nextFrame();
                     } else {
                         st.remainingSteps = rollDice(app);
-                        st.diceHoldStartMs = SDL_GetTicks();
+                        st.diceHoldStartMs = nowMs();
                         st.dicePhase = 2;
                     }
                 }
@@ -4132,7 +4142,7 @@ void updateGameState(Application& app) {
                         // [RE 0x41962F] FLC 结束 → 第二次落地音效槽 2（dword_48235A）
                         app.audio().playEffectSlot(2);
                         st.remainingSteps = rollDice(app); // 滚动结束 → 最终点数
-                        st.diceHoldStartMs = SDL_GetTicks();
+                        st.diceHoldStartMs = nowMs();
                         st.dicePhase = 2;
                     } else if (!st.diceLandPlayed && st.diceAnim.frameIndex() == 30) {
                         // [RE 0x451387] FLC 第30帧（落地瞬间）→ 第一次落地音效槽 2
@@ -4145,7 +4155,7 @@ void updateGameState(Application& app) {
             }
             // 阶段2：点数停留 500ms（sub_45285E），角色仍保持扔骰末帧
             st.showDice = true;
-            if (SDL_GetTicks() - st.diceHoldStartMs >= 500) {
+            if (nowMs() - st.diceHoldStartMs >= 500) {
                 // [RE 0x40D7C4 case2] 骰子动画结束、转移动前播放：
                 //   ① 载具/移动槽 = 特殊组?15 : (载具&3)+11（dword_4749D4）
                 //   ② 音效槽 3（dword_482362，当前玩家<4 且 cellNo 非0）

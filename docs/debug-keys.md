@@ -4,6 +4,8 @@
 > 实现：`src/app/debug_keys.cpp` / `include/game/app/debug_keys.h`；
 > 开关 `GameState.debugMode`（`src/main.cpp` 解析 `--debug`）；
 > 接入点 `src/app/game_loop.cpp` 的 `SDL_EVENT_KEY_DOWN` 分支。
+> **headless 自动化测试**（虚拟时钟/随机注入/演出 trace/脚本断言）见 `docs/testing.md`；
+> 命令行测试钩子 `--seed / --headless / --test-clock / --trace / --trace-out` 亦记录于该档。
 
 ## 启用
 

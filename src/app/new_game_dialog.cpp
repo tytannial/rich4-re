@@ -4,6 +4,7 @@
 #include "game/app/new_game_tables.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/debug_hooks.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
 #include "game/render/text.h"
@@ -509,7 +510,7 @@ void fillOneAi(DialogState& st) {
     if (n <= 0) {
         return;
     }
-    const int pick = candidates[std::rand() % n];
+    const int pick = candidates[dbg::roll(dbg::SlotSpawn, n)];
     if (!selectCharacter(st, st.selectedCount, pick)) {
         return;
     }

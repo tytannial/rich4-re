@@ -51,6 +51,8 @@
 #include "game/app/message_dialog.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/debug_hooks.h"
+#include "game/core/clock.h"
 #include "game/game_state.h"
 #include "game/platform/audio.h"
 #include "game/render/blit.h"
@@ -245,7 +247,7 @@ void digInitLayout(DigCtx& ui) {
     int v0 = 64;
     for (int t = 0; t < 5; ++t) {
         for (int k = 0; k < kDigCounts[t]; ++k) {
-            const int pick = static_cast<int>((static_cast<int64_t>(v0) * std::rand()) >> 15);
+            const int pick = static_cast<int>((static_cast<int64_t>(v0) * dbg::raw(dbg::SlotMinigame)) >> 15);
             int n = 0;
             bool placed = false;
             for (int r = 0; r < 9 && !placed; ++r) {
@@ -1000,7 +1002,7 @@ bool moneyHandler(const SDL_Event* event, void* user) {
                     ui.dollExpr = s >= 60 ? 3 : (s >= 50 ? 2 : (s >= 40 ? 0 : 1));
                 }
                 ui.uiState = 3;
-                ui.settleMs = SDL_GetTicks();
+                ui.settleMs = nowMs();
             }
             if (ui.boomActive) {  // [RE 0x41515D] 爆炸 FLC 逐帧 → 结算
                 if (!ui.boomOk || decodeFlcOnce(ui.boom)) {
@@ -1010,7 +1012,7 @@ bool moneyHandler(const SDL_Event* event, void* user) {
             }
             drawMoney(ui, true);
         } else {
-            if (SDL_GetTicks() - ui.settleMs >= 2000) {  // [RE 0x415144] 2s → 退出
+            if (nowMs() - ui.settleMs >= 2000) {  // [RE 0x415144] 2s → 退出
                 app.events().requestExit(moneyScore(ui));
                 return true;
             }
@@ -1307,9 +1309,9 @@ bool balloonHandler(const SDL_Event* event, void* user) {
             if (ui.gamePhase == 2) {
                 ui.state = 3;
                 app.cursor().select(41, 1, 0);
-                ui.settleMs = SDL_GetTicks();
+                ui.settleMs = nowMs();
             }
-        } else if (SDL_GetTicks() - ui.settleMs >= 2000) {
+        } else if (nowMs() - ui.settleMs >= 2000) {
             app.events().requestExit(ui.score);
             return true;
         }
@@ -1387,7 +1389,7 @@ void miniGameVisit(Application& app, int cellType) {
     }
     if (score < 0) {
         // [RE 0x415457] 共享 else：score = rand()%20+50（50..69）
-        score = std::rand() % 20 + 50;
+        score = dbg::roll(dbg::SlotMinigame, 20) + 50;
         char text[64];
         std::snprintf(text, sizeof(text), "得點券%d點", score);  // [RE 0x463797 cp950]
         showMessage(app, text, 2000);                            // [RE 0x41548E]

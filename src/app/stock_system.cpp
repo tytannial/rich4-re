@@ -9,6 +9,7 @@
 #include "game/app/map_tables.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/debug_hooks.h"
 
 namespace rich4 {
 
@@ -111,7 +112,7 @@ void stockTick(Application& app) {
     if (st.stockMarketClosed != 0 || stockIsHoliday(st)) {
         return;
     }
-    st.stockGlobalDrift = static_cast<float>((std::rand() - 0x4000) / 4097.0);
+    st.stockGlobalDrift = static_cast<float>((dbg::raw(dbg::SlotStock) - 0x4000) / 4097.0);
     double sum = 0.0;
     for (int i = 0; i < 12; ++i) {
         float* s = st.stocks[i];
@@ -121,7 +122,7 @@ void stockTick(Application& app) {
         } else if (st.stockNews[i]) {
             s[7] = ((st.stockNews[i] & 0xF0) != 0) ? 10.0f : -10.0f;
         } else {
-            const float noise = static_cast<float>((std::rand() - 0x4000) / 1171.0);
+            const float noise = static_cast<float>((dbg::raw(dbg::SlotStock) - 0x4000) / 1171.0);
             s[8] = noise;
             s[7] += noise * s[6];        // 动量 += 个股扰动 × 波动率
             s[7] += st.stockGlobalDrift; // 动量 += 全局扰动
@@ -329,7 +330,7 @@ void refreshBankStockShares(Application& app) {
             st.stockVolume[i] = res;
         } else {
             st.stockVolume[i] =
-                static_cast<int32_t>(static_cast<double>(res) * ((std::rand() % 2000 + 1000) / 10000.0));
+                static_cast<int32_t>(static_cast<double>(res) * ((dbg::roll(dbg::SlotStock, 2000) + 1000) / 10000.0));
         }
     }
 }

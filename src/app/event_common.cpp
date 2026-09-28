@@ -16,6 +16,8 @@
 #include "game/application.h"
 #include "game/core/encoding.h"
 #include "game/core/log.h"
+#include "game/core/debug_hooks.h"
+#include "game/core/clock.h"
 #include "game/game_state.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
@@ -68,7 +70,7 @@ void resetView(Application& app) {
 void eventAudioWait(Application& app, int ms) {
     for (int t = 0; t < ms; t += 5) {
         app.audio().update();
-        SDL_Delay(5);
+        delayMs(5);
     }
 }
 
@@ -146,7 +148,7 @@ std::vector<int> collectBuiltEstateIndices(const GameState& st) {
 }
 
 int pickRandom(const std::vector<int>& list) {
-    return list.empty() ? 0 : list[static_cast<size_t>(std::rand()) % list.size()];
+    return list.empty() ? 0 : list[static_cast<size_t>(dbg::roll(dbg::SlotAny, static_cast<int>(list.size())))];
 }
 
 std::string estateNameUtf8(const Estate& es) {

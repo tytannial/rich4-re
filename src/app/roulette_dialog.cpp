@@ -9,6 +9,8 @@
 #include "game/app/game_loop.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/trace.h"
+#include "game/core/debug_hooks.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
 #include "game/render/text.h"
@@ -162,7 +164,7 @@ int roulettePrompt(Application& app, int theme, const char* arg) {
     }
     rs.table = kRouletteTable[t];
     std::snprintf(rs.text, sizeof(rs.text), kRouletteText[t], arg ? arg : "");
-    rs.cell = std::rand() % 12; // [RE 0x43F7C6] dword_48C50C = rand()%12
+    rs.cell = dbg::roll(dbg::SlotRoulette, 12); // [RE 0x43F7C6] dword_48C50C = rand()%12
     const int cp = st.currentPlayer;
     rs.humanCtl = cp >= 0 && cp < 4 && st.players[cp].alive == 1 && st.players[cp].state37 == 0;
     RICH4_LOGI("roulette prompt: theme=%d arg=%s human=%d (RE 0x44090E)", t, arg ? arg : "",
@@ -170,6 +172,7 @@ int roulettePrompt(Application& app, int theme, const char* arg) {
     app.audio().playEffect(52); // [RE 0x475D4C] 转盘音效
     const int value = runModal(app, rouletteHandler, &rs, kFrameMs);
     RICH4_LOGI("roulette result: cell=%d value=%d (RE 0x43F7C6)", rs.cell, value);
+    trace::logf("roulette theme=%d cell=%d value=%d", t, rs.cell, value);
     return value;
 }
 

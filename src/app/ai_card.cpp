@@ -10,6 +10,7 @@
 #include "game/app/target_select_dialog.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/debug_hooks.h"
 #include "game/game_state.h"
 
 namespace rich4 {
@@ -337,7 +338,7 @@ int tgtRebuild(GameState& st) {  // [RE 0x41ED3E]
         }
         const Corp& cp = st.corps[i];
         if (cp.owner == static_cast<uint8_t>(cur + 1) && cp.type == 0 && cp.sub == 1) {
-            st.aiCardTarget = std::rand() % 4 + 1;  // [RE] 随机设施类型
+            st.aiCardTarget = dbg::roll(dbg::SlotAi, 4) + 1;  // [RE] 随机设施类型
             return 1;
         }
         if (cp.owner == 0 || cp.owner == static_cast<uint8_t>(cur + 1) || cp.type == 0) {
@@ -416,7 +417,7 @@ int tgtAngel(GameState& st) {  // [RE 0x41F037] 自己同段 ≥3 块（type0 le
     if (nc == 0) {
         return 0;
     }
-    st.aiCardTarget = 2000 + cand[std::rand() % nc];
+    st.aiCardTarget = 2000 + cand[dbg::roll(dbg::SlotAi, nc)];
     return 1;
 }
 
@@ -737,7 +738,7 @@ int tgtSleepOrFrame(GameState& st) {  // [RE 0x41FE6F] 可见对手（非冬眠/
     if (nc == 0) {
         return 0;
     }
-    const int pick = (creditorIdx >= 0) ? cand[creditorIdx] : cand[std::rand() % nc];
+    const int pick = (creditorIdx >= 0) ? cand[creditorIdx] : cand[dbg::roll(dbg::SlotAi, nc)];
     st.aiCardTarget = 0x8000 | (1 << pick);
     return 1;
 }
@@ -1039,7 +1040,7 @@ int aiCardSelect(Application& app, int cardId) {
     if (diff >= 2) {
         return 0;
     }
-    if (diff == 1 && (std::rand() % 3) != 0) {
+    if (diff == 1 && dbg::roll(dbg::SlotAi, 3) != 0) {
         return 0;
     }
     st.aiCardTarget = 0;
@@ -1060,7 +1061,7 @@ int aiCardSelect(Application& app, int cardId) {
         case 12: r = tgtDemolish(st); break;
         case 13: r = tgtSteal(st); break;
         case 14: r = tgtStay(st); break;
-        case 15: r = (std::rand() % 4 == 0) ? 1 : 0; break;  // [RE 0x41FE4E]
+        case 15: r = (dbg::roll(dbg::SlotAi, 4) == 0) ? 1 : 0; break;  // [RE 0x41FE4E]
         case 16: case 17: r = tgtSleepOrFrame(st); break;
         case 18: case 19: case 20: case 21:
             return 0;  // [RE 表项 0x41E6E3] 被动卡：AI 不主动使用

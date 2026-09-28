@@ -1,7 +1,9 @@
 #include "game/app/event_stack.h"
 
 #include "game/application.h"
+#include "game/core/clock.h"
 #include "game/core/log.h"
+#include "game/core/trace.h"
 
 namespace rich4 {
 
@@ -58,6 +60,8 @@ int runModal(Application& app, EventStack::Handler handler, void* user, uint32_t
     //       SetTimer/WM_TIMER → 循环内按 tickMs 合成 SDL_EVENT_TIMER（选人界面动画用）
     app.events().push(handler, user);
     app.events().clearExit();
+    trace::logf("modal push h=%p tick=%u depth=%d", reinterpret_cast<const void*>(handler),
+                tickMs, app.events().depth());
     // 保存外层 timer 间隔：嵌套模态（如 settingsDialog）返回后需恢复，
     // 否则外层游戏内循环（16ms tick）的定时器会被清零而停止
     const uint32_t savedTimer = app.events().timerInterval();
@@ -67,14 +71,20 @@ int runModal(Application& app, EventStack::Handler handler, void* user, uint32_t
         // （处理器可在此时通过 setTimer 调整间隔，如选人界面状态切换 100ms→50ms）
         handler(nullptr, user);
     }
-    uint64_t nextTick = SDL_GetTicks() + app.events().timerInterval();
+    uint64_t nextTick = nowMs() + app.events().timerInterval();
     while (app.running() && !app.events().exitRequested()) {
         app.pumpEvents();
         app.renderFrame();
         const uint32_t interval = app.events().timerInterval();
         if (interval > 0) {
-            const uint64_t now = SDL_GetTicks();
-            if (now >= nextTick) {
+            // [NEW] 虚拟时钟（headless 测试）：每轮直接步进 interval 并派发 timer，
+            //   不等墙钟（正常模式透传原逻辑，行为零变化）
+            const bool step = virtualClock();
+            if (step) {
+                clockAdvanceMs(interval);
+            }
+            const uint64_t now = nowMs();
+            if (step || now >= nextTick) {
                 nextTick = now + interval;
                 SDL_Event timerEvent{};
                 timerEvent.type = kModalTimerEvent;
@@ -86,6 +96,7 @@ int runModal(Application& app, EventStack::Handler handler, void* user, uint32_t
     app.events().setTimer(savedTimer);
     app.events().pop();
     const int result = app.events().exitResult();
+    trace::logf("modal pop h=%p result=%d", reinterpret_cast<const void*>(handler), result);
     // 消费退出请求：原版 WM_USER+2 消息被局部消息泵取走，不会影响外层模态
     app.events().clearExit();
     return result;

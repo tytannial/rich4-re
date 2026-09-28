@@ -1,6 +1,7 @@
 #include "game/platform/audio.h"
 
 #include "game/core/log.h"
+#include "game/core/trace.h"
 #include "game/resource/mkf.h"
 
 #include <SDL3/SDL.h>
@@ -339,6 +340,7 @@ void Audio::update() {
 }
 
 bool Audio::playEffect(int effectId) {
+    trace::logf("sfx play id=%d", effectId);
     if (!m_impl->stream || !m_effectMkf || m_effectVolume <= 0) {
         return false;
     }
@@ -375,6 +377,7 @@ bool Audio::playEffect(int effectId) {
 // [RE 0x4542CE(handle, 1)] 循环播放专用 buffer（第二参 = DSBPLAY_LOOPING；老虎机滚动音
 //   dword_475D3C）：同 id 旧循环先停（单 buffer 重播语义），直至 stopEffect
 bool Audio::playEffectLooping(int effectId) {
+    trace::logf("sfx play id=%d looping=1", effectId);
     stopEffect(effectId);
     if (!playEffect(effectId)) {
         return false;
@@ -385,6 +388,7 @@ bool Audio::playEffectLooping(int effectId) {
 
 // [RE 0x4542E9] 按 Effect.mkf 索引停止声部（老虎机 case8 停滚动音）
 void Audio::stopEffect(int effectId) {
+    trace::logf("sfx stop id=%d", effectId);
     auto& voices = m_impl->voices;
     voices.erase(std::remove_if(voices.begin(), voices.end(),
                                 [effectId](const Impl::Voice& v) { return v.id == effectId; }),
@@ -392,6 +396,7 @@ void Audio::stopEffect(int effectId) {
 }
 
 bool Audio::playEffectSlot(int slot) {
+    trace::logf("sfx slot=%d play", slot);
     if (slot < 0 || slot >= 24) {
         return false;
     }
@@ -405,6 +410,7 @@ bool Audio::playEffectSlot(int slot) {
 }
 
 void Audio::stopEffectSlot(int slot) {
+    trace::logf("sfx slot=%d stop", slot);
     auto& voices = m_impl->voices;
     voices.erase(std::remove_if(voices.begin(), voices.end(),
                                 [slot](const Impl::Voice& v) { return v.slot == slot; }),
@@ -414,6 +420,7 @@ void Audio::stopEffectSlot(int slot) {
 // [RE 0x4542CE(handle,1)] 槽循环播放（移动音/機器娃娃）：
 //   同槽替换 + looping 标记 + slot 归属（stopEffectSlot 可停）
 bool Audio::playEffectSlotLooping(int slot) {
+    trace::logf("sfx slot=%d play looping=1", slot);
     if (slot < 0 || slot >= 24) {
         return false;
     }
@@ -432,6 +439,7 @@ bool Audio::playEffectSlotLooping(int slot) {
 
 // [RE 0x45441A] 播放语音（voiceId = Speaking.mkf 索引；'#NNNN' 前缀数字）
 bool Audio::playVoice(int voiceId) {
+    trace::logf("voice id=%d", voiceId);
     if (!m_impl->stream || !m_speakingMkf || m_effectVolume <= 0) {
         return false; // 原版 g_effectVolume 为 0 时 sub_45441A 不播
     }

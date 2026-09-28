@@ -2,6 +2,8 @@
 
 #include "game/app/date_dialog.h"
 #include "game/application.h"
+#include "game/core/clock.h"
+#include "game/core/debug_hooks.h"
 #include "game/core/log.h"
 
 #include <cstdio>
@@ -17,7 +19,9 @@ bool gameInit(Application& app) {
     //       SetDisplayMode(640,480,16) → SDL 窗口 + 逻辑分辨率（Application::init）
 
     // [RE 0x4015D6] srand(GetTickCount())
-    std::srand(static_cast<unsigned>(SDL_GetTicks()));
+    // [NEW] --seed 固定随机序列（headless 可复现；未提供则保持原版 tick 播种语义）
+    std::srand(dbg::seed() >= 0 ? static_cast<unsigned>(dbg::seed())
+                                : static_cast<unsigned>(nowMs()));
 
     // [RE 0x4502FE] 打开 MKF（原版资源管理器按需解压，当前用 MkfArchive 占位）
     // 原版: 0x4015D6 中 sub_4502FE("data.mkf"/"speaking.mkf"/"panel.mkf"/"effect.mkf")

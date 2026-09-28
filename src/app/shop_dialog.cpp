@@ -21,6 +21,7 @@
 #include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/debug_hooks.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
 #include "game/render/text.h"
@@ -791,7 +792,7 @@ void shopOwnerGift(Application& app, int p) {
     char text[96];
     const char* name = nullptr;
     int price = 0;
-    if (std::rand() & 1) {
+    if (dbg::roll(dbg::SlotShop, 2) != 0) {
         const int item = drawGiftCard(app, p); // [RE 0x445ADA] 1-based / 0=池空
         if (item == 0) {
             return; // 原版池空时 0 索引别名到烏龜卡（重写跳过）
@@ -834,7 +835,7 @@ void shopOpenUi(Application& app, int specIdx) {
     // [RE 0x42EAF7..0x42EBFE]
     uint8_t stock[30];
     std::memcpy(stock, st.propStock, sizeof stock);
-    const int n = std::rand() % 10 + 6;
+    const int n = dbg::roll(dbg::SlotShop, 10) + 6;
     for (int i = 0; i < n; ++i) {
         uint8_t pool[128];
         int cnt = 0;
@@ -846,7 +847,7 @@ void shopOpenUi(Application& app, int specIdx) {
         if (cnt == 0) {
             break; // 原版无守卫（v42 越界风险），重写防越界
         }
-        const int pick = pool[std::rand() % cnt] + 1;
+        const int pick = pool[dbg::roll(dbg::SlotShop, cnt)] + 1;
         s.cardsForSale[i] = static_cast<uint8_t>(pick);
         --stock[pick - 1];
     }

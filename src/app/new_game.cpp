@@ -10,6 +10,7 @@
 #include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/debug_hooks.h"
 #include "game/render/raw_bitmap.h"
 #include "game/render/surface.h"
 
@@ -84,7 +85,7 @@ void shuffleIndices(uint8_t* out, int n) {
     uint8_t pool[64] = {};
     int remaining = n;
     for (int i = 0; i < n; ++i) {
-        int pick = std::rand() % remaining;
+        int pick = dbg::roll(dbg::SlotSpawn, remaining);
         int idx = 0;
         for (; idx < n; ++idx) {
             if (!pool[idx]) {

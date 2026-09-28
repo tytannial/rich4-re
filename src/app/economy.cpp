@@ -20,6 +20,8 @@
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
 #include "game/core/log.h"
+#include "game/core/debug_hooks.h"
+#include "game/core/clock.h"
 #include "game/render/blit.h"
 
 namespace rich4 {
@@ -277,7 +279,7 @@ int pickRandomActiveTarget(const GameState& st, int exclude) {
     if (n == 0) {
         return -1;
     }
-    return ids[std::rand() % n];
+    return ids[dbg::roll(dbg::SlotAny, n)];
 }
 
 // [RE 0x40E14D] releaseCellTableSlot = deleteMapObject
@@ -589,7 +591,7 @@ void eliminatePlayer(Application& app, int p) {
         playEventFlc(app, 555, 0, 40, 100);
         for (int t = 0; t < 2000; t += 5) {
             app.audio().update();
-            SDL_Delay(5);
+            delayMs(5);
         }
         st.currentPlayer = oldCur;
     }
@@ -685,7 +687,7 @@ void eliminatePlayer(Application& app, int p) {
         for (int t = 0; t < 3; ++t) {
             size_t pick = 0;
             do {
-                pick = static_cast<size_t>(std::rand()) % auctionIds.size();
+                pick = static_cast<size_t>(dbg::roll(dbg::SlotAuction, static_cast<int>(auctionIds.size())));
             } while (auctionIds[pick] == 0);
             runAuction(app, -1, auctionIds[pick], false);
             auctionIds[pick] = 0;

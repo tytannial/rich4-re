@@ -2,8 +2,18 @@
 
 #include <cstdarg>
 #include <cstdio>
+#include <deque>
+#include <mutex>
+#include <string>
 
 namespace rich4 {
+
+namespace {
+// [NEW] 内存日志环（测试断言用，无原版对应）
+constexpr size_t kLogRingMax = 4096;
+std::deque<std::string> g_logRing;
+std::mutex g_logRingMutex;
+} // namespace
 
 namespace {
 const char* levelTag(LogLevel level) {
@@ -47,6 +57,54 @@ void logMessage(LogLevel level, const char* fmt, ...) {
         std::fprintf(f, "[rich4][%s] %s\n", levelTag(level), buf);
         std::fflush(f);
     }
+    // [NEW] 同步写入内存环（assert log 检索用）
+    {
+        std::lock_guard<std::mutex> lk(g_logRingMutex);
+        std::string line = "[";
+        line += levelTag(level);
+        line += "] ";
+        line += buf;
+        if (g_logRing.size() >= kLogRingMax) {
+            g_logRing.pop_front();
+        }
+        g_logRing.emplace_back(std::move(line));
+    }
+}
+
+bool logContains(const char* substr) {
+    std::lock_guard<std::mutex> lk(g_logRingMutex);
+    for (const std::string& s : g_logRing) {
+        if (s.find(substr) != std::string::npos) {
+            return true;
+        }
+    }
+    return false;
+}
+
+int logCount(const char* substr) {
+    std::lock_guard<std::mutex> lk(g_logRingMutex);
+    int n = 0;
+    for (const std::string& s : g_logRing) {
+        if (s.find(substr) != std::string::npos) {
+            ++n;
+        }
+    }
+    return n;
+}
+
+std::string logLastMatch(const char* substr) {
+    std::lock_guard<std::mutex> lk(g_logRingMutex);
+    for (auto it = g_logRing.rbegin(); it != g_logRing.rend(); ++it) {
+        if (it->find(substr) != std::string::npos) {
+            return *it;
+        }
+    }
+    return {};
+}
+
+void logClear() {
+    std::lock_guard<std::mutex> lk(g_logRingMutex);
+    g_logRing.clear();
 }
 
 } // namespace rich4

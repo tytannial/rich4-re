@@ -1,6 +1,8 @@
 #include "game/app/float_message.h"
 
 #include <SDL3/SDL.h>
+#include "game/core/clock.h"
+#include "game/core/trace.h"
 
 #include "game/application.h"
 #include "game/platform/audio.h"
@@ -55,7 +57,8 @@ void FloatMessage::show(Application& app, const char* text) {
     // 原版文字位置 = (dword_48C618 + left + w/2, dword_48C62C + top + h/2)，align 4 居中
     app.text().drawText(dst, text, m_bgX + m_dx + fr.width / 2,
                         m_bgY + m_dy + fr.height / 2, 4);
-    m_startMs = SDL_GetTicks();
+    trace::logf("float text=\"%s\"", text);
+    m_startMs = nowMs();
 }
 
 // [RE 0x44EE18(0)] 计时推进：≥2000ms 后每 tick 查语音（sub_4544B9），播完才恢复
@@ -64,7 +67,7 @@ bool FloatMessage::advance(Application& app) {
         restore(app); // 原版 LABEL_10：start 为 0 直接恢复并返回完成
         return true;
     }
-    if (SDL_GetTicks() - m_startMs < 2000) {
+    if (nowMs() - m_startMs < 2000) {
         return false;
     }
     if (app.audio().voicePlaying()) {

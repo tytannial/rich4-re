@@ -14,6 +14,7 @@
 #include "game/app/new_game_tables.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/debug_hooks.h"
 #include "game/game_state.h"
 #include "game/platform/audio.h"
 #include "game/render/blit.h"
@@ -720,9 +721,9 @@ void drawNumber(DrawCtx& ui) {
     }
     int num;
     if (allLow || soldCount == 0) {
-        num = std::rand() % 36 + 1;
+        num = dbg::roll(dbg::SlotLottery, 36) + 1;
     } else {
-        num = sold[std::rand() % soldCount];
+        num = sold[dbg::roll(dbg::SlotLottery, soldCount)];
     }
     ui.number = num;
     ui.numberDrawn = true;
@@ -933,7 +934,7 @@ void lotteryVisit(Application& app) {
             }
         }
         if (n > 0) {
-            const int cell = freeCell[std::rand() % n];
+            const int cell = freeCell[dbg::roll(dbg::SlotLottery, n)];
             st.lotteryNumbers[cell] = static_cast<uint8_t>(p + 1);
             pl.cash -= kBetAmount;
             st.publicFund += kBetAmount;

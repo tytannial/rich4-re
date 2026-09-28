@@ -1,10 +1,19 @@
 #pragma once
 
+#include <string>
+
 namespace rich4 {
 
 enum class LogLevel { Debug, Info, Warn, Error };
 
 void logMessage(LogLevel level, const char* fmt, ...);
+
+// [NEW] 测试断言支持（无原版对应）：内存日志环（最近 4096 条，含级别前缀）
+// 供脚本 `assert log <substr>` 使用；headless/有头均记录，开销为一次 vsnprintf+push。
+bool logContains(const char* substr);
+int logCount(const char* substr);
+std::string logLastMatch(const char* substr);
+void logClear();
 
 } // namespace rich4
 

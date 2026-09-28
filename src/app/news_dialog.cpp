@@ -34,6 +34,8 @@
 #include "game/application.h"
 #include "game/core/encoding.h"
 #include "game/core/log.h"
+#include "game/core/debug_hooks.h"
+#include "game/core/clock.h"
 #include "game/game_state.h"
 #include "game/render/blit.h"
 #include "game/render/raw_bitmap.h"
@@ -525,7 +527,7 @@ void applySpecPtChange(NewsCtx& ctx, int32_t delta, uint8_t newsValue, int textI
     if (count <= 0) {
         return;
     }
-    SpecPt& sp = st.specPts[std::rand() % count + 1];
+    SpecPt& sp = st.specPts[dbg::roll(dbg::SlotNews, count) + 1];
     char text[192];
     std::snprintf(text, sizeof(text), kNewsTexts[textIdx], specPtNameUtf8(sp).c_str());
     drawEffectText(ctx, text, 310);
@@ -754,7 +756,7 @@ void evt35_profitDouble(NewsCtx& ctx, int phase) {
     if (list.empty()) {
         return;
     }
-    SpecPt& sp = st.specPts[list[static_cast<size_t>(std::rand()) % list.size()]];
+    SpecPt& sp = st.specPts[list[static_cast<size_t>(dbg::roll(dbg::SlotNews, static_cast<int>(list.size())))]];
     char text[192];
     std::snprintf(text, sizeof(text), kNewsTexts[35], specPtNameUtf8(sp).c_str());
     drawEffectText(ctx, text, 310);
@@ -885,7 +887,7 @@ void evt27_stockHaltOne(NewsCtx& ctx, int phase) {
     }
     Application& app = *ctx.app;
     GameState& st = app.gameState();
-    const int s = std::rand() % 12; // [RE 0x44B0F8]
+    const int s = dbg::roll(dbg::SlotNews, 12); // [RE 0x44B0F8]
     char text[192];
     std::snprintf(text, sizeof(text), kNewsTexts[27],
                   kStockNames[st.gameMode * 4 + st.mapIndex][s]);
@@ -911,7 +913,7 @@ void evt28_stockResume(NewsCtx& ctx, int phase) {
     if (list.empty()) {
         return;
     }
-    const int s = list[static_cast<size_t>(std::rand()) % list.size()];
+    const int s = list[static_cast<size_t>(dbg::roll(dbg::SlotNews, static_cast<int>(list.size())))];
     char text[192];
     std::snprintf(text, sizeof(text), kNewsTexts[28],
                   kStockNames[st.gameMode * 4 + st.mapIndex][s]);
@@ -933,7 +935,7 @@ void evt29_badLoanJail(NewsCtx& ctx, int phase) {
         if (list.empty()) {
             return;
         }
-        const SpecPt& sp = st.specPts[list[static_cast<size_t>(std::rand()) % list.size()]];
+        const SpecPt& sp = st.specPts[list[static_cast<size_t>(dbg::roll(dbg::SlotNews, static_cast<int>(list.size())))]];
         const int owner = sp.owner - 1;
         char text[224];
         std::snprintf(text, sizeof(text), kNewsTexts[29], specPtNameUtf8(sp).c_str(),
@@ -1326,13 +1328,13 @@ bool newsHandler(const SDL_Event* event, void* user) {
     Application& app = *ctx.app;
     if (event == nullptr) {
         // 模态进入：绘制面板/插画/标题 + 效果阶段 0
-        ctx.startMs = static_cast<int>(SDL_GetTicks());
+        ctx.startMs = static_cast<int>(nowMs());
         drawNewsBase(ctx);
         kNewsFuncs[ctx.eventIdx](ctx, 0);
         return true;
     }
     if (event->type == kModalTimerEvent) {
-        if (!ctx.phase1Done && SDL_GetTicks() - ctx.startMs >= kNewsShowMs) {
+        if (!ctx.phase1Done && nowMs() - ctx.startMs >= kNewsShowMs) {
             ctx.phase1Done = true;
             // [RE 各效果函数 phase1 开头 refreshGameUi(0,0,3)] 先切回场景再执行效果：
             //   否则 FLC（外星人/坐牢等）画在全屏事件面板上（实机反馈 2026-09-26，同 fateEvent）

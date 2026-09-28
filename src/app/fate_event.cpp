@@ -36,6 +36,8 @@
 #include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/debug_hooks.h"
+#include "game/core/clock.h"
 #include "game/game_state.h"
 #include "game/render/blit.h"
 #include "game/render/raw_bitmap.h"
@@ -241,7 +243,7 @@ FateLuckResult fateLuckRoll(const GameState& st, int p, uint8_t sel) {
             set(1, "%s保佑\n\n逃過此劫！"); // [RE aS_36 0x4658e7]
         } else if (luck < 0) {
             set(2, "%s作祟\n\n倒霉加倍！"); // [RE aS_35 0x4658d4]
-        } else if (luck > 50 && (std::rand() & 1) != 0) {
+        } else if (luck > 50 && dbg::roll(dbg::SlotLuck, 2) != 0) {
             set(1, "%s保佑\n\n逃過此劫！");
         }
         return r;
@@ -252,7 +254,7 @@ FateLuckResult fateLuckRoll(const GameState& st, int p, uint8_t sel) {
             set(1, "%s保佑\n\n免付罰金！"); // [RE aS_34 0x4658c1]
         } else if (luck < 0) {
             set(2, "%s作祟\n\n罰金加倍！"); // [RE aS_33 0x4658ae]
-        } else if (luck > 50 && (std::rand() & 1) != 0) {
+        } else if (luck > 50 && dbg::roll(dbg::SlotLuck, 2) != 0) {
             set(1, "%s保佑\n\n免付罰金！");
         }
         return r;
@@ -263,7 +265,7 @@ FateLuckResult fateLuckRoll(const GameState& st, int p, uint8_t sel) {
             set(2, "%s保佑\n\n獎金加倍！"); // [RE aS_31 0x465888]
         } else if (luck < 0) {
             set(1, "%s作祟\n\n獎金作廢！"); // [RE aS_32 0x46589b]
-        } else if (luck > 50 && (std::rand() & 1) != 0) {
+        } else if (luck > 50 && dbg::roll(dbg::SlotLuck, 2) != 0) {
             set(2, "%s保佑\n\n獎金加倍！");
         }
         return r;
@@ -342,7 +344,7 @@ int fateTakeRandomItem(Application& app, int target) {
     if (n == 0) {
         return 0;
     }
-    return ids[std::rand() % n];
+    return ids[dbg::roll(dbg::SlotFate, n)];
 }
 
 // [RE 0x44BFB1/0x44BE16 phase0] 随机选自有地产（requireBuilt：+26 等级 !=0 / ==0）
@@ -795,13 +797,13 @@ bool fateHandler(const SDL_Event* event, void* user) {
     Application& app = *ctx.app;
     if (event == nullptr) {
         // 模态进入：面板/插画 + 效果阶段 0
-        ctx.startMs = static_cast<int>(SDL_GetTicks());
+        ctx.startMs = static_cast<int>(nowMs());
         fateDrawBase(ctx);
         fateDrawPhase0(ctx);
         return true;
     }
     if (event->type == kModalTimerEvent) {
-        const int elapsed = static_cast<int>(SDL_GetTicks()) - ctx.startMs;
+        const int elapsed = static_cast<int>(nowMs()) - ctx.startMs;
         if (!ctx.phase1Done && elapsed >= kFateShowMs) {
             ctx.phase1Done = true;
             // [RE 各效果函数 phase1 开头 refreshGameUi(0,0,3)] 相位1 前先切回场景：

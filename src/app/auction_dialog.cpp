@@ -31,6 +31,7 @@
 #include "game/app/map_render.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/debug_hooks.h"
 #include "game/game_state.h"
 #include "game/platform/audio.h"
 #include "game/render/blit.h"
@@ -118,7 +119,7 @@ struct AuctionCtx {
 //   IDA float 显示误读已核）；estate 同地段自有数 + level>>1 + 1 加价、
 //   供需系数 6.0 - 空地占比×4.0、随机折扣 [0.5,0.8]、上限 (3.0~3.5)×基价×M、封顶现金。
 int auctionAiMaxBid(GameState& st, int player1, int objId, int price) {
-    const double v20 = static_cast<double>(std::rand()) / 32767.0 * 0.3 + 0.5;
+    const double v20 = static_cast<double>(dbg::raw(dbg::SlotAuction)) / 32767.0 * 0.3 + 0.5;
     int empty = 0;
     int sameName = 0;
     int bid = 0;
@@ -139,7 +140,7 @@ int auctionAiMaxBid(GameState& st, int player1, int objId, int price) {
         bid = static_cast<int>(static_cast<double>(st.moneyMul * price *
                                                    (sameName + (target.level >> 1) + 1)) *
                                supply * v20);
-        cap = static_cast<int>((static_cast<double>(std::rand()) * 1.52587890625e-05 + 3.0) *
+        cap = static_cast<int>((static_cast<double>(dbg::raw(dbg::SlotAuction)) * 1.52587890625e-05 + 3.0) *
                                static_cast<double>(st.moneyMul * target.priceAdd));
     } else {
         const Corp& target = st.corps[static_cast<size_t>(objId - 4000)];
@@ -152,7 +153,7 @@ int auctionAiMaxBid(GameState& st, int player1, int objId, int price) {
                                           static_cast<double>(st.corps.size() - 1) * 4.0;
         bid = static_cast<int>(static_cast<double>(st.moneyMul * price * ((target.sub >> 1) + 1)) *
                                supply * v20);
-        cap = static_cast<int>((static_cast<double>(std::rand()) * 1.52587890625e-05 + 3.0) *
+        cap = static_cast<int>((static_cast<double>(dbg::raw(dbg::SlotAuction)) * 1.52587890625e-05 + 3.0) *
                                static_cast<double>(st.moneyMul * target.buildPrice));
     }
     if (bid > cap) {

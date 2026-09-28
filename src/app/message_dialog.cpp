@@ -5,6 +5,8 @@
 #include "game/app/event_stack.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/trace.h"
+#include "game/core/clock.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
 #include "game/render/text.h"
@@ -35,12 +37,12 @@ void redrawMessage(MessageState& st) {
 bool messageEventHandler(const SDL_Event* event, void* user) {
     auto& st = *static_cast<MessageState*>(user);
     if (!event) {
-        st.startMs = SDL_GetTicks();
+        st.startMs = nowMs();
         redrawMessage(st);
         return true;
     }
     if (event->type == kModalTimerEvent) {
-        if (SDL_GetTicks() - st.startMs >= static_cast<uint64_t>(st.ms)) {
+        if (nowMs() - st.startMs >= static_cast<uint64_t>(st.ms)) {
             st.app->events().requestExit(0);
         } else {
             redrawMessage(st);
@@ -62,6 +64,7 @@ void showMessage(Application& app, const char* text, int ms) {
     st.text = text;
     st.ms = ms;
     RICH4_LOGI("showMessage: %s (%dms, RE 0x440CAC)", text, ms);
+    trace::logf("msg text=\"%s\" ms=%d", text, ms);
     runModal(app, &messageEventHandler, &st, 16);
 }
 

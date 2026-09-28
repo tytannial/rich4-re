@@ -9,6 +9,7 @@
 #include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/debug_hooks.h"
 #include "game/game_state.h"
 
 namespace rich4 {
@@ -52,7 +53,7 @@ int randomOpponent(const GameState& st, int exclude) {
             list[n++] = i;
         }
     }
-    return n != 0 ? list[std::rand() % n] : -1;
+    return n != 0 ? list[dbg::roll(dbg::SlotAi, n)] : -1;
 }
 
 int mineCountOnRoute(const GameState& st, int cur, const char* name) {
@@ -183,7 +184,7 @@ int tgtMineLike(GameState& st) {  // id3 地雷 [RE 0x4213C5] / id4 炸彈 [RE 0
     if (n == 0) {
         return 0;
     }
-    st.aiItemTarget = cand[std::rand() % n];
+    st.aiItemTarget = cand[dbg::roll(dbg::SlotAi, n)];
     return 1;
 }
 
@@ -242,7 +243,7 @@ int tgtDice(GameState& st) {  // id8 遙控骰子 [RE 0x421827]：有可升级/�
         }
     }
     if (cand) {
-        st.aiItemTarget = std::rand() % 6 + 1;  // [RE] 点数 1..6（原版 word_48B8B4 索引+1）
+        st.aiItemTarget = dbg::roll(dbg::SlotAi, 6) + 1;  // [RE] 点数 1..6（原版 word_48B8B4 索引+1）
         return 1;
     }
     return 0;
@@ -343,7 +344,7 @@ int tgtNuke(GameState& st) {  // id13 核子飛彈 [RE 0x421E62]：他人有建�
         return 0;
     }
     for (int attempt = 0; attempt < 10; ++attempt) {
-        const int oid = list[std::rand() % n];
+        const int oid = list[dbg::roll(dbg::SlotAi, n)];
         int x = 0;
         int y = 0;
         getObjectPosition(st, oid, x, y);
@@ -380,7 +381,7 @@ int aiItemSelect(Application& app, int itemId) {
     if (diff >= 2) {
         return 0;
     }
-    if (diff == 1 && (std::rand() % 3) != 0) {
+    if (diff == 1 && dbg::roll(dbg::SlotAi, 3) != 0) {
         return 0;
     }
     st.aiItemTarget = 0;
@@ -390,14 +391,14 @@ int aiItemSelect(Application& app, int itemId) {
         case 2:  r = tgtRoadblock(st); break;
         case 3:  r = tgtMineLike(st); break;
         case 4:  r = tgtMineLike(st); break;
-        case 5:  r = ((st.players[cur].travel & 3) == 0 && std::rand() % 4 == 0) ? 1 : 0; break;
-        case 6:  r = ((st.players[cur].travel & 3) < 2 && std::rand() % 4 == 0) ? 1 : 0; break;
+        case 5:  r = ((st.players[cur].travel & 3) == 0 && dbg::roll(dbg::SlotAi, 4) == 0) ? 1 : 0; break;
+        case 6:  r = ((st.players[cur].travel & 3) < 2 && dbg::roll(dbg::SlotAi, 4) == 0) ? 1 : 0; break;
         case 7:  r = tgtMissile(st); break;
         case 8:  r = tgtDice(st); break;
         case 9:  r = tgtRobotWorker(st); break;
         case 10: return 0;  // [RE 0x420EDF] 時光機：AI 不用
         case 11: r = tgtTeleport(st); break;
-        case 12: r = (std::rand() % 15 <= st.players[cur].aiPersonality) ? 1 : 0; break;
+        case 12: r = (dbg::roll(dbg::SlotAi, 15) <= st.players[cur].aiPersonality) ? 1 : 0; break;
         case 13: r = tgtNuke(st); break;
         default: return 0;
     }

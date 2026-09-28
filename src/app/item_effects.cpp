@@ -18,6 +18,8 @@
 #include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/trace.h"
+#include "game/core/clock.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
 #include "game/render/text.h"
@@ -74,12 +76,12 @@ void drawItemLine(ItemLineCtx& ctx) {
 bool itemLineHandler(const SDL_Event* event, void* user) {
     auto& ctx = *static_cast<ItemLineCtx*>(user);
     if (!event) {
-        ctx.startMs = SDL_GetTicks();
+        ctx.startMs = nowMs();
         drawItemLine(ctx);
         return true;
     }
     if (event->type == kModalTimerEvent) {
-        if (SDL_GetTicks() - ctx.startMs >= 1000) {  // [RE 0x44EF41] sub_4544F6(1000)
+        if (nowMs() - ctx.startMs >= 1000) {  // [RE 0x44EF41] sub_4544F6(1000)
             ctx.app->events().requestExit(0);
         } else {
             drawItemLine(ctx);
@@ -131,6 +133,7 @@ void playLine(Application& app, int player, const char* line, int exprFrame) {
     ctx.player = player;
     ctx.expr = exprFrame;
     RICH4_LOGI("playLine: p%d expr%d %s (RE 0x44EF41)", player, exprFrame, line);
+    trace::logf("line p=%d expr=%d text=\"%s\"", player, exprFrame, line);
     runModal(app, &itemLineHandler, &ctx, 16);
 }
 

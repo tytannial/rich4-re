@@ -5,7 +5,10 @@
 #include "game/app/new_game.h"
 #include "game/game_state.h"
 
+#include "game/core/clock.h"
+#include "game/core/debug_hooks.h"
 #include "game/core/log.h"
+#include "game/core/trace.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -78,12 +81,29 @@ std::vector<std::pair<std::string, int>> gameKeys; // [NEW] --game-key "ctrl+5,1
     bool debugMode = false;
     int selftestSlot = -1;
     int loadGameSlot = -1;
+    // [NEW] headless 测试钩子（docs/testing.md；无原版对应）
+    int testSeed = -1;
+    bool headless = false;
+    bool testClock = false;
+    bool traceOn = false;
+    std::string traceOut;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--game" && i + 1 < argc) {
             gameDir = argv[++i];
         } else if (arg == "--debug") {
             debugMode = true;
+        } else if (arg == "--seed" && i + 1 < argc) {
+            testSeed = std::atoi(argv[++i]);
+        } else if (arg == "--headless") {
+            headless = true;
+        } else if (arg == "--test-clock") {
+            testClock = true;
+        } else if (arg == "--trace") {
+            traceOn = true;
+        } else if (arg == "--trace-out" && i + 1 < argc) {
+            traceOut = argv[++i];
+            traceOn = true;
         } else if (arg == "--save-selftest" && i + 1 < argc) {
             selftestSlot = std::atoi(argv[++i]);
         } else if (arg == "--load-game" && i + 1 < argc) {
@@ -192,7 +212,9 @@ std::vector<std::pair<std::string, int>> gameKeys; // [NEW] --game-key "ctrl+5,1
             std::printf("usage: rich4 [--game <dir>] [--shot <file.bmp>] [--shot-cursor x,y] "
                         "[--auto-click] [--auto-click2 x,y] [--game-click x,y,frame] "
                         "[--game-click2 x,y,frame] [--game-click3 x,y,frame] "
-                        "[--game-click4 x,y,frame] [--game-click5 x,y,frame] [--game-drag x1,y1,x2,y2,frame]\n");
+                        "[--game-click4 x,y,frame] [--game-click5 x,y,frame] [--game-drag x1,y1,x2,y2,frame]\n"
+                        "  [NEW headless 测试钩子] --debug --seed <n> --headless --test-clock "
+                        "--trace --trace-out <file.json> --save-selftest <slot> --load-game <slot>\n");
             return 0;
         }
     }
@@ -259,6 +281,20 @@ std::vector<std::pair<std::string, int>> gameKeys; // [NEW] --game-key "ctrl+5,1
     }
 
     rich4::Application app;
+    // [NEW] headless 测试钩子接线（docs/testing.md）：
+    //   --seed 固定随机序列（gameInit 播种读取）；--headless/--test-clock 虚拟时钟
+    //   （delayMs 不睡仅累加，阻塞动画/消息循环快速收敛）；--trace 演出 trace 记录
+    //   （assert trace 数据源），--trace-out 退出时导出 JSON。
+    //   注：--headless 的 dummy 渲染旁路属后续步骤（当前=虚拟时钟+trace，仍建窗口）。
+    if (testSeed >= 0) {
+        rich4::dbg::setSeed(testSeed);
+    }
+    if (headless || testClock) {
+        rich4::setVirtualClock(true);
+    }
+    if (headless || traceOn) {
+        rich4::trace::setEnabled(true);
+    }
     if (!app.init(gameDir)) {
         RICH4_LOGE("Application init failed");
         return 1;
@@ -278,6 +314,9 @@ std::vector<std::pair<std::string, int>> gameKeys; // [NEW] --game-key "ctrl+5,1
                         s.mapIndex, s.currentPlayer, s.cellEnts.size(), s.estates.size(),
                         s.players[0].cash, s.manualView ? 1 : 0, s.pendingSpawnPlayer,
                         s.panelLoaded ? 1 : 0, dump.c_str());
+        }
+        if (!traceOut.empty()) {
+            rich4::trace::exportJson(traceOut);
         }
         app.shutdown();
         return ok ? 0 : 1;
@@ -322,6 +361,9 @@ std::vector<std::pair<std::string, int>> gameKeys; // [NEW] --game-key "ctrl+5,1
                           click6Y, click7X, click7Y);
     }
     app.run();
+    if (!traceOut.empty()) {
+        rich4::trace::exportJson(traceOut);
+    }
     app.shutdown();
     return 0;
 }

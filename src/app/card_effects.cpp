@@ -24,6 +24,7 @@
 #include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/debug_hooks.h"
 #include "game/game_state.h"
 
 namespace rich4 {
@@ -1102,7 +1103,7 @@ int applyFreeCard(Application& app, int target, int32_t fee) {
         use = confirmDialog(app, text, 220, 320);  // [RE askDialog]
     } else {
         // [RE AI 分支] 阈值 (rand%3000+3000)×M；费用 ≤ 现金且阈值 ≥ 费用 → 不用
-        const int32_t threshold = (std::rand() % 3000 + 3000) * st.moneyMul;
+        const int32_t threshold = (dbg::roll(dbg::SlotJackpot, 3000) + 3000) * st.moneyMul;
         use = !(fee <= st.players[target].cash && threshold >= fee);
     }
     if (!use) {

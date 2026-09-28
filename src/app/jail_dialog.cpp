@@ -16,6 +16,7 @@
 #include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/debug_hooks.h"
 #include "game/platform/audio.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
@@ -328,7 +329,7 @@ bool bailHandler(const SDL_Event* event, void* user) {
 // [RE 0x43D3DF] AI 保释：rand&1 → 按个性收集候选 → 点数检查 → 扣费释放
 void bailAi(Application& app) {
     GameState& st = app.gameState();
-    if ((std::rand() & 1) == 0) {
+    if (dbg::roll(dbg::SlotAi, 2) == 0) {
         RICH4_LOGI("bail AI: rand=0 本回合不保释 (RE 0x43D3DF)");
         return;
     }
@@ -349,7 +350,7 @@ void bailAi(Application& app) {
                 cand[n++] = j;
             }
         }
-        if (personality == 1 && (std::rand() % 3) == 0) {
+        if (personality == 1 && dbg::roll(dbg::SlotAi, 3) == 0) {
             for (int k = 4; k < 8; ++k) {
                 if (st.jailFlags[k]) {
                     cand[n++] = k;
@@ -360,7 +361,7 @@ void bailAi(Application& app) {
     if (n == 0) {
         return;
     }
-    const int target = cand[std::rand() % n];
+    const int target = cand[dbg::roll(dbg::SlotAi, n)];
     const int cost = kBailCost[target];
     // [RE 0x43D4FD] 玩家目标 points > 费用（严格）；NPC 目标 points >= 700（费用表 300 另判）
     const int pts = st.players[cur].points;
@@ -787,7 +788,7 @@ bool hospHandler(const SDL_Event* event, void* user) {
 // [RE 0x43EAA5] AI 自动办理出院（同監獄版 bailAi：候选按个性、玩家 points>费用、NPC >=700）
 void visitAi(Application& app) {
     GameState& st = app.gameState();
-    if ((std::rand() & 1) == 0) {
+    if (dbg::roll(dbg::SlotAi, 2) == 0) {
         RICH4_LOGI("hospital visit AI: rand=0 本回合不办理出院 (RE 0x43EAA5)");
         return;
     }
@@ -807,7 +808,7 @@ void visitAi(Application& app) {
                 cand[n++] = j;
             }
         }
-        if (personality == 1 && (std::rand() % 3) == 0) {
+        if (personality == 1 && dbg::roll(dbg::SlotAi, 3) == 0) {
             for (int k = 4; k < 8; ++k) {
                 if (st.hospitalFlags[k]) {
                     cand[n++] = k;
@@ -818,7 +819,7 @@ void visitAi(Application& app) {
     if (n == 0) {
         return;
     }
-    const int target = cand[std::rand() % n];
+    const int target = cand[dbg::roll(dbg::SlotAi, n)];
     const int cost = kHospCost[target];
     const int pts = st.players[cur].points;
     const bool ok = target < 4 ? pts > cost : pts >= 700;

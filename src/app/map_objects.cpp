@@ -20,6 +20,9 @@
 #include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/trace.h"
+#include "game/core/debug_hooks.h"
+#include "game/core/clock.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
 #include "game/render/text.h"
@@ -389,7 +392,7 @@ bool slotHandler(const SDL_Event* event, void* user) {
             continue;
         }
         if (sc.phase <= 2 && sc.frame % 10 == 0) {
-            sc.byte_[r] = (std::rand() % 10) * 2 + 1;
+            sc.byte_[r] = (dbg::roll(dbg::SlotJackpot, 10)) * 2 + 1;
         }
         sc.byte_[r] = (sc.byte_[r] + 1) % 20;
     }
@@ -467,14 +470,14 @@ int slotMachineDialog(Application& app, int a1) {
     sc.vis = !(a1 & 1);
     const int lowest = sc.vis ? 1 : 0;
     for (int r = lowest; r <= 3; ++r) {
-        sc.byte_[r] = (std::rand() % 10) * 2 + 1;
+        sc.byte_[r] = (dbg::roll(dbg::SlotJackpot, 10)) * 2 + 1;
     }
     if (auto blob = st.panel.read(67)) {
         sc.ui.load(std::move(*blob));
     }
     if (sc.ui.frameCount() < 24) {
         RICH4_LOGW("slotMachineDialog: panel.mkf[67] unavailable (frames=%d)", sc.ui.frameCount());
-        return sc.vis ? std::rand() % 1000 : std::rand() % 10000;
+        return sc.vis ? dbg::roll(dbg::SlotJackpot, 1000) : dbg::roll(dbg::SlotJackpot, 10000);
     }
     const int cp = st.currentPlayer;
     sc.humanCtl = cp >= 0 && cp < 4 && st.players[cp].alive == 1 && st.players[cp].state37 == 0;
@@ -502,11 +505,11 @@ void showGodNarration(Application& app, const char* text) {
     app.text().setFont(28, 0xFFFFFF, 0x101010, kTextStyleShadow, 0);
     app.text().drawText(dst, text, 220, 460, 7);
     app.renderFrame();
-    const uint64_t end = SDL_GetTicks() + 2400;
-    while (static_cast<int64_t>(SDL_GetTicks() - end) < 0) {
+    const uint64_t end = nowMs() + 2400;
+    while (static_cast<int64_t>(nowMs() - end) < 0) {
         app.audio().update();
         app.pumpEvents();
-        SDL_Delay(20);
+        delayMs(20);
     }
     st.eventFlcActive = false;
 }
@@ -557,10 +560,10 @@ void attachEnd(Application& app, int p) {
         blitSpriteFrameClipped(dst, img, frame, sx, sy, true);
         app.renderFrame();
         app.pumpEvents();
-        const uint64_t end = SDL_GetTicks() + 60;
-        while (static_cast<int64_t>(SDL_GetTicks() - end) < 0) {
+        const uint64_t end = nowMs() + 60;
+        while (static_cast<int64_t>(nowMs() - end) < 0) {
             app.audio().update();
-            SDL_Delay(5);
+            delayMs(5);
         }
     }
     setClipRect(0, 0, 640, 480);
@@ -860,7 +863,7 @@ int drawGiftCard(Application& app, int player) {
     if (n == 0) {
         return 0;
     }
-    const int item = list[std::rand() % n] + 1;
+    const int item = list[dbg::roll(dbg::SlotItem, n)] + 1;
     givePlayerItem(st, player, item);
     return item;
 }
@@ -873,7 +876,7 @@ int discardRandomCard(Application& app, int player) {
         return 0;
     }
     const size_t off = static_cast<size_t>(15 * player);
-    const int card = st.cardState60[off + std::rand() % n];
+    const int card = st.cardState60[off + dbg::roll(dbg::SlotCard, n)];
     cardBagRemove(st, player, card);
     return card;
 }
@@ -982,6 +985,8 @@ void addMoney(Application& app, int player, int32_t amount, bool cash) {
 void flyObjectSprite(Application& app, int objId, int fromX, int fromY, int toX, int toY,
                      int holdMs) {
     GameState& st = app.gameState();
+    trace::logf("fly obj=%d from=(%d,%d) to=(%d,%d) hold=%d", objId, fromX, fromY, toX, toY,
+                holdMs);
     Surface& dst = app.surface();
     int dir = 0;
     UiImage* img = nullptr;
@@ -1033,7 +1038,7 @@ void flyObjectSprite(Application& app, int objId, int fromX, int fromY, int toX,
     for (int i = 0; i < frames; ++i) {
         px += stepX;
         py += stepY;
-        const uint64_t end = SDL_GetTicks() + 24;
+        const uint64_t end = nowMs() + 24;
         // [RE 0x456469] 恢复背景（整区；原版只恢复上一帧精灵矩形，背景不变故等价）
         for (int r = 0; r < kSnapH; ++r) {
             std::memcpy(dst.pixels() + static_cast<size_t>(kSnapY + r) * Surface::kWidth + kSnapX,
@@ -1042,9 +1047,9 @@ void flyObjectSprite(Application& app, int objId, int fromX, int fromY, int toX,
         }
         blitSpriteFrameClipped(dst, *img, dir, static_cast<int>(px), static_cast<int>(py), true);
         app.renderFrame();
-        while (static_cast<int64_t>(SDL_GetTicks() - end) < 0) {
+        while (static_cast<int64_t>(nowMs() - end) < 0) {
             app.audio().update();
-            SDL_Delay(2);
+            delayMs(2);
         }
     }
     setClipRect(0, 0, 640, 480);
@@ -1052,7 +1057,7 @@ void flyObjectSprite(Application& app, int objId, int fromX, int fromY, int toX,
     //   才显示目标格物件）——屏幕即时模式必须显式冻结末帧
     for (int t = 0; t < holdMs; t += 5) {
         app.audio().update();
-        SDL_Delay(5);
+        delayMs(5);
     }
     RICH4_LOGI("flyObject: obj %d (%d,%d)->(%d,%d) %d frames hold %d (RE 0x40E669)", objId, x0,
                y0, x1, y1, frames, holdMs);

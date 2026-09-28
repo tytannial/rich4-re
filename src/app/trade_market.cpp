@@ -22,6 +22,8 @@
 #include "game/application.h"
 #include "game/core/encoding.h"
 #include "game/core/log.h"
+#include "game/core/debug_hooks.h"
+#include "game/core/clock.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
 #include "game/render/text.h"
@@ -158,11 +160,11 @@ bool tradeTipEvent(const SDL_Event* event, void* user) {
     auto& s = *static_cast<TradeTipState*>(user);
     if (!event) {
         drawTradeTipBox(*s.app, *s.sheet, s.text, s.y);
-        s.startMs = SDL_GetTicks();
+        s.startMs = nowMs();
         return true;
     }
     if (event->type == kModalTimerEvent) {
-        if (SDL_GetTicks() - s.startMs >= 1500) {
+        if (nowMs() - s.startMs >= 1500) {
             s.app->events().requestExit(0);
         } else {
             drawTradeTipBox(*s.app, *s.sheet, s.text, s.y);
@@ -1523,7 +1525,7 @@ void tradeAiTurn(Application& app) {
     clearInvalidTradeOrders(st);  // [RE 0x4284BE 开头 sub_42483E]
 
     // [RE 0x428881] 1/15：挂卖
-    if (std::rand() % 15 == 0) {
+    if (dbg::roll(dbg::SlotAiTrade, 15) == 0) {
         bool sold = false;
         const int cardCount = cardBagCount(st, cur);
         if (cardCount > 12) {
@@ -1541,7 +1543,7 @@ void tradeAiTurn(Application& app) {
                 }
             }
             if (!dup.empty()) {
-                const int card = dup[static_cast<size_t>(std::rand()) % dup.size()];
+                const int card = dup[static_cast<size_t>(dbg::roll(dbg::SlotAiTrade, static_cast<int>(dup.size())))];
                 if (st.tradeSlots[cur][6].type != 0) {
                     removeTradeOrder(st, cur, 0);  // [RE 0x42891B] 满槽先腾位
                 }
@@ -1562,7 +1564,7 @@ void tradeAiTurn(Application& app) {
                 }
             }
             if (!cand.empty()) {
-                const int itemId = cand[static_cast<size_t>(std::rand()) % cand.size()];
+                const int itemId = cand[static_cast<size_t>(dbg::roll(dbg::SlotAiTrade, static_cast<int>(cand.size())))];
                 if (st.tradeSlots[cur][6].type != 0) {
                     removeTradeOrder(st, cur, 0);
                 }
@@ -1572,7 +1574,7 @@ void tradeAiTurn(Application& app) {
     }
 
     // [RE 0x428A37] 1/3：自己卡片/道具挂单改价为原价
-    if (std::rand() % 3 == 0) {
+    if (dbg::roll(dbg::SlotAiTrade, 3) == 0) {
         for (int s = 0; s < 7; ++s) {
             TradeSlot& t = st.tradeSlots[cur][s];
             if (t.type == kTradeItem) {
@@ -1584,7 +1586,7 @@ void tradeAiTurn(Application& app) {
     }
 
     // [RE 0x428AE8] 1/4：低价买入他人挂单（每次最多成交一笔）
-    if (std::rand() % 4 == 0) {
+    if (dbg::roll(dbg::SlotAiTrade, 4) == 0) {
         bool bought = false;
         for (int p = 0; p < st.playerCount && p < 8 && !bought; ++p) {
             if (p == cur || st.players[p].alive == 0) continue;

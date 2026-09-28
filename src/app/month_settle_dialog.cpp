@@ -13,6 +13,7 @@
 #include "game/app/float_message.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/clock.h"
 #include "game/game_state.h"
 #include "game/platform/audio.h"
 #include "game/render/blit.h"
@@ -427,7 +428,7 @@ void playSettleFlc(SettleCtx& ui, int mkfIndex, int x, int y) {
         app.pumpEvents();
         for (int t = 0; t < interval; t += 5) {
             app.audio().update();
-            SDL_Delay(5);
+            delayMs(5);
         }
     }
     RICH4_LOGI("monthSettle: FLC data.mkf[%d] played @(%d,%d) (RE 0x45144F)", mkfIndex, x, y);

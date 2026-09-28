@@ -12,6 +12,7 @@
 #include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/debug_hooks.h"
 #include "game/render/blit.h"
 #include "game/render/iso_blit.h"
 #include "game/render/surface.h"
@@ -74,7 +75,7 @@ int pickSpawnCellEnt(const GameState& state) {
     if (n == 0) {
         return 1;
     }
-    return cand[std::rand() % n];
+    return cand[dbg::roll(dbg::SlotSpawn, n)];
 }
 
 // [RE 0x456C33] flag 掩膜：SPR 掩膜形状非透明像素对屏幕像素 **|= color**（OR 出半透明
@@ -138,7 +139,7 @@ bool spawnPlayerAt(GameState& state, int p) {
         }
     }
     if (ne > 0) {
-        const uint16_t from = ex[std::rand() % ne];
+        const uint16_t from = ex[dbg::roll(dbg::SlotSpawn, ne)];
         pl.prevCellEnt = from;
         pl.dir = static_cast<uint8_t>(facingBetween(state, from, ce));
     } else {
@@ -954,7 +955,7 @@ int randomCellEnt(const GameState& state, int nearCellEnt) {
         return 0;
     }
     for (int guard = 0; guard < 200; ++guard) {
-        const int pick = cand[std::rand() % n];
+        const int pick = cand[dbg::roll(dbg::SlotSpawn, n)];
         if (nearCellEnt <= 0) {
             return pick;
         }
@@ -964,7 +965,7 @@ int randomCellEnt(const GameState& state, int nearCellEnt) {
             return pick;
         }
     }
-    return cand[std::rand() % n];
+    return cand[dbg::roll(dbg::SlotSpawn, n)];
 }
 
 // [RE 0x451985] captureHighlightShapes：从最后一次渲染的 mapHitRegions 提取高亮形状快照
