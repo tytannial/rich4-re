@@ -1,0 +1,17 @@
+# id: 142_card_demolish
+# covers: [HELP 67] 拆除卡 0x443B0F——选目标降一级(level 3→2)+FLC529
+# timeout: 150000
+wait idle 1000
+find.estate 0
+sel.owner 2
+sel.level 3
+sel.goto
+use.card demolish
+wait frames 200
+clicksel
+wait frames 260
+clicksel
+wait frames 900
+assert state estates.sel.level == 2
+assert state errors == 0
+quit

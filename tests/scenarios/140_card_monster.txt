@@ -1,0 +1,19 @@
+# id: 140_card_monster
+# covers: [HELP 65] 怪獸卡 0x443917——地图选建筑→demolishAtObjId(mode2) 夷平+FLC557+原主记债
+#          （ISS-014 前置台词模态吞首击 → 双点规则）
+# timeout: 150000
+wait idle 1000
+find.estate 0
+sel.owner 2
+sel.level 3
+sel.goto
+use.card monster
+wait frames 200
+clicksel
+wait frames 260
+clicksel
+wait frames 900
+assert state estates.sel.level == 0
+assert state players.0.cash < 200000
+assert state errors == 0
+quit
