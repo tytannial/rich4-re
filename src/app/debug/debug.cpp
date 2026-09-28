@@ -11,12 +11,15 @@
 
 #include "game/app/bank_stay_dialog.h"
 #include "game/app/card_bag_dialog.h"
+#include "game/app/card_effects.h"
+#include "game/app/item_effects.h"
 #include "game/app/dividend.h"
 #include "game/app/fate_event.h"
 #include "game/app/lottery.h"
 #include "game/app/magic_house_dialog.h"
 #include "game/app/map_objects.h"
 #include "game/app/map_render.h"
+#include "game/app/object_tip.h"
 #include "game/app/month_settle.h"
 #include "game/app/news_dialog.h"
 #include "game/app/query_dialog.h"
@@ -56,11 +59,11 @@ int clampi(int v, int lo, int hi) {
 }
 
 struct Step {
-    enum Kind { Cmd, WaitFrames, WaitTrace, WaitLog, WaitIdle };
+    enum Kind { Cmd, WaitFrames, WaitTrace, WaitLog, WaitIdle, WaitState };
     Kind kind = Cmd;
-    std::string a;      // 命令原文 / 等待模式
-    std::string b;      // 保留
-    int n = 0;          // WaitFrames 帧数
+    std::string a;      // 命令原文 / 等待模式 / wait state 路径
+    std::string b;      // wait state 比较符
+    int n = 0;          // 帧数 / wait state 比较值
     int limit = 6000;   // 等待类上限帧
     int lineNo = 0;
 };
@@ -186,6 +189,12 @@ bool getStateInt(const GameState& st, const std::string& path, long long& out) {
         const int p = parseInt(c[0]);
         if (p < 0 || p >= 9) return false;
         out = st.players[p].alive;
+        return true;
+    }
+    if (matchPath(path, "players.*.byte54", c, 1)) {
+        const int p = parseInt(c[0]);
+        if (p < 0 || p >= 9) return false;
+        out = st.players[p].byte54;
         return true;
     }
     if (matchPath(path, "players.*.travel", c, 1)) {
@@ -590,6 +599,18 @@ bool cmdPlayerDice(Application& app, const std::vector<std::string>& a, std::str
     // [RE 0x48BAFC] g_diceValue 为**全局**（GameState 字段，本次移动总步数），非 per-player
     if (!argCount(a, 2, err, "player.dice <p ignored> <v>")) return false;
     app.gameState().diceValue = parseInt(a[2]);
+    return true;
+}
+
+bool cmdPlayerAlive(Application& app, const std::vector<std::string>& a, std::string& err) {
+    // 置入场标志（统计/目标过滤以 alive!=0 为准；1=已入场人类形态，alive&6=0 不触发 AI 自动）
+    if (!argCount(a, 2, err, "player.alive <p> <v>")) return false;
+    const int p = parseInt(a[1]);
+    if (p < 0 || p >= 9) {
+        err = "player.alive: bad index";
+        return false;
+    }
+    app.gameState().players[p].alive = static_cast<uint8_t>(parseInt(a[2]));
     return true;
 }
 
@@ -1223,6 +1244,154 @@ bool cmdTap(Application& app, const std::vector<std::string>& a, std::string& er
     return true;
 }
 
+bool cmdUseItem(Application& app, const std::vector<std::string>& a, std::string& err) {
+    if (!argCount(a, 1, err, "use.item <id 1..14>")) return false;
+    const int id = parseInt(a[1]);
+    if (id < 1 || id > 14) {
+        err = "use.item: bad id";
+        return false;
+    }
+    trace::logf("use item id=%d p=%d", id, curPlayer(app));
+    const int r = itemEffect(app, id); // [RE 0x475DD4] 0=取消（内部 itemBagRemove）
+    RICH4_LOGI("debug: use.item %d -> %d", id, r);
+    return true;
+}
+
+bool cmdClickCell(Application& app, const std::vector<std::string>& a, std::string& err) {
+    if (!argCount(a, 1, err, "clickcell <i>")) return false;
+    GameState& st = app.gameState();
+    const int i = parseInt(a[1]);
+    if (i < 1 || i >= static_cast<int>(st.cellEnts.size())) {
+        err = "clickcell: bad index";
+        return false;
+    }
+    const int cx = st.cellEnts[i].x + 24;
+    const int cy = st.cellEnts[i].y + 12;
+    queueInput(cx, cy, false, false);
+    trace::logf("clicked clickcell %d at=(%d,%d)", i, cx, cy);
+    return true;
+}
+
+bool cmdClickPlayer(Application& app, const std::vector<std::string>& a, std::string& err) {
+    // 点玩家头像：优先扫 mapHitRegions 的 0xF000|p 命中矩形（与选人 filter 同源），
+    // 无命中区（不在视野）则回退 sprite 坐标（可能落空，由调用方 assert 暴露）
+    if (!argCount(a, 1, err, "clickplayer <p>")) return false;
+    GameState& st = app.gameState();
+    const int p = parseInt(a[1]);
+    if (p < 0 || p >= 9) {
+        err = "clickplayer: bad index";
+        return false;
+    }
+    const uint16_t want = static_cast<uint16_t>(0xF000 | (p & 0xF));
+    int bx = -1;
+    int by = -1;
+    int best = 1 << 30;
+    for (const auto& hr : st.mapHitRegions) {
+        if (hr.id != want || hr.w <= 0 || hr.h <= 0) {
+            continue;
+        }
+        const int cx = hr.x + hr.w / 2;
+        const int cy = hr.y + hr.h / 2;
+        for (int y2 = hr.y; y2 < hr.y + hr.h; y2 += 4) {
+            for (int x2 = hr.x; x2 < hr.x + hr.w; x2 += 4) {
+                if (pickMapObject(st, x2, y2) == want) {
+                    const int d = (x2 - cx) * (x2 - cx) + (y2 - cy) * (y2 - cy);
+                    if (d < best) {
+                        best = d;
+                        bx = x2;
+                        by = y2;
+                    }
+                }
+            }
+        }
+    }
+    if (bx < 0) {
+        bx = st.players[p].spriteX + 24;
+        by = st.players[p].spriteY + 12;
+        RICH4_LOGW("debug: clickplayer %d not in view hit list, fallback sprite (%d,%d)", p, bx,
+                   by);
+    }
+    queueInput(bx, by, false, false);
+    trace::logf("clicked clickplayer %d at=(%d,%d)", p, bx, by);
+    return true;
+}
+
+typedef int (*CardEffectFn)(Application&);
+struct CardAlias {
+    const char* name;
+    CardEffectFn fn;
+};
+// [RE 0x475D5C] g_cardEffectFuncs 直调表（跳过选卡 UI；内部自扣卡需先 give.card）
+const CardAlias kCardAliases[] = {
+    {"rich", cardEffectEqualRich},      {"poor", cardEffectEqualPoor},
+    {"buyLand", cardEffectBuyLand},     {"swapLand", cardEffectSwapLand},
+    {"swapHouse", cardEffectSwapHouse}, {"turn", cardEffectTurn},
+    {"auction", cardEffectAuction},     {"monster", cardEffectMonster},
+    {"demolish", cardEffectDemolish},   {"steal", cardEffectSteal},
+    {"angel", cardEffectAngel},         {"devil", cardEffectDevil},
+    {"stay", cardEffectStay},           {"hibernate", cardEffectHibernate},
+    {"sleepwalk", cardEffectSleepwalk}, {"frame", cardEffectFrame},
+    {"tax", cardEffectTaxAudit},        {"priceUp", cardEffectPriceUp},
+    {"seal", cardEffectSeal},           {"ally", cardEffectAlly},
+    {"turtle", cardEffectTurtle},       {"redStock", cardEffectRedStock},
+    {"blackStock", cardEffectBlackStock},
+};
+
+bool cmdUseCard(Application& app, const std::vector<std::string>& a, std::string& err) {
+    if (!argCount(a, 1, err, "use.card <alias> (rich/poor/auction/.../turtle)")) return false;
+    for (const auto& c : kCardAliases) {
+        if (a[1] == c.name) {
+            trace::logf("use card name=%s p=%d", c.name, curPlayer(app));
+            const int r = c.fn(app);
+            RICH4_LOGI("debug: use.card %s -> %d", c.name, r);
+            return true;
+        }
+    }
+    err = "use.card: unknown alias " + a[1];
+    return false;
+}
+
+bool cmdClickSel(Application& app, const std::vector<std::string>&, std::string& err) {
+    // 点当前 select 目标：在渲染期命中矩形内**扫描出 pick 真正等于目标**的最近掩码点
+    // （mapHitRegions 带 SPR 像素掩码，bounding-rect 中心可能落在掩码外 → hover 不置位）
+    GameState& st = app.gameState();
+    if (g_selected == 0) {
+        err = "clicksel: nothing selected";
+        return false;
+    }
+    for (const auto& hr : st.mapHitRegions) {
+        if (hr.id != g_selected || hr.w <= 0 || hr.h <= 0) {
+            continue;
+        }
+        const int cx = hr.x + hr.w / 2;
+        const int cy = hr.y + hr.h / 2;
+        int bx = -1;
+        int by = -1;
+        int best = 1 << 30;
+        for (int y2 = hr.y; y2 < hr.y + hr.h; y2 += 4) {
+            for (int x2 = hr.x; x2 < hr.x + hr.w; x2 += 4) {
+                if (pickMapObject(st, x2, y2) == g_selected) {
+                    const int d = (x2 - cx) * (x2 - cx) + (y2 - cy) * (y2 - cy);
+                    if (d < best) {
+                        best = d;
+                        bx = x2;
+                        by = y2;
+                    }
+                }
+            }
+        }
+        if (bx >= 0) {
+            queueInput(bx, by, false, false);
+            trace::logf("clicked clicksel id=%u at=(%d,%d)", g_selected, bx, by);
+            return true;
+        }
+        err = "clicksel: no mask-hit point found in rect";
+        return false;
+    }
+    err = "clicksel: selected object not in current view hit list";
+    return false;
+}
+
 bool cmdClick(Application& app, const std::vector<std::string>& a, std::string& err) {
     (void)app;
     if (!argCount(a, 2, err, "click <x> <y>")) return false;
@@ -1285,6 +1454,7 @@ const Cmd kCmds[] = {
     {"player.vehicle", cmdPlayerVehicle},
     {"player.teleport", cmdPlayerTeleport},
     {"player.dice", cmdPlayerDice},
+    {"player.alive", cmdPlayerAlive},
     {"give.card", cmdGiveCard},
     {"give.item", cmdGiveItem},
     {"land", cmdLand},
@@ -1314,6 +1484,11 @@ const Cmd kCmds[] = {
     {"click", cmdClick},
     {"clickr", cmdClickR},
     {"tap", cmdTap},
+    {"use.item", cmdUseItem},
+    {"use.card", cmdUseCard},
+    {"clickcell", cmdClickCell},
+    {"clickplayer", cmdClickPlayer},
+    {"clicksel", cmdClickSel},
     {"rclick", cmdRClick},
     {"move", cmdMove},
     {"key", cmdKey},
@@ -1362,9 +1537,10 @@ bool isBlockingCmd(const std::string& name) {
 }
 
 bool isInteractiveCmd(const std::string& name) {
-    // 阻塞模态期间仍需可执行的应答类命令
-    static const char* const kInter[] = {"click", "clickr", "rclick", "move", "key",
-                                         "confirm", "tap"};
+    // 阻塞模态期间仍需可执行的应答类命令（点地图/选目标也属应答）
+    static const char* const kInter[] = {"click",     "clickr",  "rclick",    "move",
+                                         "key",       "confirm", "tap",       "clickcell",
+                                         "clickplayer", "clicksel"};
     for (const char* i : kInter) {
         if (name == i) {
             return true;
@@ -1613,6 +1789,21 @@ bool parseWaitStep(const std::vector<std::string>& a, Step& st, std::string& err
         }
         return true;
     }
+    if (sub == "state") {
+        // wait state <path> <op> <value> [maxFrames]
+        if (a.size() < 5) {
+            err = "usage: wait state <path> <op> <value> [max]";
+            return false;
+        }
+        st.kind = Step::WaitState;
+        st.a = a[2];
+        st.b = a[3];
+        st.n = parseInt(a[4]);
+        if (a.size() > 5) {
+            st.limit = parseInt(a[5]);
+        }
+        return true;
+    }
     err = "wait: unknown sub " + sub;
     return false;
 }
@@ -1839,6 +2030,27 @@ void tick(Application& app) {
                 fail("wait idle", "no player control (timeout)");
             }
             return;
+        case Step::WaitState: {
+            long long got = 0;
+            if (!getStateInt(app.gameState(), st.a, got)) {
+                sc.waited = 0;
+                ++sc.pc;
+                fail("wait state", st.a + " (unknown path)");
+                return;
+            }
+            if (cmpOp(got, st.b, st.n)) {
+                sc.waited = 0;
+                ++sc.pc;
+            } else if (++sc.waited > st.limit) {
+                sc.waited = 0;
+                ++sc.pc;
+                char buf[96];
+                std::snprintf(buf, sizeof(buf), "%s %s %d (got %lld)", st.a.c_str(), st.b.c_str(),
+                              st.n, got);
+                fail("wait state", buf + std::string(" (timeout)"));
+            }
+            return;
+        }
     }
 }
 

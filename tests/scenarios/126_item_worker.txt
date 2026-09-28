@@ -1,0 +1,16 @@
+# id: 126_item_worker
+# covers: [HELP 98] 機器工人（效果表 id9 useItemRobotWorker 0x447295：选地块→angelUpgrade+FLC553 加盖）
+# skip: Q-M headless 下目标选择掩码点击已送达但 selected 未置位（filter 推演全通过），待深挖
+# timeout: 120000
+wait idle 1000
+find.estate 0
+sel.owner 1
+sel.level 1
+sel.goto
+give.item 0 9
+use.item 9
+clicksel
+wait frames 900
+assert state estates.sel.level >= 2
+assert state errors == 0
+quit

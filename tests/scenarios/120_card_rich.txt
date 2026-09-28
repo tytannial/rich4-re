@@ -1,0 +1,20 @@
+# id: 120_card_rich
+# covers: [HELP 63] 均富卡 0x4420D8——alive!=0 玩家现金取均值（入场标志用 player.alive
+#          显式置位，避免全 AI 局回合异步扰动；均富/超额 1/100 记债给使用者 p0）
+# timeout: 60000
+wait idle 1000
+player.alive 1 1
+player.alive 2 1
+player.alive 3 1
+player.cash 0 1000
+player.cash 1 3000
+player.cash 2 5000
+player.cash 3 7000
+use.card rich
+wait frames 600
+assert state players.0.cash == 4000
+assert state players.1.cash == 4000
+assert state players.2.cash == 4000
+assert state players.3.cash == 4000
+assert state errors == 0
+quit

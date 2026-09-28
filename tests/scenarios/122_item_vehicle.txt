@@ -1,0 +1,11 @@
+# id: 122_item_vehicle
+# covers: [HELP 97] 機車（效果表 id5 useItemFoot 0x446E4A：travel=1，骰子数=2）
+# timeout: 60000
+wait idle 1000
+give.item 0 5
+use.item 5
+wait frames 300
+assert state players.0.travel == 1
+assert state players.0.cash < 200000
+assert state errors == 0
+quit

@@ -293,7 +293,8 @@ void drawMiniMap(Application& app) {
     }
     // [RE 0x40A4E1] 重建工作副本（底图 + 住宅用地/商業用地/行業設施點玩家颜色标记），随物件变化更新
     buildMiniMapMarks(app);
-    // [DIAG] 小地图状态（每 120 帧一次）
+    // [DIAG] 小地图状态（每 120 帧一次）；临时关闭，排查小地图问题时改回 #if 1
+#if 0
     static int s_mmLog = 0;
     if (++s_mmLog >= 120) {
         s_mmLog = 0;
@@ -324,6 +325,7 @@ void drawMiniMap(Application& app) {
                        state.players[i].spriteY, state.pieceSprites[i].frameCount());
         }
     }
+#endif
     if (state.miniMapBuffer.size() == static_cast<size_t>(kMiniMapW) * kMiniMapH) {
         uint16_t* d = dst.pixels() + static_cast<size_t>(v1) * Surface::kWidth + 440;
         for (int row = 0; row < kMiniMapH; ++row) {

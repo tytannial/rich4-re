@@ -16,6 +16,8 @@
 #include "game/app/event_stack.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/app/debug/debug.h"
+#include <cstdio>
 #include "game/game_state.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
@@ -101,6 +103,12 @@ int hitSlot(const SelectState& s, int x, int y) {
 bool selectHandler(const SDL_Event* event, void* user) {
     auto& s = *static_cast<SelectState*>(user);
     if (event == nullptr) {
+        // [NEW] 登记候选格（0x43FF56 hitSlot 同源矩形；脚本 clickr pick.<0..count-1>）
+        for (int i = 0; i < s.count && i < 8; ++i) {
+            char nm[16];
+            std::snprintf(nm, sizeof(nm), "pick.%d", i);
+            debug::registerRegion(nm, s.boxX + i * kSlotW, s.boxY, kSlotW, kSlotH);
+        }
         redraw(s);
         return true;
     }

@@ -1,0 +1,15 @@
+# id: 132_card_tax
+# covers: [HELP 69] 查稅卡 0x4451F0——cardPickTarget(0x0E0C0410: flags 0x10 选人/BYTE1=4
+#          他人)→地图点头像→20% 现金税转账
+# timeout: 90000
+wait idle 1000
+player.alive 1 1
+player.teleport 1 85
+player.cash 1 50000
+use.card tax
+wait frames 30
+clickplayer 1
+wait trace "xfer from=1" 15000
+assert state players.1.cash == 40000
+assert state errors == 0
+quit

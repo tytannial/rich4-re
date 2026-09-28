@@ -1,0 +1,19 @@
+# id: 128_card_hibernate
+# covers: [HELP 58] 冬眠卡 0x4440EA——全体对手 byte54=5（生效条件含 spriteX!=0，
+#          未入场者被跳过→用 teleport 置 sprite；各记债 150×M 给使用者）
+# timeout: 60000
+wait idle 1000
+player.alive 1 1
+player.alive 2 1
+player.alive 3 1
+player.teleport 1 41
+player.teleport 2 42
+player.teleport 3 43
+use.card hibernate
+wait frames 600
+assert state players.1.byte54 == 5
+assert state players.2.byte54 == 5
+assert state players.3.byte54 == 5
+assert state players.0.byte54 == 0
+assert state errors == 0
+quit
