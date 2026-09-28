@@ -105,6 +105,14 @@
 | Q-H | `card.rebuild` 后**卡包应有 7 号卡才扣卡**——命令层直调不带卡时 cardBagRemove(7) 可能移除空槽（原版经 useCardFlow 先扣卡） | rebuild 场景未断卡包 | 实机走卡片栏用改建卡核对；脚本可补 `give.card 0 7 + dump` |
 | Q-I | trace `xfer to=` 语义：收款=玩家**索引0基**、=银行/公库时为其他编号（0x41D433 映射） | 72 场景断 `xfer from=0 to=1`（AI 玩家1=owner2-1）成立 | 银行收款场景先 `dump` 观察字段再写死断言；建议 testing.md §2.1 补"to 字段编号对照表" |
 
+### ISS-013 specPt costType 是 `g_specPtCostMap` 索引，不是帮助序号
+- **现象**：84 场景初版选 `costType=4(電腦)` 断言 dayCount 收费——实际 **costType4=保險公司(轮盘)**
+  （`spIdx==3` 才是銀行=feeBase×dayCount），且保險轮盘=人类模式必须 `click` 停格；
+  land 后挂在轮盘+认购双框上，wait trace xfer 超时。
+- **方案**：场景改 `specpt.type 1 3`（銀行·确定性公式），缴费后 `confirm no` 放行认购询问框。
+- **教训**：给"数值断言"型场景选分支时，先 `dump specpt` + 对照 turn_system specPt 注释表
+  （0x41A168 段）确认 costType→公式，**不要按帮助/帮助页序号直觉映射**。
+
 ## 3. 使用约定
 
 - **新场景失败先判类**：`wait` 超时→时序（ISS-004）；金额/格值不符→注入/公式（ISS-003/008）；

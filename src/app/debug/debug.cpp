@@ -1072,6 +1072,18 @@ bool cmdSelFlag(Application& app, const std::vector<std::string>& a, std::string
     return true;
 }
 
+bool cmdSpecPtType(Application& app, const std::vector<std::string>& a, std::string& err) {
+    if (!argCount(a, 2, err, "specpt.type <i> <costType>")) return false;
+    GameState& st = app.gameState();
+    const int i = parseInt(a[1]);
+    if (i < 1 || i >= static_cast<int>(st.specPts.size())) {
+        err = "specpt.type: index out of range";
+        return false;
+    }
+    st.specPts[i].costType = static_cast<uint8_t>(parseInt(a[2]));
+    return true;
+}
+
 bool cmdSpecPtFund(Application& app, const std::vector<std::string>& a, std::string& err) {
     if (!argCount(a, 2, err, "specpt.fund <i> <v>")) return false;
     GameState& st = app.gameState();
@@ -1251,6 +1263,7 @@ const Cmd kCmds[] = {
     {"corp.owner", cmdCorpOwner},
     {"corp.level", cmdCorpLevel},
     {"specpt.owner", cmdSpecPtOwner},
+    {"specpt.type", cmdSpecPtType},
     {"all.owned", cmdAllOwned},
     {"all.level1", cmdAllLevel1},
     {"player.cash", cmdPlayerCash},
