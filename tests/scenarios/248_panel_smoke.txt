@@ -1,0 +1,21 @@
+# id: 248_panel_smoke
+# covers: [HELP 10/11/13] 工具條 幫助(top.0 0x44EB39)/大地圖(top.5 0x40A9BD)/設置
+#          (top.1 0x411B53) 三面板開閉鏈（退出=右鍵 0x205 慣例(幫助)/各自按鈕；
+#          取消不改音樂=既有回歸點）
+# timeout: 90000
+wait idle 1500
+clickr top.0
+wait log "help dialog" 10000
+rclick 320 240
+wait frames 120
+clickr top.5
+wait log "map dialog" 10000
+rclick 320 240
+wait frames 120
+clickr top.1
+wait log "settings dialog: page=" 10000
+rclick 320 240
+wait log "system menu result" 10000
+wait frames 200
+assert state errors == 0
+quit
