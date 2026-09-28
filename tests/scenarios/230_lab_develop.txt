@@ -1,0 +1,17 @@
+# id: 230_lab_develop
+# covers: [HELP 63] 研究所研發 0x44101D——自有 type4 corp(corp.build 構造)→land 內先彈
+#          corp 升級詢問(0x41A31E 同步阻塞=Q-U 同型)→prefetch confirm no 應答→
+#          labDevelopDialog→lab.slot.1→researchItem=2/left=5
+# timeout: 80000
+wait idle 1000
+select corp 1
+corp.build 1 4 3
+land
+confirm no
+wait log "dialog open name=lab" 15000
+clickr lab.slot.1
+wait log "lab develop:" 15000
+assert log "researchItem=2"
+assert state corps.1.sub == 3
+assert state errors == 0
+quit

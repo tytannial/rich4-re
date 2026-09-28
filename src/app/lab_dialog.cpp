@@ -1,12 +1,15 @@
 #include "game/app/lab_dialog.h"
 
 #include <SDL3/SDL.h>
+#include <cstdio>
 
 #include "game/app/event_stack.h"
 #include "game/app/map_tables.h"
 #include "game/app/new_game_tables.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/trace.h"
+#include "game/app/debug/debug.h"
 #include "game/game_state.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
@@ -172,7 +175,21 @@ bool labEventHandler(const SDL_Event* event, void* user) {
 
 }  // namespace
 
-void labDevelopDialog(Application& app, Corp& cp) {
+void labDevelopDialog(Application& app, Corp& cp) {    // [NEW] named region：5 研發槽（hitLabSlot 0x4402D7 同源 x[35,406]/y[297,351]）
+    {
+        static bool s_regLab = false;
+        if (!s_regLab) {
+            s_regLab = true;
+            for (int i = 0; i < 5; ++i) {
+                char nm[14];
+                std::snprintf(nm, sizeof(nm), "lab.slot.%d", i);
+                debug::registerRegion(nm, kLabHitX0 + kLabIconStep * i, kLabHitY0,
+                                      kLabIconStep, kLabHitY1 - kLabHitY0);
+            }
+        }
+    }
+    trace::logf("dialog open name=lab sub=%u", cp.sub);
+
     GameState& g = app.gameState();
     int idx = -1;
     if (g.players[g.currentPlayer].alive == 1) {

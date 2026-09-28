@@ -1,0 +1,5 @@
+# id: 99_probe
+# covers: probe
+# timeout: 30000
+wait idle 1000
+quit

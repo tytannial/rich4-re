@@ -488,6 +488,20 @@ bool cmdCorpLevel(Application& app, const std::vector<std::string>& a, std::stri
     return true;
 }
 
+// [NEW] corp.sub <i> <n>：研發門槛解鎖級數（0x44101D 研究所周邊構造用）
+bool cmdCorpSub(Application& app, const std::vector<std::string>& a, std::string& err) {
+    if (!argCount(a, 2, err, "corp.sub <i> <n>")) return false;
+    GameState& st = app.gameState();
+    const int i = parseInt(a[1]);
+    const int n = parseInt(a[2]);
+    if (i <= 0 || i >= static_cast<int>(st.corps.size()) || n < 0 || n > 5) {
+        err = "corp.sub: out of range";
+        return false;
+    }
+    st.corps[i].sub = static_cast<uint8_t>(n);
+    return true;
+}
+
 bool cmdCorpOwner(Application& app, const std::vector<std::string>& a, std::string& err) {
     if (!argCount(a, 2, err, "corp.owner <i> <p>")) return false;
     GameState& st = app.gameState();
@@ -1076,6 +1090,20 @@ bool cmdFindEvtCell(Application& app, const std::vector<std::string>& a, std::st
     return true;
 }
 
+// [NEW] find.lab：找 type==4 行業設施點(研究所) corp 並選中（selected=4000+ci）
+bool cmdFindLab(Application& app, const std::vector<std::string>& a, std::string& err) {
+    GameState& st = app.gameState();
+    for (size_t i = 1; i < st.corps.size(); ++i) {
+        if (st.corps[i].type == 4) {
+            g_selected = static_cast<uint16_t>(4000 + static_cast<int>(i));
+            RICH4_LOGI("debug: find.lab -> corp %zu (selected=%u)", i, g_selected);
+            return true;
+        }
+    }
+    err = "find.lab: no type4 corp";
+    return false;
+}
+
 bool cmdStockBuy(Application& app, const std::vector<std::string>& a, std::string& err) {
     if (!argCount(a, 3, err, "stock.buy <p> <stock> <n>")) return false;
     const int changed = buyStock(app, parseInt(a[1]), parseInt(a[2]), parseInt(a[3]), false);
@@ -1547,6 +1575,7 @@ const Cmd kCmds[] = {
     {"estate.flag", cmdEstateFlag},
     {"use.god", cmdUseGod},
     {"corp.build", cmdCorpBuild},
+    {"corp.sub", cmdCorpSub},
     {"corp.owner", cmdCorpOwner},
     {"corp.level", cmdCorpLevel},
     {"specpt.owner", cmdSpecPtOwner},
@@ -1569,6 +1598,7 @@ const Cmd kCmds[] = {
     {"day", cmdDay},
     {"find.estate", cmdFindEstate},
     {"find.evtcell", cmdFindEvtCell},
+    {"find.lab", cmdFindLab},
     {"find.road", cmdFindRoad},
     {"stock.buy", cmdStockBuy},
     {"sel.owner", cmdSelOwner},
