@@ -107,8 +107,23 @@
 
 ## 3. 使用约定
 
-- 新场景失败先判类：`wait` 超时→时序（ISS-004）；金额/格值不符→注入/公式（ISS-003/008）；
+- **新场景失败先判类**：`wait` 超时→时序（ISS-004）；金额/格值不符→注入/公式（ISS-003/008）；
   路径 unknown→getter 顺序（ISS-010）。
 - 修复产品 bug 后**必须**把该 bug 变成一条场景断言（反哺），并在本文件对应 Q-x 标注
   `→ 已固化为 NN_xxx.txt`。
 - Q-x 被实机验证/证伪后写结论（勾销 / 转 ISS / 转修复）。
+
+## 4. 自动化挖出的产品 bug / 死锁（按发现记录）
+
+### BUG-001 请神符附身动画后回合状态机挂死（headless 实测 60000 帧无进展）
+- **复现**：`--headless --quickstart 0,4,1 --exec "wait idle 1000; use.god invite; quit"`
+  → `fly obj=5` → `attachObject p0 type=5` 后**无** `debug: use.god invite -> 1`、无后续 tick
+  日志、整脚本 60000 帧 TIMEOUT（attachEnd 0x40E32C 飘走/等待链）。
+- **疑因**：attachObject 置玩家 busy/等待标志，attachEnd 的 46 槽 flyCount 等待或回合推进条件
+  在 headless 快进下未满足——**也可能是正常模式同样存在的挂点**（人工用请神符若需等待极久即同源）。
+- **动作**：Q-J（新）待查 `attachEnd`/`useInviteGodCard` 收尾路径；场景 94_invite_god 暂 `[skip]`。
+- **状态**：🔴 未修。
+
+### BUG-002（观察）96_priceup_flag 一次通过但**翻倍金额未断言**
+- 现断 cash<200000；更严格应 `assert trace "xfer ... amount=<2×fee>"`——
+  fee 依赖同路段块数，需先 `dump` 定值；作为金额断言铺开示例待补。

@@ -1,0 +1,15 @@
+# id: 96_priceup_flag
+# covers: [HELP 83] 漲價卡机制（estate.flag≠0 → 他人付费翻倍 0x419B0F；flag 直设代卡）
+# timeout: 60000
+wait idle 1000
+player.cash 0 200000
+find.estate 0
+assert state selected >= 2000
+sel.owner 2
+sel.level 2
+sel.flag 0x50
+land
+wait trace "xfer from=0" 12000
+assert state players.0.cash < 200000
+assert state errors == 0
+quit

@@ -28,6 +28,7 @@ HEAD_ID = re.compile(r"^#\s*id:\s*(.+)$", re.M)
 HEAD_COVERS = re.compile(r"^#\s*covers:\s*(.+)$", re.M)
 HEAD_TIMEOUT = re.compile(r"^#\s*timeout:\s*(\d+)$", re.M)
 HEAD_QUICKSTART = re.compile(r"^#\s*quickstart:\s*(\d+,\d+,\d+)$", re.M)
+HEAD_SKIP = re.compile(r"^#\s*skip:\s*(.+)$", re.M)
 HELP_REF = re.compile(r"HELP\s*(\d+)")
 
 
@@ -46,12 +47,14 @@ def parse_scenario(path: Path) -> dict:
     cov = HEAD_COVERS.search(txt)
     tout = HEAD_TIMEOUT.search(txt)
     qs = HEAD_QUICKSTART.search(txt)
+    sk = HEAD_SKIP.search(txt)
     covers = sorted(int(x) for x in HELP_REF.findall(cov.group(1))) if cov else []
     return {
         "file": path,
         "id": mid.group(1).strip() if mid else path.stem,
         "covers": covers,
         "quickstart": qs.group(1) if qs else "0,4,1",
+        "skip": sk.group(1).strip() if sk else "",
         "wall_timeout": int(tout.group(1)) // 100 + 30 if tout else 120,
     }
 
@@ -141,6 +144,9 @@ def main() -> int:
     results = []
     print(f"=== L1 headless 场景 ×{len(all_sc)} (exe={Path(args.exe).name}, seed={args.seed}) ===")
     for sc in all_sc:
+        if sc.get("skip"):
+            print(f"  [SKIP] {sc['id']:<28} {sc['skip']}")
+            continue
         for rep in range(args.repeat):
             r = run_scenario(sc, args.exe, args.game, args.seed + rep)
             r["rep"] = rep

@@ -1061,6 +1061,17 @@ bool cmdSelType(Application& app, const std::vector<std::string>& a, std::string
     return true;
 }
 
+bool cmdSelFlag(Application& app, const std::vector<std::string>& a, std::string& err) {
+    if (!argCount(a, 1, err, "sel.flag <v>")) return false;
+    const int i = selIndex();
+    if (i < 1 || i >= static_cast<int>(app.gameState().estates.size())) {
+        err = "sel.flag: no estate selected";
+        return false;
+    }
+    app.gameState().estates[i].flag = static_cast<uint8_t>(parseInt(a[1]));
+    return true;
+}
+
 bool cmdSpecPtFund(Application& app, const std::vector<std::string>& a, std::string& err) {
     if (!argCount(a, 2, err, "specpt.fund <i> <v>")) return false;
     GameState& st = app.gameState();
@@ -1156,6 +1167,39 @@ bool cmdClickR(Application& app, const std::vector<std::string>& a, std::string&
     return true;
 }
 
+bool cmdEstateFlag(Application& app, const std::vector<std::string>& a, std::string& err) {
+    if (!argCount(a, 2, err, "estate.flag <i> <v>")) return false;
+    GameState& st = app.gameState();
+    const int i = parseInt(a[1]);
+    if (i < 1 || i >= static_cast<int>(st.estates.size())) {
+        err = "estate.flag: index out of range";
+        return false;
+    }
+    st.estates[i].flag = static_cast<uint8_t>(parseInt(a[2]));
+    return true;
+}
+
+bool cmdUseGod(Application& app, const std::vector<std::string>& a, std::string& err) {
+    // 请神符 0x444E1A / 送神符 0x444C45（先塞卡走完整路径，同 Ctrl+Shift+I/H）
+    if (!argCount(a, 1, err, "use.god invite|banish")) return false;
+    GameState& st = app.gameState();
+    const int cur = curPlayer(app);
+    if (a[1] == "invite") {
+        giveCardToBag(st, cur, 23);
+        const bool ok = useInviteGodCard(app);
+        RICH4_LOGI("debug: use.god invite -> %d", ok ? 1 : 0);
+        return true;
+    }
+    if (a[1] == "banish") {
+        giveCardToBag(st, cur, 22);
+        const bool ok = useBanishGodCard(app);
+        RICH4_LOGI("debug: use.god banish -> %d", ok ? 1 : 0);
+        return true;
+    }
+    err = "use.god: invite|banish";
+    return false;
+}
+
 bool cmdClick(Application& app, const std::vector<std::string>& a, std::string& err) {
     (void)app;
     if (!argCount(a, 2, err, "click <x> <y>")) return false;
@@ -1201,6 +1245,8 @@ const Cmd kCmds[] = {
     {"estate.owner", cmdEstateOwner},
     {"estate.level", cmdEstateLevel},
     {"estate.type", cmdEstateType},
+    {"estate.flag", cmdEstateFlag},
+    {"use.god", cmdUseGod},
     {"corp.build", cmdCorpBuild},
     {"corp.owner", cmdCorpOwner},
     {"corp.level", cmdCorpLevel},
@@ -1225,6 +1271,7 @@ const Cmd kCmds[] = {
     {"sel.owner", cmdSelOwner},
     {"sel.level", cmdSelLevel},
     {"sel.type", cmdSelType},
+    {"sel.flag", cmdSelFlag},
     {"sel.goto", cmdSelGoto},
     {"specpt.fund", cmdSpecPtFund},
     {"card.rebuild", cmdCardRebuild},

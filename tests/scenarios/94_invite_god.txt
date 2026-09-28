@@ -1,0 +1,10 @@
+# id: 94_invite_god
+# covers: [HELP 84] 請神符 useInviteGodCard 0x444E1A（最近可附身神明→飞行→attach 全套）
+# skip: BUG-001 attach 后挂死待修（docs/testing-issues.md §4）
+# timeout: 60000
+wait idle 1000
+use.god invite
+wait trace "attach p=0" 15000
+assert state players.0.god >= 1
+assert state errors == 0
+quit
