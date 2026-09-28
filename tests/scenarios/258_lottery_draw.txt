@@ -1,0 +1,21 @@
+# id: 258_lottery_draw
+# covers: [HELP 36] 15 號開獎 0x43010C——p0 投注 lotto.5(=No.6,0-based 網格)→
+#          rng lottery=5 注入開出 No.6 owner=1(p0)→
+#          中獎結算(奖池入 cash+winner trace)；100(投注側) 的開獎姊妹案
+# timeout: 120000
+wait idle 1000
+player.cash 0 200000
+find.evtcell 9
+land
+clickr lotto.5
+wait frames 60
+rclick 320 240
+wait frames 120
+assert state publicFund >= 1000
+rng lottery 5
+day 14
+wait log "lottery draw: No.6 owner=1" 40000
+wait log "lottery settle: winner=1 pool left=0" 40000
+assert state players.0.cash >= 200000  # 派彩=pool(單注時即本錢回帳)+pool 清零已在 settle 斷言
+assert state errors == 0
+quit
