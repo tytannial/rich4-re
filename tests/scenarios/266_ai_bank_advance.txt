@@ -1,0 +1,16 @@
+# id: 266_ai_bank_advance
+# covers: 週轉资金准备结算接入 AI 回合（0x418DFE sub_436B0A(0)）——
+#          p0/p1/p2 同欠週轉金（银行经营者 i==owner 者豁免，至少一个非经营者被清算），
+#          任一后续 AI 回合触发「銀行經營權易主」
+# quickstart: 0,4,0
+# timeout: 240000
+wait log "begin player 2 turn" 180000
+player.bank 0 20000
+player.bank 1 20000
+player.bank 2 20000
+player.advance 0 5000
+player.advance 1 4000
+player.advance 2 3000
+wait log "銀行經營權易主" 180000
+assert state errors == 0
+quit

@@ -68,9 +68,23 @@
 
 ## 7. 后续规划建议（优先级序）
 
-1. `0x418E31` 状态守卫（小、行为正确性高）。
-2. `sub_4221C0` 骰子调整（小，复用 `aiItemPredictPath`）。
-3. `bankAdvanceSettle(app, 0)` 接入（一行）。
+1. ~~`0x418E31` 状态守卫~~ ✅ **2026-09-28 已实现**（`turn_system.cpp beginPlayerTurn`，
+   场景 `262_ai_turn_guard`：p1 置态后全程无 land/landmove）。
+2. ~~`sub_4221C0` 骰子调整~~ ✅ **2026-09-28 已实现**（`ai_item.cpp aiDiceAdjustPerTurn`，
+   场景 `264_ai_dice_adjust`：实机日志 `dice=1 ownFree=4 other=0` 验证"守段收租"语义）。
+3. ~~`bankAdvanceSettle(app, 0)` 接入~~ ✅ **2026-09-28 已实现**（0x418DFE 位序；场景
+   `266_ai_bank_advance`。注意 one=0 循环**豁免银行经营者本人**（i==owner skip），
+   开局 bank 常有初始经营者——多玩家负债才稳态触发）。
 4. `sub_42BF03`/`sub_42C79F` AI 股票买卖（两大函数，需结合 `stock_system.cpp` 现
-   接口：停牌/涨跌停/历史均价数组均已存在）。
+   接口：停牌/涨跌停/历史均价数组均已存在）——**本轮进行中（A5）**。
 5. 与「AI 行为整体规划」合并评审（用户 2026-09-28 决策：本轮先道具/卡片，行为链后续补完）。
+
+## 8. 补充核实（2026-09-28 实现时）
+
+- `g_playerCellNo`(0x496BA8,+64) = 挂道具槽号（1-based），寿命 = `g_cellLife[24*v10-24]`
+  = `cellTable[24*(cellNo-1)+4]`（`g_cellLife 0x496D0C = g_cellTable 0x496D08+4` 别名）。
+- `g_playerVehicle[104*cur]`(0x496B79) 在 `aiDiceAdjustPerTurn/aiTgtScooter/aiTgtCar` 语境
+  = **travel 行进方式**（+17）；与同盟字段 `0x496BA9 ally` 是两个不同全局（IDA 曾混淆，
+  以引用地址为准）。
+- 状态守卫 break 后 `playerActionFlags[p] |= 0x80` → 下一 tick `updateGameState` 重新
+  进 `beginPlayerTurn`（重入安全：卡/道具/週轉/交易每 tick 都会再跑，原版同形）。

@@ -1,0 +1,11 @@
+# id: 262_ai_turn_guard
+# covers: AI 回合状态守卫（0x418E31）——p1 置 byte54 状态后本回合不掷骰不移动
+#          （playerActionFlags|=0x80 重入，全程无 land/landmove p=1）
+# quickstart: 0,4,0
+# timeout: 240000
+wait log "begin player 0 turn" 120000
+player.state 1 5
+day 4
+assert no trace " p=1"
+assert state errors == 0
+quit

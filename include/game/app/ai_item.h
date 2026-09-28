@@ -19,4 +19,11 @@ int aiItemSelect(Application& app, int itemId);
 // 卡片链共用（查封 6 格 / 烏龜 3 格候选域，[RE 0x42062B/0x420970]）。
 void aiItemPredictPath(const GameState& st, int p, int steps, uint16_t out[8], bool* hasBranch);
 
+// [RE 0x4221C0] aiDiceAdjustPerTurn：AI/托管回合（0x418E70，卡/道具与状态守卫之后、
+//   sub_40DD1F 移动之前）骰子数动态调整。机车基数2/汽车基数3；挂道具（cellNo=+64）
+//   按寿命（cellTable[槽].life=+4）：汽车 <15→1、>20→3、15..20 保持；机车 <15→1、
+//   ≥15 不动作。无道具：前方 5 步路径（aiItemPredictPath）自家/无主 ownFree、他人 other
+//   —— ownFree==0∧other>2 → 汽车 2+(rand&1)/机车 2；ownFree≥2∧other≤1 → 1。步行不调整。
+void aiDiceAdjustPerTurn(Application& app);
+
 } // namespace rich4

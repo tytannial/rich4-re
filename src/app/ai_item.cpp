@@ -662,4 +662,84 @@ int aiItemSelect(Application& app, int itemId) {
     return 0;
 }
 
+// [RE 0x4221C0] 回合骰子数动态调整（beginPlayerTurn 0x418E70，状态守卫后、移动前）。
+// 依据: 0x4221C0 反编译——travel(+17)：2 汽车基数3 / 1 机车基数2 / 0 步行直接返回；
+//   挂道具 g_playerCellNo(+64)≠0 → 寿命 g_cellLife[槽]=cellTable[24*(cellNo-1)+4]：
+//   汽车 <15→1、15..20→保持3 返回、>20→3 返回；机车 ≥15→返回、否则→1。
+//   无道具：aiPathForward(cur,5) 前方5格——无主/自家计入 ownFree（0x4223F9/0x42240C），
+//   他人产业计入 other；汽车 `!ownFree∧other>2`→2+(rand&1)，`ownFree≥2∧other≤1`→1；
+//   机车 `!ownFree∧other>2`→2（重赋基数），`ownFree≥2∧other≤1`→1，其余保持 2。
+// 语义：自家地产密集段收骰子（1 骰守段收租），他人产业段放开（2~3 骰闯段）。
+void aiDiceAdjustPerTurn(Application& app) {
+    GameState& st = app.gameState();
+    const int p = st.currentPlayer;
+    if (p < 0 || p >= kPlayerCount4) {
+        return;
+    }
+    Player& pl = st.players[p];
+    if (pl.travel == 0 || pl.travel > 2) {
+        return;  // 步行不调整（0x42231C v1∉{1,2} return）
+    }
+    pl.diceCount = (pl.travel == 2) ? 3 : 2;
+    if (pl.cellNo != 0) {
+        const size_t off = 24 * (static_cast<size_t>(pl.cellNo) - 1);
+        if (off + 4 >= st.cellTable.size()) {
+            return;
+        }
+        const int life = st.cellTable[off + 4];
+        if (pl.travel == 2) {
+            if (life < 15) {
+                pl.diceCount = 1;
+            } else if (life > 20) {
+                pl.diceCount = 3;
+            }
+        } else {
+            if (life < 15) {
+                pl.diceCount = 1;
+            }
+        }
+        return;
+    }
+    uint16_t path[8];
+    bool branch = false;
+    aiItemPredictPath(st, p, 5, path, &branch);
+    int ownFree = 0;
+    int other = 0;
+    for (int i = 0; i < 5; ++i) {
+        const int cid = path[i];
+        if (cid <= 0 || cid >= static_cast<int>(st.cellEnts.size())) {
+            continue;
+        }
+        const uint16_t oid = st.cellEnts[cid].special;
+        int o = 0;
+        if (oid > 2000 && oid < 4000) {
+            o = st.estates[oid - 2000].owner;
+        } else if (oid > 4000 && oid < 6000) {
+            o = st.corps[oid - 4000].owner;
+        } else {
+            continue;  // 普通格不计数
+        }
+        if (o == 0 || o == static_cast<uint8_t>(p + 1)) {
+            ++ownFree;
+        } else {
+            ++other;
+        }
+    }
+    if (pl.travel == 2) {
+        if (ownFree == 0 && other > 2) {
+            pl.diceCount = static_cast<uint8_t>(2 + dbg::roll(dbg::SlotAi, 2));
+        } else if (ownFree >= 2 && other <= 1) {
+            pl.diceCount = 1;
+        }
+    } else {
+        if (ownFree == 0 && other > 2) {
+            pl.diceCount = 2;
+        } else if (ownFree >= 2 && other <= 1) {
+            pl.diceCount = 1;
+        }
+    }
+    RICH4_LOGI("aiDiceAdjust: p%d travel=%u dice=%u ownFree=%d other=%d (RE 0x4221C0)", p,
+               pl.travel, pl.diceCount, ownFree, other);
+}
+
 }  // namespace rich4

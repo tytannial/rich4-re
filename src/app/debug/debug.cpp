@@ -242,6 +242,18 @@ bool getStateInt(const GameState& st, const std::string& path, long long& out) {
         out = st.players[p].travel;
         return true;
     }
+    if (matchPath(path, "players.*.dice", c, 1)) {  // +18 diceCount（0x4221C0 骰子调整断言）
+        const int p = parseInt(c[0]);
+        if (p < 0 || p >= 9) return false;
+        out = st.players[p].diceCount;
+        return true;
+    }
+    if (matchPath(path, "players.*.advance", c, 1)) {  // +40 bankAdvance（週轉欠款）
+        const int p = parseInt(c[0]);
+        if (p < 0 || p >= 9) return false;
+        out = st.players[p].bankAdvance;
+        return true;
+    }
     if (matchPath(path, "players.*.god", c, 1)) {
         const int p = parseInt(c[0]);
         if (p < 0 || p >= 9) return false;
@@ -570,6 +582,17 @@ bool cmdPlayerBank(Application& app, const std::vector<std::string>& a, std::str
         return false;
     }
     app.gameState().players[p].bank = parseInt(a[2]);
+    return true;
+}
+
+bool cmdPlayerAdvance(Application& app, const std::vector<std::string>& a, std::string& err) {
+    if (!argCount(a, 2, err, "player.advance <p> <v>")) return false;
+    const int p = parseInt(a[1]);
+    if (p < 0 || p >= 9) {
+        err = "player.advance: bad index";
+        return false;
+    }
+    app.gameState().players[p].bankAdvance = parseInt(a[2]);  // [RE 0x496B90] 週轉欠款
     return true;
 }
 
@@ -1615,6 +1638,7 @@ const Cmd kCmds[] = {
     {"all.level1", cmdAllLevel1},
     {"player.cash", cmdPlayerCash},
     {"player.bank", cmdPlayerBank},
+    {"player.advance", cmdPlayerAdvance},
     {"player.points", cmdPlayerPoints},
     {"player.state", cmdPlayerState},
     {"player.god", cmdPlayerGod},

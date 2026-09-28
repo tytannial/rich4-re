@@ -11,6 +11,7 @@
 #include <SDL3/SDL.h>
 
 #include "game/application.h"
+#include "game/app/ai_item.h"  // aiDiceAdjustPerTurn [RE 0x4221C0]
 #include "game/app/bank_dialog.h"
 #include "game/app/bank_stay_dialog.h"
 #include "game/app/card_bag_dialog.h"
@@ -3043,6 +3044,12 @@ void beginPlayerTurn(Application& app) {
             //   beginPlayerTurn 内 mapHitRegions 仍是**上一玩家视口**的陈旧记录
             //   （机器工人/传送机/卡片链「远处误选」根因，2026-09-28 实机）→ 先刷新视口
             renderGameFrame(app);
+            // [RE 0x418DE6/0x418DF4] AI 买/卖股票（0x42BF03/0x42C79F）——A5 实装后接此处
+            // [RE 0x418DFE] 週轉资金准备结算（sub_436B0A(0)，柜员机 one=1 / 回合 one=0）
+            bankAdvanceSettle(app, 0);
+            if (st.sceneRequest != 0) {  // [RE 0x418E06] 场景切换保护
+                break;
+            }
             // [RE 0x418E13] 交易市场 AI（sub_4284BE：清挂单 + 随机挂卖/改价/低价买入）
             tradeAiTurn(app);
             // [RE 0x418E18..0x418E21] rand()&1 → 用卡(useCardFlow 0x441BAA)/道具(itemPanelFlow 0x447D97)
@@ -3052,8 +3059,17 @@ void beginPlayerTurn(Application& app) {
             } else {
                 itemBagDialog(app);
             }
-            if (app.gameState().sceneRequest != 0) {  // [RE 0x418E06] 场景切换保护
+            // [RE 0x418E31] 状态守卫：出国/绑架/冬眠等（stateFlags+50 ∨ byte54+54 ∨
+            //   state37+55 任一非 0）→ 置待处理标记 0x80（下 tick 重新 beginPlayerTurn），
+            //   本回合不掷骰不移动
+            if (st.players[p].stateFlags != 0 || st.players[p].byte54 != 0 ||
+                st.players[p].state37 != 0) {
+                st.playerActionFlags[p] |= 0x80;
                 break;
+            }
+            // [RE 0x418E6E/0x418E70] 非移动态才做骰子数动态调整，然后 sub_40DD1F 移动
+            if (st.playerActionState[p] != 1) {
+                aiDiceAdjustPerTurn(app);
             }
             startPlayerMove(app);  // [RE 0x40DD1F]
             break;
