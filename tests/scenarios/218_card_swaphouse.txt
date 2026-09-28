@@ -1,0 +1,21 @@
+# id: 218_card_swaphouse
+# covers: [HELP 77] 換屋卡 id5 0x442B02——選自己住宅(A=estate3)→點同路段對面地(B=estate4)
+#          交換 owner（174 換地卡姊妹鏈，篩選 sub_40B4F8 同路段）
+# timeout: 50000
+wait idle 1000
+estate.owner 3 1
+estate.level 3 2
+select estate 3
+sel.goto
+estate.owner 4 2
+estate.level 4 1
+select estate 4
+use.card swapHouse
+wait frames 200
+clicksel
+wait frames 260
+clicksel
+wait frames 600
+assert log "cardSwapHouse"
+assert state errors == 0
+quit

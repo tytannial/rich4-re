@@ -1,0 +1,18 @@
+# id: 216_item_nukeall
+# covers: [HELP 97] 核子飛彈(全圖) id13 0x447ACE——mode 0x400C0 選人→FLC 530→
+#          expireAssets(-1 全視野)拆產+傷害+住院3（198 同族，radius=-1 變體）
+# timeout: 80000
+wait idle 1000
+player.alive 1 1
+player.teleport 1 85
+give.item 0 13
+use.item 13
+wait frames 300
+clickplayer 1
+wait frames 260
+clickplayer 1
+wait log "missile item 13" 20000
+wait frames 1200
+assert state players.1.stateFlags >= 3
+assert state errors == 0
+quit
