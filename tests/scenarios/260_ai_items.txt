@@ -1,0 +1,18 @@
+# id: 260_ai_items
+# covers: AI 道具链（0x420E9A funcs_420EE6 判定+目标预选 / 0x447D97 AI 分支 /
+#          0x446AFB 機器娃娃对 AI 生效）——遥控骰子点数=前方路径索引+1、
+#          地雷/炸弹候选=sub_40B343 回溯路线∩视口格、飞弹债主须在视口+溅射保护
+# quickstart: 0,4,0
+# timeout: 180000
+wait trace "land cell=" 120000
+give.item 1 8 2
+give.item 1 3 2
+give.item 1 2 2
+give.item 1 1 2
+give.item 2 7 2
+give.item 2 9 2
+give.item 3 4 2
+give.item 0 8 2
+wait log "aiItemSelect" 120000
+assert state errors == 0
+quit

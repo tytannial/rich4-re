@@ -12,6 +12,7 @@
 #include "game/app/message_dialog.h"
 #include "game/app/new_game_tables.h"
 #include "game/application.h"
+#include "game/core/debug_hooks.h"
 #include "game/core/log.h"
 #include "game/core/trace.h"
 #include "game/render/blit.h"
@@ -187,7 +188,8 @@ void itemBagDialog(Application& app) {
         return;
     }
     // [RE 0x447D97 AI 分支] 电脑/托管（alive&6）且 aiCardItem bit1（使用道具）：
-    //   手持道具随机序逐件试 aiItemSelect（persona + 目标预选 dword_48BE64）→ 命中即用
+    //   手持道具（**排除 id10 時光機**，0x447FDD `i != 9`）随机起点、**最多试 4 件**
+    //   （0x448009）逐件 aiItemSelect（persona + 目标预选 dword_48BE64）→ 命中即用一件
     if (st.players[cur].alive != 1) {
         if ((st.players[cur].alive & 6) == 0 || (st.players[cur].aiCardItem & 2) == 0) {
             return;
@@ -195,29 +197,29 @@ void itemBagDialog(Application& app) {
         int items[13];
         int n = 0;
         for (int i = 0; i < 13; ++i) {
-            if (st.itemStock[15 * cur + i] != 0) {
+            if (st.itemStock[15 * cur + i] != 0 && i != 9) {
                 items[n++] = i + 1;
             }
         }
         if (n == 0) {
             return;
         }
-        for (int i = n - 1; i > 0; --i) {
-            const int j = std::rand() % (i + 1);
-            const int t = items[i];
-            items[i] = items[j];
-            items[j] = t;
-        }
-        for (int i = 0; i < n; ++i) {
-            const int id = items[i];
-            if (aiItemSelect(app, id) != 1) {
-                continue;
+        int idx = (n <= 4) ? 0 : dbg::roll(dbg::SlotAi, n);  // [RE 0x447FF3] 随机起点
+        for (int t = 0; t < 4; ++t) {
+            const int id = items[idx];
+            if (id == 0) {
+                break;
             }
-            char text[64];
-            std::snprintf(text, sizeof text, "使用%s", kItemBagNames[id]);  // [RE 0x4653E5]
-            showMessage(app, text, 1500);
-            itemEffect(app, id);
-            return;  // 原版每回合最多使用一件
+            if (aiItemSelect(app, id) == 1) {
+                char text[64];
+                std::snprintf(text, sizeof text, "使用%s", kItemBagNames[id]);  // [RE 0x4653E5]
+                showMessage(app, text, 1500);
+                itemEffect(app, id);
+                return;
+            }
+            if (++idx == n) {
+                idx = 0;  // [RE 0x448012] 回绕
+            }
         }
         return;
     }

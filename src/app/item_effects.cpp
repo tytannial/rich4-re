@@ -390,7 +390,8 @@ int useItemCar(Application& app) {
 int useItemWorker(Application& app) {
     GameState& st = app.gameState();
     const int p = st.currentPlayer;
-    if (p < 0 || p >= 4 || st.players[p].alive != 1) {
+    // 原版 0x446AFB 无 alive 守卫：AI/托管同样用娃娃（槽8 行走踢物件）
+    if (p < 0 || p >= 4) {
         return 0;
     }
     takePlayerItem(st, p, 1);  // [RE 0x446B05 takePlayerCard(cur,1)]
