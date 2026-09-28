@@ -4,6 +4,9 @@
 #include "game/app/save_data.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/app/debug/debug.h"
+#include "game/core/trace.h"
+#include <cstdio>
 #include "game/render/blit.h"
 #include "game/render/surface.h"
 #include "game/render/text.h"
@@ -162,6 +165,18 @@ int saveDialog(Application& app) {
 
     redrawSaveDialog(state);
     RICH4_LOGI("save dialog (RE 0x404165)");
+    // [NEW] named region：槽 0..4（命中帶 x(129,577) y=57+72i 與 MOTION hit 同源）
+    {
+        static bool s_regSv = false;
+        if (!s_regSv) {
+            s_regSv = true;
+            for (int i = 0; i < kSlotCount; ++i) {
+                char nm[14];
+                std::snprintf(nm, sizeof(nm), "sv.slot.%d", i);
+                debug::registerRegion(nm, 130, kSlotFirstY + kSlotHeight * i, 446, kSlotHeight);
+            }
+        }
+    }
     return runModal(app, &saveDialogEventHandler, &state);
 }
 

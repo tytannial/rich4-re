@@ -4,6 +4,8 @@
 #include "game/app/save_data.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/app/debug/debug.h"
+#include <cstdio>
 #include "game/render/blit.h"
 #include "game/render/surface.h"
 #include "game/render/text.h"
@@ -190,6 +192,18 @@ int loadDialog(Application& app) {
 
     redrawLoadDialog(state);
     RICH4_LOGI("load dialog: %d slots scanned (RE 0x403D74)", kSlotCount);
+    // [NEW] named region：槽 0..5（x(129,577) y=24+72i 與 MOTION hit 同源）
+    {
+        static bool s_regLd = false;
+        if (!s_regLd) {
+            s_regLd = true;
+            for (int i = 0; i < kSlotCount; ++i) {
+                char nm[14];
+                std::snprintf(nm, sizeof(nm), "ld.slot.%d", i);
+                debug::registerRegion(nm, 130, kSlotFirstY + kSlotHeight * i, 446, kSlotHeight);
+            }
+        }
+    }
     // [RE 0x4018E7] runModal(sub_40363A)：返回槽索引或 -1
     return runModal(app, &loadDialogEventHandler, &state);
 }

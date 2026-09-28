@@ -1,0 +1,20 @@
+# id: 246_save_load
+# covers: [HELP 11/12] 工具條存/讀檔 UI 鏈——top.4→saveDialog(0x404165) 槽左鍵即存
+#          (sv.slot.*)→saved log；改值 999999→top.3→loadDialog(0x403D74)
+#          選 slot(ld.slot.0..5)→reload 後 cash 恢復 234567=回滾鐵證
+# timeout: 90000
+wait idle 1500
+player.cash 0 234567
+clickr top.4
+wait log "save dialog" 10000
+clickr sv.slot.2
+wait log "saved to slot 3" 10000
+player.cash 0 999999
+clickr top.3
+wait log "load dialog: 6 slots" 10000
+clickr ld.slot.3
+wait log "load dialog: slot=3 reload" 20000
+wait frames 800
+assert state players.0.cash == 234567
+assert state errors == 0
+quit

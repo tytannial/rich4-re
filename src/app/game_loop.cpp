@@ -26,6 +26,7 @@
 #include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/trace.h"
 #include "game/render/surface.h"
 
 namespace rich4 {
@@ -178,6 +179,7 @@ void handleTopBarButton(Application& app, int index) {
             const int slot = loadDialog(app);
             if (slot >= 0) {
                 // reloadGameFromSlotData 不重入游戏内循环：现有 gameEventHandler 模态继续渲染新局
+                trace::logf("load dialog: slot=%d reload", slot);
                 reloadGameFromSlotData(app, slot);
             }
             break;
