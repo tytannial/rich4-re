@@ -169,6 +169,19 @@ roulette_dialog 0x43F7C6 处 [NEW] 注释）；`roulette theme=<t> cell=<c>` tra
 | `30_buy_land.txt` | [HELP 21] | 无主购地：land 弹确认框（阻塞）→重入 `confirm yes`→扣款 |
 | `40_roulette_hotel.txt` | [HELP 22] | 旅館轮盘：`rng roulette 7` 注入→人类 click 停→`roulette theme=1 cell=7` trace→收费转账 |
 
+### 2.3 named region 控件层（基座已通，逐面板铺开中）
+
+- debug::registerRegion(name,x,y,w,h)：产品侧 nterGameLoop 一次性登记，矩形与既有
+  命中判断同源常量、不改产品逻辑（[RE 0x417E26 工具条 x/40]、[RE 0x4182FA 页签 y/70]）。
+- 脚本 clickr <name>：查表取中心合成 move+click（两帧），并记 	race clicked name=；
+  配合 ssert trace dialog_open（高频 9 面板已带 dialog open name= trace），
+  交互场景不硬编码像素。
+- 已登记：	op.0..top.8 工具条（0帮助 1设置 2AI 3读 4存 5地图 6查詢 7道具 8卡片）、
+  	ab.0..tab.3 页签（资金/地產/股票/其他）。
+- 待登记（各面板入口一行）：前进 GO/骰子、百货行列与按钮、乐透网格、股市買賣、
+  魔法屋惩罚、银行、監獄保释格——Q-D 系列场景的前置。
+- 示范场景：90_topbar_query.txt（clickr top.6 打开查詢面板并断言）。
+
 ## 3. 待落地（既定路线）
 
 1. **L1 场景铺开**：按覆盖矩阵补至 ~22 条（corp 五类/事件 case2..16/卡 30/道具 13/银行/乐透/

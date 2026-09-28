@@ -98,10 +98,10 @@
 | Q-B | 15 号分红**负 fund=股东分担**（公司亏损）演出与扣款 | 56 场景只验证正路（fund=0 也弹会） | `specpt.fund <i> <负值>` + `day 14` + 实机看分担扣款/破产演出；或补脚本 assert `xfer to=股东` |
 | Q-B2 | 结息/乐透/催收的**跨月触发**（settle/lottery dayevt trace 已有，未断金额） | 56 已断 `dayevt name=lottery/dividend` trace | 存款场景：`player.bank 0 100000` + `day 30` → assert `xfer from=银行?`——transferMoney 的银行侧 to=？需先确认 trace 字段语义再写 |
 | Q-C | 旅館收费后的**住宿演出链**（走进建築消失→天数倒计时→走出恢复） | 40 场景断到收费转账为止 | 实机看演出；脚本可补 `assert state players.0.stateFlags >= 3`（BYTE0 住宿）——**待查 land 后是否同帧置位** |
-| Q-D | 交互密集 UI（樂透投注网格/魔法屋惩罚径向选择/百货买卖/银行数字框/股市买卖）脚本未覆盖 | 命令只能 `open.*` 打开+`rclick` 关闭；控件无 named region | **named region 控件层**（既定下一步）；在那之前这些功能点仍靠人工 |
+| Q-D | 交互密集 UI（樂透投注网格/魔法屋惩罚径向选择/百货买卖/银行数字框/股市买卖）脚本未覆盖 | **基座已通**：`registerRegion`+`clickr`+`dialog open name=`（90_topbar_query 绿）；百货/乐透/股市等**控件登记未铺开** | 各面板入口加一行登记（矩形同源）后补场景；逐面板清单见 testing.md §2.3 |
 | Q-E | corp 房地產费用公式标注过"简化"（pricing-formulas.md） | 未入场景 | 对照 IDA/实机核对该格收费；有出入先修代码再补 `assert trace "xfer amount=…"` |
 | Q-F | 同盟卡联合收费分账两笔 `xfer` | 未入场景 | 脚本雏形：`give.card 0 3; use?`（同盟需 UI）→ 依赖 named region；暂人工 |
-| Q-G | L2 长跑不变量未封装 | 手工 `--headless --quickstart 0,4,0` 4000 帧 OK（ISS 全部时序修复后待重跑确认） | 下一步：`80_autoplay.txt`（day 180 + assert 无 ERROR/回合推进），失败即暴露深层 bug |
+| Q-G | L2 长跑不变量未封装 | **已固化**：`80_autoplay_20d.txt`（全 AI 20+天，assert errors==0 / day 推进；seed 42/7/99/2024 四种子全绿） | 可扩至年尺度+`--repeat`；发现深层 bug 时补 assert |
 | Q-H | `card.rebuild` 后**卡包应有 7 号卡才扣卡**——命令层直调不带卡时 cardBagRemove(7) 可能移除空槽（原版经 useCardFlow 先扣卡） | rebuild 场景未断卡包 | 实机走卡片栏用改建卡核对；脚本可补 `give.card 0 7 + dump` |
 | Q-I | trace `xfer to=` 语义：收款=玩家**索引0基**、=银行/公库时为其他编号（0x41D433 映射） | 72 场景断 `xfer from=0 to=1`（AI 玩家1=owner2-1）成立 | 银行收款场景先 `dump` 观察字段再写死断言；建议 testing.md §2.1 补"to 字段编号对照表" |
 

@@ -1,0 +1,11 @@
+# id: 90_topbar_query
+# covers: [HELP 16] 查詢面板——工具条按钮 named region 驱动（clickr top.6 = queryDialog 0x424492）
+# timeout: 40000
+wait idle 1500
+clickr top.6
+wait trace "dialog open name=query" 8000
+assert trace "clicked name=top.6"
+rclick 320 240
+wait frames 40
+assert state errors == 0
+quit

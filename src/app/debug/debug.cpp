@@ -1,9 +1,12 @@
 #include "game/app/debug/debug.h"
 
 #include <cctype>
+#include <array>
 #include <cstdio>
 #include <cstring>
+#include <map>
 #include <sstream>
+#include <string>
 #include <vector>
 
 #include "game/app/bank_stay_dialog.h"
@@ -33,6 +36,9 @@
 // click/wait/assert 步骤（深度守卫防失控）。正常模式（无脚本且非 debug）零开销。
 namespace rich4 {
 namespace debug {
+
+// named region 存储（debug 级：产品侧 registerRegion / 脚本 cmdClickR 共享，需外部链接）
+std::map<std::string, std::array<int, 4>> g_regions;
 
 namespace {
 
@@ -1133,6 +1139,23 @@ bool cmdNpcRelease(Application& app, const std::vector<std::string>& a, std::str
     return true;
 }
 
+// ---- named region：产品侧一次性登记控件矩形，脚本 clickr <name> 免坐标脆断 ----
+// 存储/实现见文件底部对外 API 区（registerRegion 需外部链接）；此处仅消费。
+bool cmdClickR(Application& app, const std::vector<std::string>& a, std::string& err) {
+    (void)app;
+    if (!argCount(a, 1, err, "clickr <region>")) return false;
+    auto it = g_regions.find(a[1]);
+    if (it == g_regions.end()) {
+        err = "clickr: unknown region " + a[1];
+        return false;
+    }
+    const int cx = it->second[0] + it->second[2] / 2;
+    const int cy = it->second[1] + it->second[3] / 2;
+    trace::logf("clicked name=%s at=(%d,%d)", a[1].c_str(), cx, cy);
+    queueInput(cx, cy, false, false);
+    return true;
+}
+
 bool cmdClick(Application& app, const std::vector<std::string>& a, std::string& err) {
     (void)app;
     if (!argCount(a, 2, err, "click <x> <y>")) return false;
@@ -1218,6 +1241,7 @@ const Cmd kCmds[] = {
     {"shot", cmdShot},
     {"dump", cmdDump},
     {"click", cmdClick},
+    {"clickr", cmdClickR},
     {"rclick", cmdRClick},
     {"move", cmdMove},
     {"key", cmdKey},
@@ -1360,6 +1384,10 @@ bool execTokenCmd(Application& app, const std::vector<std::string>& a, std::stri
 
 void setSelectedObject(uint16_t id) { g_selected = id; }
 uint16_t selectedObject() { return g_selected; }
+
+void registerRegion(const char* name, int x, int y, int w, int h) {
+    g_regions[name] = {x, y, w, h};
+}
 
 int failures() { return g_failures; }
 

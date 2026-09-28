@@ -1,9 +1,11 @@
 #include "game/app/game_loop.h"
 
 #include <algorithm>
+#include <cstdio>
 
 #include "game/app/ai_dialog.h"
 #include "game/app/card_bag_dialog.h"
+#include "game/app/debug/debug.h"
 #include "game/app/debug_keys.h"
 #include "game/app/economy.h"
 #include "game/app/event_stack.h"
@@ -613,6 +615,19 @@ void renderGameFrame(Application& app) {
 void enterGameLoop(Application& app) {
     // [RE 0x401981] 依据: sub_401981(0) 压入 sub_417E26 并 PostMessage(0x401) 进入游戏内循环
     RICH4_LOGI("enter game loop (RE 0x401981)");
+    // [NEW] named region 一次性登记（docs/testing.md §3.4；仅供脚本 clickr 消费，
+    //   不改任何产品命中逻辑——矩形与既有判断同源常量）
+    {
+        char nm[16];
+        for (int i = 0; i < 9; ++i) { // 工具条 [RE 0x417E26 dword_48BDE4 = x/40]
+            std::snprintf(nm, sizeof(nm), "top.%d", i);
+            debug::registerRegion(nm, i * 40, 0, 40, 40);
+        }
+        for (int t = 0; t < 4; ++t) { // 右侧面板页签 [RE 0x4182FA tab = y/70, x∈[616,640)]
+            std::snprintf(nm, sizeof(nm), "tab.%d", t);
+            debug::registerRegion(nm, 616, t * 70, 24, 70);
+        }
+    }
     // [RE 0x4019C8] 进游戏切可选曲目（sub_454D91(0) = 切下一首），替换选人场景音乐
     app.audio().playNextMusic();
     // [RE 0x452444] 游戏内音乐切换计时器初值（0x33 = 3 天；事件中设 0x33/0x11）

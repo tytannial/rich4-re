@@ -35,5 +35,8 @@ uint16_t selectedObject();
 void synthesizeClick(Application& app, int x, int y, bool right, bool downOnly = false);
 void synthesizeKey(Application& app, const std::string& spec);
 
+// ---- named region 控件层（docs/testing.md §3.4；渐进登记，产品侧一次性 registerRegion） ----
+void registerRegion(const char* name, int x, int y, int w, int h);
+
 } // namespace debug
 } // namespace rich4
