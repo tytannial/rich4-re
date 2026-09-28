@@ -1,6 +1,7 @@
 #include "game/core/log.h"
 
 #include <cstdarg>
+#include <atomic>
 #include <cstdio>
 #include <deque>
 #include <mutex>
@@ -13,6 +14,7 @@ namespace {
 constexpr size_t kLogRingMax = 4096;
 std::deque<std::string> g_logRing;
 std::mutex g_logRingMutex;
+std::atomic<int> g_errorCount{0}; // [NEW] ERROR 级计数（assert state errors == 0 长跑不变量）
 } // namespace
 
 namespace {
@@ -68,8 +70,15 @@ void logMessage(LogLevel level, const char* fmt, ...) {
             g_logRing.pop_front();
         }
         g_logRing.emplace_back(std::move(line));
+        if (level == LogLevel::Error && std::strstr(buf, "ASSERT FAIL") == nullptr &&
+            std::strstr(buf, "script error") == nullptr) {
+            // [NEW] errors 计数只统计**产品** ERROR；断言失败/脚本装载错误本身不计入
+            ++g_errorCount;
+        }
     }
 }
+
+int logErrorCount() { return g_errorCount.load(); }
 
 bool logContains(const char* substr) {
     std::lock_guard<std::mutex> lk(g_logRingMutex);

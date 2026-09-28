@@ -1,0 +1,11 @@
+# id: 82_park_no_event
+# covers: [HELP 24] 公園（case 1 安全地带：不收费、无结算）
+# timeout: 40000
+wait idle 1000
+find.evtcell 1
+assert state selected >= 1
+land
+wait frames 400
+assert no trace "xfer from=0"
+assert state errors == 0
+quit

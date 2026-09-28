@@ -292,6 +292,10 @@ bool getStateInt(const GameState& st, const std::string& path, long long& out) {
         out = st.publicFund;
         return true;
     }
+    if (path == "errors") {
+        out = logErrorCount();
+        return true;
+    }
     if (path == "lotteryPool") {
         out = st.publicFund;
         return true;
@@ -878,6 +882,19 @@ bool cmdDump(Application& app, const std::vector<std::string>& a, std::string& e
         const Corp& cp = st.corps[i];
         RICH4_LOGI("dump corp %d: owner=%u type=%u sub=%u flag=%u fund=%d lastFee=%d", i, cp.owner,
                    cp.type, cp.sub, cp.flag, 0, cp.lastFee);
+        return true;
+    }
+    if (what == "specpt" && a.size() > 2) {
+        const int i = parseInt(a[2]);
+        if (i < 1 || i >= static_cast<int>(st.specPts.size())) {
+            err = "dump specpt: bad index";
+            return false;
+        }
+        const SpecPt& sp = st.specPts[i];
+        RICH4_LOGI("dump specpt %d: owner=%u stockNo=%d costType=%u fund=%d feeBase=%u "
+                   "capital=%d sharesLeft=%d",
+                   i, sp.owner, sp.stockNo, sp.costType, sp.fund, sp.feeBase, sp.capital,
+                   sp.sharesLeft);
         return true;
     }
     if (what == "state") {

@@ -14,6 +14,8 @@ bool logContains(const char* substr);
 int logCount(const char* substr);
 std::string logLastMatch(const char* substr);
 void logClear();
+// [NEW] ERROR 级日志计数（长跑不变量：assert state errors == 0）
+int logErrorCount();
 
 } // namespace rich4
 

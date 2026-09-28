@@ -1,0 +1,12 @@
+# id: 84_specpt_fee
+# covers: [HELP 20] 行業設施點缴费（specPt costType=4 電腦·dayCount 公式，公库 fund 收款）
+# timeout: 60000
+wait idle 1000
+player.cash 0 500000
+specpt.owner 1 2
+select specpt 1
+land
+wait trace "xfer from=0" 15000
+assert state players.0.cash < 500000
+assert state errors == 0
+quit

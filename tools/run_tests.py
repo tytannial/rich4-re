@@ -27,6 +27,7 @@ HELP_LIST = ROOT / "docs" / "help-checklist.md"
 HEAD_ID = re.compile(r"^#\s*id:\s*(.+)$", re.M)
 HEAD_COVERS = re.compile(r"^#\s*covers:\s*(.+)$", re.M)
 HEAD_TIMEOUT = re.compile(r"^#\s*timeout:\s*(\d+)$", re.M)
+HEAD_QUICKSTART = re.compile(r"^#\s*quickstart:\s*(\d+,\d+,\d+)$", re.M)
 HELP_REF = re.compile(r"HELP\s*(\d+)")
 
 
@@ -44,11 +45,13 @@ def parse_scenario(path: Path) -> dict:
     mid = HEAD_ID.search(txt)
     cov = HEAD_COVERS.search(txt)
     tout = HEAD_TIMEOUT.search(txt)
+    qs = HEAD_QUICKSTART.search(txt)
     covers = sorted(int(x) for x in HELP_REF.findall(cov.group(1))) if cov else []
     return {
         "file": path,
         "id": mid.group(1).strip() if mid else path.stem,
         "covers": covers,
+        "quickstart": qs.group(1) if qs else "0,4,1",
         "wall_timeout": int(tout.group(1)) // 100 + 30 if tout else 120,
     }
 
@@ -56,7 +59,7 @@ def parse_scenario(path: Path) -> dict:
 def run_scenario(sc: dict, exe: str, game: str, seed: int) -> dict:
     cmd = [
         exe, "--game", game, "--headless", "--seed", str(seed),
-        "--quickstart", "0,4,1", "--script", str(sc["file"]),
+        "--quickstart", sc["quickstart"], "--script", str(sc["file"]),
     ]
     t0 = time.time()
     try:
