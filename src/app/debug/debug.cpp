@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "game/app/bank_stay_dialog.h"
+#include "game/app/bank_dialog.h"
 #include "game/app/card_bag_dialog.h"
 #include "game/app/card_effects.h"
 #include "game/app/item_effects.h"
@@ -1711,6 +1712,17 @@ bool execTokenCmd(Application& app, const std::vector<std::string>& a, std::stri
             }
         }
         err = "shop: no department store cell";
+        return false;
+    }
+    if (a[0] == "atm") {
+        GameState& st = app.gameState();
+        for (size_t i = 1; i < st.specPts.size(); ++i) {
+            if (st.specPts[i].costType == 7) {
+                bankVisitDialog(app);
+                return true;
+            }
+        }
+        err = "atm: no bank cell";
         return false;
     }
     if (a[0] == "bank") {

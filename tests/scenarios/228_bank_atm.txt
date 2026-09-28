@@ -1,0 +1,28 @@
+# id: 228_bank_atm
+# covers: [HELP 35] 銀行柜員機 0x436EF8——存入(atm.dep)→小鍵盤 10000→atm.ok→
+#          transfer cash→bank（atm.btn 18 鍵=kVisitRects 0x475914 同源登記）
+# timeout: 60000
+wait idle 1000
+player.cash 0 200000
+player.bank 0 50000
+atm
+wait frames 300
+clickr atm.dep
+wait frames 40
+clickr atm.key.1
+wait frames 20
+clickr atm.key.0
+wait frames 20
+clickr atm.key.0
+wait frames 20
+clickr atm.key.0
+wait frames 20
+clickr atm.key.0
+wait frames 20
+clickr atm.ok
+wait log "bank visit: player" 10000
+rclick 320 240
+wait frames 200
+assert state players.0.bank == 60000
+assert state errors == 0
+quit

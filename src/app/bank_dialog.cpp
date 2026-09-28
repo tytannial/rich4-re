@@ -13,6 +13,8 @@
 #include "game/app/message_dialog.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/app/debug/debug.h"
+#include "game/core/trace.h"
 #include "game/platform/audio.h"
 #include "game/render/blit.h"
 #include "game/render/cursor.h"
@@ -417,6 +419,25 @@ void bankAdvanceSettle(Application& app, int one) {
 
 // [RE 0x4379C9] 路过银行
 void bankVisitDialog(Application& app) {
+    // [NEW] named region：ATM 18 鍵（hitVisitButton 0x475914 kVisitRects 面板座標系同源；
+    //   語義 0=提款 1=存入 2=EXIT 3=滑條 4..15=小鍵盤 16=MAX 17=確認交易）
+    {
+        static bool s_regAtm = false;
+        if (!s_regAtm) {
+            s_regAtm = true;
+            static const char* const kNames[18] = {
+                "atm.wd", "atm.dep", "atm.exit", "atm.slider",
+                "atm.key.7", "atm.key.8", "atm.key.9", "atm.key.4", "atm.key.5",
+                "atm.key.6", "atm.key.1", "atm.key.2", "atm.key.3", "atm.key.C",
+                "atm.key.0", "atm.key.X", "atm.max", "atm.ok"};  // 16=MAX 17=確認交易(0x4377E6)
+            for (int i = 0; i < 18; ++i) {
+                const VisitRect& r = kVisitRects[i];
+                debug::registerRegion(kNames[i], kVisitX + r.x0, kVisitY + r.y0,
+                                      r.x1 - r.x0, r.y1 - r.y0);
+            }
+        }
+    }
+    trace::logf("dialog open name=bank_atm");
     GameState& st = app.gameState();
     const int p = st.currentPlayer;
     if (p < 0 || p >= 9) {
