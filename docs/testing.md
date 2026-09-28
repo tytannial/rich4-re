@@ -111,6 +111,10 @@ magicHouse 惩罚/结息分红/小游戏 phase/…）随测试用例铺开。
 ## 2. 命令行（当前）
 
 ```powershell
+# 场景脚本（断言失败 → 退出码 1；--exec 多命令用 ; 分隔）
+./build/rich4.exe --game resources/game --headless --seed 42 --quickstart 0,4,1 `
+  --script tests/scenarios/20_rent_route.txt
+
 # 无头全 AI 冒烟（虚拟时钟快进 + trace 导出；确定性回归的基准命令）
 ./build/rich4.exe --game resources/game --headless --seed 42 --quickstart 0,4,0 `
   --trace-out build/trace.json --shot build/s.bmp --shot-frame 4000
@@ -120,20 +124,60 @@ magicHouse 惩罚/结息分红/小游戏 phase/…）随测试用例铺开。
 ./build/rich4.exe --game resources/game --debug --seed 12345 --load-game 0
 
 # 参数：--seed <n>  --headless  --test-clock  --trace  --trace-out <json>
-#       --quickstart <map[,players[,humans]]>
+#       --quickstart <map[,players[,humans]]>  --script <file>  --exec "<a; b; c>"
 ```
 
-## 3. 待落地（既定路线，见会话计划）
+### 2.1 脚本 DSL（`src/app/debug/debug.cpp`，[NEW]）
 
-1. **统一调试命令层**（`src/app/debug/`）：45 个热键→命令注册表 + `select`（替代鼠标指向）+
-   `rng.*`/`fixture.save`/`assert`/`wait`/`click <region>`/`shot`/`quit`；`--script/--exec` DSL
-   （`# id/covers/timeout` 头）；失败计数→退出码 + `--report <json>`。
-2. **L0 CTest**：`rich4_core` 静态库拆分；公式/序列化/解析器单测。
-3. **L1 场景 ~22 条 + L2 `--autoplay` 不变量长跑**；`tools/run_tests.py` 编排 + 覆盖矩阵
+- 行式；`#` 注释（行首/空白后）；`id:/timeout:` 元数据；双引号 token 含空格。
+- 执行器挂在 `Application::renderFrame` 尾部每帧步进；**阻塞命令**（land/day/news/fate/
+  magic/jail/hosp/settle/dividend/shop/bank/lottery.draw/open.*）仅在顶层帧执行，
+  其阻塞期间重入帧只推进非阻塞步骤（click/confirm/assert/wait…）——
+  天然支持 `land`（内部弹框挂起）→ `confirm yes`/`click`（应答解除挂起）→ 继续断言的交错。
+- 失败计数 → `main` 退出码（CI 契约）；`quit [code]` 结束脚本。
+
+**命令表**（`--exec "help"` 暂无，见代码 kCmds）：
+
+| 类别 | 命令 |
+|------|------|
+| 选择 | `select estate\|corp\|specpt\|cell <i>` · `select clear` · `find.estate <owner>` · `assert state selected >= 2000` |
+| 场景 | `estate.owner\|level\|type <i> <v>` · `sel.owner\|sel.level <v>` · `corp.build <i> <type> [sub]` · `corp.owner\|level <i> <v>` · `specpt.owner <i> <p>` · `all.owned <p>` · `all.level1` |
+| 玩家 | `player.cash\|bank\|points <p> <v>` · `player.state <p> <0..6>` · `player.god <p> <slot>` · `player.vehicle <p> <0..2>` · `player.teleport <p> <cell>` · `give.card\|item <p> <id> [n]` |
+| 事件 | `land [cell]`（默认 select 目标；teleport+landingEvent 同步） · `day [n]` · `news` · `fate` · `magic` · `lottery.draw` · `settle` · `dividend` · `shop` · `bank` · `jail <p> [d]` · `hosp <p> [d]` · `open.stock` · `open.query` |
+| 注入 | `rng <slot> <v>`（one-shot，见 §1.2 槽表）· `rng clear` · `seed <n>` · `settings.anim <0|1>` |
+| 断言 | `assert state <path> <==\|!=\|>=\|<=\|>\|<\> <v>` · `assert log\|trace <substr...>` · `assert no log\|trace <substr>` |
+| 等待 | `wait frames <n>` · `wait log\|trace <pat> [max]` · `wait idle [max]`（等 gamePlayerControl） |
+| 交互 | `click <x> <y>` · `rclick` · `move` · `key <spec>`（ctrl+/shift+）· `confirm yes\|no`（栈顶模态直接应答，免脆坐标） |
+| 观察 | `dump state\|player <p>\|estate <i>\|corp <i>`（走 log，配 assert log） · `shot <path>` · `quit [code]` |
+
+**state 路径**：`players.<p>.cash|bank|points|loan|stateFlags|alive|travel|god|cell`、
+`estates.<i>.owner|level|type`、`corps.<i>.owner|sub|type`、`specpts.<i>.owner|fund`、
+`cur`、`turn`、`day`、`month`、`year`、`players`、`moneyMul`、`publicFund`、`selected`。
+
+**注意**：轮盘注入生效点=**最终停靠格**（人类点击路径指针会演化，入口不消费、出口覆写，
+roulette_dialog 0x43F7C6 处 [NEW] 注释）；`roulette theme=<t> cell=<c>` trace 断言最终值。
+
+### 2.2 现有场景（tests/scenarios/，全部 headless 绿）
+
+| 脚本 | covers | 验证点 |
+|------|--------|--------|
+| `00_smoke.txt` | 冒烟 | quickstart 进局、wait idle、day、trace/log 管道 |
+| `20_rent_route.txt` | [HELP 21] | 他人住宅收租：find.sel.land→状态机续帧转账（wait log "rent: player"）→cash 降 |
+| `30_buy_land.txt` | [HELP 21] | 无主购地：land 弹确认框（阻塞）→重入 `confirm yes`→扣款 |
+| `40_roulette_hotel.txt` | [HELP 22] | 旅館轮盘：`rng roulette 7` 注入→人类 click 停→`roulette theme=1 cell=7` trace→收费转账 |
+
+## 3. 待落地（既定路线）
+
+1. **L0 CTest**：`rich4_core` 静态库拆分；公式/序列化/解析器单测。
+2. **L1 场景铺开**：按覆盖矩阵补 ~22 条（corp 五类/事件 case2..16/卡 30/道具 13/银行/乐透/
+   股市/NPC/结息分红…）；`tools/run_tests.py` 编排（批量/超时/报告）+ 覆盖矩阵
    （`# covers: [HELP idx]` ↔ `docs/help-checklist.md`）。
-4. **named region 控件层**：各对话框控件表登记 → `click <region>` + `assert clicked=`；
-   规范并入 `ui-controls.md`。
+3. **named region 控件层**：各对话框控件表登记 → `click <region>` + `assert clicked=`；
+   交互密集场景（百货/股市/银行/魔法屋选惩罚）依赖此项；规范并入 `ui-controls.md`。
+4. **L2 长跑**：`--autoplay` + 不变量检查（现有 `--headless --quickstart 0,4,0` 已可跑，
+   待脚本 `wait` 状态类 + 断言器铺开）。
 5. **trace 批2~4 全量插桩**（演出/判定边界约 40 点）。
+6. **旧热键迁移到命令注册表**（当前 45 键位保留原实现；`--script` 已与命令层并存）。
 
 ## 4. 设计约束（实施时强制）
 

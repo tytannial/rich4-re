@@ -136,6 +136,15 @@ bool rouletteHandler(const SDL_Event* event, void* user) {
     }
     rouletteDraw(rs);
     if (rs.phase >= 6) {
+        // [NEW] 定点注入生效点=最终停靠格（人类点击路径下指针从初始 cell 继续演化，
+        //   仅覆盖起始值无法控制结果；未注入时零 rand 消耗，默认行为与序列不变）。
+        //   docs/testing.md §1.2
+        if (dbg::hasInject(dbg::SlotRoulette)) {
+            rs.cell = dbg::roll(dbg::SlotRoulette, 12);
+            if (rs.table[rs.cell] == 0xFF) {
+                rs.cell = 0; // 注入落在空格时回退到 0 格（表定义必有值）
+            }
+        }
         rs.value = rs.table[rs.cell];
         app.events().requestExit(rs.value);
     }
@@ -164,7 +173,8 @@ int roulettePrompt(Application& app, int theme, const char* arg) {
     }
     rs.table = kRouletteTable[t];
     std::snprintf(rs.text, sizeof(rs.text), kRouletteText[t], arg ? arg : "");
-    rs.cell = dbg::roll(dbg::SlotRoulette, 12); // [RE 0x43F7C6] dword_48C50C = rand()%12
+    // [NEW] 有注入时起始格取 0（不消费），最终停靠格在出口按注入值覆写（见 rouletteHandler）
+    rs.cell = dbg::hasInject(dbg::SlotRoulette) ? 0 : dbg::roll(dbg::SlotRoulette, 12); // [RE 0x43F7C6] dword_48C50C = rand()%12
     const int cp = st.currentPlayer;
     rs.humanCtl = cp >= 0 && cp < 4 && st.players[cp].alive == 1 && st.players[cp].state37 == 0;
     RICH4_LOGI("roulette prompt: theme=%d arg=%s human=%d (RE 0x44090E)", t, arg ? arg : "",

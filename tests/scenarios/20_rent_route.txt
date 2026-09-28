@@ -1,0 +1,15 @@
+# id: 20_rent_route
+# covers: [HELP 21] 他人住宅用地收租——停留结算扣款（landingEvent 0x419A67）
+# timeout: 30000
+wait idle 1000
+player.cash 0 200000
+find.estate 0
+assert state selected >= 2000
+sel.owner 2
+sel.level 3
+land
+assert trace "land cell="
+# 收租扣款在 landingEvent 返回后的状态机续帧完成（showMessage 自动超时后转账）：
+wait log "rent: player" 3000
+assert state players.0.cash < 200000
+quit

@@ -210,11 +210,13 @@ cmake --build build
 能力见 **`docs/testing.md`**。已就绪：虚拟时钟（`--headless/--test-clock`，44 处墙钟收口）、
 `--seed` + 定点随机注入（`dbg::roll/raw` 21 槽，装饰随机不接）、演出 trace（`--trace-out`，
 批1：FLC/消息/音效/语音/高亮/飞行/落地分派/转盘/模态）、内存日志环、存档往返
-`--save-selftest`（`STABLE=YES`）。待落地：dummy 渲染旁路+quickstart、统一命令层+`--script`
+`--save-selftest`（`STABLE=YES`）、dummy 驱动无头渲染 + `--quickstart`、**统一调试命令层 +
+`--script/--exec` 断言 DSL（assert state/log/trace + wait/confirm/click/rng，失败→退出码）**、
+首批 4 场景（smoke/收租/购地/轮盘注入）headless 全绿。待落地：dummy 渲染旁路+quickstart、统一命令层+`--script`
 断言、CTest L0、L1 场景、L2 `--autoplay` 长跑、named region、trace 批2~4。
 
 ```powershell
-./build/rich4.exe --game resources/game --headless --trace-out build/trace.json --shot build/s.bmp
+./build/rich4.exe --game resources/game --headless --seed 42 --quickstart 0,4,1 --script tests/scenarios/20_rent_route.txt
 ./build/rich4.exe --game resources/game --save-selftest 0   # 存档 save∘parse∘save 字节稳定
 ```
 

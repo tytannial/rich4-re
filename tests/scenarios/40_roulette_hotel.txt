@@ -1,0 +1,18 @@
+# id: 40_roulette_hotel
+# covers: [HELP 22] 商業用地旅館收费——rng.roulette 注入停格 + 人类轮盘点击停止 + trace 断言
+# timeout: 60000
+wait idle 1000
+player.cash 0 200000
+corp.build 1 1
+corp.owner 1 2
+select corp 1
+rng roulette 7
+land
+wait log "roulette prompt" 6000
+wait frames 40
+click 320 240
+wait log "roulette result" 8000
+assert trace "roulette theme=1 cell=7"
+wait log "transferMoney" 8000
+assert state players.0.cash < 200000
+quit

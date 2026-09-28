@@ -1,0 +1,14 @@
+# id: 30_buy_land
+# covers: [HELP 21] 无主住宅用地购地——买地确认框应答（confirm 0x45367E）+ 扣款过户
+# timeout: 30000
+wait idle 1000
+player.cash 0 200000
+find.estate 0
+assert state selected >= 2000
+land
+# land 阻塞于"是否買下此地"确认框，重入 tick 继续消费下一步：
+confirm yes
+wait frames 30
+assert state players.0.cash < 200000
+assert trace "modal push"
+quit

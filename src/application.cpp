@@ -1,5 +1,6 @@
 #include "game/application.h"
 
+#include "game/app/debug/debug.h"
 #include "game/app/game_init.h"
 #include "game/app/game_shutdown.h"
 #include "game/app/main_menu.h"
@@ -118,6 +119,11 @@ void Application::pumpEvents() {
         }
         // [PORT Win32:GetCursorPos] 鼠标事件坐标转换（定义见 transformMouseEvent）
         transformMouseEvent(event);
+        // [NEW] 真实鼠标移动清除合成输入覆盖与调试选择器（脚本 select 仅在无人动鼠标时生效）
+        if (event.type == SDL_EVENT_MOUSE_MOTION) {
+            m_mouseOv = false;
+            debug::setSelectedObject(0);
+        }
         // [PORT Win32:WM_LBUTTONUP] 模态 UI 点击标志（转盘 sub_43F7C6 提前停止；
         //   原版检测 514/517/257，重写用按下以便即时反馈）
         if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.button == SDL_BUTTON_LEFT) {
@@ -141,6 +147,12 @@ void Application::pumpEvents() {
 }
 
 void Application::mouseLogicalPos(int& x, int& y) const {
+    if (m_mouseOv) {
+        // [NEW] headless 合成输入覆盖（debug::move/click 直投）
+        x = m_mouseOvX;
+        y = m_mouseOvY;
+        return;
+    }
     float wx = 0.0f;
     float wy = 0.0f;
     SDL_GetMouseState(&wx, &wy);
@@ -694,6 +706,9 @@ void Application::renderFrame() {
     m_cursor.uncompose(m_surface);
 
     m_renderer.present();
+
+    // [NEW] headless 调试脚本执行器每帧步进（docs/testing.md；无脚本时仅一次入队检查）
+    debug::tick(*this);
 }
 
 void Application::shutdown() {

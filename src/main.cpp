@@ -1,5 +1,6 @@
 #include "game/application.h"
 
+#include "game/app/debug/debug.h"
 #include "game/app/save_data.h"
 #include "game/app/game_loop.h"
 #include "game/app/new_game.h"
@@ -92,12 +93,19 @@ std::vector<std::pair<std::string, int>> gameKeys; // [NEW] --game-key "ctrl+5,1
     int qMap = 0;
     int qPlayers = 4;
     int qHumans = 1;
+    // [NEW] --script <file> / --exec "<a; b; c>"（可多次，按出现顺序执行；docs/testing.md）
+    std::vector<std::string> scriptFiles;
+    std::vector<std::string> execLines;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--game" && i + 1 < argc) {
             gameDir = argv[++i];
         } else if (arg == "--debug") {
             debugMode = true;
+        } else if (arg == "--script" && i + 1 < argc) {
+            scriptFiles.emplace_back(argv[++i]);
+        } else if (arg == "--exec" && i + 1 < argc) {
+            execLines.emplace_back(argv[++i]);
         } else if (arg == "--quickstart" && i + 1 < argc) {
             quickstart = true;
             if (std::sscanf(argv[++i], "%d,%d,%d", &qMap, &qPlayers, &qHumans) < 1) {
@@ -312,6 +320,14 @@ std::vector<std::pair<std::string, int>> gameKeys; // [NEW] --game-key "ctrl+5,1
     }
     // [NEW] 调试模式（--debug）：启用 Ctrl+1..8 测试热键
     app.gameState().debugMode = debugMode;
+    // [NEW] 装载 headless 测试脚本（docs/testing.md）
+    rich4::debug::initFromCommandLine(app);
+    for (const auto& f : scriptFiles) {
+        rich4::debug::addScriptFile(f);
+    }
+    for (const auto& e : execLines) {
+        rich4::debug::addExecLines(e);
+    }
     if (quickstart) {
         // [NEW] headless 开局（跳过主菜单+选人；正常模式勿用——无操作会直接进局）
         app.gameState().debugQuickstart = true;
@@ -383,5 +399,9 @@ std::vector<std::pair<std::string, int>> gameKeys; // [NEW] --game-key "ctrl+5,1
         rich4::trace::exportJson(traceOut);
     }
     app.shutdown();
-    return 0;
+    // [NEW] 脚本断言失败 → 非零退出码（CI 契约，docs/testing.md）
+    if (!scriptFiles.empty() || !execLines.empty()) {
+        std::printf("%s\n", rich4::debug::reportSummary().c_str());
+    }
+    return rich4::debug::failures() ? 1 : 0;
 }

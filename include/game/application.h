@@ -52,6 +52,13 @@ public:
 
     // 鼠标位置（640x480 逻辑坐标，对应原版全屏坐标）
     void mouseLogicalPos(int& x, int& y) const;
+    // [NEW] headless 合成输入的鼠标覆盖：调试命令 move/click 直投时设定逻辑坐标，
+    //   mouseLogicalPos 优先返回它；真实鼠标事件到达（pumpEvents）即清除
+    void setMouseOverride(int x, int y) {
+        m_mouseOvX = x;
+        m_mouseOvY = y;
+        m_mouseOv = true;
+    }
 
     // [PORT] 模态 UI 点击（原版 WM_LBUTTONUP 消息）：
     //   转盘 sub_43F7C6 等阻塞 UI 用点击提前结束/加速；每次消费后清除
@@ -60,6 +67,8 @@ public:
         m_uiClicked = false;
         return clicked;
     }
+    // [NEW] 合成点击（debug move/click 直投）也置位 uiClicked（与真实按下语义一致）
+    void setUiClicked() { m_uiClicked = true; }
 
     // [NEW] 调试：第 25 帧合成 ESC 按下（验证弹出层关闭/主菜单无操作）
     void setAutoEsc(bool on, int frame = 25) {
@@ -234,6 +243,9 @@ private:
     std::string m_shotKey;
     // [RE 0x401010] word_46CB09：確定键模拟左键按下的去重标志
     bool m_hookLeftDown = false;
+    bool m_mouseOv = false;
+    int m_mouseOvX = 0;
+    int m_mouseOvY = 0;
     int m_frameCount = 0;
     bool m_running = false;
 };

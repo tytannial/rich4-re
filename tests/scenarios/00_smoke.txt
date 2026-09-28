@@ -1,0 +1,12 @@
+# id: 00_smoke
+# covers: 冒烟——quickstart 进局 / 回合就绪 / advanceDay / trace·log 管道 / 退出码
+# timeout: 20000
+wait idle 800
+dump state
+assert state players == 4
+assert state cur == 0
+day 1
+assert state day >= 1
+assert log "advance day"
+assert trace "modal push"
+quit

@@ -26,6 +26,8 @@
 #include "game/core/encoding.h"
 #include "game/core/log.h"
 
+#include "game/app/debug/debug.h"
+
 namespace rich4 {
 
 namespace {
@@ -34,8 +36,12 @@ int clampInt(int v, int lo, int hi) {
     return v < lo ? lo : (v > hi ? hi : v);
 }
 
-// [NEW] 鼠标指向的地图物件 ID（复用渲染期拾取记录）
+// [NEW] 鼠标指向的地图物件 ID（复用渲染期拾取记录）；
+//   调试命令层 select <kind> <i> 设定的选择器优先（headless 脚本无需真实鼠标指向）
 uint16_t pointedObject(Application& app) {
+    if (const uint16_t sel = debug::selectedObject()) {
+        return sel;
+    }
     int x = 0;
     int y = 0;
     app.mouseLogicalPos(x, y);
