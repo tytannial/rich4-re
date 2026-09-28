@@ -37,4 +37,17 @@ int sellStock(Application& app, int player, int stock, int count, bool toBank);
 //   → owner = 第一大股东；返回 1 表示 owner 变化（已刷新小地图标记）
 int updateSpecPtControl(Application& app, int player, int stock);
 
+// [RE 0x42BF03] aiStockBuy：AI 买股票（beginPlayerTurn 0x418DE6）。门槛 rand()%3、
+//   aiStockPct、休市、贷款剩余 <15 天；预算 = aiStockPct%×(cash+bank+持仓市值) − 市值，
+//   超存款则 = 存款（只用 bank 买）；12 支评分（停牌/涨停/无在售剔除；无 specPt 组=
+//   技术面 24/6 日均线，上市组=公库比/发行价折价/抢控制权加分）降序 + 首位概率
+//   (13-i)/24 选定 → buyStock(viaBank) + "%s\n\n買進%s%d股"。见 418c55-ai-turn-actions.md §2
+void aiStockBuy(Application& app, int player);
+
+// [RE 0x42C79F] aiStockSell：AI 卖股票（beginPlayerTurn 0x418DF4）。贷款到期 ≤6 天且
+//   存款+现金 < 贷款 → 强制（评分翻倍/+1，循环卖至 ≥ loan×1.1）否则 rand()%3；
+//   休市跳过；逐持仓评分（上市公司组=基本面负公库/集中度/超发行价，投机组=技术面
+//   均线/144 天最低×8/涨幅比加分）→ 最高者 sellStock(toBank) 全仓 + 消息。§3
+void aiStockSell(Application& app, int player);
+
 } // namespace rich4

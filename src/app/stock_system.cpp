@@ -4,9 +4,11 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "game/app/date_util.h"
 #include "game/app/game_panel.h"
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
+#include "game/app/message_dialog.h"
 #include "game/application.h"
 #include "game/core/log.h"
 #include "game/core/trace.h"
@@ -335,6 +337,320 @@ void refreshBankStockShares(Application& app) {
                 static_cast<int32_t>(static_cast<double>(res) * ((dbg::roll(dbg::SlotStock, 2000) + 1000) / 10000.0));
         }
     }
+}
+
+// ===== AI 买/卖股票（beginPlayerTurn 0x418DE6/0x418DF4，418c55-ai-turn-actions.md §2/§3）=====
+namespace {
+
+// 历史环形窗均价（[RE 0x42C3A2] g_stockHistory[144*i+slot]，0x7FFFFFFF 掩码=有效位）
+float histAvg(const GameState& st, int s, int days) {
+    int idx = st.turnCounter - days;
+    if (idx < 0) {
+        idx += 144;
+    }
+    float sum = 0.0f;
+    int n = 0;
+    for (int k = 0; k < days; ++k) {
+        if (idx == 144) {
+            idx = 0;
+        }
+        const int32_t raw = st.stockHistory[s][idx];
+        if ((raw & 0x7FFFFFFF) != 0) {
+            float v = 0.0f;
+            std::memcpy(&v, &raw, 4);
+            sum += v;
+            ++n;
+        }
+        ++idx;
+    }
+    return n != 0 ? sum / static_cast<float>(n) : 0.0f;
+}
+
+float histMin(const GameState& st, int s) {  // [RE 0x42CBEA] 144 期最低
+    float minv = 10000.0f;
+    for (int k = 0; k < 144; ++k) {
+        const int32_t raw = st.stockHistory[s][k];
+        if ((raw & 0x7FFFFFFF) != 0) {
+            float v = 0.0f;
+            std::memcpy(&v, &raw, 4);
+            if (v < minv) {
+                minv = v;
+            }
+        }
+    }
+    return minv;
+}
+
+int listedSpecPt(const GameState& st, int s) {  // [1]=specPt 索引（0=未上市）
+    return static_cast<int>(st.stocks[s][1]);
+}
+
+// [RE 0x4295EA] 0涨 1涨停 2跌 3跌停 4平（同 stock_market_dialog.cpp stockStatus，
+//   该定义在匿名 ns 不导出，AI 侧本地复刻避免符号冲突）
+int stockUpDown(const GameState& st, int s) {
+    const float prev = st.stocks[s][4];
+    const float cur = st.stocks[s][5];
+    if (cur > prev) {
+        return cur >= stockPriceUpdate(prev, 10.0f) ? 1 : 0;
+    }
+    if (cur >= prev) {
+        return 4;
+    }
+    return cur <= stockPriceUpdate(prev, -10.0f) ? 3 : 2;
+}
+
+}  // namespace
+
+// [RE 0x42BF03] AI 买股票。评分常量：1.2/0.85/0.7（发行价折扣档）、2.5/0.6/0.5（参考价/均线比）。
+void aiStockBuy(Application& app, int player) {
+    GameState& st = app.gameState();
+    Player& pl = st.players[player];
+    // 门槛：1/3 概率、aiStockPct、休市、贷款剩余 <15 天（0x42BF1F..0x42BF68）
+    if (dbg::roll(dbg::SlotAi, 3) != 0 || pl.aiStockPct == 0 ||
+        st.stockMarketClosed != 0 || stockIsHoliday(st) ||
+        (pl.loanDate != 0 && dateDiff(st.gameDate, pl.loanDate) < 15)) {
+        return;
+    }
+    int64_t mval = 0;  // 持仓市值
+    for (int i = 0; i < 12; ++i) {
+        if (st.playerShares[player][i] != 0) {
+            mval += static_cast<int64_t>(st.playerShares[player][i]) *
+                    static_cast<int64_t>(st.stocks[i][5]);
+        }
+    }
+    int64_t gap = static_cast<int64_t>(pl.aiStockPct) * (pl.cash + pl.bank + mval) / 100 - mval;
+    if (gap <= 0) {
+        return;
+    }
+    if (gap > pl.bank) {
+        gap = pl.bank;  // 只用存款补差（0x42C05E）
+    }
+    int score[12] = {};
+    for (int i = 0; i < 12; ++i) {
+        // 剔除：停牌 / 涨停 / 无在售量（0x42C5BD）
+        if (st.stockHalted[i] != 0 || stockUpDown(st, i) == 1 || st.stockVolume[i] == 0) {
+            continue;
+        }
+        const float price = st.stocks[i][5];
+        const float ref = st.stocks[i][3];   // 参考价（涨跌界限基准）
+        const int sp = listedSpecPt(st, i);
+        if (sp == 0) {
+            // 未上市组（0x42C379）：bank ≤ 30000×M 不玩；技术面 = 6/24 日均线形态
+            if (30000 * st.moneyMul >= pl.bank) {
+                continue;
+            }
+            const float a24 = histAvg(st, i, 24);
+            const float a6 = histAvg(st, i, 6);
+            if (price < ref * 2.5f && st.stocks[i][7] > 2.0f && a6 > a24) {
+                score[i] += 2;
+            }
+            if (price < ref * 0.6f && a6 > a24) {
+                score[i] += 4;
+            }
+            if (a6 < a24 * 0.5f) {
+                score[i] += 2;
+            }
+        } else if (20000 * st.moneyMul < pl.bank &&
+                   sp < static_cast<int>(st.specPts.size())) {
+            // 上市组（0x42C5F8）：公库资金比 + 发行价折价 + 抢控制权
+            const SpecPt& pt = st.specPts[sp];
+            const double fundR =
+                st.publicFund != 0 ? static_cast<double>(pt.fund) / st.publicFund : pt.fund;
+            const double issue = pt.capital / 10000.0;
+            if (fundR > 0.0) {
+                if (5000 * st.moneyMul > fundR) {
+                    ++score[i];
+                } else if (10000 * st.moneyMul > fundR) {
+                    score[i] += 2;
+                } else {
+                    score[i] += 3;
+                }
+            }
+            if (pt.fund > 0 && st.playerShares[player][i] < 5000 &&
+                issue * 1.2 >= static_cast<double>(price)) {
+                ++score[i];
+                if (pt.owner != 0 && pt.owner != static_cast<uint8_t>(player + 1)) {
+                    const int owner = pt.owner - 1;
+                    if (st.playerShares[player][i] + st.stockReserved[i] + pt.sharesLeft >
+                        st.playerShares[owner][i]) {
+                        ++score[i];  // 可超经营者持股
+                    }
+                    if (st.stockVolume[i] + st.playerShares[player][i] > st.playerShares[owner][i]) {
+                        score[i] += 2;
+                    }
+                }
+            }
+            if (issue * 0.85 > price) {
+                score[i] += 3;
+            }
+            if (issue * 0.7 > price) {
+                score[i] += 5;
+            }
+        }
+    }
+    // 评分降序（同分保持股票序 [RE 0x42C64E qsort 仅比 low16]）
+    int order[12];
+    for (int i = 0; i < 12; ++i) {
+        order[i] = i;
+    }
+    std::stable_sort(order, order + 12,
+                     [&score](int a, int b) { return score[a] > score[b]; });
+    int pick = -1;
+    for (int k = 0; k < 12; ++k) {
+        if (score[order[k]] != 0 && dbg::roll(dbg::SlotAi, 24) <= 12 - k) {
+            pick = order[k];  // 越靠前越易买（0x42C6AF）
+            break;
+        }
+    }
+    if (pick < 0) {
+        return;
+    }
+    const float price = st.stocks[pick][5];
+    if (price <= 0.0f) {
+        return;
+    }
+    int64_t n = gap / static_cast<int64_t>(price);
+    if (n == 0) {
+        return;
+    }
+    if (n > st.stockVolume[pick]) {
+        n = st.stockVolume[pick];
+    }
+    buyStock(app, player, pick, static_cast<int>(n), true);
+    refreshPlayerPanelFor(app, player);
+    char text[96];
+    std::snprintf(text, sizeof text, "%s\n\n買進%s%d股",
+                  pl.name != nullptr ? pl.name : "",
+                  kStockNames[st.gameMode * 4 + st.mapIndex][pick], static_cast<int>(n));
+    showMessage(app, text, 1500);
+    RICH4_LOGI("aiStockBuy: p%d stock=%d n=%d (RE 0x42BF03)", player, pick, static_cast<int>(n));
+}
+
+// [RE 0x42C79F] AI 卖股票。强制=贷款到期 ≤6 天且现金+存款 < 贷款（评分×2/+1 且循环卖至
+//   资产 ≥ loan×1.1）；否则 1/3 概率。剔除：无持仓 / 停牌 / 跌停。
+void aiStockSell(Application& app, int player) {
+    GameState& st = app.gameState();
+    Player& pl = st.players[player];
+    const bool forced = dateDiff(st.gameDate, pl.loanDate) <= 6 && pl.loan != 0 &&
+                        pl.cash + pl.bank < pl.loan;
+    if (!forced && dbg::roll(dbg::SlotAi, 3) != 0) {
+        return;
+    }
+    if (st.stockMarketClosed != 0 || stockIsHoliday(st)) {
+        return;
+    }
+    const int day = static_cast<int>(st.gameDate & 0xFF);  // (u8)dword_497160 = 日
+    int best = -1;
+    do {
+        best = -1;
+        int bestScore = 0;
+        for (int i = 0; i < 12; ++i) {
+            int sc = 0;
+            if (st.playerShares[player][i] == 0 || st.stockHalted[i] != 0 ||
+                stockUpDown(st, i) == 3) {
+                // 不计（0x42CF7E score=0）
+            } else {
+                const float price = st.stocks[i][5];
+                const float prev = st.stocks[i][4];
+                const float cost = st.playerAvgCost[player][i];
+                const int sp = listedSpecPt(st, i);
+                if (sp != 0 && sp < static_cast<int>(st.specPts.size())) {
+                    const SpecPt& pt = st.specPts[sp];
+                    const double fundR =
+                        st.publicFund != 0 ? static_cast<double>(pt.fund) / st.publicFund : pt.fund;
+                    const double issue = pt.capital / 10000.0;
+                    int64_t allShares = 0;
+                    for (int j = 0; j < st.playerCount && j < 4; ++j) {
+                        allShares += st.playerShares[j][i];
+                    }
+                    const double conc = st.playerShares[player][i] != 0
+                                            ? static_cast<double>(allShares) /
+                                                  st.playerShares[player][i]
+                                            : 0.0;
+                    if (pt.fundPaid <= -10000 * st.moneyMul && conc > 0.6 && day > 10 &&
+                        day < 15) {
+                        sc += 3;  // 负公库+高集中：除权前抛（0x42C919）
+                    }
+                    if (pt.fundPaid <= -6000 * st.moneyMul &&
+                        static_cast<double>(price) > cost * 1.2 && pt.owner != player + 1 &&
+                        day > 8 && day < 15) {
+                        sc += 2;
+                    }
+                    if (fundR <= 10000 * st.moneyMul && price >= static_cast<float>(issue) * 2.0f &&
+                        static_cast<double>(price) > cost * 1.3 && conc < 0.4) {
+                        ++sc;
+                    }
+                    if (pt.owner != 0 && pt.owner != static_cast<uint8_t>(player + 1)) {
+                        const int owner = pt.owner - 1;
+                        if (st.playerShares[player][i] + st.stockReserved[i] + pt.sharesLeft <
+                                st.playerShares[owner][i] &&
+                            pt.fund <= 0 &&
+                            static_cast<double>(price) >=
+                                static_cast<double>(cost) * 1.5) {
+                            ++sc;  // 追不上经营者且价高 → 出（0x42CAC8）
+                        }
+                    }
+                    if (price > static_cast<float>(issue) * 2.0f && price > cost * 2.0f &&
+                        price < prev && pt.owner != static_cast<uint8_t>(player + 1)) {
+                        sc += 2;
+                    }
+                    if (price > static_cast<float>(issue) * 3.0f && price > cost * 3.0f &&
+                        price < prev && pt.owner == static_cast<uint8_t>(player + 1)) {
+                        sc += 2;  // 自持公司超发行价回落 → 减磅（0x42CB9D）
+                    }
+                    if (forced) {
+                        ++sc;
+                    }
+                } else {
+                    const double ratio = cost > 0.0f ? static_cast<double>(price) / cost : 0.0;
+                    const float lo144 = histMin(st, i);
+                    const float a24 = histAvg(st, i, 24);
+                    const float a6 = histAvg(st, i, 6);
+                    if (ratio > 1.6 && st.stocks[i][7] < 1.0f) {
+                        sc += 2;  // 涨幅高但动能弱（0x42CD7D）
+                    }
+                    const float floor8 = lo144 * 8.0f;
+                    if (price > floor8 && floor8 > static_cast<double>(cost) * 1.25) {
+                        sc += 2;  // 近 8 倍谷底且高于成本 1.25 → 获利了结
+                    }
+                    if (a24 > a6 && price < prev) {
+                        sc += 2;  // 短均下穿
+                    }
+                    if (ratio >= 2.0) {
+                        sc += static_cast<int>((ratio + 1.5) / 0.5 + 1.0);  // 超额收益加速卖
+                    }
+                    if (pl.bank + pl.cash < 30000 * st.moneyMul && ratio > 0.0) {
+                        sc += static_cast<int>(ratio / 0.5 + 1.0);  // 缺现金
+                    }
+                    if (pl.bank + pl.cash < 16000 * st.moneyMul && ratio > 0.0) {
+                        sc += static_cast<int>(ratio / 0.5 + 1.0);
+                    }
+                    if (forced) {
+                        sc *= 2;
+                    }
+                }
+            }
+            if (sc > bestScore) {
+                bestScore = sc;
+                best = i;
+            }
+        }
+        if (best >= 0) {
+            const int cnt = st.playerShares[player][best];
+            sellStock(app, player, best, cnt, true);
+            refreshPlayerPanelFor(app, player);
+            char text[96];
+            std::snprintf(text, sizeof text, "%s\n\n賣出%s%d股",
+                          pl.name != nullptr ? pl.name : "",
+                          kStockNames[st.gameMode * 4 + st.mapIndex][best], cnt);
+            showMessage(app, text, 1500);
+            RICH4_LOGI("aiStockSell: p%d stock=%d n=%d forced=%d (RE 0x42C79F)", player, best,
+                       cnt, forced ? 1 : 0);
+        }
+        if (!forced || best < 0) {
+            break;
+        }
+    } while (pl.loan * 1.1 > pl.cash + pl.bank);  // [RE dbl_464234] 强制模式卖到够还贷
 }
 
 } // namespace rich4

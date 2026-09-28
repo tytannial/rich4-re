@@ -1,0 +1,13 @@
+# id: 268_ai_stock_buy
+# covers: AI 买股票（0x42BF03，beginPlayerTurn 0x418DE6）——aiStockPct>0 + rng(ai)=0 过
+#          rand()%3 门槛 → 评分选股 → buyStock + 「買進」消息（stockVolume/只用 bank 补差）
+# quickstart: 0,4,0
+# timeout: 240000
+wait log "begin player 0 turn" 120000
+player.cash 1 300000
+player.bank 1 300000
+rng ai 0
+wait log "aiStockBuy: p1" 60000
+rng clear
+assert state errors == 0
+quit

@@ -1,0 +1,14 @@
+# id: 270_ai_stock_sell
+# covers: AI 卖股票（0x42C79F，beginPlayerTurn 0x418DF4）——持仓 + rng(ai)=0 过 rand()%3
+#          门槛 → 评分最高 sellStock + 「賣出」消息（初始配股 AI 必有一次卖出即验链路）
+# quickstart: 0,4,0
+# timeout: 240000
+wait log "begin player 0 turn" 120000
+player.cash 1 500000
+player.bank 1 500000
+stock.buy 1 0 400
+rng ai 0
+wait log "aiStockSell" 60000
+rng clear
+assert state errors == 0
+quit
