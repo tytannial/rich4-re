@@ -180,35 +180,44 @@ int tgtEqualRich(GameState& st) {  // [RE 0x41E6FE]
     return 0;
 }
 
-// [RE 0x41E779 均贫 / 0x4202D2 查税]（同构：视野内优先债主，否则最富可见者）
-int tgtVisibleByCash(GameState& st, bool preferCreditor) {
+// [RE 0x41E779 均贫卡2 / 0x4202D2 查税卡26]（2026-09-28 回验订正，二者条件不同）：
+//   视口对手集合（collectViewportEntities(-1) 玩家位掩码）；
+//   ① 债主在视口 ∧ 债主现金 > 30000×M（卡2 另要求 2×自己现金 < 债主现金）→ 选债主；
+//   ② 否则按玩家号 0..count-1 扫视口集合：现金 > 50000×M（卡2 另要求 3×自己现金 < 现金）
+//      ——**取最后一个满足者**（原版不 break，覆盖式；非市值最大）。
+//   relativeCheck：卡2=true、卡26=false（查税无相对财富条件）。
+int tgtVisibleByCash(GameState& st, bool relativeCheck) {
     const int cur = st.currentPlayer;
+    bool visMask[8] = {};
     int vis[8];
     const int n = visibleOpponents(st, vis);
+    for (int i = 0; i < n; ++i) {
+        visMask[vis[i]] = true;
+    }
     const int creditor = findMaxCreditor(st, cur);
-    if (creditor != -1) {
-        for (int i = 0; i < n; ++i) {
-            if (vis[i] == creditor && st.players[creditor].cash > 30000 * st.moneyMul &&
-                2 * st.players[cur].cash < st.players[creditor].cash) {
-                st.aiCardTarget = 0x8000 | (1 << creditor);
-                return 1;
-            }
+    bool useCreditor = false;
+    if (creditor != -1 && visMask[creditor] &&
+        st.players[creditor].cash > 30000 * st.moneyMul) {
+        useCreditor = !relativeCheck ||
+                      2 * st.players[cur].cash < st.players[creditor].cash;
+    }
+    if (useCreditor) {
+        st.aiCardTarget = 0x8000 | (1 << creditor);
+        return 1;
+    }
+    int pick = -1;
+    for (int i = 0; i < st.playerCount && i < kPlayerCount4; ++i) {
+        if (!visMask[i] || i == cur) {
+            continue;
+        }
+        const int32_t c = st.players[i].cash;
+        if (c > 50000 * st.moneyMul && (!relativeCheck || 3 * st.players[cur].cash < c)) {
+            pick = i;  // 覆盖式 = 取最后满足者
         }
     }
-    if (preferCreditor) {
-        int best = -1;
-        int32_t bestCash = 0;
-        for (int i = 0; i < n; ++i) {
-            const int32_t c = st.players[vis[i]].cash;
-            if (c > 50000 * st.moneyMul && c > bestCash && 3 * st.players[cur].cash < c) {
-                bestCash = c;
-                best = vis[i];
-            }
-        }
-        if (best >= 0) {
-            st.aiCardTarget = 0x8000 | (1 << best);
-            return 1;
-        }
+    if (pick >= 0) {
+        st.aiCardTarget = 0x8000 | (1 << pick);
+        return 1;
     }
     return 0;
 }
@@ -241,6 +250,16 @@ int tgtSwapLand(GameState& st) {  // [RE 0x41EAE2]
         if (mine.owner != cur + 1 || mine.level > 1) {
             return 0;
         }
+        // [RE 0x41EB72] 同段是否还有自己的地：**全图**扫描（非视口）——有则不换
+        for (size_t j = 1; j < st.estates.size(); ++j) {
+            if (static_cast<int>(j) == i) {
+                continue;
+            }
+            if (std::strcmp(st.estates[j].name, mine.name) == 0 &&
+                st.estates[j].owner == static_cast<uint8_t>(cur + 1)) {
+                return 0;
+            }
+        }
         int vis[256];
         const int n = visibleEstates(st, vis);
         for (int k = 0; k < n; ++k) {
@@ -250,10 +269,7 @@ int tgtSwapLand(GameState& st) {  // [RE 0x41EAE2]
             }
             const Estate& es = st.estates[j];
             if (std::strcmp(es.name, mine.name) == 0) {
-                if (es.owner == static_cast<uint8_t>(cur + 1)) {
-                    return 0;  // 同段自己还有地 → 不换
-                }
-                continue;
+                continue;  // 同段（含他人）不作为换地对象
             }
             if (es.priceAdd <= mine.priceAdd || es.level <= mine.level) {
                 continue;
@@ -354,7 +370,7 @@ int tgtRebuild(GameState& st) {  // [RE 0x41ED3E]
     return 0;
 }
 
-int tgtAuction(GameState& st) {  // [RE 0x41EF26]
+int tgtAuction(GameState& st) {  // [RE 0x41EF26] 脚下他人高值产业（债主门槛降 2 级）
     const int cur = st.currentPlayer;
     const uint16_t objId = standingObjId(st);
     const int creditor = findMaxCreditor(st, cur);
@@ -363,7 +379,9 @@ int tgtAuction(GameState& st) {  // [RE 0x41EF26]
         if (es.owner != 0 && es.owner != cur + 1 && es.level >= 3) {
             return 1;
         }
-        if (es.owner == static_cast<uint8_t>(creditor + 1) && es.level >= 2) {
+        // [RE 0x41FAB0] 债主分支外层 if(owner) —— 无主地不得落入 ==creditor+1(=0) 误判
+        if (es.owner != 0 && creditor != -1 && es.owner == static_cast<uint8_t>(creditor + 1) &&
+            es.level >= 2) {
             return 1;
         }
         return 0;
@@ -373,7 +391,8 @@ int tgtAuction(GameState& st) {  // [RE 0x41EF26]
         if (cp.owner != 0 && cp.owner != cur + 1 && cp.sub >= 3) {
             return 1;
         }
-        if (cp.owner == static_cast<uint8_t>(creditor + 1) && cp.sub >= 2) {
+        if (cp.owner != 0 && creditor != -1 && cp.owner == static_cast<uint8_t>(creditor + 1) &&
+            cp.sub >= 2) {
             return 1;
         }
         return 0;
@@ -457,17 +476,25 @@ int tgtDevil(GameState& st) {  // [RE 0x41F1B3] 他人路段（债主段 level �
         ++count[g][o];
         ++total[g];
     }
-    for (int t = 0; t < m; ++t) {
-        if (creditor != -1) {
+    // [RE 0x41F302..0x41F3DC 回验订正] 有债主时**只查债主段**（不兜底他人段）；
+    //   无债主时查「自己未持地(count[cur]==0)」的路段、他人累计**仅限存活玩家**。
+    if (creditor != -1) {
+        for (int t = 0; t < m; ++t) {
             if (levelSum[t][creditor] >= 2 && count[t][creditor] >= 7 && count[t][cur] <= 1) {
                 st.aiCardTarget = 2000 + first[t];
                 return 1;
             }
         }
+        return 0;
+    }
+    for (int t = 0; t < m; ++t) {
+        if (count[t][cur] != 0) {
+            continue;  // 自己持有的路段不拆
+        }
         int otherLevel = 0;
         int otherCount = 0;
         for (int o = 0; o < kPlayerCount4; ++o) {
-            if (o == cur) {
+            if (o == cur || st.players[o].alive == 0) {
                 continue;
             }
             otherLevel += levelSum[t][o];
@@ -490,16 +517,20 @@ int tgtMonster(GameState& st) {  // [RE 0x41F400] 等级最高的他人建筑（
     const int nc = visibleCorps(st, visC);
     int bestEstateOwnerLevel[9] = {};
     int bestEstateObj[9] = {};
+    int bestEstatePrice[9] = {};   // 平手比 (+28 priceAdd) [RE 0x41F4E7]
     int bestCorpLevel[9] = {};
     int bestCorpObj[9] = {};
+    int bestCorpPriceVal[9] = {};  // 平手比 (+34 buildPrice) [RE 0x41F57C]
     for (int k = 0; k < ne; ++k) {
         const Estate& es = st.estates[visE[k]];
         if (es.owner == 0 || es.owner == cur + 1 || es.level < 3) {
             continue;
         }
         const int o = es.owner - 1;
-        if (es.level > bestEstateOwnerLevel[o]) {
+        if (es.level > bestEstateOwnerLevel[o] ||
+            (es.level == bestEstateOwnerLevel[o] && es.priceAdd > bestEstatePrice[o])) {
             bestEstateOwnerLevel[o] = es.level;
+            bestEstatePrice[o] = es.priceAdd;
             bestEstateObj[o] = 2000 + visE[k];
         }
     }
@@ -509,95 +540,123 @@ int tgtMonster(GameState& st) {  // [RE 0x41F400] 等级最高的他人建筑（
             continue;
         }
         const int o = cp.owner - 1;
-        if (cp.sub > bestCorpLevel[o]) {
+        if (cp.sub > bestCorpLevel[o] || (cp.sub == bestCorpLevel[o] && cp.buildPrice > bestCorpPriceVal[o])) {
             bestCorpLevel[o] = cp.sub;
+            bestCorpPriceVal[o] = cp.buildPrice;
             bestCorpObj[o] = 4000 + visC[k];
         }
     }
+    // [RE 0x41F5A1..0x41F695 回验订正] 债主分支 = corp(sub≥3) 优先于 estate(level≥3)；
+    //   无债主结果时全场 = corp(≥3，平手 buildPrice) 整体优先于 estate(≥4，平手 priceAdd)。
     if (creditor != -1) {
-        if (bestEstateOwnerLevel[creditor] >= 3) {
-            st.aiCardTarget = bestEstateObj[creditor];
-            return 1;
-        }
         if (bestCorpLevel[creditor] >= 3) {
             st.aiCardTarget = bestCorpObj[creditor];
             return 1;
         }
+        if (bestEstateOwnerLevel[creditor] >= 3) {
+            st.aiCardTarget = bestEstateObj[creditor];
+            return 1;
+        }
     }
-    int bestLevel = 0;
-    int bestObj = 0;
+    int bestEstate = 0;
+    int bestEstateP = 0;
+    int bestEstateObjId = 0;
+    int bestCorp = 0;
+    int bestCorpP = 0;
+    int bestCorpObjId = 0;
     for (int o = 0; o < kPlayerCount4; ++o) {
-        if (o == cur) {
+        if (o == cur || st.players[o].alive == 0) {
             continue;
         }
-        if (bestEstateOwnerLevel[o] >= 4 && bestEstateOwnerLevel[o] > bestLevel) {
-            bestLevel = bestEstateOwnerLevel[o];
-            bestObj = bestEstateObj[o];
+        if (bestEstateOwnerLevel[o] >= 4 &&
+            (bestEstateOwnerLevel[o] > bestEstate ||
+             (bestEstateOwnerLevel[o] == bestEstate && bestEstatePrice[o] > bestEstateP))) {
+            bestEstate = bestEstateOwnerLevel[o];
+            bestEstateP = bestEstatePrice[o];
+            bestEstateObjId = bestEstateObj[o];
         }
-        if (bestCorpLevel[o] >= 3 && bestCorpLevel[o] > bestLevel) {
-            bestLevel = bestCorpLevel[o];
-            bestObj = bestCorpObj[o];
+        if (bestCorpLevel[o] >= 3 &&
+            (bestCorpLevel[o] > bestCorp ||
+             (bestCorpLevel[o] == bestCorp && bestCorpPriceVal[o] > bestCorpP))) {
+            bestCorp = bestCorpLevel[o];
+            bestCorpP = bestCorpPriceVal[o];
+            bestCorpObjId = bestCorpObj[o];
         }
     }
-    if (bestObj != 0) {
-        st.aiCardTarget = bestObj;
+    if (bestCorpObjId != 0) {
+        st.aiCardTarget = bestCorpObjId;
+        return 1;
+    }
+    if (bestEstateObjId != 0) {
+        st.aiCardTarget = bestEstateObjId;
         return 1;
     }
     return 0;
 }
 
-int tgtDemolish(GameState& st) {  // [RE 0x41F6A9] 怪兽优先；否则路面道具/高威胁他人地产
+// [RE 0x41F6A9 回验订正] 怪兽优先复用（0x41F400，其 collectViewportEntities(-1) 列表留存）；
+//   否则**按视口列表顺序**单遍混合分派（首个命中即用）：
+//   - estate 条目：personality≠0 ∧ 他人 ∧ 连锁店(type≠0) ∧ 该主建筑数≥4 → 拆
+//   - corp 条目：自己有载具(travel&3) ∧ 加油站(type==3) ∧ sub==1 ∧ 非自家 → 拆
+//   - 路面道具槽条目（0xA100|槽）：type==16 路障 → 所在格**他人有主**产业才拆
+//     （无主跳过 [RE 0x41F833]）；type==17 地雷 → 所在格**自家**产业才拆
+//     （原语义=清除自家地雷，旧版"拆他人地雷"方向反了）
+//   目标编码 = normalizeHitId（槽 → 0x8000|(槽<<8)，与 cardEffectDemolish 原版解析一致）。
+int tgtDemolish(GameState& st) {
     if (tgtMonster(st) == 1) {
         return 1;
     }
     const int cur = st.currentPlayer;
-    // 路面道具（cellTable 16 路障 / 17 地雷；无主或他人）
     for (const auto& hit : st.mapHitRegions) {
-        if ((hit.id & 0xFF00) != 0xA100) {
+        const uint16_t id = hit.id;
+        if (id > 2000 && id < 4000) {
+            const Estate& es = st.estates[id - 2000];
+            if (st.players[cur].aiPersonality == 0 || es.owner == 0 ||
+                es.owner == static_cast<uint8_t>(cur + 1) || es.type == 0) {
+                continue;
+            }
+            if (builtEstatesOf(st, es.owner - 1) >= 4) {
+                st.aiCardTarget = id;
+                return 1;
+            }
             continue;
         }
-        const int slot = hit.id & 0xFF;
+        if (id > 4000 && id < 6000) {
+            const Corp& cp = st.corps[id - 4000];
+            if ((st.players[cur].travel & 3) != 0 && cp.type == 3 && cp.sub == 1 &&
+                cp.owner != static_cast<uint8_t>(cur + 1)) {
+                st.aiCardTarget = id;  // 拆他人一级加油站（防其涨价/收费成长）
+                return 1;
+            }
+            continue;
+        }
+        if ((id & 0xFF00) != 0xA100) {
+            continue;
+        }
+        const int slot = id & 0xFF;
         if (slot < 1 || slot > 46) {
             continue;
         }
         const int type = st.cellTable[24 * (slot - 1)];
-        if (type != 16 && type != 17) {
-            continue;
-        }
-        const uint16_t ent = static_cast<uint16_t>(st.cellTable[24 * (slot - 1) + 2]);
+        const uint16_t ent = static_cast<uint16_t>(st.cellTable[24 * (slot - 1) + 2] |
+                                                   (st.cellTable[24 * (slot - 1) + 3] << 8));
         if (ent >= st.cellEnts.size()) {
             continue;
         }
         const uint16_t oid = st.cellEnts[ent].special;
+        int owner = 0;
         if (oid > 2000 && oid < 4000) {
-            const uint8_t o = st.estates[oid - 2000].owner;
-            if (o != static_cast<uint8_t>(cur + 1)) {
-                // mapHitRegions 编码（0xA100|槽+1）→ 原版目标编码（0x8000|(槽+1)<<8）
-                //（cardEffectDemolish 按原版编码解析槽号；误用会让槽号错=拆错物件）
-                st.aiCardTarget = normalizeHitId(hit.id);
-                return 1;
-            }
+            owner = st.estates[oid - 2000].owner;
         } else if (oid > 4000 && oid < 6000) {
-            const uint8_t o = st.corps[oid - 4000].owner;
-            if (o != static_cast<uint8_t>(cur + 1)) {
-                st.aiCardTarget = normalizeHitId(hit.id);
-                return 1;
-            }
+            owner = st.corps[oid - 4000].owner;
         }
-    }
-    // 他人有建筑 estate 且该 owner 建筑数 ≥4（personality 非 0）
-    if (st.players[cur].aiPersonality != 0) {
-        int vis[256];
-        const int n = visibleEstates(st, vis);
-        for (int k = 0; k < n; ++k) {
-            const Estate& es = st.estates[vis[k]];
-            if (es.owner == 0 || es.owner == cur + 1 || es.type == 0) {
-                continue;
-            }
-            if (builtEstatesOf(st, es.owner - 1) >= 4) {
-                st.aiCardTarget = 2000 + vis[k];
-                return 1;
-            }
+        if (type == 16 && owner != 0 && owner != cur + 1) {
+            st.aiCardTarget = static_cast<uint32_t>(normalizeHitId(id));  // 他人路上的路障
+            return 1;
+        }
+        if (type == 17 && owner == cur + 1) {
+            st.aiCardTarget = static_cast<uint32_t>(normalizeHitId(id));  // 自家地上的地雷
+            return 1;
         }
     }
     return 0;
@@ -608,13 +667,17 @@ int tgtSteal(GameState& st) {  // [RE 0x41F901] 债主/可见对手的最贵卡�
     int vis[8];
     const int n = visibleOpponents(st, vis);
     const int creditor = findMaxCreditor(st, cur);
-    auto bestCardOf = [&st](int owner, int personaWant) -> int {
+    auto bestCardOf = [&st](int owner, bool personaNonZero) -> int {
         int best = 0;
         int bestPrice = 0;
         for (int s = 0; s < 15; ++s) {
             const int card = st.cardState60[15 * owner + s];
-            if (card == 0 || kCardAiPersona[card] != personaWant) {
+            if (card == 0) {
                 continue;
+            }
+            const int persona = kCardAiPersona[card];
+            if (personaNonZero ? (persona == 0) : (persona != 2)) {
+                continue;  // [RE 0x41F9E5] 债主=persona非0；其他=persona==2（0x41FA86）
             }
             if (kCardPrices[card] > bestPrice) {
                 bestPrice = kCardPrices[card];
@@ -627,7 +690,7 @@ int tgtSteal(GameState& st) {  // [RE 0x41F901] 债主/可见对手的最贵卡�
         if (vis[i] != creditor) {
             continue;
         }
-        const int card = bestCardOf(vis[i], 1);  // 债主：persona==1 的最贵卡
+        const int card = bestCardOf(vis[i], true);  // 债主：persona != 0 的最贵卡
         if (card != 0) {
             st.aiCardTarget = 0x8000 | (1 << vis[i]);
             st.aiCardTarget2 = card;
@@ -638,7 +701,7 @@ int tgtSteal(GameState& st) {  // [RE 0x41F901] 债主/可见对手的最贵卡�
     int bestCard = 0;
     int bestPrice = 0;
     for (int i = 0; i < n; ++i) {
-        const int card = bestCardOf(vis[i], 2);  // 其他：persona==2
+        const int card = bestCardOf(vis[i], false);  // 其他：persona==2
         if (card != 0 && kCardPrices[card] > bestPrice) {
             bestPrice = kCardPrices[card];
             bestCard = card;
@@ -677,9 +740,12 @@ int tgtStay(GameState& st) {  // [RE 0x41FACC] 自己升级位（跳过回合保
                 }
             }
         } else if (objId > 4000 && objId < 6000) {
+            // [RE 0x41FC6B 回验订正] 门槛 = 自己**现金** > 10000（非 bank+cash）
+            //   ∧ 升级费 M×feeTable[0] < 现金 ∧ type≠0/≠3 ∧ sub<5 ∧ luckB≥0
             const Corp& cp = st.corps[objId - 4000];
-            if (cp.owner == cur + 1 && cp.type != 0 && cp.type != 3 && cp.sub < 5 && pl.luckB >= 0 &&
-                (pl.bank + pl.cash) > 10000) {
+            if (cp.owner == cur + 1 && cp.type != 0 && cp.type != 3 && cp.sub < 5 &&
+                pl.luckB >= 0 && pl.cash > 10000 &&
+                static_cast<double>(st.moneyMul) * cp.feeTable[0] < pl.cash) {
                 st.aiCardTarget = 0x8000 | (1 << cur);
                 return 1;
             }
@@ -816,14 +882,17 @@ int tgtStockBlack(GameState& st) {  // [RE 0x4200EA] 持股最多对手/债主�
             top = o;
         }
     }
-    auto bestOf = [&st, cur](int owner) -> int {
+    // [RE 0x4200EA 回验订正] top（公司最多者）分支需 word_496984（挂牌/有价）过滤；
+    //   creditor 分支（0x42022E）**不查**该条件。两者最终债主结果优先。
+    auto bestOf = [&st, cur](int owner, bool needListed) -> int {
         int best = -1;
         int64_t bestVal = 0;
         for (int i = 0; i < 12; ++i) {
             const int64_t val = static_cast<int64_t>(st.playerShares[owner][i]) *
                                 static_cast<int64_t>(st.playerAvgCost[owner][i]);
-            if (st.playerShares[owner][i] != 0 && st.stocks[i][1] != 0.0f && !haltedAt(st, i) &&
-                !limitDown(st, i) && st.playerShares[cur][i] == 0 && val > bestVal) {
+            if (st.playerShares[owner][i] != 0 && (!needListed || st.stocks[i][1] != 0.0f) &&
+                !haltedAt(st, i) && !limitDown(st, i) && st.playerShares[cur][i] == 0 &&
+                val > bestVal) {
                 bestVal = val;
                 best = i;
             }
@@ -833,10 +902,10 @@ int tgtStockBlack(GameState& st) {  // [RE 0x4200EA] 持股最多对手/债主�
     int pick = -1;
     const int creditor = findMaxCreditor(st, cur);
     if (creditor != -1) {
-        pick = bestOf(creditor);
+        pick = bestOf(creditor, false);
     }
     if (pick < 0 && top >= 0) {
-        pick = bestOf(top);
+        pick = bestOf(top, true);
     }
     if (pick < 0) {
         return 0;
@@ -845,65 +914,70 @@ int tgtStockBlack(GameState& st) {  // [RE 0x4200EA] 持股最多对手/债主�
     return 1;
 }
 
-int tgtPriceUp(GameState& st) {  // [RE 0x42040E] 自己占比 ≥0.68 的路段 / 自己高级 corp
+// [RE 0x42040E 回验订正] **单遍视口混合列表**：estate 路段判定即时命中（优先级高）；
+//   corp（自家已建 type≠0/≠4 ∧ sub≥3）仅记**最高 sub** 候选不即返；
+//   路段判定：全图同段聚合，遇债主持地 break 弃段；`own Σlevel ≥ 7 ∧ 他人 Σlevel ≤ 3 ∧
+//   own块数/总块数 ≥ 0.682`。estate 未命中时 corp 候选兜底。
+int tgtPriceUp(GameState& st) {
     const int cur = st.currentPlayer;
     const int creditor = findMaxCreditor(st, cur);
-    int visC[256];
-    const int nc = visibleCorps(st, visC);
-    for (int k = 0; k < nc; ++k) {
-        const Corp& cp = st.corps[visC[k]];
-        if (cp.owner == static_cast<uint8_t>(cur + 1) && cp.type != 0 && cp.type != 4 &&
-            cp.sub >= 3) {
-            st.aiCardTarget = 4000 + visC[k];
-            return 1;
-        }
-    }
-    int vis[256];
-    const int n = visibleEstates(st, vis);
-    int first[128];
-    int m = 0;
-    for (int k = 0; k < n; ++k) {
-        const int i = vis[k];
-        int g = -1;
-        for (int t = 0; t < m; ++t) {
-            if (std::strcmp(st.estates[first[t]].name, st.estates[i].name) == 0) {
-                g = t;
+    int corpBest = 0;
+    int corpBestSub = 0;
+    bool estateHit = false;
+    const char* lastName = nullptr;
+    for (const auto& hit : st.mapHitRegions) {
+        const uint16_t id = hit.id;
+        if (id > 2000 && id < 4000) {
+            const Estate& es = st.estates[id - 2000];
+            if (lastName != nullptr && std::strcmp(es.name, lastName) == 0) {
+                continue;  // 路段首次出现才判定
+            }
+            int ownLevel = 0;
+            int ownBlocks = 0;
+            int otherLevel = 0;
+            int total = 0;
+            bool creditorHere = false;
+            for (size_t j = 1; j < st.estates.size(); ++j) {
+                if (std::strcmp(st.estates[j].name, es.name) != 0) {
+                    continue;
+                }
+                ++total;
+                const uint8_t o = st.estates[j].owner;
+                if (o == static_cast<uint8_t>(cur + 1)) {
+                    ownLevel += st.estates[j].level;
+                    ++ownBlocks;
+                } else if (o != 0) {
+                    otherLevel += st.estates[j].level;
+                }
+                if (creditor != -1 && o == static_cast<uint8_t>(creditor + 1)) {
+                    creditorHere = true;
+                    break;  // [RE 0x420535] 债主持地 → 弃该段
+                }
+            }
+            lastName = es.name;
+            if (!creditorHere && ownLevel >= 7 && otherLevel <= 3 && total > 0 &&
+                static_cast<double>(ownBlocks) / total >= 0.682) {
+                st.aiCardTarget = id;
+                estateHit = true;
                 break;
             }
-        }
-        if (g >= 0) {
             continue;
         }
-        first[m] = i;
-        g = m;
-        ++m;
-        // 聚合该段
-        int ownLevel = 0;
-        int ownBlocks = 0;
-        int otherLevel = 0;
-        int total = 0;
-        bool creditorHere = false;
-        for (size_t j = 1; j < st.estates.size(); ++j) {
-            if (std::strcmp(st.estates[j].name, st.estates[i].name) != 0) {
-                continue;
-            }
-            ++total;
-            const uint8_t o = st.estates[j].owner;
-            if (o == static_cast<uint8_t>(cur + 1)) {
-                ownLevel += st.estates[j].level;
-                ++ownBlocks;
-            } else if (o != 0) {
-                otherLevel += st.estates[j].level;
-            }
-            if (creditor != -1 && o == static_cast<uint8_t>(creditor + 1)) {
-                creditorHere = true;
+        if (id > 4000 && id < 6000) {
+            const Corp& cp = st.corps[id - 4000];
+            if (cp.owner == static_cast<uint8_t>(cur + 1) && cp.type != 0 && cp.type != 4 &&
+                cp.sub >= 3 && cp.sub > corpBestSub) {
+                corpBestSub = cp.sub;
+                corpBest = id;
             }
         }
-        if (!creditorHere && ownLevel >= 7 && otherLevel <= 3 && total > 0 &&
-            static_cast<double>(ownBlocks) / total >= 0.682) {
-            st.aiCardTarget = 2000 + i;
-            return 1;
-        }
+    }
+    if (estateHit) {
+        return 1;
+    }
+    if (corpBest != 0) {
+        st.aiCardTarget = corpBest;
+        return 1;
     }
     return 0;
 }
@@ -962,16 +1036,27 @@ int tgtSeal(GameState& st) {
     return 0;
 }
 
-int tgtAlly(GameState& st) {  // [RE 0x4207CC] 可见（非债主、非已盟）地产最多者结盟
+// [RE 0x4207CC 回验订正] 先在**全图**（alive∧≠self）找地产+公司总数最大者（严格大于=首个最大），
+//   再查其是否在视口候选（≠债主 ∧ 对方 ally != self+1）——最大者不在视口则**不结盟**。
+int tgtAlly(GameState& st) {
     const int cur = st.currentPlayer;
     int vis[8];
     const int n = visibleOpponents(st, vis);
+    if (n == 0) {
+        return 0;
+    }
     const int creditor = findMaxCreditor(st, cur);
-    int best = -1;
-    int bestCount = 0;
+    bool candidate[8] = {};
     for (int i = 0; i < n; ++i) {
         const int p = vis[i];
-        if (p == creditor || st.players[p].ally == static_cast<uint8_t>(cur + 1)) {
+        if (p != creditor && st.players[p].ally != static_cast<uint8_t>(cur + 1)) {
+            candidate[p] = true;
+        }
+    }
+    int best = -1;
+    int bestCount = 0;
+    for (int p = 0; p < st.playerCount && p < kPlayerCount4; ++p) {
+        if (p == cur || st.players[p].alive == 0) {
             continue;
         }
         int cnt = 0;
@@ -985,12 +1070,12 @@ int tgtAlly(GameState& st) {  // [RE 0x4207CC] 可见（非债主、非已盟）
                 ++cnt;
             }
         }
-        if (cnt > bestCount) {
+        if (cnt > bestCount) {  // [RE 0x420923]
             bestCount = cnt;
             best = p;
         }
     }
-    if (best < 0) {
+    if (best < 0 || !candidate[best]) {
         return 0;
     }
     st.aiCardTarget = 0x8000 | (1 << best);
@@ -1177,7 +1262,7 @@ int aiCardSelect(Application& app, int cardId) {
         case 23: r = tgtInvite(app); break;
         case 24: r = tgtStockRed(st); break;
         case 25: r = tgtStockBlack(st); break;
-        case 26: r = tgtVisibleByCash(st, true); break;
+        case 26: r = tgtVisibleByCash(st, false); break;  // [RE 0x4202D2] 查税：无相对财富条件
         case 27: r = tgtPriceUp(st); break;
         case 28: r = tgtSeal(st); break;
         case 29: r = tgtAlly(st); break;
@@ -1189,6 +1274,10 @@ int aiCardSelect(Application& app, int cardId) {
                    cur, cardId, st.aiCardTarget, st.aiCardTarget2);
         return 1;
     }
+    // 诊断：persona 已过但目标函数无候选（与道具链同款，实机核对候选域用）
+    RICH4_LOGI("aiCardSelect: p%d card=%d rejected (no candidate; persona=%u ai=%u cell=%u)",
+               cur, cardId, kCardAiPersona[cardId], st.players[cur].aiPersonality,
+               st.players[cur].cellEntId);
     return 0;
 }
 
