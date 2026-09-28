@@ -3,11 +3,13 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "game/app/ai_item.h"  // aiItemPredictPath（[RE 0x40B221] 候选域共享）
 #include "game/app/economy.h"
 #include "game/app/game_panel.h"
 #include "game/app/map_objects.h"
 #include "game/app/map_tables.h"
 #include "game/app/target_select_dialog.h"
+#include "game/app/turn_system.h"  // estateRouteRent [RE 0x419744]
 #include "game/application.h"
 #include "game/core/log.h"
 #include "game/core/debug_hooks.h"
@@ -906,53 +908,55 @@ int tgtPriceUp(GameState& st) {  // [RE 0x42040E] 自己占比 ≥0.68 的路段
     return 0;
 }
 
-int tgtSeal(GameState& st) {  // [RE 0x42062B] 债主高级设施 / 他人 level 和 ≥7 路段
+// [RE 0x42062B] 查封卡：候选域=**前方 6 步路径**（aiItemPredictPath，原版不查分叉）逐格——
+//   estate：路段**首次出现**才统计（同路段去重 v0）；该段含自家 → 放弃（LABEL_4）；
+//           他人 Σlevel ≥ 7 → 查封该格对象；
+//   corp：债主（findMaxCreditor）的已建设施 type≠0 ∧ sub≥3 → 查封。
+//   2026-09-28 订正：旧版误用全视口 visibleEstates/Corps（远处误封根因）。
+int tgtSeal(GameState& st) {
     const int cur = st.currentPlayer;
     const int creditor = findMaxCreditor(st, cur);
-    int visC[256];
-    const int nc = visibleCorps(st, visC);
-    for (int k = 0; k < nc; ++k) {
-        const Corp& cp = st.corps[visC[k]];
-        if (creditor != -1 && cp.owner == static_cast<uint8_t>(creditor + 1) && cp.type != 0 &&
-            cp.sub >= 3) {
-            st.aiCardTarget = 4000 + visC[k];
-            return 1;
-        }
-    }
-    int vis[256];
-    const int n = visibleEstates(st, vis);
-    int first[128];
-    int m = 0;
-    for (int k = 0; k < n; ++k) {
-        const int i = vis[k];
-        int g = -1;
-        for (int t = 0; t < m; ++t) {
-            if (std::strcmp(st.estates[first[t]].name, st.estates[i].name) == 0) {
-                g = t;
-                break;
-            }
-        }
-        if (g >= 0) {
+    uint16_t path[8];
+    bool branch = false;
+    aiItemPredictPath(st, cur, 6, path, &branch);
+    const char* lastName = nullptr;
+    for (int i = 0; i < 6; ++i) {
+        const int cid = path[i];
+        if (cid <= 0 || cid >= static_cast<int>(st.cellEnts.size())) {
             continue;
         }
-        first[m] = i;
-        ++m;
-        int otherLevel = 0;
-        bool own = false;
-        for (size_t j = 1; j < st.estates.size(); ++j) {
-            if (std::strcmp(st.estates[j].name, st.estates[i].name) != 0) {
-                continue;
+        const uint16_t oid = st.cellEnts[cid].special;
+        if (oid > 2000 && oid < 4000) {
+            const Estate& es = st.estates[oid - 2000];
+            if (lastName != nullptr && std::strcmp(es.name, lastName) == 0) {
+                continue;  // 同路段已统计
             }
-            const uint8_t o = st.estates[j].owner;
-            if (o == static_cast<uint8_t>(cur + 1)) {
-                own = true;
-            } else if (o != 0) {
-                otherLevel += st.estates[j].level;
+            int otherLevel = 0;
+            bool own = false;
+            for (size_t j = 1; j < st.estates.size(); ++j) {
+                if (std::strcmp(st.estates[j].name, es.name) != 0) {
+                    continue;
+                }
+                const uint8_t o = st.estates[j].owner;
+                if (o == static_cast<uint8_t>(cur + 1)) {
+                    own = true;  // [RE LABEL_4] 自家经过的路段不封
+                    break;
+                }
+                if (o != 0) {
+                    otherLevel += st.estates[j].level;
+                }
             }
-        }
-        if (!own && otherLevel >= 7) {
-            st.aiCardTarget = 2000 + i;
-            return 1;
+            lastName = es.name;
+            if (!own && otherLevel >= 7) {
+                st.aiCardTarget = oid;
+                return 1;
+            }
+        } else if (oid > 4000 && oid < 6000 && creditor != -1) {
+            const Corp& cp = st.corps[oid - 4000];
+            if (cp.owner == static_cast<uint8_t>(creditor + 1) && cp.type != 0 && cp.sub >= 3) {
+                st.aiCardTarget = oid;
+                return 1;
+            }
         }
     }
     return 0;
@@ -993,35 +997,139 @@ int tgtAlly(GameState& st) {  // [RE 0x4207CC] 可见（非债主、非已盟）
     return 1;
 }
 
-int tgtTurtle(GameState& st) {  // [RE 0x420970] 自己路段产值高 → 自己；否则踩在自己高产值段的对手
+// [RE 0x420970] 烏龜卡（条件方向经反汇编 0x420BFB fcompp/jnb 核验，勿再翻转）：
+//   ① 自己前方 3 步路径（**无分叉**）逐格累计「无主格地价 / 自家可加盖地价」Σvalue 与格数，
+//      遇「他人 estate 同段租金>1000×M / 他人已建设施 corp（研究所除外）/ 他人行业点」→ 转②；
+//      Σ×1.5 **<** 现金 ∧ ≥2 格 ∧ bank+cash>10000 ∧ luckB≥0 → **对自己用**；
+//   ② 视口存活对手逐个（[RE collectViewportEntities(-1)] 玩家位掩码）：其前方 3 步路径
+//      （无分叉）全落**我家产业段**（estate 计同段租金 / corp 计 feeTable[sub] /
+//      specPt 计 feeBase；遇无主格或对手自有格 → 弃该对手）∧ Σ ≥ 10000×M ∧ ≥2 格 →
+//      封该对手（其下一两步正好踩进我家产段）。
+//   2026-09-28 订正：旧版误用全视口自家产业 Σ×1.5≥现金（方向与候选域双错）。
+int tgtTurtle(GameState& st) {
     const int cur = st.currentPlayer;
-    // 自己：视口内自己的产业租金和
-    int64_t myValue = 0;
-    int myBlocks = 0;
-    for (const auto& hit : st.mapHitRegions) {
-        if (hit.id > 2000 && hit.id < 4000) {
-            const Estate& es = st.estates[hit.id - 2000];
-            if (es.owner == static_cast<uint8_t>(cur + 1)) {
-                myValue += es.fees[es.level < 6 ? es.level : 0];
-                ++myBlocks;
+    const Player& pl = st.players[cur];
+    uint16_t path[8];
+    bool branch = false;
+    aiItemPredictPath(st, cur, 3, path, &branch);
+    bool toOpponent = branch;
+    if (!branch) {
+        int64_t value = 0;
+        int blocks = 0;
+        for (int i = 0; i < 3; ++i) {
+            const int cid = path[i];
+            if (cid <= 0 || cid >= static_cast<int>(st.cellEnts.size())) {
+                continue;
+            }
+            const uint16_t oid = st.cellEnts[cid].special;
+            if (oid > 2000 && oid < 4000) {
+                const Estate& es = st.estates[oid - 2000];
+                if (es.owner == 0) {
+                    value += es.priceAdd;  // 无主 → +28
+                    ++blocks;
+                } else if (es.owner == static_cast<uint8_t>(cur + 1) && es.type == 0 &&
+                           es.level < 5) {
+                    value += es.priceBase;  // 自家可加盖 → +30
+                    ++blocks;
+                }
+                if (es.owner != 0 && es.owner != static_cast<uint8_t>(cur + 1) &&
+                    estateRouteRent(st, es.owner, es) > 1000 * st.moneyMul) {
+                    toOpponent = true;
+                    break;  // 他人高租段 → 转对手流
+                }
+            } else if (oid > 4000 && oid < 6000) {
+                const Corp& cp = st.corps[oid - 4000];
+                if (cp.owner == 0) {
+                    value += cp.buildPrice;  // 无主 → +34
+                    ++blocks;
+                } else if (cp.owner == static_cast<uint8_t>(cur + 1) && cp.type != 0 &&
+                           cp.type != 3 && cp.sub < 5) {
+                    value += cp.feeTable[0];  // 自家可建设施 → +36
+                    ++blocks;
+                }
+                if (cp.owner != 0 && cp.owner != static_cast<uint8_t>(cur + 1) && cp.type != 0 &&
+                    cp.type != 4 && cp.sub != 0) {
+                    toOpponent = true;
+                    break;  // 他人已建设施（研究所除外）
+                }
+            } else if (oid > 6000 && oid < 8000) {
+                const int si = oid - 6000;
+                if (si > 0 && si < static_cast<int>(st.specPts.size())) {
+                    const uint8_t o = st.specPts[si].owner;
+                    if (o != 0 && o != static_cast<uint8_t>(cur + 1)) {
+                        toOpponent = true;
+                        break;  // 他人行业点
+                    }
+                }
             }
         }
-    }
-    const Player& pl = st.players[cur];
-    // [RE 0x463D40 = 1.5] 自己产值×1.5 ≥ 现金 → 对自己用（原版 dbl_463D40）
-    if (static_cast<double>(myValue) * 1.5 >= static_cast<double>(pl.cash) && myBlocks >= 2 &&
-        (pl.bank + pl.cash) > 10000 && pl.luckB >= 0) {
-        st.aiCardTarget = 0x8000 | (1 << cur);
-        return 1;
-    }
-    int vis[8];
-    const int n = visibleOpponents(st, vis);
-    for (int i = 0; i < n; ++i) {
-        if (st.players[vis[i]].byte54 != 0) {
-            continue;
+        if (!toOpponent && static_cast<double>(value) * 1.5 < static_cast<double>(pl.cash) &&
+            blocks >= 2 && pl.bank + pl.cash > 10000 && pl.luckB >= 0) {
+            st.aiCardTarget = 0x8000 | (1 << cur);  // 对自己用（0x420C50）
+            return 1;
         }
-        st.aiCardTarget = 0x8000 | (1 << vis[i]);
-        return 1;
+    }
+    // ② 对手流：其前方 3 格全为我方产业 → 冻之
+    int vis[8];
+    const int nv = visibleOpponents(st, vis);
+    for (int q = 0; q < nv; ++q) {
+        const int opp = vis[q];
+        uint16_t opath[8];
+        bool ob = false;
+        aiItemPredictPath(st, opp, 3, opath, &ob);
+        if (ob) {
+            continue;  // [RE 0x420CBE] 路径有分叉不赌
+        }
+        int64_t rent = 0;
+        int hits = 0;
+        bool valid = true;
+        for (int i = 0; i < 3; ++i) {
+            const int cid = opath[i];
+            if (cid <= 0 || cid >= static_cast<int>(st.cellEnts.size())) {
+                continue;
+            }
+            const uint16_t oid = st.cellEnts[cid].special;
+            if (oid > 2000 && oid < 4000) {
+                const Estate& es = st.estates[oid - 2000];
+                if (es.owner == static_cast<uint8_t>(cur + 1)) {
+                    rent += estateRouteRent(st, es.owner, es);
+                    ++hits;
+                }
+                if (es.owner == 0 || es.owner == static_cast<uint8_t>(opp + 1)) {
+                    valid = false;  // 无主/对手自有格 → 弃该对手（第三方格跳过不弃）
+                    break;
+                }
+            } else if (oid > 4000 && oid < 6000) {
+                const Corp& cp = st.corps[oid - 4000];
+                if (cp.owner == static_cast<uint8_t>(cur + 1) && cp.type != 0 && cp.type != 4 &&
+                    cp.sub != 0 && cp.sub < 6) {
+                    rent += cp.feeTable[cp.sub];
+                    ++hits;
+                }
+                if (cp.owner == 0 || cp.owner == static_cast<uint8_t>(opp + 1)) {
+                    valid = false;
+                    break;
+                }
+            } else if (oid > 6000 && oid < 8000) {
+                const int si = oid - 6000;
+                if (si <= 0 || si >= static_cast<int>(st.specPts.size())) {
+                    continue;
+                }
+                const SpecPt& sp = st.specPts[si];
+                if (sp.owner == static_cast<uint8_t>(cur + 1)) {
+                    rent += sp.feeBase;
+                    ++hits;
+                }
+                if (sp.owner == 0 || sp.owner == static_cast<uint8_t>(opp + 1)) {
+                    valid = false;
+                    break;
+                }
+            }
+        }
+        if (valid && rent >= 10000 * st.moneyMul && hits >= 2) {
+            st.aiCardTarget = 0x8000 | (1 << opp);
+            return 1;
+        }
     }
     return 0;
 }

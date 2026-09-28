@@ -7,7 +7,6 @@
 #include "game/app/economy.h"
 #include "game/app/map_objects.h"
 #include "game/app/map_tables.h"
-#include "game/app/target_select_dialog.h"
 #include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/log.h"
@@ -15,6 +14,47 @@
 #include "game/game_state.h"
 
 namespace rich4 {
+
+// [RE 0x40B221] 前方 steps 步预测路径（word_48B8B4）→ out[steps]（≤8，0=无效）。
+//   从玩家当前格出发逐步选出口：排除来路 prevCellEnt、排除 occMask bit30-33 占用出口；
+//   多出口 → 随机选并置 *hasBranch（原版返回位 v12——路径不确定）；无出口 → 回填来路。
+//   候选域核心（2026-09-28 距离语义修正）：娃娃/路障主/遙控骰子（要求无分叉）、
+//   卡片查封 6 格/烏龜 3 格。实现于匿名 ns 外供 ai_card.cpp 复用。
+void aiItemPredictPath(const GameState& st, int p, int steps, uint16_t out[8], bool* hasBranch) {
+    std::memset(out, 0, sizeof(uint16_t) * 8);
+    if (steps > 8) {
+        steps = 8;
+    }
+    const Player& pl = st.players[p];
+    uint16_t cur = pl.cellEntId;
+    uint16_t prev = pl.prevCellEnt;
+    for (int i = 0; i < steps; ++i) {
+        uint16_t cand[4];
+        int n = 0;
+        if (cur > 0 && cur < static_cast<int>(st.cellEnts.size())) {
+            const CellEnt& ce = st.cellEnts[cur];
+            uint32_t bit = 0x40000000u;
+            for (int k = 0; k < 4; ++k) {
+                const uint16_t e = ce.exits[k];
+                if (e != 0 && e != prev && (ce.occMask & bit) == 0) {
+                    cand[n++] = e;
+                }
+                bit >>= 1;
+            }
+        }
+        if (n == 0) {
+            out[i] = prev;  // 死路 → 折回填来路
+        } else if (n == 1) {
+            out[i] = cand[0];
+        } else {
+            *hasBranch = true;
+            out[i] = cand[dbg::roll(dbg::SlotAi, n)];
+        }
+        prev = cur;
+        cur = out[i];
+    }
+}
+
 namespace {
 
 constexpr int kPlayerCount4 = 4;
@@ -86,45 +126,13 @@ bool aiSpendOk(const GameState& st, int cur) {
     return pl.bank + pl.cash > 10000 && pl.luckB >= 0 && pl.fixedStep == 0;
 }
 
-// ===== 候选域公共 [RE word_48B8B4 / word_48B8C4] =====
-
-// [RE sub_40B221] 玩家**前方** steps 步预测路径 → out[steps]（≤8，0=无）。
-// 逐步从当前格选出口：排除来路 prevCellEnt、排除 occMask bit30-33 占用；
-// 多出口 → 随机选一并置 *hasBranch（原版 v12）；无出口 → 回填来路继续（原地折返）。
-// 用途：娃娃/路障主（要求 !hasBranch——路径唯一才赌）、遙控骰子（点数=索引+1）。
-void predictPathFwd(const GameState& st, int p, int steps, uint16_t out[8], bool* hasBranch) {
-    std::memset(out, 0, sizeof(uint16_t) * 8);
-    if (steps > 8) {
-        steps = 8;
-    }
-    const Player& pl = st.players[p];
-    uint16_t cur = pl.cellEntId;
-    uint16_t prev = pl.prevCellEnt;
-    for (int i = 0; i < steps; ++i) {
-        uint16_t cand[4];
-        int n = 0;
-        if (cur > 0 && cur < static_cast<int>(st.cellEnts.size())) {
-            const CellEnt& ce = st.cellEnts[cur];
-            uint32_t bit = 0x40000000u;
-            for (int k = 0; k < 4; ++k) {
-                const uint16_t e = ce.exits[k];
-                if (e != 0 && e != prev && (ce.occMask & bit) == 0) {
-                    cand[n++] = e;
-                }
-                bit >>= 1;
-            }
-        }
-        if (n == 0) {
-            out[i] = prev;  // 死路 → 折回填来路
-        } else if (n == 1) {
-            out[i] = cand[0];
-        } else {
-            *hasBranch = true;
-            out[i] = cand[dbg::roll(dbg::SlotAi, n)];
-        }
-        prev = cur;
-        cur = out[i];
-    }
+// [RE sub_40A0B1 sub_409EF9 画布近似] 世界坐标是否落在"以 (tx,ty) 为中心 radius 屏幕 px"
+//   画布内：2:1 等距（32 网格 → 屏幕步进 sx=(wx-wy)/2, sy=(wx+wy)/4）。
+//   [PORT] 忽略 mapRotation 对投影轴的置换（旋转下菱形形状等价，判定集合一致）。
+bool nearIso(int tx, int ty, int ex, int ey, int radius) {
+    const int sx = std::abs(((ex - ey) - (tx - ty)) / 2);
+    const int sy = std::abs(((ex + ey) - (tx + ty)) / 4);
+    return sx <= radius && sy <= radius;
 }
 
 // [RE sub_40B343] 变体：从**上一格**出发逐步推进（首步 base=prevCellEnt、排除 cur），
@@ -194,61 +202,13 @@ bool inList(const uint16_t* list, int n, uint16_t v) {
     return false;
 }
 
-// [RE sub_40A0B1] 以目标（objId）为中心的采集列表：重写以当前视口拾取记录
-//   （mapHitRegions）按屏幕坐标差 ≤ radius 过滤，三类实体与原登记一致——
-//   玩家（→ 0x8000|(1<<p)，normalizeHitId 同式）/ 有主 estate（2000+）/ 有主 corp
-//   （4000+）；radius = -1 → 全视口。目标不在视口（无 anchor）→ 返回 -1（放弃）。
-//   [RE] 与 expireAssets 屏幕口径统一，保证"AI 评估范围 = 实际爆炸范围"。
-int collectAround(GameState& st, int objId, int radius, uint16_t out[], int cap) {
-    const GameState::MapHitRegion* tgt = nullptr;
-    for (const auto& h : st.mapHitRegions) {
-        if (h.id == static_cast<uint16_t>(objId)) {
-            tgt = &h;
-            break;
-        }
-    }
-    if (tgt == nullptr) {
-        return -1;
-    }
-    int n = 0;
-    for (const auto& h : st.mapHitRegions) {
-        if (h.id == tgt->id) {
-            continue;
-        }
-        if (radius >= 0 &&
-            (std::abs(h.anchorX - tgt->anchorX) > radius ||
-             std::abs(h.anchorY - tgt->anchorY) > radius)) {
-            continue;
-        }
-        const uint16_t id = static_cast<uint16_t>(normalizeHitId(h.id));
-        const bool isPlayer = (id & 0x8000) != 0 && (id & 0x00FF) != 0;
-        const bool isEstate = id > 2000 && id < 4000;
-        const bool isCorp = id > 4000 && id < 6000;
-        if ((isPlayer || isEstate || isCorp) && n < cap) {
-            out[n++] = id;
-        }
-    }
-    return n;
-}
-
-// [RE sub_4216AB] 该采集项是否为 cur 的产业
-bool isOwnEstate(const GameState& st, int cur, uint16_t id) {
-    if (id > 2000 && id < 4000) {
-        return st.estates[id - 2000].owner == static_cast<uint8_t>(cur + 1);
-    }
-    if (id > 4000 && id < 6000) {
-        return st.corps[id - 4000].owner == static_cast<uint8_t>(cur + 1);
-    }
-    return false;
-}
-
 // ===== 逐道具目标（[RE funcs_420EE6 @0x4753A0]）=====
 
 int tgtDoll(GameState& st) {  // id1 機器娃娃 [RE 0x420EFA]：前方4步路径（无分叉）有可踢障碍
     const int cur = st.currentPlayer;
     uint16_t path[8];
     bool branch = false;
-    predictPathFwd(st, cur, 4, path, &branch);
+    aiItemPredictPath(st, cur, 4, path, &branch);
     if (branch) {
         return 0;  // 原版 !sub_40B221：路径不确定 → 不放娃娃
     }
@@ -287,7 +247,7 @@ int tgtRoadblock(GameState& st) {  // id2 路障 [RE 0x42107F]：主=前方4步�
     const int cur = st.currentPlayer;
     uint16_t path[8];
     bool branch = false;
-    predictPathFwd(st, cur, 4, path, &branch);
+    aiItemPredictPath(st, cur, 4, path, &branch);
     if (!branch) {
         for (int i = 0; i < 4; ++i) {
             const int cid = path[i];
@@ -364,7 +324,7 @@ int tgtRoadblock(GameState& st) {  // id2 路障 [RE 0x42107F]：主=前方4步�
     return 0;
 }
 
-// [RE 0x4213C5] 地雷：候选 = 回溯路线(6) ∩ 视口 ∩ 他人产业；监狱/医院格（在押）命中即选
+// [RE 0x4213C5] 地雷：候选 = 回溯路线(6) ∩ 视口 ∩ 他人产业；监狱/医院格（有在押）命中即选
 int tgtMine(GameState& st) {
     const int cur = st.currentPlayer;
     uint16_t back[8];
@@ -423,7 +383,10 @@ int tgtBomb(GameState& st) {
     return 1;
 }
 
-int tgtMissile(GameState& st) {  // id7 飛彈 [RE 0x421717]：债主须在视口；溅射(±100)无玩家/自家产业
+// [RE 0x421717] 飛彈：债主/随机者 → 其所在格；**全图目标不做距离限制**（用户决策 2026-09-28，
+//   道具效果端发射时视口即移到目标）。溅射保护 [RE sub_40A0B1(债主坐标,100)]：画布只登记
+//   当前玩家（stateFlags==0 时）+ 产业 → 自己将被波及 或 自家产业在 ±100 内 → 放弃。
+int tgtMissile(GameState& st) {
     const int cur = st.currentPlayer;
     int target = findMaxCreditor(st, cur);
     if (target == -1) {
@@ -432,35 +395,29 @@ int tgtMissile(GameState& st) {  // id7 飛彈 [RE 0x421717]：债主须在视�
     if (target < 0) {
         return 0;
     }
-    // 债主须出现在当前视口拾取列表（玩家命中 0xF000|p）
-    const uint16_t pHit = static_cast<uint16_t>(0xF000 | target);
-    const GameState::MapHitRegion* th = nullptr;
-    for (const auto& h : st.mapHitRegions) {
-        if (h.id == pHit) {
-            th = &h;
-            break;
-        }
-    }
-    if (th == nullptr) {
-        return 0;  // 债主不在屏幕内 → 原版不发
-    }
     const int cid = st.players[target].cellEntId;
     if (cid <= 0 || cid >= static_cast<int>(st.cellEnts.size())) {
         return 0;
     }
-    st.aiItemTarget = cid;
-    // 溅射区 [RE 0x4217B5..0x421815]：债主周围 ±100 屏 px 含任意玩家或自家产业 → 放弃
-    uint16_t list[256];
-    const int nl = collectAround(st, static_cast<int>(pHit), 100, list, 256);
-    for (int i = 0; i < nl; ++i) {
-        const uint16_t id = list[i];
-        if ((id & 0x8000) != 0 && (id & 0xFF) != 0) {
-            return 0;  // 玩家（含自己/债主）
+    const Player& pl = st.players[cur];
+    const int tx = st.players[target].spriteX;
+    const int ty = st.players[target].spriteY;
+    if (pl.stateFlags == 0 && nearIso(tx, ty, pl.spriteX, pl.spriteY, 100)) {
+        return 0;  // 自己恰在爆炸圈（原版仅登记发射者玩家位）
+    }
+    for (size_t i = 1; i < st.estates.size(); ++i) {
+        const Estate& es = st.estates[i];
+        if (es.owner == static_cast<uint8_t>(cur + 1) && nearIso(tx, ty, es.x, es.y, 100)) {
+            return 0;  // [RE sub_4216AB] 溅射含自家产业 → 放弃
         }
-        if (isOwnEstate(st, cur, id)) {
+    }
+    for (size_t i = 1; i < st.corps.size(); ++i) {
+        const Corp& cp = st.corps[i];
+        if (cp.owner == static_cast<uint8_t>(cur + 1) && nearIso(tx, ty, cp.x, cp.y, 100)) {
             return 0;
         }
     }
+    st.aiItemTarget = cid;
     return 1;
 }
 
@@ -474,7 +431,7 @@ int tgtDice(GameState& st) {  // id8 遙控骰子 [RE 0x421827]：前方6步（�
     }
     uint16_t path[8];
     bool branch = false;
-    predictPathFwd(st, cur, 6, path, &branch);
+    aiItemPredictPath(st, cur, 6, path, &branch);
     if (branch) {
         return 0;  // [RE 0x421877] sub_40B221 返回真（路径不确定）→ 不用骰子
     }
@@ -585,14 +542,18 @@ int tgtTeleport(GameState& st) {  // id11 傳送機 [RE 0x421CB6]：视口无主
     return 0;
 }
 
-int tgtNuke(GameState& st) {  // id13 核子飛彈 [RE 0x421E62]：他人有建筑地；溅射无玩家 ∧ 自家/他人 块数·等级比 < 1/(玩家数+2)
+// id13 核子飛彈 [RE 0x421E62]：全图他人有建筑地（level/sub≠0）；**不做距离限制**
+//   （原版 collectAroundPoint(obj,-1) 以目标重投影全画布 ±220）。每次试投评估：
+//   自己（stateFlags==0 登记玩家位）在画布内 → 放弃；否则 自家块数/他人块数 ∧
+//   自家Σlevel/他人Σlevel 均 < 1/(存活玩家+2) 才命中（不炸自家圈）。
+int tgtNuke(GameState& st) {
     const int cur = st.currentPlayer;
     int list[256];
     int n = 0;
     for (size_t i = 1; i < st.estates.size() && n < 256; ++i) {
         const Estate& es = st.estates[i];
         if (es.owner != 0 && es.owner != static_cast<uint8_t>(cur + 1) && es.level != 0) {
-            list[n++] = 2000 + static_cast<int>(i);  // [RE 0x421ECE] 有建筑（level≠0，非 type）
+            list[n++] = 2000 + static_cast<int>(i);
         }
     }
     for (size_t i = 1; i < st.corps.size() && n < 256; ++i) {
@@ -605,40 +566,44 @@ int tgtNuke(GameState& st) {  // id13 核子飛彈 [RE 0x421E62]：他人有建�
         return 0;
     }
     const double limit = 1.0 / (alivePlayerCount(st) + 2);  // [RE v22 = 1/(sub_40D2B4+2)]
-    uint16_t buf[256];
+    const Player& pl = st.players[cur];
     for (int attempt = 0; attempt < 10; ++attempt) {
         const int oid = list[dbg::roll(dbg::SlotAi, n)];
-        const int nl = collectAround(st, oid, -1, buf, 256);
-        if (nl < 0) {
-            continue;  // 目标不在视口 → 该候选无法评估
+        int tx = 0;
+        int ty = 0;
+        getObjectPosition(st, oid, tx, ty);
+        if (pl.stateFlags == 0 && nearIso(tx, ty, pl.spriteX, pl.spriteY, 220)) {
+            continue;  // [RE 0x421FE5] 画布含玩家位（仅登记发射者自己）→ 放弃
         }
         int ownCnt = 0;
         int ownSum = 0;
         int otherCnt = 0;
         int otherSum = 0;
-        bool hasPlayer = false;
-        for (int i = 0; i < nl; ++i) {
-            const uint16_t id = buf[i];
-            if ((id & 0x8000) != 0 && (id & 0xFF) != 0) {
-                hasPlayer = true;  // [RE 0x421FE5] 含玩家位掩码 → 放弃
-                break;
+        for (size_t i = 1; i < st.estates.size(); ++i) {
+            const Estate& es = st.estates[i];
+            if (es.owner == 0 || !nearIso(tx, ty, es.x, es.y, 220)) {
+                continue;
             }
-            int lv = 0;
-            if (id > 2000 && id < 4000) {
-                lv = st.estates[id - 2000].level;
-            } else if (id > 4000 && id < 6000) {
-                lv = st.corps[id - 4000].sub;
-            }
-            if (isOwnEstate(st, cur, id)) {
-                ownSum += lv;
+            if (es.owner == static_cast<uint8_t>(cur + 1)) {
+                ownSum += es.level;
                 ++ownCnt;
             } else {
-                otherSum += lv;
+                otherSum += es.level;
                 ++otherCnt;
             }
         }
-        if (hasPlayer) {
-            continue;
+        for (size_t i = 1; i < st.corps.size(); ++i) {
+            const Corp& cp = st.corps[i];
+            if (cp.owner == 0 || !nearIso(tx, ty, cp.x, cp.y, 220)) {
+                continue;
+            }
+            if (cp.owner == static_cast<uint8_t>(cur + 1)) {
+                ownSum += cp.sub;
+                ++ownCnt;
+            } else {
+                otherSum += cp.sub;
+                ++otherCnt;
+            }
         }
         const double rCnt = (otherCnt != 0) ? static_cast<double>(ownCnt) / otherCnt : INFINITY;
         const double rSum = (otherSum != 0) ? static_cast<double>(ownSum) / otherSum : INFINITY;
@@ -690,6 +655,10 @@ int aiItemSelect(Application& app, int itemId) {
                    itemId, st.aiItemTarget, st.players[cur].cellEntId);
         return 1;
     }
+    // 诊断：persona 已过但目标函数无候选（实机核对候选域用，低频日志）
+    RICH4_LOGI("aiItemSelect: p%d item=%d rejected (no candidate; persona=%u ai=%u cell=%u)",
+               cur, itemId, kItemAiPersona[itemId], st.players[cur].aiPersonality,
+               st.players[cur].cellEntId);
     return 0;
 }
 

@@ -3038,6 +3038,11 @@ void beginPlayerTurn(Application& app) {
                 startPlayerMove(app);
                 break;
             }
+            // [RE 0x418D61/0x418D69] turn 入口 drawMiniMap(1)+sub_41D546：原版空闲循环持续
+            //   重绘，AI 回合开始视口早已跟随当前玩家；重写 tick 序 update→render，
+            //   beginPlayerTurn 内 mapHitRegions 仍是**上一玩家视口**的陈旧记录
+            //   （机器工人/传送机/卡片链「远处误选」根因，2026-09-28 实机）→ 先刷新视口
+            renderGameFrame(app);
             // [RE 0x418E13] 交易市场 AI（sub_4284BE：清挂单 + 随机挂卖/改价/低价买入）
             tradeAiTurn(app);
             // [RE 0x418E18..0x418E21] rand()&1 → 用卡(useCardFlow 0x441BAA)/道具(itemPanelFlow 0x447D97)
