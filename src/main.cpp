@@ -87,12 +87,22 @@ std::vector<std::pair<std::string, int>> gameKeys; // [NEW] --game-key "ctrl+5,1
     bool testClock = false;
     bool traceOn = false;
     std::string traceOut;
+    // [NEW] --quickstart <map[,players[,humans]]>：headless 开局（docs/testing.md）
+    bool quickstart = false;
+    int qMap = 0;
+    int qPlayers = 4;
+    int qHumans = 1;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--game" && i + 1 < argc) {
             gameDir = argv[++i];
         } else if (arg == "--debug") {
             debugMode = true;
+        } else if (arg == "--quickstart" && i + 1 < argc) {
+            quickstart = true;
+            if (std::sscanf(argv[++i], "%d,%d,%d", &qMap, &qPlayers, &qHumans) < 1) {
+                quickstart = false;
+            }
         } else if (arg == "--seed" && i + 1 < argc) {
             testSeed = std::atoi(argv[++i]);
         } else if (arg == "--headless") {
@@ -214,7 +224,8 @@ std::vector<std::pair<std::string, int>> gameKeys; // [NEW] --game-key "ctrl+5,1
                         "[--game-click2 x,y,frame] [--game-click3 x,y,frame] "
                         "[--game-click4 x,y,frame] [--game-click5 x,y,frame] [--game-drag x1,y1,x2,y2,frame]\n"
                         "  [NEW headless 测试钩子] --debug --seed <n> --headless --test-clock "
-                        "--trace --trace-out <file.json> --save-selftest <slot> --load-game <slot>\n");
+                        "--trace --trace-out <file.json> --quickstart <map[,players[,humans]]> "
+                        "--save-selftest <slot> --load-game <slot>\n");
             return 0;
         }
     }
@@ -295,12 +306,19 @@ std::vector<std::pair<std::string, int>> gameKeys; // [NEW] --game-key "ctrl+5,1
     if (headless || traceOn) {
         rich4::trace::setEnabled(true);
     }
-    if (!app.init(gameDir)) {
+    if (!app.init(gameDir, headless)) {
         RICH4_LOGE("Application init failed");
         return 1;
     }
     // [NEW] 调试模式（--debug）：启用 Ctrl+1..8 测试热键
     app.gameState().debugMode = debugMode;
+    if (quickstart) {
+        // [NEW] headless 开局（跳过主菜单+选人；正常模式勿用——无操作会直接进局）
+        app.gameState().debugQuickstart = true;
+        app.gameState().quickMap = qMap;
+        app.gameState().quickPlayers = qPlayers;
+        app.gameState().quickHumans = qHumans;
+    }
     if (loadGameSlot >= 0) {
         const bool ok = rich4::reloadGameFromSlotData(app, loadGameSlot);
         std::printf("load-game slot %d: %s\n", loadGameSlot, ok ? "OK" : "FAIL");

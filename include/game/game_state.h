@@ -625,6 +625,13 @@ struct GameState {
     // [NEW] 调试模式（命令行 --debug 启用；测试辅助，无原版对应）
     // 用途: Ctrl+1..8 修改地块所属/等级/连锁店、批量铺地、加现金、打印地块详情
     bool debugMode = false;
+    // [NEW] --quickstart（headless 测试开局，docs/testing.md；无原版对应）：
+    //   run() 跳过主菜单模态、newGameInit 跳过选人对话框，直接用下列配置开局。
+    //   quickHumans: 前 N 人为人类（其余 AI）；headless L1 场景=1、L2 长跑=0（全员 AI 自动）
+    bool debugQuickstart = false;
+    int quickMap = 0;
+    int quickPlayers = 4;
+    int quickHumans = 1;
 
     // [RE 0x475110] dword_475110 脏区标志（bit1=地图区）
     uint8_t dirtyFlags = 0;

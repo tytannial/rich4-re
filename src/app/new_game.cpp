@@ -146,10 +146,27 @@ bool newGameInit(Application& app, bool mode1) {
     if (!restore) {
         // 0x406DE7 新游戏分支：清空选项与角色，默认 {玩家数=四人, 资金=200000}
         state.newGameConfig = NewGameConfig{};
+        // [NEW] --quickstart：headless 测试开局，预填配置并跳过选图/选人模态
+        //   （docs/testing.md；无原版对应——正常路径下此分支永不进入）
+        if (state.debugQuickstart) {
+            NewGameConfig& cfg = state.newGameConfig;
+            cfg.mapIndex = state.quickMap < 0 ? 0 : (state.quickMap > 3 ? 3 : state.quickMap);
+            const int np = state.quickPlayers < 2 ? 2 : (state.quickPlayers > 4 ? 4 : state.quickPlayers);
+            cfg.playerCountIndex = np - 2;
+            const int nh = state.quickHumans < 0 ? 0
+                         : (state.quickHumans > np ? np : state.quickHumans);
+            for (int i = 0; i < 4; ++i) {
+                cfg.charId[i] = i < np ? i : -1;
+                cfg.isAi[i] = i >= nh;
+            }
+            RICH4_LOGI("quickstart: prefill map=%d players=%d humans=%d, dialog skipped (RE 0x404E44 bypass)",
+                       cfg.mapIndex, np, nh);
+        }
     }
 
     // [RE 0x404E44] 选图/选人模态（取消返回 false → 主菜单）
-    if (!newGameDialog(app, restore, state.newGameConfig)) {
+    const bool skipDialog = state.debugQuickstart && !restore; // [NEW] headless 开局
+    if (!skipDialog && !newGameDialog(app, restore, state.newGameConfig)) {
         RICH4_LOGI("new game cancelled (RE 0x404E44)");
         return false;
     }

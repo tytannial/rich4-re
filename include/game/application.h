@@ -23,7 +23,7 @@ namespace rich4 {
 //       PeekMessageA 主循环 + sub_401815 清理
 class Application {
 public:
-    bool init(const std::string& gameDir);
+    bool init(const std::string& gameDir, bool headless = false);
     void run();
     void shutdown();
 
@@ -45,6 +45,8 @@ public:
     Cursor& cursor() { return m_cursor; }
     TextRenderer& text() { return m_text; }
     const std::string& gameDir() const { return m_gameDir; }
+    // [NEW] headless 测试运行标志（docs/testing.md；dummy 驱动+虚拟时钟+输入直投）
+    bool headless() const { return m_headless; }
     // [NEW] 媒体目录（音乐/视频）：<gameDir>/Media，回退 <gameDir>/../Media
     const std::string& mediaDir() const { return m_mediaDir; }
 
@@ -170,6 +172,7 @@ private:
 
     std::string m_gameDir;
     std::string m_mediaDir;
+    bool m_headless = false;
     Window m_window;
     Renderer m_renderer;
     Input m_input;

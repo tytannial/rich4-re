@@ -10,19 +10,27 @@
 
 namespace rich4 {
 
-bool Application::init(const std::string& gameDir) {
+bool Application::init(const std::string& gameDir, bool headless) {
     // [RE 0x401B9C] WinMain 初始化段
     // 依据: 0x401B9C 反编译; RegisterClassA("Rich4") + CreateWindowExA(0, "Rich4",
     //       "Rich4", 0x80000000=WS_POPUP, 屏幕宽高) + sub_4015D6() + ShowWindow(5)
     // 迁移: Win32 窗口类/全屏窗口 → SDL_CreateWindow（窗口化，现代化目标）;
     //       显示模式由 0x4015D6 的 SetDisplayMode(640,480,16) 决定 → 逻辑分辨率 640x480
     m_gameDir = gameDir;
+    m_headless = headless;
     // [NEW] 媒体目录（音乐/视频）：优先 <gameDir>/Media，回退 <gameDir>/../Media
     m_mediaDir = gameDir + "/Media";
     if (!std::filesystem::exists(m_mediaDir + "/Music")) {
         m_mediaDir = gameDir + "/../Media";
     }
 
+    // [NEW] headless 测试运行（docs/testing.md）：SDL dummy 驱动——无真实窗口/显卡/声卡；
+    //   Surface 为 CPU 位图，绘制路径与 saveBmp 不依赖 GPU，VSync 关闭配合虚拟时钟极速推进；
+    //   音频 open 失败走既有 silent 兜底
+    if (headless) {
+        SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "dummy");
+        SDL_SetHint(SDL_HINT_AUDIO_DRIVER, "dummy");
+    }
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
         RICH4_LOGE("SDL_Init failed: %s", SDL_GetError());
         return false;
@@ -31,7 +39,7 @@ bool Application::init(const std::string& gameDir) {
     if (!m_window.create("Rich4", 1280, 960)) {
         return false;
     }
-    if (!m_renderer.create(m_window.handle(), 640, 480)) {
+    if (!m_renderer.create(m_window.handle(), 640, 480, !headless)) {
         return false;
     }
     // [RE 0x48A08C] 后台绘制缓冲（640x480 RGB555）
@@ -63,7 +71,14 @@ void Application::run() {
         m_state.gameMode = 0;
         m_state.mapIndex = 0;
         m_state.gameInited = false;
-        const int scene = mainMenuScene(*this); // [RE 0x4029FD]
+        int scene;
+        if (m_state.debugQuickstart) {
+            // [NEW] headless 测试开局：跳过主菜单模态直接新游戏（docs/testing.md）
+            scene = 0;
+            RICH4_LOGI("quickstart: bypass main menu (RE 0x4029FD)");
+        } else {
+            scene = mainMenuScene(*this); // [RE 0x4029FD]
+        }
         if (!m_running) {
             // 原版 Msg.message == 18(WM_QUIT) 时 WinMain 直接返回
             return;

@@ -17,7 +17,7 @@ public:
     Renderer(const Renderer&) = delete;
     Renderer& operator=(const Renderer&) = delete;
 
-    bool create(SDL_Window* window, int logicalWidth, int logicalHeight);
+    bool create(SDL_Window* window, int logicalWidth, int logicalHeight, bool vsync = true);
     void destroy();
 
     void beginFrame();

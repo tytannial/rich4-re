@@ -26,7 +26,24 @@
   在 headless 下按虚拟时间**快速收敛**，整局测试秒级完成。
 - 正常模式透传原语义（行为零变化）；开启时以当前真实 ticks 为基准（与既有 `startMs`
   比较连续）。
-- 注：`--headless` 当前 = 虚拟时钟 + trace；**dummy 渲染旁路属后续步骤**（仍建窗口）。
+
+### 1.1b headless dummy 运行时（`Application::init(dir, headless)`）
+- `--headless` → `SDL_SetHint(VIDEO/AUDIO_DRIVER,"dummy")` + VSync 关闭；窗口/renderer
+  照常创建（软件渲染），**Surface 绘制与 `saveBmp` 全在 CPU，与驱动无关**。
+- **已验证事实**：同一时刻 dummy 截图与真窗口截图**字节一致**；
+  `--load-game 0`（存档→渲染→截图）headless 全链通过；
+  `--headless --seed 42 --quickstart 0,4,0 --shot-frame 4000` 两次运行
+  trace 499 条逐条一致 + BMP 一致（**可复现性成立**；唯一非确定字段=modal `h=` 指针，
+  ASLR 所致，比对时归一化）。
+- **合成输入无需"坐标直通层"**：dummy renderer 的 `SDL_RenderCoordinates*/WarpMouse`
+  数学路径与真窗口一致，既有 `--shot-cursor/--auto-click/--game-click/--game-key`
+  在 headless 下实测可用（点击可进选人对话框）。
+- 性能：4000 帧全 AI 局 ≈ 22s（~180fps，CPU 全图重绘主导）；如需更快可加 `--no-render`（待）。
+
+### 1.1c `--quickstart <map[,players[,humans]]>`
+- `Application::run` 跳过主菜单模态；`newGameInit` 跳过 `newGameDialog`，预填
+  `NewGameConfig`（charId=0..n-1，前 humans 位人类、其余 AI）。
+- L1 场景：`humans>=1`（脚本驱动当前玩家）；L2 长跑：`humans=0` 全 AI 自动。
 
 ### 1.2 确定性与定点注入（`src/core/debug_hooks.{h,cpp}`）
 - `--seed <n>`：`gameInit` 播种改读 `dbg::seed()`（未提供则原版 tick 播种语义）。
@@ -94,29 +111,29 @@ magicHouse 惩罚/结息分红/小游戏 phase/…）随测试用例铺开。
 ## 2. 命令行（当前）
 
 ```powershell
-# 无头冒烟（虚拟时钟快进 + trace 导出）
-./build/rich4.exe --game resources/game --headless --trace-out build/trace.json --shot build/s.bmp
+# 无头全 AI 冒烟（虚拟时钟快进 + trace 导出；确定性回归的基准命令）
+./build/rich4.exe --game resources/game --headless --seed 42 --quickstart 0,4,0 `
+  --trace-out build/trace.json --shot build/s.bmp --shot-frame 4000
 
 # 确定性回归（存档往返字节稳定；--seed 固定随机）
 ./build/rich4.exe --game resources/game --save-selftest 0
 ./build/rich4.exe --game resources/game --debug --seed 12345 --load-game 0
 
 # 参数：--seed <n>  --headless  --test-clock  --trace  --trace-out <json>
+#       --quickstart <map[,players[,humans]]>
 ```
 
 ## 3. 待落地（既定路线，见会话计划）
 
-1. **引擎 headless 化**：dummy video/audio + renderer/present 旁路 + 合成输入逻辑坐标直通 +
-   `--quickstart map:players`（跳选人）/`--load-file`（存档夹具）。
-2. **统一调试命令层**（`src/app/debug/`）：45 个热键→命令注册表 + `select`（替代鼠标指向）+
+1. **统一调试命令层**（`src/app/debug/`）：45 个热键→命令注册表 + `select`（替代鼠标指向）+
    `rng.*`/`fixture.save`/`assert`/`wait`/`click <region>`/`shot`/`quit`；`--script/--exec` DSL
    （`# id/covers/timeout` 头）；失败计数→退出码 + `--report <json>`。
-3. **L0 CTest**：`rich4_core` 静态库拆分；公式/序列化/解析器单测。
-4. **L1 场景 ~22 条 + L2 `--autoplay` 不变量长跑**；`tools/run_tests.py` 编排 + 覆盖矩阵
+2. **L0 CTest**：`rich4_core` 静态库拆分；公式/序列化/解析器单测。
+3. **L1 场景 ~22 条 + L2 `--autoplay` 不变量长跑**；`tools/run_tests.py` 编排 + 覆盖矩阵
    （`# covers: [HELP idx]` ↔ `docs/help-checklist.md`）。
-5. **named region 控件层**：各对话框控件表登记 → `click <region>` + `assert clicked=`；
+4. **named region 控件层**：各对话框控件表登记 → `click <region>` + `assert clicked=`；
    规范并入 `ui-controls.md`。
-6. **trace 批2~4 全量插桩**（演出/判定边界约 40 点）。
+5. **trace 批2~4 全量插桩**（演出/判定边界约 40 点）。
 
 ## 4. 设计约束（实施时强制）
 

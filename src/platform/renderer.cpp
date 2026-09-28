@@ -6,7 +6,7 @@ namespace rich4 {
 
 Renderer::~Renderer() { destroy(); }
 
-bool Renderer::create(SDL_Window* window, int logicalWidth, int logicalHeight) {
+bool Renderer::create(SDL_Window* window, int logicalWidth, int logicalHeight, bool vsync) {
     m_renderer = SDL_CreateRenderer(window, nullptr);
     if (!m_renderer) {
         RICH4_LOGE("SDL_CreateRenderer failed: %s", SDL_GetError());
@@ -15,7 +15,9 @@ bool Renderer::create(SDL_Window* window, int logicalWidth, int logicalHeight) {
     m_logicalWidth = logicalWidth;
     m_logicalHeight = logicalHeight;
     setWidescreen(true);
-    SDL_SetRenderVSync(m_renderer, 1);
+    if (vsync) {
+        SDL_SetRenderVSync(m_renderer, 1);
+    }
     return true;
 }
 
