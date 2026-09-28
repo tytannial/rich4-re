@@ -1,0 +1,33 @@
+# id: 192_bank_loan
+# covers: [HELP 35] 銀行停留貸款 0x435062——申請(0x4757F8 kHitApply)→簾幕+提額消息→
+#          数字輸入(0x453544) Enter→+loan/setLoanDate→離開。
+#          同步要點：首擊=跳開場問候消息（FloatMessage 點擊跳過語義），二擊才命中申請鈕
+#          （ISS-014 雙點規則在銀行面板的變體）；數字框打開後才注册 numkey → 先 wait log。
+# timeout: 60000
+wait idle 1000
+player.cash 0 200000
+bank
+wait frames 400
+clickr bank.apply
+wait frames 120
+clickr bank.apply
+wait log "number input dialog" 20000
+clickr numkey.1
+wait frames 30
+clickr numkey.0
+wait frames 30
+clickr numkey.0
+wait frames 30
+clickr numkey.0
+wait frames 30
+clickr numkey.0
+wait frames 30
+clickr numkey.0
+wait frames 30
+clickr numkey.ok
+wait log "bank stay: loan +" 20000
+clickr bank.exit
+wait frames 200
+assert state players.0.loan >= 100000
+assert state errors == 0
+quit

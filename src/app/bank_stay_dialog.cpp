@@ -16,6 +16,8 @@
 #include "game/app/number_input_dialog.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/app/debug/debug.h"
+#include <cstdio>
 #include "game/core/trace.h"
 #include "game/core/debug_hooks.h"
 #include "game/game_state.h"
@@ -1170,6 +1172,23 @@ void setLoanDate(Application& app, int p) {
 
 // [RE 0x436668] 停留银行（landingEvent case 14 → 路过柜员机后）
 void bankStayDialog(Application& app, int cellEntId) {
+    // [NEW] named region 登记（0x4757F8 命中矩形同源常量；脚本 clickr bank.exit/apply/
+    //   repay/center；center=自家融资帘启后中央区）
+    {
+        static bool s_reg = false;
+        if (!s_reg) {
+            s_reg = true;
+            debug::registerRegion("bank.exit", kHitExit[0], kHitExit[1],
+                                  kHitExit[2] - kHitExit[0], kHitExit[3] - kHitExit[1]);
+            debug::registerRegion("bank.apply", kHitApply[0], kHitApply[1],
+                                  kHitApply[2] - kHitApply[0], kHitApply[3] - kHitApply[1]);
+            debug::registerRegion("bank.repay", kHitRepay[0], kHitRepay[1],
+                                  kHitRepay[2] - kHitRepay[0], kHitRepay[3] - kHitRepay[1]);
+            debug::registerRegion("bank.center", kHitCenter[0], kHitCenter[1],
+                                  kHitCenter[2] - kHitCenter[0], kHitCenter[3] - kHitCenter[1]);
+        }
+    }
+
     trace::logf("dialog open name=bank_stay");
     GameState& st = app.gameState();
     const int p = st.currentPlayer;
