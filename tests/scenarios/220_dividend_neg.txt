@@ -1,0 +1,15 @@
+# id: 220_dividend_neg
+# covers: [HELP 20] 公司虧損=負 fund 負分红→bank 扣不盡由 cash 補（0x42BA97 尾部；
+#          Q-B 結案：specpt.fund 構造 -50000 與持股分攤）
+# timeout: 60000
+wait idle 1000
+stock.buy 0 0 100
+player.bank 0 10000
+player.cash 0 200000
+specpt.fund 3 -50000
+day 14
+wait log "dividend: 15th meeting done" 20000
+assert state players.0.bank == 0
+assert state players.0.cash < 200000
+assert state errors == 0
+quit
