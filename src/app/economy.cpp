@@ -293,6 +293,12 @@ int pickRandomActiveTarget(const GameState& st, int exclude) {
 //   无主 → cellEnt+38 物件占用清；清槽（cellEnt/life/owner）
 //   slot<12 → **配对轮替**：在对向槽以 randomCellEnt(旧格,距>300) 重建配对类型
 // 差异: 原版 type16/17 也跳回退（trap 表恒 0，等价）；原版 a1（距离参数）传垃圾值，忽略
+// [RE 0x40E278] godPairType：偶槽(idx 0,2,..10)被消耗→重建奇槽大形态(idx+2)；
+//   奇槽(1,3,..11)被消耗→重建偶槽小形态(idx)。见 economy.h 注释与单测 test_god.cpp。
+int godPairType(int idx) {
+    return ((idx & 1) != 0) ? idx : idx + 2;
+}
+
 void releaseCellTableSlot(Application& app, int slot) {
     GameState& st = app.gameState();
     if (slot <= 0) {
@@ -334,9 +340,13 @@ void releaseCellTableSlot(Application& app, int slot) {
     st.cellTable[off + 3] = 0;
     st.cellTable[off + 4] = 0;
     st.cellTable[off + 5] = 0;
-    // [RE 0x40E278] 槽 0..11 配对轮替（小↔大、福神↔窮神按对、惡犬↔土地公…）
+    // [RE 0x40E278] 槽 0..11 配对轮替：严格在**同对的另一槽**重建对向形态
+    //   （偶槽小神/天使/惡犬 0,2,..10 → 奇槽 2,4,..12 大財神/大福神/大窮神/大衰神/惡魔/土地公；
+    //    奇槽反之 → 偶槽小形态）。原版反汇编 `test dl,1 → lea ebx,[edx-1] / lea ebx,[edx+1]`
+    //   后 `inc ebx` 即类型实参，故奇槽被消耗时重建类型=idx(偶)，**非 idx+1**（2026-09-28 修正：
+    //   旧实现奇槽误用 idx+1 致大形态原地复现、永不翻回小形态，小神/天使/惡犬逐步绝迹）。
     if (idx < 12) {
-        const int pairType = ((idx & 1) != 0) ? idx + 1 : idx + 2;
+        const int pairType = godPairType(idx);
         const int newEnt = randomCellEnt(st, entId);
         if (newEnt > 0) {
             createMapObject(app, pairType, newEnt, 0, 0);

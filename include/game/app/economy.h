@@ -32,6 +32,12 @@ void clearAllyPair(GameState& st, int p);
 // slot 为 1-based cellTable 槽：占用者属性回退 → 清槽 → 前 12 槽重新随机放置
 void releaseCellTableSlot(Application& app, int slot);
 
+// [RE 0x40E278] godPairType：槽 idx(0-based, 0..11) 被消耗后应在**对向槽**重建的神明类型。
+//   配对 (偶小, 奇大)：type1↔2、3↔4、5↔6、7↔8、9天使↔10惡魔、11惡犬↔12土地公。
+//   原版反汇编 `test dl,1 → lea ebx,[edx-1] / lea ebx,[edx+1]` 后 `inc ebx`：
+//   偶槽→idx+2（奇槽大形态），奇槽→idx（偶槽小形态）。抽出供 L0 单测锁定方向。
+int godPairType(int idx);
+
 // [RE 0x40AC7B] expireAssets：范围资产清算（定义见 src/app/economy.cpp）
 //   sub_40A45C 口径：基于**当前视口** mapHitRegions（= g_drawList）的**屏幕空间**采集——
 //   radius=-1 全视野、否则视口中心 (220,260) ± radius 方块（调用方须先 refreshGameUi(x,y,0)

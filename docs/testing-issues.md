@@ -104,7 +104,7 @@
 | Q-G | L2 长跑不变量未封装 | **已固化**：`80_autoplay_20d.txt`（全 AI 20+天，assert errors==0 / day 推进；seed 42/7/99/2024 四种子全绿） | 可扩至年尺度+`--repeat`；发现深层 bug 时补 assert |
 | Q-H | `card.rebuild` 后**卡包应有 7 号卡才扣卡**——命令层直调不带卡时 cardBagRemove(7) 可能移除空槽（原版经 useCardFlow 先扣卡） | rebuild 场景未断卡包 | 实机走卡片栏用改建卡核对；脚本可补 `give.card 0 7 + dump` |
 | Q-I | trace `xfer to=` 语义：收款=玩家**索引0基**、=银行/公库时为其他编号（0x41D433 映射） | 72 场景断 `xfer from=0 to=1`（AI 玩家1=owner2-1）成立 | 银行收款场景先 `dump` 观察字段再写死断言；建议 testing.md §2.1 补"to 字段编号对照表" |
-| **Q-J** | 请神符"第一回合地图不该有大财神却请到"（用户 2026-09-28 实机反馈） | **初步核对=非缺陷**：开局布局表 `kCellTypeInit[46]`（exe 0x496D08 提取）**槽1=type2 大財神**本就存在；`canAttachObject` 允许 t≤12(≠11)∪{15}，财神可附身符合 [RE 0x444D1A] 集合语义 | 已实机确认请神不卡死；若后续核对"请到的不是视野最近者"再升级 |
+| **Q-J** | 请神符"第一回合地图不该有大财神却请到"（用户 2026-09-28 实机反馈） | **已结案=非初始放置缺陷**：`loadMapData 0x407D6F` 开局仅放偶槽 1,3,5,7,9,11（小神+天使+惡犬），大神/惡魔/土地公**绝不预置**（`kCellTypeInit` 的 +0 类型常驻 ≠ 在场——空槽判定 `+2 cellEnt==0`，潜伏槽不绘制/不拾取）。"提前见/请到大神"根因=**`Ctrl+Shift+O` 调试直放**（1..18 循环、当前格、绕过配对，用户确认触发过）。请神符第一回合候选实为小神+天使（惡犬 `canAttach=0` 请不到），符合预期 | 结案；轮替方向缺陷另立 BUG-003（见 §4） |
 | **Q-K** | 请神符「最近」口径 | `pickNearestAttachable` 用 **cellEnt 格坐标欧氏距离**+视野(mapHitRegions)过滤 | 与原版 0x444D1A 的拾取坐标口径（屏幕像素/带 rotation?）待 IDA 细核；构造"近处小神+远处大神"用例可脚本化（place/teleport+select 后 use.god invite 断言 objId） |
 
 ### ISS-013 specPt costType 是 `g_specPtCostMap` 索引，不是帮助序号
@@ -150,6 +150,19 @@
 ### BUG-002（观察）96_priceup_flag 一次通过但**翻倍金额未断言**
 - 现断 cash<200000；更严格应 `assert trace "xfer ... amount=<2×fee>"`——
   fee 依赖同路段块数，需先 `dump` 定值；作为金额断言铺开示例待补。
+
+### BUG-003 神明配对轮替方向写反（奇槽大形态永不翻回小形态）— **已修 2026-09-28**
+- **现象**：玩到多回合后场上大财神/恶魔/土地公越来越多、小神/天使/恶犬渐绝，"该轮换的不轮换"。
+- **根因**：`economy.cpp` `releaseCellTableSlot` 末尾 `pairType=(idx&1)?idx+1:idx+2`——
+  奇数槽(大形态)被消耗时算出 `idx+1`=**同奇槽大形态**，`createMapObject` 按 `type-1` 写回原槽 →
+  原地复现、永不翻回偶槽小形态。原版 `0x40E278` 反汇编 `lea ebx,[edx-1]/[edx+1]` 后 `inc ebx`
+  实为奇槽→`idx`(小形态)、偶槽→`idx+2`(大形态) 严格双向交替。
+- **修复**：抽 `godPairType(idx)=(idx&1)?idx:idx+2`（`economy.h/.cpp`），releaseCellTableSlot 调用之；
+  L0 单测 `tests/unit/test_god.cpp`（偶→大、奇→小 各 6 例）锁定方向。
+- **附带核实**：神明**无独立天数刷新/换位**——`advanceDay` 仅新月 1 号换位槽 13/14；静止神 `life=0&owner=0`
+  永不被寿命递减段触碰；交替唯一成本=被消耗(踩中/请走/送神)或附身寿命 7 归零→立即对向重建。见
+  `map-object-refresh.md §2.1/§2.1.1`。
+- **状态**：✅ 已修，待实机双向回归（消耗小神→出大神→再消耗→翻回小神；恶犬↔土地公、天使↔惡魔）。
 ## 5. 使用约定
 
 - **新场景失败先判类**：`wait` 超时→时序（ISS-004）；金额/格值不符→注入/公式（ISS-003/008）；

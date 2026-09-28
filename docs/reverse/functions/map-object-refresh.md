@@ -46,6 +46,35 @@ if (slot < 12) {                      // 仅槽 0..11
 开局 `loadMapData` 只放类型 1,3,5,7,9,11（偶数槽）→ 场上每对恒 1 个神明；踩中/到期后换成对向。
 礼物/宝箱/死神/道具（槽 ≥12）**不轮替**。
 
+> **2026-09-28 修正（重写实现偏离 → 已修）**：重写 `releaseCellTableSlot` 曾把奇数槽被消耗时的
+> 重建类型误算为 `idx+1`（=同奇槽大形态），导致**大财神/大福神/大穷神/大衰神/恶魔/土地公一旦被
+> 轮换出即永久原地复现，永不翻回小形态**，小神/天使/恶犬逐轮绝迹（表现=“神越轮越大、该轮换的不轮换”）。
+> 已抽为 `godPairType(idx)`（`economy.cpp`/`economy.h`）忠实原版 `0x40E278`：偶槽→`idx+2`、奇槽→`idx`；
+> L0 单测 `tests/unit/test_god.cpp` 锁定双向。
+
+### 2.1.1 神明刷新/交替触发全模型（何时“出现/消失/换位”，有无天数等待）
+
+对“神明是否有天数刷新等待”的专项核实结论：**没有独立的计时刷新**。全部证据：
+
+1. **出现（写入 cellTable 1..12）仅 4 个来源**（`0x40E033 createMapObject` 的 xref 全枚举）：
+   - `0x407D6F loadMapData`：开局仅放偶槽 1,3,5,7,9,11（+ 13/14 礼物/宝箱）；
+   - `0x40E278 deleteMapObject` 配对轮替：某槽被消耗的**瞬间**在对向槽 `randomCellEnt(旧格,距>300)` 重建；
+   - `0x411AE0 surrenderPlayer` / `0x446BAA/C88/D69` 道具放置：只涉及 15 死神 / 16-18 道具，**不产神明**；
+   - `Ctrl+Shift+O`（调试，非正常游戏）：按 1..18 循环在玩家当前格直放、`owner=0` 绕过配对，
+     是“第一回合见/请到大神”的真实来源（**非初始放置 bug**）。
+2. **`0x41CF67 advanceDay` 对 cellTable 的处理 = 仅新月 1 号**把槽 **13/14**（礼物/宝箱）delete→relocate→create；
+   **从不**按天/月对神明 1..12 计时、换位或刷新 → 静止神明 `life=0 & owner=0` **永远站桩**。
+3. **寿命递减只作用于“被附身”的神**：`0x41C84F→0x41CC6F` 尾段 `if(g_playerAttachedObj[p])` 对
+   当前回合玩家的 cellTable 槽 `life-1`，归零→`attachEndAnim`(24 帧飘走)→`deleteMapObject`→**立即**对向轮替。
+   调用点 = `0x419039 nextPlayer`（每玩家回合开始一次）；`0x41902E advanceDay`（一轮=1 天）→ 寿命 7≈7 天。
+4. **交替的唯一“时间”成本**=神明被玩家得到并持有到寿命耗尽（或送神符/请神替换 / 玩家踩中他神触发
+   `attachObject` 前置 `attachEnd`）；**没人碰则永不轮换**。即“天使→恶魔”“恶犬→土地公”非等待定时刷新，
+   而是“天使被消耗/到期→恶魔立即刷新”，反之亦然（配对方向见 §2.1）。
+
+重写一致性：`new_game.cpp:432-436`（初始）、`map_objects.cpp` `attachEnd→releaseCellTableSlot`、
+`turn_system.cpp:3666`（寿命-1 节奏）、`turn_system.cpp:3822`（月度仅 13/14）均与原版吻合；
+唯一偏差即上述 `godPairType` 方向 bug，已修。
+
 ### 2.2 月度换位（禮物13/寶箱14）
 `advanceDay` 在 `sub_452117` 返回"新日期 == 1 号"时（**每月 1 号**，非每天）：
 `deleteMapObject(13/14)` → `randomCellEnt(旧cellEnt)` → `createMapObject(13/14)`，
