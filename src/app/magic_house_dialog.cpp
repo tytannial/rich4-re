@@ -43,6 +43,8 @@
 #include "game/application.h"
 #include "game/core/log.h"
 #include "game/core/trace.h"
+#include "game/app/debug/debug.h"
+#include <cstdio>
 #include "game/core/debug_hooks.h"
 #include "game/game_state.h"
 #include "game/platform/audio.h"
@@ -805,6 +807,22 @@ bool deathGodHandler(const SDL_Event* event, void* user) {
 
 // [RE 0x43380A] magicHouseVisit
 void magicHouseVisit(Application& app) {
+    trace::logf("dialog open name=magic_house");
+    // [NEW] named region：12 惩罚径向图标（0x432B57 hover=panel[19] RAW 拾取；
+    //   矩形=kIconPos±32 与图标帧 64×64 同源）。目标确认行为动态宽度不登记
+    //   （AI 分支自动全链；人类链验证到"选中惩罚"即 rclick 取消）。
+    {
+        static bool s_reg = false;
+        if (!s_reg) {
+            s_reg = true;
+            for (int i = 0; i < 12; ++i) {
+                char nm[20];
+                std::snprintf(nm, sizeof(nm), "magic.pen.%d", i + 1);
+                debug::registerRegion(nm, kIconPos[i][0] - 32, kIconPos[i][1] - 32, 64, 64);
+            }
+        }
+    }
+
     GameState& st = app.gameState();
     const int cur = st.currentPlayer;
     std::vector<int> targets;

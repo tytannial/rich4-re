@@ -1,0 +1,19 @@
+# id: 110_shop_buy
+# covers: [HELP 27] 百貨公司——case15 进店→Prompt 阶段点击=进 Ready→商品行买卡(点券)→离开
+#          （shopModal: 非 Ready 阶段点击推进阶段，属产品语义）
+# timeout: 120000
+wait idle 1000
+player.points 0 30000
+find.evtcell 15
+assert state selected >= 1
+land
+wait frames 400
+clickr shop.crow.0
+wait frames 60
+clickr shop.crow.0
+wait frames 60
+assert state players.0.points < 30000
+clickr shop.leave
+wait trace "shop revenue" 20000
+assert state errors == 0
+quit

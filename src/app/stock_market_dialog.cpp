@@ -13,6 +13,8 @@
 #include "game/app/number_input_dialog.h"
 #include "game/app/stock_system.h"
 #include "game/core/trace.h"
+#include "game/app/debug/debug.h"
+#include <cstdio>
 #include "game/application.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
@@ -704,6 +706,21 @@ bool stockPanelHandler(const SDL_Event* event, void* user) {
 } // namespace
 
 void stockMarketDialog(Application& app) {
+    // [NEW] named region：0x4754C8 Rect[5] 行情/持股/賣出·買入切换/所有公司資訊/EXIT
+    //   （绝对坐标同源，脚本 stock.btn.<0..4>）
+    {
+        static bool s_reg = false;
+        if (!s_reg) {
+            s_reg = true;
+            for (int i = 0; i < 5; ++i) {
+                char nm[16];
+                std::snprintf(nm, sizeof(nm), "stock.btn.%d", i);
+                debug::registerRegion(nm, kBtns[i].l, kBtns[i].t, kBtns[i].r - kBtns[i].l,
+                                      kBtns[i].b - kBtns[i].t);
+            }
+        }
+    }
+
     trace::logf("dialog open name=stock_market");
     GameState& st = app.gameState();
     UiImage ui;

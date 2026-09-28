@@ -1,0 +1,15 @@
+# id: 114_magic_smoke
+# covers: [HELP 38] 魔法屋——施法→12 惩罚径向选择(0x432E97 DOWN 确认)→右键取消退出
+#          （目标行为动态宽度未登记；apply 全链由 80_autoplay AI 分支覆盖）
+# timeout: 120000
+wait idle 1000
+magic
+wait frames 1200
+clickr magic.pen.2
+wait frames 60
+clickr magic.pen.2
+wait frames 60
+rclick 320 240
+wait trace "clicked name=magic.pen.2" 10000
+assert state errors == 0
+quit

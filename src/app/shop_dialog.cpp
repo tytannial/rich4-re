@@ -22,6 +22,8 @@
 #include "game/application.h"
 #include "game/core/log.h"
 #include "game/core/trace.h"
+#include "game/app/debug/debug.h"
+#include <cstdio>
 #include "game/core/debug_hooks.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
@@ -883,6 +885,30 @@ void shopOpenUi(Application& app, int specIdx) {
 //   实参 objId = cellEnt+32 special（6000+n），非 cellEnts 数组下标;
 //   营业额（买 10×价 / 卖 1×价）入 specPt.fund(+40)/fundPaid(+44)
 void shopDialog(Application& app, int objId) {
+    // [NEW] named region 登记（矩形=本文件命中常量同源；行 hit 在抽屉到位 drawerX=5 后可点）
+    {
+        static bool s_reg = false;
+        if (!s_reg) {
+            s_reg = true;
+            debug::registerRegion("shop.swap", kSwapHitL, kSwapHitT, kSwapHitR - kSwapHitL,
+                                  kSwapHitB - kSwapHitT);
+            debug::registerRegion("shop.leave", kLeaveHitL, kLeaveHitT, kLeaveHitR - kLeaveHitL,
+                                  kLeaveHitB - kLeaveHitT);
+            for (int i = 0; i < (kCardRowB - kCardRowT) / kCardRowH; ++i) {
+                char nm[20];
+                std::snprintf(nm, sizeof(nm), "shop.crow.%d", i);
+                debug::registerRegion(nm, kCardRowL, kCardRowT + i * kCardRowH,
+                                      kCardRowR - kCardRowL, kCardRowH);
+            }
+            for (int i = 0; i < (kItemRowB - kItemRowT) / kItemRowH; ++i) {
+                char nm[20];
+                std::snprintf(nm, sizeof(nm), "shop.irow.%d", i);
+                debug::registerRegion(nm, kItemRowL, kItemRowT + i * kItemRowH,
+                                      kItemRowR - kItemRowL, kItemRowH);
+            }
+        }
+    }
+
     trace::logf("dialog open name=shop");
     GameState& st = app.gameState();
     const int cur = st.currentPlayer;

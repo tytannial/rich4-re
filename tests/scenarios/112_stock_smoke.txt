@@ -1,0 +1,15 @@
+# id: 112_stock_smoke
+# covers: [HELP 14] 股市面板——open.stock + 行情/持股切换 + EXIT（stock.btn.<0..4> named 冒烟）
+# timeout: 60000
+wait idle 1500
+open.stock
+clickr stock.btn.1
+wait frames 30
+clickr stock.btn.0
+wait frames 30
+clickr stock.btn.4
+wait frames 30
+assert trace "dialog open name=stock_market"
+assert trace "clicked name=stock.btn.1"
+assert state errors == 0
+quit
