@@ -16,6 +16,8 @@
 #include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/app/debug/debug.h"
+#include <cstdio>
 #include "game/core/trace.h"
 #include "game/core/debug_hooks.h"
 #include "game/platform/audio.h"
@@ -852,6 +854,19 @@ void visitAi(Application& app) {
 
 // [RE 0x43E9A4] 醫院格落地（landingEvent case 5）：办理出院
 void hospitalVisitDialog(Application& app) {
+    // [NEW] named region 一次性登记（0x43CFFE 头像格矩形同源；clickr hosp.cell.<0..7>）
+    {
+        static bool s_reg = false;
+        if (!s_reg) {
+            s_reg = true;
+            for (int i = 0; i < 8; ++i) {
+                char nm[20];
+                std::snprintf(nm, sizeof(nm), "hosp.cell.%d", i);
+                debug::registerRegion(nm, kHospCellX[i], kHospCellY[i], kHospHitW, kHospHitH);
+            }
+        }
+    }
+
     trace::logf("dialog open name=hospital_visit");
     GameState& st = app.gameState();
     bool any = false;
@@ -902,6 +917,19 @@ void hospitalVisitDialog(Application& app) {
 
 // [RE 0x43D304] 監獄格落地（landingEvent case 4）：保释
 void jailBailDialog(Application& app) {
+    // [NEW] named region 一次性登记（0x43CC3D 头像格命中矩形同源；脚本 clickr bail.cell.<0..7>）
+    {
+        static bool s_reg = false;
+        if (!s_reg) {
+            s_reg = true;
+            for (int i = 0; i < 8; ++i) {
+                char nm[20];
+                std::snprintf(nm, sizeof(nm), "bail.cell.%d", i);
+                debug::registerRegion(nm, kBailCellX[i], kBailCellY[i], kBailHitW, kBailHitH);
+            }
+        }
+    }
+
     trace::logf("dialog open name=jail_bail");
     GameState& st = app.gameState();
     bool any = false;

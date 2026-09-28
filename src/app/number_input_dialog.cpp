@@ -11,6 +11,8 @@
 #include "game/app/game_loop.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/app/debug/debug.h"
+#include <cstdio>
 #include "game/render/blit.h"
 #include "game/render/cursor.h"
 #include "game/render/surface.h"
@@ -352,6 +354,35 @@ bool numberInputHandler(const SDL_Event* event, void* user) {
 // 迁移: panel[21] 为 SPR（8bit 索引 + RGB555 调色板），按原版 sub_456512 实现 blitSprRegion
 // 差异: 背景保存恢复（saveBackground/allocUiElement）改为逐帧全量重绘（等价）
 int numberInputDialog(Application& app, int maxValue) {
+    // [NEW] named region 一次性登记（kKeyRect 初始位同源常量；语义名映射见 testing.md：
+    //   numkey.cancel/ok/clear/back/slider + numkey.0..9）
+    {
+        static bool s_reg = false;
+        if (!s_reg) {
+            s_reg = true;
+            debug::registerRegion("numkey.cancel", kPanelInitX + kKeyRect[2][0],
+                                  kPanelInitY + kKeyRect[2][1], kKeyRect[2][2], kKeyRect[2][3]);
+            debug::registerRegion("numkey.ok", kPanelInitX + kKeyRect[3][0],
+                                  kPanelInitY + kKeyRect[3][1], kKeyRect[3][2], kKeyRect[3][3]);
+            debug::registerRegion("numkey.clear", kPanelInitX + kKeyRect[4][0],
+                                  kPanelInitY + kKeyRect[4][1], kKeyRect[4][2], kKeyRect[4][3]);
+            debug::registerRegion("numkey.back", kPanelInitX + kKeyRect[6][0],
+                                  kPanelInitY + kKeyRect[6][1], kKeyRect[6][2], kKeyRect[6][3]);
+            debug::registerRegion("numkey.slider", kPanelInitX + kKeyRect[16][0],
+                                  kPanelInitY + kKeyRect[16][1], kKeyRect[16][2], kKeyRect[16][3]);
+            // kKeyChar 数字位：id 5='0' 13='1' 14='2' 15='3' 10='4' 11='5' 12='6' 7='7' 8='8' 9='9'
+            static const int kDigitKeyId[10] = {5, 13, 14, 15, 10, 11, 12, 7, 8, 9};
+            for (int d = 0; d < 10; ++d) {
+                const int id = kDigitKeyId[d];
+                char nm[16];
+                std::snprintf(nm, sizeof(nm), "numkey.%d", d);
+                debug::registerRegion(nm, kPanelInitX + kKeyRect[id][0],
+                                      kPanelInitY + kKeyRect[id][1], kKeyRect[id][2],
+                                      kKeyRect[id][3]);
+            }
+        }
+    }
+
     GameState& st = app.gameState();
     NumberInputCtx ctx;
     ctx.app = &app;

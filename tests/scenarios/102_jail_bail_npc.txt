@@ -1,0 +1,18 @@
+# id: 102_jail_bail_npc
+# covers: [HELP 34] 監獄門外保释——NPC 小偷格 bail.cell.4（0x43D304：首击跳过场消息、
+#          再击命中格→yesNo(0x453A32)→releaseEventNpc 0x43D7BF + 300 点券+答谢演出）
+# timeout: 90000
+wait idle 1000
+player.points 0 1000
+find.evtcell 4
+assert state selected >= 1
+land
+clickr bail.cell.4
+wait frames 40
+clickr bail.cell.4
+wait frames 10
+confirm yes
+wait trace "npc.release n=4" 20000
+assert state players.0.points <= 700
+assert state errors == 0
+quit
