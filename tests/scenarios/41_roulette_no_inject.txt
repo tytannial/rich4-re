@@ -1,0 +1,20 @@
+# id: 41_roulette_no_inject
+# covers: [HELP 22] 旅館轮盘——无注入回归：g_inject 若退化为静态零初始化，首次会被钉 cell0
+#         → theme1(旅館) byte_475D0C[cell0]=0xFF → value=255（"休息255天"）。
+#         断言 no trace "value=255" 等价锁定 value∈{1,4,3,2}（其余格皆 0xFF）。见 testing-issues ISS-019。
+# timeout: 60000
+wait idle 1000
+player.cash 0 200000
+corp.build 1 1
+corp.owner 1 2
+select corp 1
+land
+wait log "roulette prompt" 6000
+wait frames 40
+click 320 240
+wait log "roulette result" 8000
+assert trace "roulette theme=1"
+assert no trace "value=255"
+wait log "transferMoney" 8000
+assert state players.0.cash < 200000
+quit

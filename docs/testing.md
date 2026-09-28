@@ -168,6 +168,7 @@ roulette_dialog 0x43F7C6 处 [NEW] 注释）；`roulette theme=<t> cell=<c>` tra
 | `20_rent_route.txt` | [HELP 21] | 他人住宅收租：find.sel.land→状态机续帧转账（wait log "rent: player"）→cash 降 |
 | `30_buy_land.txt` | [HELP 21] | 无主购地：land 弹确认框（阻塞）→重入 `confirm yes`→扣款 |
 | `40_roulette_hotel.txt` | [HELP 22] | 旅館轮盘：`rng roulette 7` 注入→人类 click 停→`roulette theme=1 cell=7` trace→收费转账 |
+| `41_roulette_no_inject.txt` | [HELP 22] | 旅館轮盘**无注入回归**：首次不得被 `g_inject` 零初始化钉 cell0→255（`assert no trace "value=255"`，ISS-019） |
 
 ### 2.3 named region 控件层（基座已通，逐面板铺开中）
 

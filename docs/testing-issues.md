@@ -163,6 +163,22 @@
   场景设计先判断该 modal 是"命令内同步完成"还是"跨 tick 挂起等待"。
 - **状态**：✅（222 转绿，62 场景回归无差异）
 
+### ISS-019 `g_inject` 静态零初始化 = 全槽"首次注入 0"（旅館轮盘 value=255）
+- **现象（用户实机）**：AI 回合第一次踩他人旅館，转盘**画面**停在有效值（如 4）却结算
+  "休息255天 費用153000元！"；日志 `roulette result: cell=0 value=255`。
+- **根因**：`debug_hooks.cpp` 的 `std::array<int, SlotCount> g_inject;` 处于命名空间作用域
+  → 静态存储期**零初始化为 0**（非哨兵 `kNoInject=-1`）；而 `clearInject()` 只在个别 debug
+  命令路径调用，**启动未执行** → 每槽 `hasInject()` 误报 true、`raw()` 首次返回注入值 0。
+  轮盘最恶性：入口 `hasInject?0` + 出口覆写 `cell=0`，theme1(旅館) `byte_475D0C[cell0]=0xFF`
+  → `value=255`；其余各槽（骰子/发牌/事件/AI…）仅"首次随机被钉索引 0"的静默偏差，第二次起
+  `raw` 已置回 -1 恢复正常——故只有轮盘因 0xFF 格放大成可见错误。
+- **方案**：(a) `g_inject` **声明处**用 lambda `fill(kNoInject)`；(b) `roulette` 注入落 0xFF 格时
+  **回退到第一个有效格**，而非写死 `cell=0`（旧注释"表定义必有值"对 theme1 不成立）。
+- **教训**：静态/命名空间作用域的**哨兵数组必须显式初始化到哨兵值**——C++ 默认零初始化会把 0
+  当成合法注入；新增调试槽位勿依赖"运行期才 clear"。凡"回退默认值"须遍历确认该值在**所有分支表**
+  里都合法（此处 cell0 仅对 theme1 非法）。
+- **状态**：✅ 回归=`41_roulette_no_inject`（`assert no trace "value=255"`，正=40 注入路径）。
+
 | **Q-W** | 公佈欄**下單深鏈**未測（股票/地產/道具/卡片 4 子對話框的按鈕幾何+主面板 8 槽交互）；`queueTradeOrder/executeTrade/ageTradeOrders` 純函數可由 L0 單測補 | 0x4284BE/0x42704E/0x4255DA | 250 已驗開閉；下一步=子對話框 named region 或 CTest 純函數測試 | ? 掛賬 |
 
 ## 3. 阻塞模态人工干预点清单

@@ -142,7 +142,10 @@ bool rouletteHandler(const SDL_Event* event, void* user) {
         if (dbg::hasInject(dbg::SlotRoulette)) {
             rs.cell = dbg::roll(dbg::SlotRoulette, 12);
             if (rs.table[rs.cell] == 0xFF) {
-                rs.cell = 0; // 注入落在空格时回退到 0 格（表定义必有值）
+                // 注入落在无效格：回退到第一个有效格（不可用 cell0——theme1(旅館) 的 cell0=0xFF）
+                while (rs.table[rs.cell] == 0xFF) {
+                    rs.cell = (rs.cell + 1) % 12;
+                }
             }
         }
         rs.value = rs.table[rs.cell];
