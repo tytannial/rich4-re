@@ -1,0 +1,12 @@
+# id: 212_card_blackstock
+# covers: [HELP 85] 黑卡 id25 0x44503F——選股→停盤3日 + addPlayerDebt(股市操縱成本)
+# timeout: 60000
+wait idle 1000
+player.cash 0 300000
+give.card 0 25
+use.card blackStock
+wait frames 300
+clickr stock.row.7
+wait log "cardBlackStock:" 8000
+assert state errors == 0
+quit

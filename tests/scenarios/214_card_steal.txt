@@ -1,0 +1,20 @@
+# id: 214_card_steal
+# covers: [HELP 80] 偷窺卡 id13 0x443E3D——選人(0x0E0C0410)→panel[11] 偷卡
+#          (selectCardOrItemDialog 0x44192A)→takePlayerCard+give+addPlayerDebt(卡價)；
+#          gift.card.* 登記=giftHitSlot 0x4413EC 同源；ISS-014 選人雙點
+# timeout: 80000
+wait idle 1000
+player.alive 1 1
+player.teleport 1 85
+give.card 1 5
+use.card steal
+wait frames 200
+clickplayer 1
+wait frames 260
+clickplayer 1
+wait log "selectCardOrItem:" 8000
+clickr gift.card.0
+wait log "cardSteal:" 8000
+assert log "cardSteal: p0 -> p1"
+assert state errors == 0
+quit

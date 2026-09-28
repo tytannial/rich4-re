@@ -23,6 +23,8 @@
 #include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/app/debug/debug.h"
+#include <cstdio>
 #include "game/core/trace.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
@@ -477,6 +479,23 @@ int selectCardOrItemFromPlayerDialog(Application& app, int targetPlayer) {
     if (sheet.frameCount() < 2) {
         RICH4_LOGW("selectCardOrItem: panel.mkf[11] unavailable (RE 0x44192A)");
         return 0;
+    }
+    // [NEW] named region：卡片/道具 5x3 格（giftHitSlot 0x4413EC 同源：卡 y75+56j、
+    //   道具 y275+56j，x=19+80i；脚本 clickr gift.card.<0..14> / gift.item.<0..14>）
+    {
+        static bool s_regGift = false;
+        if (!s_regGift) {
+            s_regGift = true;
+            for (int i = 0; i < 15; ++i) {
+                char nm[20];
+                std::snprintf(nm, sizeof(nm), "gift.card.%d", i);
+                debug::registerRegion(nm, 19 + kHitW * (i % 5), 75 + kHitH * (i / 5),
+                                      kHitW, kHitH);
+                std::snprintf(nm, sizeof(nm), "gift.item.%d", i);
+                debug::registerRegion(nm, 19 + kHitW * (i % 5), 275 + kHitH * (i / 5),
+                                      kHitW, kHitH);
+            }
+        }
     }
     GiftSelectState s;
     s.app = &app;

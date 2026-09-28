@@ -752,6 +752,18 @@ int stockPickDialog(Application& app, int mode) {
     if (ui.frameCount() < 3) {
         return 0;
     }
+    // [NEW] named region：選股行 1..12（hitRow 同源 kRowH*r+48；stockPickDialog 選股鏈腳本化）
+    {
+        static bool s_regRows = false;
+        if (!s_regRows) {
+            s_regRows = true;
+            for (int r = 1; r <= 12; ++r) {
+                char nm[16];
+                std::snprintf(nm, sizeof(nm), "stock.row.%d", r);
+                debug::registerRegion(nm, kSelX, kRowH * r + 48, kSelW, kRowH);
+            }
+        }
+    }
     StockPanelState s;
     s.app = &app;
     s.ui = &ui;

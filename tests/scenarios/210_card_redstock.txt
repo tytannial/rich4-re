@@ -1,0 +1,13 @@
+# id: 210_card_redstock
+# covers: [HELP 84] 紅卡 id24 0x444F25——stockPickDialog(panel[75] 選股行 1..12)→
+#          stockNewsApply 停盤 3 日；stock.row.* 登記=hitRow 同源
+# timeout: 60000
+wait idle 1000
+give.card 0 24
+use.card redStock
+wait frames 300
+clickr stock.row.3
+wait log "cardRedStock:" 8000
+assert log "cardRedStock: stock=3"
+assert state errors == 0
+quit
