@@ -21,6 +21,7 @@
 #include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/trace.h"
 #include "game/core/debug_hooks.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
@@ -871,6 +872,7 @@ void shopOpenUi(Application& app, int specIdx) {
     app.audio().resumeSceneMusic();                                // [RE 0x42ED0F]
     st.specPts[specIdx].fund += revenue;     // [RE 0x42ED75] +40 公库
     st.specPts[specIdx].fundPaid += revenue; // [RE 0x42ED7E] +44 累计
+    trace::logf("shop revenue=%d", revenue);
     RICH4_LOGI("shop: close revenue=%d fund=%d (RE 0x42E931)", revenue, st.specPts[specIdx].fund);
 }
 
@@ -881,6 +883,7 @@ void shopOpenUi(Application& app, int specIdx) {
 //   实参 objId = cellEnt+32 special（6000+n），非 cellEnts 数组下标;
 //   营业额（买 10×价 / 卖 1×价）入 specPt.fund(+40)/fundPaid(+44)
 void shopDialog(Application& app, int objId) {
+    trace::logf("dialog open name=shop");
     GameState& st = app.gameState();
     const int cur = st.currentPlayer;
     if (cur < 0 || cur >= 4) {

@@ -20,6 +20,7 @@
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
 #include "game/core/log.h"
+#include "game/core/trace.h"
 #include "game/core/debug_hooks.h"
 #include "game/core/clock.h"
 #include "game/render/blit.h"
@@ -196,6 +197,7 @@ void transferMoney(Application& app, int from, int to, int32_t amount, int flags
             st.specPts[idx].fundPaid += paid;
         }
     }
+    trace::logf("xfer from=%d to=%d amount=%d paid=%d flags=%d", from, to, amount, paid, flags);
     RICH4_LOGI("transferMoney: %d -> %d amount %d paid %d flags %d (RE 0x41D2C6)", from, to, amount,
                paid, flags);
     // [RE 0x41D2C6 尾] 付款方=当前玩家（0..8）且存活 → 立即重绘玩家面板
@@ -227,6 +229,7 @@ void addPlayerDebt(GameState& st, int creditor, int debtor, int32_t amount) {
         clearAllyPair(st, creditor);
         RICH4_LOGI("addPlayerDebt: ally %d/%d dissolved by debt (RE 0x40CC1A)", creditor, debtor);
     }
+    trace::logf("debt debtor=%d creditor=%d amount=%d", debtor, creditor, amount);
     RICH4_LOGI("addPlayerDebt: %d owes %d += %d (total %d, RE 0x40DF69)", debtor, creditor, amount,
                v);
 }
@@ -705,6 +708,7 @@ void eliminatePlayer(Application& app, int p) {
         img.load(std::move(copy));
     }
     renderGameFrame(app); // [RE 0x40D3F0 sub_41906A(1)]
+    trace::logf("eliminate p=%d", p);
     RICH4_LOGI("eliminatePlayer: p%d aliveHumans=%d aliveTotal=%d auction=%zu (RE 0x40CD87)", p,
                aliveHumans, aliveTotal, auctionIds.size());
 }

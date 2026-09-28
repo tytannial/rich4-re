@@ -1318,6 +1318,7 @@ void giveCardToBag(GameState& st, int player, int card) {
     for (int i = 0; i < 15; ++i) {
         if (st.cardState60[off + i] == 0) {
             st.cardState60[off + i] = static_cast<uint8_t>(card);
+            trace::logf("card.give p=%d id=%d slot=%d", player, card, i);
             --st.propStock[card - 1]; // [RE 0x44133B] --byte_499197[card]
             return;
         }
@@ -1337,6 +1338,7 @@ int drawFreeCard(GameState& st, int player) {
         return 0;
     }
     const int card = list[dbg::roll(dbg::SlotCard, n)] + 1;
+    trace::logf("card.draw p=%d id=%d pool=%d", player, card, n);
     giveCardToBag(st, player, card);
     return card;
 }
@@ -1514,6 +1516,7 @@ bool checkCarriedGod(Application& app, const GameState& st, uint8_t carried) {
     }
     char text[96];
     std::snprintf(text, sizeof(text), kFmtGodInvest, kObjectNames[carried]);
+    trace::logf("god.block carried=%u", carried);
     showMessage(app, text, 1500);
     return true;
 }
@@ -1692,6 +1695,8 @@ int resolveFeePayer(Application& app, int payer, int32_t fee, const char* feeNam
 // 差异: 另一调用点 sub_418EBD（回合尾、alive&0x30 临时载具分支）依赖载具计时系统 [TODO]；
 //       原版开头的 refreshGameUi(视口同步) 省略（重写逐帧重绘）
 void landAfterMove(Application& app, int p, uint16_t cellEntId) {
+    trace::logf("landmove p=%d cell=%u god=%u", p, cellEntId,
+                app.gameState().players[p].cellTableIdx);
     GameState& st = app.gameState();
     if (p < 0 || p >= 9 || cellEntId >= st.cellEnts.size()) {
         return;
@@ -3269,6 +3274,7 @@ void releaseEventNpc(Application& app, int npc, bool fromJail) {
         st.hospitalFlags[npc] = 0;
     }
     loadWalkResources(st, npc);
+    trace::logf("npc.release n=%d by=%d", npc, st.currentPlayer);
     RICH4_LOGI("releaseEventNpc: NPC %d released by %d, cell %u status=%u (RE 0x43D7BF/0x43EE6E)",
                npc, st.currentPlayer, cell, slot.status);
 }
@@ -3361,6 +3367,7 @@ void jailPlayer(Application& app, int player, int days) {
     }
     insurancePayout(app, player, 2000 * days * st.moneyMul); // [RE 0x43D749]
     pl.byte66 = static_cast<uint8_t>(pl.byte66 + days);      // [RE 0x43D755] byte_496BAA 累计
+    trace::logf("jail p=%d days=%d", player, days);
     RICH4_LOGI("jailPlayer: p=%d days=%d (RE 0x43D593)", player, days);
 }
 
@@ -3425,6 +3432,7 @@ void hospitalizePlayer(Application& app, int player, int days) {
     }
     insurancePayout(app, player, 2000 * days * st.moneyMul); // [RE 0x43EDF8]
     pl.byte66 = static_cast<uint8_t>(pl.byte66 + days);      // [RE 0x43EE04]
+    trace::logf("hosp p=%d days=%d", player, days);
     RICH4_LOGI("hospitalizePlayer: p=%d days=%d (RE 0x43EC3F)", player, days);
 }
 
@@ -3799,12 +3807,15 @@ void advanceDay(Application& app) {
     refreshBankStockShares(app);
     // [RE 0x41CF67] 15 号：股东大会分红（sub_42BA97）+ 乐透开奖（sub_431712）——顺序：先分红后乐透
     if ((st.gameDate & 0xFF) == 15) {
+        trace::logf("dayevt name=dividend");
         dividendMeeting(app);    // [RE 0x41D08F] 15 号分红（panel.mkf[76]）
+        trace::logf("dayevt name=lottery");
         lotteryDrawMeeting(app); // [RE 0x41D094] 乐透开奖（依赖 case 9 投注）
     }
     // [RE 0x41CF67] 新月（跨月 1 号）：月初结息（sub_439BFA → sub_437E61）+ 事件格换位 + 月份计数
     if (newMonth) {
-        monthlySettle(app); // [RE 0x41D09E] 月初结息（panel.mkf[25] + 存款 ×1.1 + 排行演出）
+        trace::logf("dayevt name=settle");
+    monthlySettle(app); // [RE 0x41D09E] 月初结息（panel.mkf[25] + 存款 ×1.1 + 排行演出）
         // [RE 0x41D0A5..0x41D0F1] 禮物(cellTable 类型13)/寶箱(14) 每月 1 号重定位：
         //   先记旧格 → deleteMapObject（槽12/13，≥12 不轮替）→ randomCellEnt(旧格) →
         //   createMapObject（原注释"卡片格/銀行格"为误——那是 cellType 格子属性，非 cellTable 物件）

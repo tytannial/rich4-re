@@ -23,6 +23,7 @@
 #include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/trace.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
 #include "game/render/text.h"
@@ -271,6 +272,7 @@ int cardRebuildEffect(Application& app) {
 
 // [RE 0x441BAA] useCardFlow
 void useCardDialog(Application& app) {
+    trace::logf("dialog open name=card_bag");
     GameState& st = app.gameState();
     const int cur = st.currentPlayer;
     if (cur < 0 || cur >= 4) {

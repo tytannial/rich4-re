@@ -13,6 +13,7 @@
 #include "game/app/new_game_tables.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/trace.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
 #include "game/render/text.h"
@@ -179,6 +180,7 @@ void drawItemBagAt(Application& app, const UiImage& sheet, int player, int x, in
 
 // [RE 0x447D97] itemPanelFlow
 void itemBagDialog(Application& app) {
+    trace::logf("dialog open name=item_bag");
     GameState& st = app.gameState();
     const int cur = st.currentPlayer;
     if (cur < 0 || cur >= 4) {

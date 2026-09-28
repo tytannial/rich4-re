@@ -1,0 +1,14 @@
+# id: 60_corp_gas
+# covers: [HELP 22] 加油站收费（载具×步数公式；步行免付对照另议）
+# timeout: 40000
+wait idle 1000
+player.cash 0 200000
+corp.build 1 3
+corp.owner 1 2
+select corp 1
+player.vehicle 0 1
+player.dice 0 6
+land
+wait trace "xfer from=0" 8000
+assert state players.0.cash < 200000
+quit

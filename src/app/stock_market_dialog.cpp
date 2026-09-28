@@ -12,6 +12,7 @@
 #include "game/app/new_game_tables.h"
 #include "game/app/number_input_dialog.h"
 #include "game/app/stock_system.h"
+#include "game/core/trace.h"
 #include "game/application.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
@@ -703,6 +704,7 @@ bool stockPanelHandler(const SDL_Event* event, void* user) {
 } // namespace
 
 void stockMarketDialog(Application& app) {
+    trace::logf("dialog open name=stock_market");
     GameState& st = app.gameState();
     UiImage ui;
     if (auto blob = st.panel.read(75)) {

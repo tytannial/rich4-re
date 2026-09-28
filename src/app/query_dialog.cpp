@@ -11,6 +11,7 @@
 #include "game/application.h"
 #include "game/core/encoding.h"
 #include "game/core/log.h"
+#include "game/core/trace.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
 #include "game/render/text.h"
@@ -666,6 +667,7 @@ bool queryEventHandler(const SDL_Event* event, void* user) {
 } // namespace
 
 void queryDialog(Application& app) {
+    trace::logf("dialog open name=query");
     // [RE 0x424492] 工具条 case 6 → 查詢面板（panel.mkf[9] + [74]）
     QueryPanelState st;
     st.app = &app;

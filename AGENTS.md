@@ -215,6 +215,7 @@ cmake --build build
 **L0 CTest（`rich4_tests`：收租公式/存档往返/MKF-LZHUF）**、**`tools/run_tests.py` 编排 +
 覆盖矩阵**、首批 4 场景（smoke/收租/购地/轮盘注入）headless 全绿。待落地：L1 场景铺满矩阵、
 named region、L2 长跑不变量、trace 批2~4、旧热键迁移命令表。
+**推进疑难点/设计取舍/实机对照清单 → `docs/testing-issues.md`**（实施时持续更新）。
 
 ```powershell
 ./build/rich4.exe --game resources/game --headless --seed 42 --quickstart 0,4,1 --script tests/scenarios/20_rent_route.txt

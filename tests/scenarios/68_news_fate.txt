@@ -1,0 +1,9 @@
+# id: 68_news_fate
+# covers: [HELP 33] 新聞 newsEvent 0x44B6DF（2400ms 阶段机）+ [HELP 28] 命運 fateEvent 0x44DB81
+# timeout: 80000
+wait idle 1000
+news
+wait trace "news idx=" 10000
+fate
+wait trace "fate idx=" 12000
+quit

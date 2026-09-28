@@ -9,6 +9,7 @@
 #include "game/app/map_tables.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/trace.h"
 #include "game/core/debug_hooks.h"
 
 namespace rich4 {
@@ -154,6 +155,7 @@ void stockTick(Application& app) {
             s[7] = std::clamp(s[7], -10.0f, 10.0f);
         }
         s[5] = stockPriceUpdate(s[4], s[7]);
+        trace::logf("stock idx=%d prev=%.1f new=%.1f delta=%.1f", i, s[4], s[5], s[7]);
         st.stockHistory[i][st.turnCounter] =
             *reinterpret_cast<int32_t*>(&s[5]); // 位模式存 float
         sum += s[5];

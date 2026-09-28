@@ -14,6 +14,7 @@
 #include "game/app/new_game_tables.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/trace.h"
 #include "game/core/debug_hooks.h"
 #include "game/game_state.h"
 #include "game/platform/audio.h"
@@ -750,6 +751,7 @@ void settleDraw(DrawCtx& ui) {
         st.publicFund = 0;
         std::memset(st.lotteryNumbers, 0, sizeof(st.lotteryNumbers));
     }
+    trace::logf("lotto winner=%d pool=%d", ui.winner, st.publicFund);
     RICH4_LOGI("lottery settle: winner=%d pool left=%d (RE 0x43010C)", ui.winner, st.publicFund);
 }
 

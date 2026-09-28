@@ -42,6 +42,7 @@
 #include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/trace.h"
 #include "game/core/debug_hooks.h"
 #include "game/game_state.h"
 #include "game/platform/audio.h"
@@ -860,6 +861,7 @@ void magicHouseVisit(Application& app) {
     }
 
     applyMagicPenalty(app, pen, targets, cur);
+    trace::logf("magic pen=%d", pen);
     RICH4_LOGI("magicHouse: cond pen=%d targets=%zu entrant=%d (RE 0x43380A)", pen,
                targets.size(), cur);
 }

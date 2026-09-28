@@ -1,0 +1,9 @@
+# id: 70_npc_release
+# covers: [HELP 47/53] 事件槽 NPC——开局在押小偷(4)，releaseEventNpc 0x43D7BF 保释释放
+# timeout: 40000
+wait idle 1000
+npc.dump
+assert log "dump npc 4: busy=1"
+npc.release 4
+assert trace "npc.release n=4"
+quit

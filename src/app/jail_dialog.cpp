@@ -16,6 +16,7 @@
 #include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/trace.h"
 #include "game/core/debug_hooks.h"
 #include "game/platform/audio.h"
 #include "game/render/blit.h"
@@ -851,6 +852,7 @@ void visitAi(Application& app) {
 
 // [RE 0x43E9A4] 醫院格落地（landingEvent case 5）：办理出院
 void hospitalVisitDialog(Application& app) {
+    trace::logf("dialog open name=hospital_visit");
     GameState& st = app.gameState();
     bool any = false;
     for (int i = 0; i < 8; ++i) {
@@ -900,6 +902,7 @@ void hospitalVisitDialog(Application& app) {
 
 // [RE 0x43D304] 監獄格落地（landingEvent case 4）：保释
 void jailBailDialog(Application& app) {
+    trace::logf("dialog open name=jail_bail");
     GameState& st = app.gameState();
     bool any = false;
     for (int i = 0; i < 8; ++i) {

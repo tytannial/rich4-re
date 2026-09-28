@@ -34,6 +34,7 @@
 #include "game/application.h"
 #include "game/core/encoding.h"
 #include "game/core/log.h"
+#include "game/core/trace.h"
 #include "game/core/debug_hooks.h"
 #include "game/core/clock.h"
 #include "game/game_state.h"
@@ -1376,6 +1377,7 @@ void newsRun(Application& app, int idx) {
     } else {
         RICH4_LOGW("news: data.mkf[%d] unavailable (RE 0x44B768)", 441 + idx);
     }
+    trace::logf("news idx=%d", idx);
     RICH4_LOGI("news event: idx %d text=%s (RE 0x44B6DF)", idx, kNewsTexts[idx]);
     runModal(app, &newsHandler, &ctx, 16);
 }

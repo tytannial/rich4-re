@@ -579,6 +579,7 @@ void attachEnd(Application& app, int p) {
             playLine(app, p, kMoneyLines[ci][17], 2);
         }
     }
+    trace::logf("attachend p=%d type=%u", p, type);
     RICH4_LOGI("attachEnd: player %d god type %u left (RE 0x40E32C)", p, type);
 }
 
@@ -595,6 +596,7 @@ void attachObject(Application& app, int p, int cellEntId, int objId) {
     uint8_t* e = &st.cellTable[off];
     const uint8_t type = e[0];
     Player& pl = st.players[p];
+    trace::logf("attach p=%d cell=%d obj=%d", p, cellEntId, objId);
     RICH4_LOGI("attachObject: p%d cell=%d objId=%d type=%u (RE 0x40EAD7)", p, cellEntId, objId,
                type);
     if (pl.cellTableIdx != 0) {

@@ -36,6 +36,7 @@
 #include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/trace.h"
 #include "game/core/debug_hooks.h"
 #include "game/core/clock.h"
 #include "game/game_state.h"
@@ -849,6 +850,7 @@ void fateRun(Application& app, int tableIdx) {
     } else {
         RICH4_LOGW("fate: data.mkf[%d] unavailable (RE 0x44DC69)", artIdx);
     }
+    trace::logf("fate idx=%d", tableIdx);
     RICH4_LOGI("fate event: idx %d text=%s (RE 0x44DB81)", tableIdx, kFateTexts[tableIdx]);
     runModal(app, &fateHandler, &ctx, 16);
 }

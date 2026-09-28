@@ -1,0 +1,11 @@
+# id: 62_event_card_draw
+# covers: [HELP 25] 卡片格（case 13，FLC 536 + drawFreeCard 0x441E12 赠卡池抽卡）
+# timeout: 40000
+wait idle 1000
+find.evtcell 13
+assert state selected >= 1
+land
+wait trace "card.draw" 8000
+assert trace "flc idx=536"
+assert trace "card.draw"
+quit

@@ -5,6 +5,7 @@
 #include "game/app/event_stack.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/trace.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
 #include "game/render/text.h"
@@ -106,6 +107,7 @@ bool confirmEventHandler(const SDL_Event* event, void* user) {
 } // namespace
 
 bool confirmDialog(Application& app, const char* text, int cx, int cy) {
+    trace::logf("dialog open name=confirm");
     UiImage ui;
     if (auto blob = app.gameState().data.read(440)) {
         ui.load(std::move(*blob));

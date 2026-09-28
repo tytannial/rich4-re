@@ -1,0 +1,10 @@
+# id: 66_hospital
+# covers: [HELP 37] 醫院——hospitalizePlayer 0x43EC3F（FLC 524/stateFlags BYTE3）
+# timeout: 40000
+wait idle 1000
+hosp 0 3
+wait frames 400
+assert trace "flc idx=524"
+assert trace "hosp p=0 days=3"
+assert state players.0.stateFlags >= 50331648
+quit

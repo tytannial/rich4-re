@@ -1,0 +1,13 @@
+# id: 72_chain_rent
+# covers: [HELP 21] 连锁店收费——同地主连锁数×2000×moneyMul（0x419A67 连锁分支）
+# timeout: 40000
+wait idle 1000
+player.cash 0 200000
+find.estate 0
+sel.owner 2
+sel.level 2
+sel.type 1
+land
+wait trace "xfer from=0" 10000
+assert trace "xfer from=0 to=1 amount=2000"
+quit

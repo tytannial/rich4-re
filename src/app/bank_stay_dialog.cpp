@@ -16,6 +16,7 @@
 #include "game/app/number_input_dialog.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/trace.h"
 #include "game/core/debug_hooks.h"
 #include "game/game_state.h"
 #include "game/platform/audio.h"
@@ -1169,6 +1170,7 @@ void setLoanDate(Application& app, int p) {
 
 // [RE 0x436668] 停留银行（landingEvent case 14 → 路过柜员机后）
 void bankStayDialog(Application& app, int cellEntId) {
+    trace::logf("dialog open name=bank_stay");
     GameState& st = app.gameState();
     const int p = st.currentPlayer;
     if (p < 0 || p >= 9) {

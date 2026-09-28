@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "game/app/bank_stay_dialog.h"
+#include "game/app/card_bag_dialog.h"
 #include "game/app/dividend.h"
 #include "game/app/fate_event.h"
 #include "game/app/lottery.h"
@@ -197,6 +198,18 @@ bool getStateInt(const GameState& st, const std::string& path, long long& out) {
         const int p = parseInt(c[0]);
         if (p < 0 || p >= 9) return false;
         out = st.players[p].cellEntId;
+        return true;
+    }
+    // estates.sel.<owner|level|type>：索引=当前 select（脚本免算硬编码）。
+    // 注意：必须排在 "estates.*.xxx" 之前——"sel" 会被通配捕获吞掉
+    if (matchPath(path, "estates.sel.*", c, 1) && g_selected >= 2000 && g_selected < 4000) {
+        const int i = g_selected - 2000;
+        if (i < 1 || i >= static_cast<int>(st.estates.size())) return false;
+        const std::string& f = c[0];
+        if (f == "owner") out = st.estates[i].owner;
+        else if (f == "level") out = st.estates[i].level;
+        else if (f == "type") out = st.estates[i].type;
+        else return false;
         return true;
     }
     if (matchPath(path, "estates.*.owner", c, 1)) {
@@ -559,6 +572,14 @@ bool cmdPlayerTeleport(Application& app, const std::vector<std::string>& a, std:
     pl.spriteY = st.cellEnts[cell].y;
     st.cellEnts[cell].occMask |= (256u << p);
     buildMiniMapMarks(app);
+    return true;
+}
+
+bool cmdPlayerDice(Application& app, const std::vector<std::string>& a, std::string& err) {
+    // land 直落不产生步数；加油站/石油等「載具×步數」公式需显式设 diceValue
+    // [RE 0x48BAFC] g_diceValue 为**全局**（GameState 字段，本次移动总步数），非 per-player
+    if (!argCount(a, 2, err, "player.dice <p ignored> <v>")) return false;
+    app.gameState().diceValue = parseInt(a[2]);
     return true;
 }
 
@@ -1006,6 +1027,95 @@ bool cmdSelLevel(Application& app, const std::vector<std::string>& a, std::strin
     return true;
 }
 
+bool cmdSelType(Application& app, const std::vector<std::string>& a, std::string& err) {
+    if (!argCount(a, 1, err, "sel.type <0|1>")) return false;
+    const int i = selIndex();
+    if (i < 1 || i >= static_cast<int>(app.gameState().estates.size())) {
+        err = "sel.type: no estate selected";
+        return false;
+    }
+    app.gameState().estates[i].type = static_cast<uint8_t>(parseInt(a[1]) != 0 ? 1 : 0);
+    return true;
+}
+
+bool cmdSpecPtFund(Application& app, const std::vector<std::string>& a, std::string& err) {
+    if (!argCount(a, 2, err, "specpt.fund <i> <v>")) return false;
+    GameState& st = app.gameState();
+    const int i = parseInt(a[1]);
+    if (i < 1 || i >= static_cast<int>(st.specPts.size())) {
+        err = "specpt.fund: index out of range";
+        return false;
+    }
+    st.specPts[i].fund = parseInt(a[2]);
+    return true;
+}
+
+bool cmdSelGoto(Application& app, const std::vector<std::string>& a, std::string& err) {
+    // 当前玩家站到 select 目标对应的 cellEnt（不触发结算；配合 card.rebuild 等"脚下地"命令）
+    GameState& st = app.gameState();
+    if (g_selected == 0) {
+        err = "sel.goto: nothing selected";
+        return false;
+    }
+    const int p = a.size() > 1 ? parseInt(a[1]) : curPlayer(app);
+    uint16_t cell = 0;
+    if (g_selected < 2000) {
+        cell = g_selected;
+    } else {
+        for (size_t i = 1; i < st.cellEnts.size(); ++i) {
+            if (st.cellEnts[i].special == g_selected) {
+                cell = static_cast<uint16_t>(i);
+                break;
+            }
+        }
+    }
+    if (cell < 1 || cell >= static_cast<int>(st.cellEnts.size()) || p < 0 || p >= 9) {
+        err = "sel.goto: no target cell";
+        return false;
+    }
+    Player& pl = st.players[p];
+    if (pl.cellEntId > 0 && pl.cellEntId < st.cellEnts.size()) {
+        st.cellEnts[pl.cellEntId].occMask &= ~(256u << p);
+    }
+    pl.cellEntId = cell;
+    pl.spriteX = st.cellEnts[cell].x;
+    pl.spriteY = st.cellEnts[cell].y;
+    st.cellEnts[cell].occMask |= (256u << p);
+    buildMiniMapMarks(app);
+    RICH4_LOGI("debug: sel.goto p%d -> cell %u", p, cell);
+    return true;
+}
+
+bool cmdCardRebuild(Application& app, const std::vector<std::string>&, std::string& err) {
+    const int r = cardRebuildEffect(app); // [RE 0x44309B] 脚下格改建（与 Ctrl+4/卡片栏同路径）
+    RICH4_LOGI("debug: card.rebuild -> %d", r);
+    (void)err;
+    return true;
+}
+
+bool cmdNpcDump(Application& app, const std::vector<std::string>&, std::string& err) {
+    GameState& st = app.gameState();
+    for (int i = 0; i < 5; ++i) {
+        const NpcSlot80& s = st.npcSlots[i];
+        RICH4_LOGI("dump npc %d: busy=%u status=0x%02X bailer=%u cell=%u", i + 4, s.busy, s.status,
+                   s.bailer, s.cell);
+    }
+    (void)err;
+    return true;
+}
+
+bool cmdNpcRelease(Application& app, const std::vector<std::string>& a, std::string& err) {
+    if (!argCount(a, 1, err, "npc.release <npc 4..7> [fromJail=1]")) return false;
+    const int npc = parseInt(a[1]); // [RE Ctrl+Shift+9 同款] releaseEventNpc 传 4..7
+    const bool fromJail = a.size() > 2 ? parseInt(a[2]) != 0 : true;
+    if (npc < 4 || npc > 7) {
+        err = "npc.release: index must be 4..7";
+        return false;
+    }
+    releaseEventNpc(app, npc, fromJail);
+    return true;
+}
+
 bool cmdClick(Application& app, const std::vector<std::string>& a, std::string& err) {
     (void)app;
     if (!argCount(a, 2, err, "click <x> <y>")) return false;
@@ -1064,6 +1174,7 @@ const Cmd kCmds[] = {
     {"player.god", cmdPlayerGod},
     {"player.vehicle", cmdPlayerVehicle},
     {"player.teleport", cmdPlayerTeleport},
+    {"player.dice", cmdPlayerDice},
     {"give.card", cmdGiveCard},
     {"give.item", cmdGiveItem},
     {"land", cmdLand},
@@ -1073,6 +1184,12 @@ const Cmd kCmds[] = {
     {"stock.buy", cmdStockBuy},
     {"sel.owner", cmdSelOwner},
     {"sel.level", cmdSelLevel},
+    {"sel.type", cmdSelType},
+    {"sel.goto", cmdSelGoto},
+    {"specpt.fund", cmdSpecPtFund},
+    {"card.rebuild", cmdCardRebuild},
+    {"npc.dump", cmdNpcDump},
+    {"npc.release", cmdNpcRelease},
     {"confirm", cmdConfirm},
     {"jail", cmdJail},
     {"hosp", cmdHosp},
@@ -1479,7 +1596,7 @@ void addScriptFile(const std::string& path) {
 void addExecLines(const std::string& lines) {
     Script sc;
     sc.id = "exec";
-    sc.timeoutFrames = 100000;
+    sc.timeoutFrames = 40000; // [NEW] exec 内联默认上限，防弹框挂死无界运行
     std::stringstream ss(lines);
     std::string part;
     int lineNo = 0;
@@ -1549,23 +1666,23 @@ void tick(Application& app) {
     Step& st = sc.steps[sc.pc];
     switch (st.kind) {
         case Step::Cmd: {
+            // 统一规则（2026-09-28）：**任何** Cmd 执行期间都可能弹台词/框阻塞
+            // （cardRebuildEffect→playCardLine、showCardGet 等），故执行前置 g_inBlock；
+            // 重入帧只放行交互应答 step（click/key/confirm），其余 step 冻结 pc——
+            // 保证"数据修改完成后才允许断言/后续命令"的严格时序。
             const bool block = stepFirstIsBlocking(st.a);
-            // 阻塞命令进行中：只放行交互应答 step，其余冻结 pc（断言严格晚于阻塞完成）
             if (g_inBlock && !stepFirstIsInteractive(st.a)) {
                 return;
             }
             ++sc.pc;
-            if (block) {
-                g_inBlock = true;
-            }
+            (void)block;
+            g_inBlock = true;
             std::string err;
             if (!execLine(app, st.a, err)) {
                 ++g_failures;
                 RICH4_LOGE("script %s line %d: %s", sc.id.c_str(), st.lineNo, err.c_str());
             }
-            if (block) {
-                g_inBlock = false;
-            }
+            g_inBlock = false;
             return;
         }
         case Step::WaitFrames:

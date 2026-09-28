@@ -1,0 +1,15 @@
+# id: 64_god_block_buy
+# covers: [HELP 45] 小衰神——买地流标（checkCarriedGod 0x40FA61 守卫，"投資失敗！"）
+# timeout: 60000
+wait idle 1000
+player.cash 0 200000
+find.estate 0
+assert state selected >= 2000
+player.god 0 7
+land
+confirm yes
+wait frames 500
+assert trace "god.block carried=7"
+assert no log "xfer from=0"
+assert state players.0.cash == 200000
+quit

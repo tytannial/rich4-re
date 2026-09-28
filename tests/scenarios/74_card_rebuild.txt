@@ -1,0 +1,13 @@
+# id: 74_card_rebuild
+# covers: [HELP 64] 改建卡 cardRebuildEffect 0x44309B——脚下住宅↔连锁店（type^=1, level=1）
+# timeout: 40000
+wait idle 1000
+find.estate 0
+assert state selected >= 2000
+sel.owner 1
+sel.level 2
+sel.goto
+assert state players.0.cell >= 1
+card.rebuild
+assert state estates.sel.type == 1
+quit
