@@ -1,0 +1,19 @@
+# id: 224_specpt_buy
+# covers: [HELP 20] 行業設施點認購 0x41D1A9——owner=0 落地→詢問框→numkey 股數→
+#          specPt buy(控股/持股鏈路)；84(收費側) 的認購側姊妹案
+# timeout: 60000
+wait idle 1000
+player.cash 0 300000
+specpt.owner 1 0
+select specpt 1
+land
+wait log "confirm dialog" 15000
+confirm yes
+wait log "number input dialog" 15000
+clickr numkey.5
+wait frames 30
+clickr numkey.ok
+wait log "specPt buy:" 15000
+assert log "specPt buy: player 0 specPt 1"
+assert state errors == 0
+quit
