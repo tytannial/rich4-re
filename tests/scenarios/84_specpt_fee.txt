@@ -1,5 +1,4 @@
 # id: 84_specpt_fee
-# skip: Q-S 缴费前 resolveFeePayer(0x40DF69 免费/嫁祸/死神)弹框链需应答，且费用=feeBase×dayCount
 # covers: [HELP 20] 行業設施點缴费（costType=3 銀行=feeBase×dayCount，公库 fund 收款
 #          transferMoney to>100；缴费后认购询问→confirm no 放行）
 # timeout: 80000

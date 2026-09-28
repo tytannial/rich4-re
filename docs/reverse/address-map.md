@@ -143,7 +143,7 @@
 | `0x4315CC` | 乐透格落地（landingEvent | `include/game/app/lottery.h:7` | 0x4315CC/0x42F7FC 反编译；详见 docs/reverse/functions/lottery-system.md。 |
 | `0x431712` | 15 | `include/game/app/lottery.h:15` | 0x431712/0x43010C 反编译；详见 docs/reverse/functions/lottery-system.md。 |
 | `0x43380A` | magicHouseVisit | `include/game/app/magic_house_dialog.h:7` | docs/reverse/functions/43380a-magic-house.md §1..§4 |
-| `0x4339D9` | deathGodSummonDialog（定义见头文件注释） | `src/app/magic_house_dialog.cpp:887` | 0x4339D9 反编译; 候选 = 存活且 ≠ 发起者（≤1 人返回 0）；资源 panel[18]/[20] + data.mkf[2]；musicPlayScene(7) 压栈；runModal(0x433088 状态机) 返回选中玩家+1。 |
+| `0x4339D9` | deathGodSummonDialog（定义见头文件注释） | `src/app/magic_house_dialog.cpp:889` | 0x4339D9 反编译; 候选 = 存活且 ≠ 发起者（≤1 人返回 0）；资源 panel[18]/[20] + data.mkf[2]；musicPlayScene(7) 压栈；runModal(0x433088 状态机) 返回选中玩家+1。 |
 | `0x433BD8` | payFromBank | `src/app/economy.cpp:106` | 0x433BD8 反编译; bank -= amount；不足 → cash += bank(负值) → bank = 0； cash < 0 → cash = 0 + eliminatePlayer（0x40CD87） |
 | `0x436A5A` | checkLoanDue | `src/app/turn_system.cpp:3439` | 0x436A5A 反编译; v = sub_4521AA(当前日期, loanDate)（= 距到期剩余天数） v==0 强执（showMessage 0x464B2C → sub_433BD8 扣款 → 清 loan/loanDate）； v==1/2 提醒（0x464B43/0x464B5C）；v==3 催收演出 sub_43695E（柜员动画窗，1.4 银行 UI 接入） 差异: sub_43695E 演出与 sub_41906A 刷新暂以日志占位 |
 | `0x439BFA` | 月初结息（advanceDay | `include/game/app/month_settle.h:7` | 0x439BFA/0x437E61 反编译；dbl_464E88=1.1；详见 docs/reverse/functions/bank-system.md §5。 参数: app（游戏状态/音频/事件栈） |

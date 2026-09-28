@@ -1,4 +1,5 @@
 #include "game/core/trace.h"
+#include "game/core/log.h"
 
 #include <cstdarg>
 #include <cstdio>
@@ -49,14 +50,17 @@ void setEnabled(bool on) { g_enabled = on; }
 bool enabled() { return g_enabled; }
 
 void logf(const char* fmt, ...) {
-    if (!g_enabled) {
-        return;
-    }
     char buf[1024];
     va_list args;
     va_start(args, fmt);
     std::vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
+    // [FIX] 结构化事件文本无条件镜像进 log 环（此前 g_enabled=false 时整条丢弃，
+    //   导致 `wait log "xfer from=..."` 类断言仅在 --trace 下生效）
+    rich4::logMirror(buf);
+    if (!g_enabled) {
+        return;
+    }
     std::lock_guard<std::mutex> lk(g_mutex);
     if (g_records.size() >= kMaxRecords) {
         g_records.pop_front();

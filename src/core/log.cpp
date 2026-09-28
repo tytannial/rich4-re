@@ -81,6 +81,14 @@ void logMessage(LogLevel level, const char* fmt, ...) {
 
 int logErrorCount() { return g_errorCount.load(); }
 
+void logMirror(const char* line) {
+    std::lock_guard<std::mutex> lk(g_logRingMutex);
+    g_logRing.emplace_back(line);
+    if (g_logRing.size() > kLogRingMax) {
+        g_logRing.pop_front();
+    }
+}
+
 bool logContains(const char* substr) {
     std::lock_guard<std::mutex> lk(g_logRingMutex);
     for (const std::string& s : g_logRing) {

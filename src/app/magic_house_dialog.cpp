@@ -482,6 +482,7 @@ bool magicHandler(const SDL_Event* event, void* user) {
                 break;
             case 6:
                 ui.state = 7;
+        trace::logf("magic state7 pick-ready");
                 break;
             case 8: { // [RE 0x432A4C] 退出：播 panel[20] FLC（音效 59）→ postModalExit
                 if (!ui.flcStarted) {
@@ -591,6 +592,7 @@ bool magicHandler(const SDL_Event* event, void* user) {
                 ui.state = 6;
                 ui.msg.show(app, kCondNames[ui.cond]);
             } else if (ui.hover != 0) { // 选定惩罚
+                trace::logf("magic picked pen=%d cond=%d", ui.hover, ui.cond);
                 restoreBigBuf(ui);
                 blitElement(dst, ui.sheet.frame(kFrameConfirm), 182, 142, false);
                 blitElement(dst, ui.sheet.frame(kCondIconBase + ui.cond), kIconCondX, kIconCondY,
