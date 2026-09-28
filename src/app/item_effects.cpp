@@ -18,6 +18,8 @@
 #include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/app/debug/debug.h"
+#include <cstdio>
 #include "game/core/trace.h"
 #include "game/core/clock.h"
 #include "game/render/blit.h"
@@ -1056,6 +1058,18 @@ int remoteDiceDialog(Application& app) {
     if (sheet.frameCount() < 7) {
         RICH4_LOGW("remoteDiceDialog: panel.mkf[72] unavailable (RE 0x446774)");
         return 0;
+    }
+    // [NEW] named region：骰面 1..6（0x4469xx diceHit 同源矩形 104+40*i,314,30,29）
+    {
+        static bool s_reg = false;
+        if (!s_reg) {
+            s_reg = true;
+            for (int i = 0; i < 6; ++i) {
+                char nm[12];
+                std::snprintf(nm, sizeof(nm), "dice.%d", i + 1);
+                debug::registerRegion(nm, 104 + 40 * i, 314, 30, 29);
+            }
+        }
     }
     DicePickCtx c;
     c.app = &app;

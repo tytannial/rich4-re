@@ -1,0 +1,10 @@
+# id: 194_item_heli
+# covers: [HELP 97] 火車/直升機族——id6 itemCar 0x446F05 travel=2 dice=3
+# timeout: 60000
+wait idle 1000
+give.item 0 6
+use.item 6
+wait log "itemCar:" 8000
+assert state players.0.travel == 2
+assert state errors == 0
+quit

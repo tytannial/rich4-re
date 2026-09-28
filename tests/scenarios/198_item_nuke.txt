@@ -1,0 +1,17 @@
+# id: 198_item_nuke
+# covers: [HELP 97] 核子飛彈 id7 0x446FBC——選目標(mode 0x300C0 選人)→FLC 528→
+#          expireAssets 全拆+傷害+住院3（ISS-014 雙點規則：台词模态吞首击）
+# timeout: 80000
+wait idle 1000
+player.alive 1 1
+player.teleport 1 85
+use.item 7
+wait frames 300
+clickplayer 1
+wait frames 260
+clickplayer 1
+wait log "missile item 7" 20000
+wait frames 1200
+assert state players.1.stateFlags >= 3
+assert state errors == 0
+quit

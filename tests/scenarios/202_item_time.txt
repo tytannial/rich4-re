@@ -1,0 +1,15 @@
+# id: 202_item_time
+# covers: [HELP 97] 時光機 id10 0x447387——快照=saveTurnSnapshot 0x44808A(移動前)；
+#          擲骰→落地→回滾 → cell 復位到移動前(teleport 85)鐵證
+# timeout: 80000
+wait idle 1000
+give.item 0 10
+player.teleport 0 85
+roll
+wait log "land cell=" 10000
+use.item 10
+wait log "time machine: p0 rolled back" 10000
+wait frames 400
+assert state players.0.cell == 85
+assert state errors == 0
+quit

@@ -1,0 +1,12 @@
+# id: 200_item_dice
+# covers: [HELP 97] 遙控骰子 id8 0x4470F8——panel[72] 骰面選擇(clickr dice.4)→
+#          forcedDice=4 + startPlayerMove；dice.1..6 登記=diceHit 0x4469xx 同源
+# timeout: 60000
+wait idle 1000
+give.item 0 8
+use.item 8
+wait frames 300
+clickr dice.4
+wait log "remote dice: p0 value=4" 10000
+assert state errors == 0
+quit

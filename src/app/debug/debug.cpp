@@ -695,6 +695,17 @@ uint16_t resolveTargetCell(Application& app);
 
 uint16_t resolveTargetCell(Application& app);
 
+// [NEW] roll: scriptable human dice entry = 0x40DD1F startPlayerMove
+//   (dice value via rng.dice; turn snapshot 0x44808A saved inside, same as real path)
+bool cmdRoll(Application& app, const std::vector<std::string>& a, std::string& err) {
+    GameState& st = app.gameState();
+    trace::logf("roll p=%d", st.currentPlayer);
+    startPlayerMove(app);
+    RICH4_LOGI("debug: roll -> steps=%d state=%u (RE 0x40DD1F)", st.remainingSteps,
+               st.playerActionState[st.currentPlayer]);
+    return true;
+}
+
 bool cmdLand(Application& app, const std::vector<std::string>& a, std::string& err) {
     GameState& st = app.gameState();
     uint16_t cell = 0;
@@ -1553,6 +1564,7 @@ const Cmd kCmds[] = {
     {"give.card", cmdGiveCard},
     {"give.item", cmdGiveItem},
     {"land", cmdLand},
+    {"roll", cmdRoll},
     {"day", cmdDay},
     {"find.estate", cmdFindEstate},
     {"find.evtcell", cmdFindEvtCell},
