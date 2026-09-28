@@ -1,0 +1,12 @@
+# id: 208_item_doll
+# covers: [HELP 97] 機器娃娃 id1 0x446AFB——扣卡 takePlayerCard(1)+槽8 落位(currentPlayer=8
+#          →9 步行走→nextPlayer busy 0→3)；item-effects.md §1.6 同构槽模型
+# timeout: 80000
+wait idle 1000
+give.item 0 1
+use.item 1
+wait log "itemWorker:" 8000
+assert log "itemWorker: p0 -> slot8"
+wait idle 4000
+assert state errors == 0
+quit

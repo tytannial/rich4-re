@@ -1,0 +1,16 @@
+# id: 204_item_bomb
+# covers: [HELP 88] 定时炸弹放置 placeMapItem id4 0x446D69(mode 0x20001，与地雷/路障同链)
+# timeout: 50000
+wait idle 1000
+give.item 0 4
+find.road
+assert state selected >= 1
+use.item 4
+wait frames 200
+clicksel
+wait frames 260
+clicksel
+wait frames 900
+assert log "place item 4"
+assert state errors == 0
+quit

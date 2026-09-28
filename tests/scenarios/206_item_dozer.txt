@@ -1,0 +1,10 @@
+# id: 206_item_dozer
+# covers: [HELP 97] 工程車 id12 0x4479D2——travel=31(Kind+100 代驾)+dice 上限 18 自动到
+# timeout: 60000
+wait idle 1000
+give.item 0 12
+use.item 12
+wait log "itemBulldozer:" 8000
+assert log "itemBulldozer: p0 travel=31"
+assert state errors == 0
+quit
