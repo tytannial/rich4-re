@@ -452,10 +452,12 @@ void aiStockBuy(Application& app, int player) {
             }
         } else if (20000 * st.moneyMul < pl.bank &&
                    sp < static_cast<int>(st.specPts.size())) {
-            // 上市组（0x42C5F8）：公库资金比 + 发行价折价 + 抢控制权
+            // 上市组（0x42C5F8）：公库**每期支出**比 = fundPaid(+44)/stockDivPeriod(+84 dword_499084)
+            //   + 发行价（capital/10000）折价 + 抢控制权
             const SpecPt& pt = st.specPts[sp];
-            const double fundR =
-                st.publicFund != 0 ? static_cast<double>(pt.fund) / st.publicFund : pt.fund;
+            const double fundR = st.stockDivPeriod != 0
+                                     ? static_cast<double>(pt.fundPaid) / st.stockDivPeriod
+                                     : static_cast<double>(pt.fundPaid);
             const double issue = pt.capital / 10000.0;
             if (fundR > 0.0) {
                 if (5000 * st.moneyMul > fundR) {
@@ -556,8 +558,11 @@ void aiStockSell(Application& app, int player) {
                 const int sp = listedSpecPt(st, i);
                 if (sp != 0 && sp < static_cast<int>(st.specPts.size())) {
                     const SpecPt& pt = st.specPts[sp];
+                    // [RE 0x42CFE8] 每期公库支出 = fundPaid(+44)/stockDivPeriod(dword_499084)
                     const double fundR =
-                        st.publicFund != 0 ? static_cast<double>(pt.fund) / st.publicFund : pt.fund;
+                        st.stockDivPeriod != 0
+                            ? static_cast<double>(pt.fundPaid) / st.stockDivPeriod
+                            : static_cast<double>(pt.fundPaid);
                     const double issue = pt.capital / 10000.0;
                     int64_t allShares = 0;
                     for (int j = 0; j < st.playerCount && j < 4; ++j) {
@@ -567,11 +572,11 @@ void aiStockSell(Application& app, int player) {
                                             ? static_cast<double>(allShares) /
                                                   st.playerShares[player][i]
                                             : 0.0;
-                    if (pt.fundPaid <= -10000 * st.moneyMul && conc > 0.6 && day > 10 &&
+                    if (pt.fund <= -10000 * st.moneyMul && conc > 0.6 && day > 10 &&
                         day < 15) {
-                        sc += 3;  // 负公库+高集中：除权前抛（0x42C919）
+                        sc += 3;  // 公库巨亏(+40)+高集中：除权前抛（0x42C919）
                     }
-                    if (pt.fundPaid <= -6000 * st.moneyMul &&
+                    if (pt.fund <= -6000 * st.moneyMul &&
                         static_cast<double>(price) > cost * 1.2 && pt.owner != player + 1 &&
                         day > 8 && day < 15) {
                         sc += 2;

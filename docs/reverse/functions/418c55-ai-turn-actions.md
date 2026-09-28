@@ -75,8 +75,11 @@
 3. ~~`bankAdvanceSettle(app, 0)` 接入~~ ✅ **2026-09-28 已实现**（0x418DFE 位序；场景
    `266_ai_bank_advance`。注意 one=0 循环**豁免银行经营者本人**（i==owner skip），
    开局 bank 常有初始经营者——多玩家负债才稳态触发）。
-4. `sub_42BF03`/`sub_42C79F` AI 股票买卖（两大函数，需结合 `stock_system.cpp` 现
-   接口：停牌/涨跌停/历史均价数组均已存在）——**本轮进行中（A5）**。
+4. ~~`sub_42BF03`/`sub_42C79F` AI 股票买卖~~ ✅ **2026-09-28 已实现**（`stock_system.cpp
+   aiStockBuy/aiStockSell`，beginPlayerTurn 0x418DE6/0x418DF4 接线；场景 `268_ai_stock_buy`
+   实测 `aiStockBuy: p1 stock=4 n=1647`、`270_ai_stock_sell` 实测 p0 初始配股卖出。
+   **字段订正**：`dword_499084` = `stockDivPeriod`（分红期数，非 publicFund）；评分中
+   `fundR = specPt.fundPaid(+44)/stockDivPeriod`（每期支出均值）、`+40 = fund`（公库累计）。
 5. 与「AI 行为整体规划」合并评审（用户 2026-09-28 决策：本轮先道具/卡片，行为链后续补完）。
 
 ## 8. 补充核实（2026-09-28 实现时）
