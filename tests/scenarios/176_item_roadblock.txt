@@ -1,0 +1,16 @@
+# id: 176_item_roadblock
+# covers: [HELP 95] 路障放置 placeMapItem(0x446BAA mode 0x1, objType16)——道路格放置成物件
+# timeout: 50000
+wait idle 1000
+give.item 0 2
+find.road
+assert state selected >= 1
+use.item 2
+wait frames 200
+clicksel
+wait frames 260
+clicksel
+wait frames 600
+assert log "place item 2"
+assert state errors == 0
+quit

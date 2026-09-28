@@ -1,0 +1,24 @@
+# id: 174_card_swapland
+# covers: [HELP 77] 換地卡 0x442622——脚下自己地(A=estate1) 与所选他人同类地(B=estate2) 交换 owner
+#          （地图确定性索引：map0 estate 表 1/2 均住宅；双点规则 ISS-014）
+# timeout: 50000
+# 注：首点即成交（台词极短/命中快），二点被已关模态吞掉属预期（clicksel 宽容跳过）
+wait idle 1000
+estate.owner 1 1
+estate.level 1 1
+select estate 1
+sel.goto
+estate.owner 2 2
+estate.level 2 1
+select estate 2
+use.card swapLand
+wait frames 200
+clicksel
+wait frames 260
+clicksel
+wait frames 600
+assert state estates.1.owner != 1
+assert state estates.2.owner != 2
+assert state estates.1.owner != estates.2.owner
+assert state errors == 0
+quit

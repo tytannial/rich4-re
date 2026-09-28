@@ -1,0 +1,17 @@
+# id: 172_card_seal
+# covers: [HELP 68] 查封卡 0x445593——脚下地整段 flag=0x51(5天免收)（研究停/涨價反制在数据层）
+# timeout: 50000
+wait idle 1000
+find.estate 0
+sel.owner 2
+sel.level 2
+sel.goto
+use.card seal
+wait frames 200
+clicksel
+wait frames 260
+clicksel
+wait frames 600
+assert state estates.sel.flag == 81
+assert state errors == 0
+quit

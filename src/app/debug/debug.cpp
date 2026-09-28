@@ -192,6 +192,12 @@ bool getStateInt(const GameState& st, const std::string& path, long long& out) {
         out = st.players[p].alive;
         return true;
     }
+    if (matchPath(path, "players.*.state37", c, 1)) {
+        const int p = parseInt(c[0]);
+        if (p < 0 || p >= 9) return false;
+        out = st.players[p].state37;
+        return true;
+    }
     if (matchPath(path, "players.*.byte54", c, 1)) {
         const int p = parseInt(c[0]);
         if (p < 0 || p >= 9) return false;
@@ -225,6 +231,7 @@ bool getStateInt(const GameState& st, const std::string& path, long long& out) {
         if (f == "owner") out = st.estates[i].owner;
         else if (f == "level") out = st.estates[i].level;
         else if (f == "type") out = st.estates[i].type;
+        else if (f == "flag") out = st.estates[i].flag;
         else return false;
         return true;
     }
@@ -244,6 +251,12 @@ bool getStateInt(const GameState& st, const std::string& path, long long& out) {
         const int i = parseInt(c[0]);
         if (i < 1 || i >= static_cast<int>(st.estates.size())) return false;
         out = st.estates[i].type;
+        return true;
+    }
+    if (matchPath(path, "estates.*.flag", c, 1)) {
+        const int i = parseInt(c[0]);
+        if (i < 1 || i >= static_cast<int>(st.estates.size())) return false;
+        out = st.estates[i].flag;
         return true;
     }
     if (matchPath(path, "corps.*.owner", c, 1)) {
@@ -802,11 +815,13 @@ bool cmdAssert(Application& app, const std::vector<std::string>& a, std::string&
         const std::string op = a[i++];
         long long want = 0;
         long long got = 0;
-        try {
-            want = std::stoll(a[i]);
-        } catch (...) {
-            err = "assert state: bad value " + a[i];
-            return false;
+        if (!getStateInt(app.gameState(), a[i], want)) {
+            try {
+                want = std::stoll(a[i]);
+            } catch (...) {
+                err = "assert state: bad value/path " + a[i];
+                return false;
+            }
         }
         if (!getStateInt(app.gameState(), path, got)) {
             err = "assert state: unknown path " + path;

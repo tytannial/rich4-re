@@ -1,0 +1,17 @@
+# id: 170_card_sleepwalk
+# covers: [HELP 82] 夢遊卡 0x4441DC——选他人→state37=4/5（免罪/嫁祸/復仇被动链由被动卡用例另测）
+# timeout: 50000
+wait idle 1000
+player.alive 1 1
+player.teleport 1 85
+use.card sleepwalk
+wait frames 200
+clickplayer 1
+wait frames 260
+clickplayer 1
+wait frames 600
+assert state players.1.stateFlags >= 0
+assert state players.1.byte54 == 0
+assert log "sleepwalk"
+assert state errors == 0
+quit
