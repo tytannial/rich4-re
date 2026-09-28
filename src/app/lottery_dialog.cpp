@@ -16,6 +16,8 @@
 #include "game/core/log.h"
 #include "game/core/trace.h"
 #include "game/core/debug_hooks.h"
+#include "game/app/debug/debug.h"
+#include <cstdio>
 #include "game/game_state.h"
 #include "game/platform/audio.h"
 #include "game/render/blit.h"
@@ -892,6 +894,20 @@ void lotteryVisit(Application& app) {
     const int p = st.currentPlayer;
     if (p < 0 || p >= 9) {
         return;
+    }
+    // [NEW] named region 一次性登记投注网格（docs/testing.md §2.3；矩形=本文件网格常量，
+    //   与 buyHandler 命中同源，产品逻辑零改动；脚本 clickr lotto.<0..35>）
+    {
+        static bool s_reg = false;
+        if (!s_reg) {
+            s_reg = true;
+            for (int n = 0; n < kGridCols * kGridRows; ++n) {
+                char nm[16];
+                std::snprintf(nm, sizeof(nm), "lotto.%d", n);
+                debug::registerRegion(nm, kGridX0 + (n % kGridCols) * kCellW,
+                                      kGridY0 + (n / kGridCols) * kCellH, kCellW, kCellH);
+            }
+        }
     }
     Player& pl = st.players[p];
     if (pl.alive == 1) {

@@ -1,0 +1,16 @@
+# id: 100_lottery_bet
+# covers: [HELP 36] 樂透投注（case 9 land → 0x42F7FC 网格买注 $1000/注，入公库 publicFund）
+# timeout: 60000
+wait idle 1000
+player.cash 0 200000
+find.evtcell 9
+assert state selected >= 1
+land
+clickr lotto.5
+wait frames 40
+assert trace "clicked name=lotto.5"
+rclick 320 240
+wait frames 60
+assert state publicFund >= 1000
+assert state errors == 0
+quit

@@ -1,10 +1,12 @@
 # id: 94_invite_god
-# covers: [HELP 84] 請神符 useInviteGodCard 0x444E1A（最近可附身神明→飞行→attach 全套）
-# skip: BUG-001 attach 后挂死待修（docs/testing-issues.md §4）
-# timeout: 60000
+# covers: [HELP 84] 請神符 useInviteGodCard 0x444E1A（最近神明→飞行→attach；财神/穷神
+#          attachObject 内弹老虎机 0x440706 = 人工干预点 → tap 一下停滚）
+# timeout: 120000
 wait idle 1000
 use.god invite
-wait trace "attach p=0" 15000
+wait trace "attach p=0" 30000
+tap
+wait frames 600
 assert state players.0.god >= 1
 assert state errors == 0
 quit

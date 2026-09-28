@@ -1212,6 +1212,17 @@ bool cmdUseGod(Application& app, const std::vector<std::string>& a, std::string&
     return false;
 }
 
+bool cmdTap(Application& app, const std::vector<std::string>& a, std::string& err) {
+    // [NEW] 通用"人工干预一下"：对当前阻塞模态任意处合成一次左键
+    //   （老虎机 0x43F767 任意左键停滚 / 转盘 0x44090E 点击提前停 / 其余面板中心兜底）
+    (void)err;
+    const int x = a.size() > 1 ? parseInt(a[1]) : 320;
+    const int y = a.size() > 2 ? parseInt(a[2]) : 240;
+    queueInput(x, y, false, false);
+    trace::logf("clicked tap at=(%d,%d)", x, y);
+    return true;
+}
+
 bool cmdClick(Application& app, const std::vector<std::string>& a, std::string& err) {
     (void)app;
     if (!argCount(a, 2, err, "click <x> <y>")) return false;
@@ -1302,6 +1313,7 @@ const Cmd kCmds[] = {
     {"dump", cmdDump},
     {"click", cmdClick},
     {"clickr", cmdClickR},
+    {"tap", cmdTap},
     {"rclick", cmdRClick},
     {"move", cmdMove},
     {"key", cmdKey},
@@ -1351,7 +1363,8 @@ bool isBlockingCmd(const std::string& name) {
 
 bool isInteractiveCmd(const std::string& name) {
     // 阻塞模态期间仍需可执行的应答类命令
-    static const char* const kInter[] = {"click", "rclick", "move", "key", "confirm"};
+    static const char* const kInter[] = {"click", "clickr", "rclick", "move", "key",
+                                         "confirm", "tap"};
     for (const char* i : kInter) {
         if (name == i) {
             return true;
