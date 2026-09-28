@@ -212,11 +212,13 @@ cmake --build build
 批1：FLC/消息/音效/语音/高亮/飞行/落地分派/转盘/模态）、内存日志环、存档往返
 `--save-selftest`（`STABLE=YES`）、dummy 驱动无头渲染 + `--quickstart`、**统一调试命令层 +
 `--script/--exec` 断言 DSL（assert state/log/trace + wait/confirm/click/rng，失败→退出码）**、
-首批 4 场景（smoke/收租/购地/轮盘注入）headless 全绿。待落地：dummy 渲染旁路+quickstart、统一命令层+`--script`
-断言、CTest L0、L1 场景、L2 `--autoplay` 长跑、named region、trace 批2~4。
+**L0 CTest（`rich4_tests`：收租公式/存档往返/MKF-LZHUF）**、**`tools/run_tests.py` 编排 +
+覆盖矩阵**、首批 4 场景（smoke/收租/购地/轮盘注入）headless 全绿。待落地：L1 场景铺满矩阵、
+named region、L2 长跑不变量、trace 批2~4、旧热键迁移命令表。
 
 ```powershell
 ./build/rich4.exe --game resources/game --headless --seed 42 --quickstart 0,4,1 --script tests/scenarios/20_rent_route.txt
+python tools/run_tests.py --matrix    # ctest + 全场景 + 覆盖矩阵（build/test-report.json）
 ./build/rich4.exe --game resources/game --save-selftest 0   # 存档 save∘parse∘save 字节稳定
 ```
 

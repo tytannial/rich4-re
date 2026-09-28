@@ -168,16 +168,29 @@ roulette_dialog 0x43F7C6 处 [NEW] 注释）；`roulette theme=<t> cell=<c>` tra
 
 ## 3. 待落地（既定路线）
 
-1. **L0 CTest**：`rich4_core` 静态库拆分；公式/序列化/解析器单测。
-2. **L1 场景铺开**：按覆盖矩阵补 ~22 条（corp 五类/事件 case2..16/卡 30/道具 13/银行/乐透/
-   股市/NPC/结息分红…）；`tools/run_tests.py` 编排（批量/超时/报告）+ 覆盖矩阵
-   （`# covers: [HELP idx]` ↔ `docs/help-checklist.md`）。
-3. **named region 控件层**：各对话框控件表登记 → `click <region>` + `assert clicked=`；
+1. **L1 场景铺开**：按覆盖矩阵补至 ~22 条（corp 五类/事件 case2..16/卡 30/道具 13/银行/乐透/
+   股市/NPC/结息分红…）；`python tools/run_tests.py --matrix` 即未覆盖工作清单。
+2. **named region 控件层**：各对话框控件表登记 → `click <region>` + `assert clicked=`；
    交互密集场景（百货/股市/银行/魔法屋选惩罚）依赖此项；规范并入 `ui-controls.md`。
-4. **L2 长跑**：`--autoplay` + 不变量检查（现有 `--headless --quickstart 0,4,0` 已可跑，
-   待脚本 `wait` 状态类 + 断言器铺开）。
-5. **trace 批2~4 全量插桩**（演出/判定边界约 40 点）。
-6. **旧热键迁移到命令注册表**（当前 45 键位保留原实现；`--script` 已与命令层并存）。
+3. **L2 长跑不变量**：封装 `invariants` 脚本（现可手工 `--headless --quickstart 0,4,0` 跑通）。
+4. **trace 批2~4 全量插桩**（演出/判定边界约 40 点）。
+5. **旧热键迁移到命令注册表**（45 键位现保留原实现；`--script` 已与命令层并存）。
+
+### 3.1 已完成：L0 单测 + 编排器
+
+- CMake 拆分 `rich4_core`（不含 main）静态库 + `rich4_tests`；`enable_testing()/add_test`；
+  `ctest`（build 目录）或 `rich4_tests.exe [gameDir]`。
+- `tests/unit/`（microtest.h 自写框架，无外部依赖）首批 22 checks：
+  `estateRouteRent` 同路段求和/连锁×2000/moneyMul、存档 `save∘parse∘save` 字节稳定、
+  MkfArchive/LZHUF 解压确定性。
+- `tools/run_tests.py`：ctest + 场景批量（超时看门狗/`--filter`/`--repeat`）+
+  `build/test-report.json` + **覆盖矩阵**（`# covers: [HELP n]` ↔ help-checklist 99 条，
+  输出未覆盖清单）；任一失败 → 退出码 1。
+
+```powershell
+python tools/run_tests.py --matrix
+python tools/run_tests.py --filter rent --repeat 3
+```
 
 ## 4. 设计约束（实施时强制）
 

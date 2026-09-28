@@ -39,16 +39,38 @@ else()
 endif()
 
 file(GLOB_RECURSE RICH4_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/*.cpp")
+list(REMOVE_ITEM RICH4_SOURCES "${CMAKE_SOURCE_DIR}/src/main.cpp")
 
-add_executable(rich4 ${RICH4_SOURCES})
-target_include_directories(rich4 PRIVATE "${CMAKE_SOURCE_DIR}/include"
-                                        "${CMAKE_SOURCE_DIR}/third_party/stb")
-target_link_libraries(rich4 PRIVATE SDL3::SDL3)
+# [NEW] rich4_core：游戏引擎全部源文件（不含 main），供 rich4 可执行与单测共用
+add_library(rich4_core STATIC ${RICH4_SOURCES})
+target_include_directories(rich4_core PUBLIC "${CMAKE_SOURCE_DIR}/include"
+                                             "${CMAKE_SOURCE_DIR}/third_party/stb")
+target_link_libraries(rich4_core PUBLIC SDL3::SDL3)
+if(MSVC)
+  target_compile_options(rich4_core PRIVATE /W4 /utf-8 /permissive-)
+else()
+  target_compile_options(rich4_core PRIVATE -Wall -Wextra)
+endif()
+
+add_executable(rich4 "${CMAKE_SOURCE_DIR}/src/main.cpp")
+target_link_libraries(rich4 PRIVATE rich4_core)
 
 if(MSVC)
   target_compile_options(rich4 PRIVATE /W4 /utf-8 /permissive-)
 else()
   target_compile_options(rich4 PRIVATE -Wall -Wextra)
+endif()
+
+# ---- 单元测试（L0，docs/testing.md）----
+enable_testing()
+file(GLOB RICH4_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/tests/unit/*.cpp")
+if(RICH4_TEST_SOURCES)
+  add_executable(rich4_tests ${RICH4_TEST_SOURCES})
+  target_link_libraries(rich4_tests PRIVATE rich4_core)
+  if(MSVC)
+    target_compile_options(rich4_tests PRIVATE /W4 /utf-8 /permissive-)
+  endif()
+  add_test(NAME unit COMMAND rich4_tests)
 endif()
 
 # 预编译包为动态库，运行前复制 SDL3.dll 到输出目录。
