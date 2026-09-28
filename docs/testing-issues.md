@@ -104,6 +104,8 @@
 | Q-G | L2 长跑不变量未封装 | **已固化**：`80_autoplay_20d.txt`（全 AI 20+天，assert errors==0 / day 推进；seed 42/7/99/2024 四种子全绿） | 可扩至年尺度+`--repeat`；发现深层 bug 时补 assert |
 | Q-H | `card.rebuild` 后**卡包应有 7 号卡才扣卡**——命令层直调不带卡时 cardBagRemove(7) 可能移除空槽（原版经 useCardFlow 先扣卡） | rebuild 场景未断卡包 | 实机走卡片栏用改建卡核对；脚本可补 `give.card 0 7 + dump` |
 | Q-I | trace `xfer to=` 语义：收款=玩家**索引0基**、=银行/公库时为其他编号（0x41D433 映射） | 72 场景断 `xfer from=0 to=1`（AI 玩家1=owner2-1）成立 | 银行收款场景先 `dump` 观察字段再写死断言；建议 testing.md §2.1 补"to 字段编号对照表" |
+| **Q-J** | 请神符"第一回合地图不该有大财神却请到"（用户 2026-09-28 实机反馈） | **初步核对=非缺陷**：开局布局表 `kCellTypeInit[46]`（exe 0x496D08 提取）**槽1=type2 大財神**本就存在；`canAttachObject` 允许 t≤12(≠11)∪{15}，财神可附身符合 [RE 0x444D1A] 集合语义 | 已实机确认请神不卡死；若后续核对"请到的不是视野最近者"再升级 |
+| **Q-K** | 请神符「最近」口径 | `pickNearestAttachable` 用 **cellEnt 格坐标欧氏距离**+视野(mapHitRegions)过滤 | 与原版 0x444D1A 的拾取坐标口径（屏幕像素/带 rotation?）待 IDA 细核；构造"近处小神+远处大神"用例可脚本化（place/teleport+select 后 use.god invite 断言 objId） |
 
 ### ISS-013 specPt costType 是 `g_specPtCostMap` 索引，不是帮助序号
 - **现象**：84 场景初版选 `costType=4(電腦)` 断言 dayCount 收费——实际 **costType4=保險公司(轮盘)**
