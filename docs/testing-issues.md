@@ -106,7 +106,7 @@
 | Q-I | trace `xfer to=` 语义：收款=玩家**索引0基**、=银行/公库时为其他编号（0x41D433 映射） | 72 场景断 `xfer from=0 to=1`（AI 玩家1=owner2-1）成立 | 银行收款场景先 `dump` 观察字段再写死断言；建议 testing.md §2.1 补"to 字段编号对照表" |
 | **Q-J** | 请神符"第一回合地图不该有大财神却请到"（用户 2026-09-28 实机反馈） | **已结案=非初始放置缺陷**：`loadMapData 0x407D6F` 开局仅放偶槽 1,3,5,7,9,11（小神+天使+惡犬），大神/惡魔/土地公**绝不预置**（`kCellTypeInit` 的 +0 类型常驻 ≠ 在场——空槽判定 `+2 cellEnt==0`，潜伏槽不绘制/不拾取）。"提前见/请到大神"根因=**`Ctrl+Shift+O` 调试直放**（1..18 循环、当前格、绕过配对，用户确认触发过）。请神符第一回合候选实为小神+天使（惡犬 `canAttach=0` 请不到），符合预期 | 结案；轮替方向缺陷另立 BUG-003（见 §4） |
 | **Q-K** | 请神符「最近」口径 | `pickNearestAttachable` 用 **cellEnt 格坐标欧氏距离**+视野(mapHitRegions)过滤 | 与原版 0x444D1A 的拾取坐标口径（屏幕像素/带 rotation?）待 IDA 细核；构造"近处小神+远处大神"用例可脚本化（place/teleport+select 后 use.god invite 断言 objId） |
-| **Q-M** | 126 機器工人 headless 目标选择未生效：clicksel 确认点在 pickMapObject==目标 的掩码点上（targetAllowed flags6 与 byte1 default 推演均通过），selectTargetDialog 仍返回 0 | useItemRobotWorker 0x447295 mode=0x2090006 | 疑点：①对话框初始化当帧 hover 未刷新即收 UP②drawTargetSel mouseLogicalPos 初判覆盖 ③mode bit24=0x02 有未解码语义。下轮对 0x446AE8 各位 IDA 核 + target hover 加 trace 诊断 |
+| **Q-M** | ~~待深挖~~ **已结案（ISS-014）**：126 首击被 playItemLine 前置台词模态消费，目标对话框收不到 UP → 返回 0 | useItemRobotWorker 0x447295 | 修复=**二次 clicksel**（台词 ~60 帧后落目标框窗口）；126 绿 target=2001 flags=1 | → 已固化为 126_item_worker.txt |
 | **Q-N** | 110 百货开场消息轮数随语音时长浮动 → 固定 wait 轮数 flaky | FloatMessage 2000ms+voice | 已"连点三下"吸收；通用教训：点击推进阶段的 UI 需 Ready 证据（wait trace/log）或冗余点击；长期=UI 阶段查询 trace 化 |
 
 ### ISS-013 specPt costType 是 `g_specPtCostMap` 索引，不是帮助序号
@@ -116,6 +116,15 @@
 - **方案**：场景改 `specpt.type 1 3`（銀行·确定性公式），缴费后 `confirm no` 放行认购询问框。
 - **教训**：给"数值断言"型场景选分支时，先 `dump specpt` + 对照 turn_system specPt 注释表
   （0x41A168 段）确认 costType→公式，**不要按帮助/帮助页序号直觉映射**。
+
+### ISS-014 命令内嵌台词模态吞交互点击（通用规则：前置双点）
+- **现象**：`use.item 9`（機器工人）后紧跟 `clicksel`，目标选择框返回 0（未选中）。
+- **根因**：effect 函数序章 `playItemLine`/`playCardLine` 先弹 ~1s 台词模态；clicksel 的
+  move+click 两帧全落在台词窗口（FloatMessage 点击=跳过消息），台词结束后目标框才出现，
+  已无后续事件 → UP 永缺。
+- **方案**：脚本规则=**前置台词类 effect 连发两次选择点击**（`clicksel; wait frames 240; clicksel`）。
+  适用全部 use.item/use.card 带台词者（122 機車无地图点击所以一发过）。
+- **状态**：✅ 126 二次 clicksel 绿（target=2001）。
 
 ## 3. 阻塞模态人工干预点清单
 
