@@ -1,0 +1,18 @@
+# id: 162_card_devil
+# covers: [HELP 76] 惡魔卡 0x4436E0——选他人地块→整段 level/type 清零+原主记债 30×M×level
+# timeout: 50000
+wait idle 1000
+find.estate 0
+sel.owner 2
+sel.level 2
+sel.goto
+use.card devil
+wait frames 200
+clicksel
+wait frames 260
+clicksel
+wait frames 1200
+assert state estates.sel.level == 0
+assert trace "debt debtor="
+assert state errors == 0
+quit

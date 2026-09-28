@@ -5,8 +5,9 @@
 wait idle 1000
 use.god invite
 wait trace "attach p=0" 30000
+wait log "slotMachine:" 20000
 tap
-wait frames 600
+wait frames 900
 assert state players.0.god >= 1
 assert state errors == 0
 quit

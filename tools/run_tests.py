@@ -59,15 +59,18 @@ def parse_scenario(path: Path) -> dict:
     }
 
 
-def run_scenario(sc: dict, exe: str, game: str, seed: int) -> dict:
+def run_scenario(sc: dict, exe: str, game: str, seed: int, wall_cap: int = 0) -> dict:
     cmd = [
         exe, "--game", game, "--headless", "--seed", str(seed),
         "--quickstart", sc["quickstart"], "--script", str(sc["file"]),
     ]
     t0 = time.time()
+    cap = sc["wall_timeout"]
+    if wall_cap > 0:
+        cap = min(cap, wall_cap)
     try:
         p = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8",
-                           errors="replace", timeout=sc["wall_timeout"], cwd=str(ROOT))
+                           errors="replace", timeout=cap, cwd=str(ROOT))
         out = p.stdout + "\n" + p.stderr
         rc = p.returncode
         timeout = False
@@ -134,6 +137,8 @@ def main() -> int:
     ap.add_argument("--repeat", type=int, default=1)
     ap.add_argument("--matrix", action="store_true")
     ap.add_argument("--no-ctest", action="store_true")
+    ap.add_argument("--wall-cap", type=int, default=0,
+                    help="每场景墙钟秒数上限（0=仅按 # timeout 推算）；定位挂死用如 90")
     args = ap.parse_args()
 
     scripts = sorted(SCEN_DIR.glob("*.txt")) if SCEN_DIR.exists() else []
@@ -148,7 +153,7 @@ def main() -> int:
             print(f"  [SKIP] {sc['id']:<28} {sc['skip']}")
             continue
         for rep in range(args.repeat):
-            r = run_scenario(sc, args.exe, args.game, args.seed + rep)
+            r = run_scenario(sc, args.exe, args.game, args.seed + rep, args.wall_cap)
             r["rep"] = rep
             results.append(r)
             flag = "PASS" if r["ok"] else "FAIL"

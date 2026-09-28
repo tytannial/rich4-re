@@ -1,0 +1,17 @@
+# id: 150_item_mine
+# covers: [HELP 88] 地雷放置 placeMapItem(0x446C88 mode 0x10001: 目标=可拾取道路格)
+#          放视野内空格（ISS-014 双点台词规则）；踩雷爆炸链由 onPlayerActionPhase/长跑覆盖
+# timeout: 50000
+wait idle 1000
+give.item 0 3
+find.road
+assert state selected >= 1
+use.item 3
+wait frames 200
+clicksel
+wait frames 260
+clicksel
+wait frames 900
+assert log "place item 3"
+assert state errors == 0
+quit

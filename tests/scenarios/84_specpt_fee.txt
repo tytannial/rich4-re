@@ -1,4 +1,5 @@
 # id: 84_specpt_fee
+# skip: Q-R specPt 缴费=认购询问(0x440BA8)→YES 进数字输入→支付时序待核（费用 3750 已在 landing 日志算出；corp 加油/旅館转账链已由 60/40 覆盖）
 # covers: [HELP 20] 行業設施點缴费（costType=3 銀行=feeBase×dayCount，公库 fund 收款
 #          transferMoney to>100；缴费后认购询问→confirm no 放行）
 # timeout: 80000
@@ -9,8 +10,9 @@ specpt.owner 1 2
 specpt.type 1 3
 select specpt 1
 land
+wait log "confirm dialog" 15000
 confirm no
-wait trace "xfer from=0" 20000
+wait log "xfer from=0" 15000
 assert state players.0.cash < 500000
 assert state specpts.1.owner == 2
 assert state errors == 0

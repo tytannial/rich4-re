@@ -1,7 +1,7 @@
 # id: 148_card_frame
 # covers: [HELP 74] 陷害卡 0x4444BF——选他人玩家(flags 0x10/BYTE1=4)→jailPlayer 5天
 #          （p1 无免罪/嫁祸卡 → 直接入狱；stateFlags BYTE2 置位）
-# timeout: 150000
+# timeout: 50000
 wait idle 1000
 player.alive 1 1
 player.teleport 1 85

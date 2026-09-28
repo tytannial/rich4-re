@@ -1,6 +1,6 @@
 # id: 142_card_demolish
 # covers: [HELP 67] 拆除卡 0x443B0F——选目标降一级(level 3→2)+FLC529
-# timeout: 150000
+# timeout: 50000
 wait idle 1000
 find.estate 0
 sel.owner 2

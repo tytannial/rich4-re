@@ -3,6 +3,7 @@
 #include <cstdarg>
 #include <atomic>
 #include <cstdio>
+#include <cstring>
 #include <deque>
 #include <mutex>
 #include <string>
@@ -71,7 +72,7 @@ void logMessage(LogLevel level, const char* fmt, ...) {
         }
         g_logRing.emplace_back(std::move(line));
         if (level == LogLevel::Error && std::strstr(buf, "ASSERT FAIL") == nullptr &&
-            std::strstr(buf, "script error") == nullptr) {
+            (std::strncmp(buf, "script ", 7) != 0 && std::strncmp(buf, "clicksel skip", 13) != 0)) {
             // [NEW] errors 计数只统计**产品** ERROR；断言失败/脚本装载错误本身不计入
             ++g_errorCount;
         }

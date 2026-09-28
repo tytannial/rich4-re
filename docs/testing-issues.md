@@ -126,6 +126,21 @@
   适用全部 use.item/use.card 带台词者（122 機車无地图点击所以一发过）。
 - **状态**：✅ 126 二次 clicksel 绿（target=2001）。
 
+### ISS-015 阻塞标志的嵌套清零事故（prevInBlock）
+- **现象**：白名单应答 step（clickr/confirm）执行完把 `g_inBlock` 直接置 false，
+  外层 land 仍在阻塞 → 后续 assert 被提前放行（读到半完成状态）且冻结保护失效。
+- **方案**：进入时 `prevInBlock = g_inBlock`，退出时恢复 prev（重入保持 true）。
+- **状态**：✅。
+
+### ISS-016 冻结步骤挡住后续应答 → 受限前瞻（prefetch）
+- **现象**：脚本 `assert` 排在 `clickr shop.leave` 前；模态阻塞期 assert 冻结 pc →
+  leave 永远到不了 → 模态永不关 → 互等挂死（110 实证，90s TIMEOUT）。
+- **方案**：冻结时在 pc 之后 ≤8 格窗口内找**首个交互 step** 先执行并标 `done`，
+  正式经过时跳过。语义=「写在断言之后的点击视为对当前模态的预定应答」。
+- **状态**：✅（110 绿）。配套：`--wall-cap` 墙钟上限定位挂死；场景 timeout 收敛 50000 帧。
+- **衍生教训（Q-R/Q-P 两案）**：应答 step 仍需**等模态真正出现**（`wait log "slotMachine:"`、
+  `wait log "confirm dialog"` 等同步点先行），前瞻只解决顺序死锁不解决抢跑。
+
 ## 3. 阻塞模态人工干预点清单
 
 | 干预点 | 原版 | 停滚/确认方式 | 脚本手段 | 状态 |

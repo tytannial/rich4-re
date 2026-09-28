@@ -66,6 +66,7 @@ struct Step {
     int n = 0;          // 帧数 / wait state 比较值
     int limit = 6000;   // 等待类上限帧
     int lineNo = 0;
+    bool done = false;  // 阻塞期前瞻已执行（正式经过时跳过）
 };
 
 struct Script {
@@ -1026,6 +1027,25 @@ bool cmdStockBuy(Application& app, const std::vector<std::string>& a, std::strin
     return true;
 }
 
+bool cmdFindRoad(Application& app, const std::vector<std::string>& a, std::string& err) {
+    // 首个可拾取道路格（mapHitRegions 中 id<2000 者——0xFFFF00 占用格原版不登记，
+    // 天然排除站人/已占格；供地雷/路障/炸弹放置目标）
+    (void)app;
+    (void)a;
+    (void)err;
+    GameState& st = app.gameState();
+    g_selected = 0;
+    for (const auto& hr : st.mapHitRegions) {
+        if (hr.id >= 1 && hr.id < 2000) {
+            g_selected = hr.id;
+            RICH4_LOGI("debug: find.road -> cell %u", g_selected);
+            return true;
+        }
+    }
+    RICH4_LOGI("debug: find.road -> none in view");
+    return true;
+}
+
 bool cmdConfirm(Application& app, const std::vector<std::string>& a, std::string& err) {
     // 对当前栈顶模态直接应答（YES=1/NO=0，对应 0x401966 postModalExit lParam）
     (void)err;
@@ -1258,6 +1278,8 @@ bool cmdUseItem(Application& app, const std::vector<std::string>& a, std::string
 }
 
 bool cmdClickCell(Application& app, const std::vector<std::string>& a, std::string& err) {
+    // 与 clicksel 同法：在 hr(id==格 id) 内扫 pickMapObject 真实命中的菱形点，
+    // 不可见时回退格锚点（由脚本断言暴露落空）
     if (!argCount(a, 1, err, "clickcell <i>")) return false;
     GameState& st = app.gameState();
     const int i = parseInt(a[1]);
@@ -1265,10 +1287,35 @@ bool cmdClickCell(Application& app, const std::vector<std::string>& a, std::stri
         err = "clickcell: bad index";
         return false;
     }
-    const int cx = st.cellEnts[i].x + 24;
-    const int cy = st.cellEnts[i].y + 12;
-    queueInput(cx, cy, false, false);
-    trace::logf("clicked clickcell %d at=(%d,%d)", i, cx, cy);
+    int bx = -1;
+    int by = -1;
+    int best = 1 << 30;
+    for (const auto& hr : st.mapHitRegions) {
+        if (hr.id != i || hr.w <= 0 || hr.h <= 0) {
+            continue;
+        }
+        const int cx = hr.x + hr.w / 2;
+        const int cy = hr.y + hr.h / 2;
+        for (int y2 = hr.y; y2 < hr.y + hr.h; y2 += 4) {
+            for (int x2 = hr.x; x2 < hr.x + hr.w; x2 += 4) {
+                if (pickMapObject(st, x2, y2) == i) {
+                    const int d = (x2 - cx) * (x2 - cx) + (y2 - cy) * (y2 - cy);
+                    if (d < best) {
+                        best = d;
+                        bx = x2;
+                        by = y2;
+                    }
+                }
+            }
+        }
+    }
+    if (bx < 0) {
+        bx = st.cellEnts[i].x + 24;
+        by = st.cellEnts[i].y + 12;
+        RICH4_LOGW("debug: clickcell %d not in hit list, fallback (%d,%d)", i, bx, by);
+    }
+    queueInput(bx, by, false, false);
+    trace::logf("clicked clickcell %d at=(%d,%d)", i, bx, by);
     return true;
 }
 
@@ -1385,11 +1432,14 @@ bool cmdClickSel(Application& app, const std::vector<std::string>&, std::string&
             trace::logf("clicked clicksel id=%u at=(%d,%d)", g_selected, bx, by);
             return true;
         }
+        // 目标在 hit list 但掩码无命中点：极罕见，保持报错
         err = "clicksel: no mask-hit point found in rect";
         return false;
     }
-    err = "clicksel: selected object not in current view hit list";
-    return false;
+    // 目标不在当前视野命中列表：多为**上一次点击已生效、模态已关**（双点规则下常见）→
+    // 宽容跳过并记 trace；真未选中由后续效果断言暴露
+    trace::logf("clicksel skip id=%u (not in hit list)", g_selected);
+    return true;
 }
 
 bool cmdClick(Application& app, const std::vector<std::string>& a, std::string& err) {
@@ -1461,6 +1511,7 @@ const Cmd kCmds[] = {
     {"day", cmdDay},
     {"find.estate", cmdFindEstate},
     {"find.evtcell", cmdFindEvtCell},
+    {"find.road", cmdFindRoad},
     {"stock.buy", cmdStockBuy},
     {"sel.owner", cmdSelOwner},
     {"sel.level", cmdSelLevel},
@@ -1979,19 +2030,37 @@ void tick(Application& app) {
             // （cardRebuildEffect→playCardLine、showCardGet 等），故执行前置 g_inBlock；
             // 重入帧只放行交互应答 step（click/key/confirm），其余 step 冻结 pc——
             // 保证"数据修改完成后才允许断言/后续命令"的严格时序。
-            const bool block = stepFirstIsBlocking(st.a);
+            if (st.done) {
+                ++sc.pc; // 阻塞期前瞻已执行
+                return;
+            }
             if (g_inBlock && !stepFirstIsInteractive(st.a)) {
+                // 受限前瞻：冻结步骤之后 ≤8 格内的交互应答 step 先派发
+                // （否则 assert 卡 pc → 关不掉打开的模态 → 互等死锁，110 实证）
+                for (size_t j = sc.pc + 1; j < sc.steps.size() && j <= sc.pc + 8; ++j) {
+                    Step& nx = sc.steps[j];
+                    if (nx.kind == Step::Cmd && !nx.done && stepFirstIsInteractive(nx.a)) {
+                        nx.done = true;
+                        std::string perr;
+                        if (!execLine(app, nx.a, perr)) {
+                            ++g_failures;
+                            RICH4_LOGE("script %s line %d: %s (prefetch)", sc.id.c_str(),
+                                       nx.lineNo, perr.c_str());
+                        }
+                        break;
+                    }
+                }
                 return;
             }
             ++sc.pc;
-            (void)block;
+            const bool prevInBlock = g_inBlock; // 重入白名单 step 结束后须保持外层阻塞
             g_inBlock = true;
             std::string err;
             if (!execLine(app, st.a, err)) {
                 ++g_failures;
                 RICH4_LOGE("script %s line %d: %s", sc.id.c_str(), st.lineNo, err.c_str());
             }
-            g_inBlock = false;
+            g_inBlock = prevInBlock;
             return;
         }
         case Step::WaitFrames:

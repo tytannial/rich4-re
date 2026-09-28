@@ -1,0 +1,18 @@
+# id: 160_card_angel
+# covers: [HELP 57] 天使卡 0x4434C0——选自己地块→同路段全部加盖一层（level+1）
+#          注：FLC523 仅"封顶(0x80)"时播；本路段单块 level1→2 不到封顶，不播属原版语义
+# timeout: 50000
+wait idle 1000
+find.estate 0
+sel.owner 1
+sel.level 1
+sel.goto
+use.card angel
+wait frames 200
+clicksel
+wait frames 260
+clicksel
+wait frames 1500
+assert state estates.sel.level >= 2
+assert state errors == 0
+quit

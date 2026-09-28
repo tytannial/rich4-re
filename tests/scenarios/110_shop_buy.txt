@@ -2,7 +2,7 @@
 # covers: [HELP 27] 百貨公司——case15 进店→商品行买卡(点券扣减)→离开(shop revenue trace)
 #          注：开场消息序列(欢迎→提示)轮数随语音时长浮动，非 Ready 阶段点击=推进阶段，
 #          故连点三下保证覆盖 0~2 次跳消息后落在 Ready 购买（ISS-004 时序脆弱案例）
-# timeout: 120000
+# timeout: 50000
 wait idle 1000
 player.points 0 30000
 find.evtcell 15

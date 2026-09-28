@@ -1,6 +1,6 @@
 # id: 126_item_worker
 # covers: [HELP 98] 機器工人（效果表 id9 useItemRobotWorker 0x447295：选地块→angelUpgrade+FLC553 加盖）
-# timeout: 120000
+# timeout: 50000
 wait idle 1000
 find.estate 0
 sel.owner 1

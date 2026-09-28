@@ -1,7 +1,7 @@
 # id: 140_card_monster
 # covers: [HELP 65] 怪獸卡 0x443917——地图选建筑→demolishAtObjId(mode2) 夷平+FLC557+原主记债
 #          （ISS-014 前置台词模态吞首击 → 双点规则）
-# timeout: 150000
+# timeout: 50000
 wait idle 1000
 find.estate 0
 sel.owner 2

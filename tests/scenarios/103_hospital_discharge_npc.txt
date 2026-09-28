@@ -1,7 +1,7 @@
 # id: 103_hospital_discharge_npc
 # covers: [HELP 37] 醫院門外出院——NPC 流氓格 hosp.cell.<4..7>（0x43E9A4 阶段机：
 #          问候消息→点头像→确认→扣点券出院；答谢演出）
-# timeout: 120000
+# timeout: 50000
 wait idle 1000
 player.points 0 1000
 find.evtcell 5
