@@ -1765,11 +1765,13 @@ bool execTokenCmd(Application& app, const std::vector<std::string>& a, std::stri
         return false;
     }
     if (a[0] == "news") {
-        newsDebugFire(app, -1);
+        // news [idx 0..35]：无参=随机抽取（idx7 拍卖会开交互面板，脚本场景慎用）
+        newsDebugFire(app, a.size() > 1 ? parseInt(a[1]) : -1);
         return true;
     }
     if (a[0] == "fate") {
-        fateDebugFire(app, -1);
+        // fate [idx 0..48]：无参=随机；指定效果号保证脚本确定性（生日/嫁祸=交互面板）
+        fateDebugFire(app, a.size() > 1 ? parseInt(a[1]) : -1);
         return true;
     }
     if (a[0] == "magic") {

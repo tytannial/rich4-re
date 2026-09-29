@@ -1,9 +1,12 @@
 # id: 68_news_fate
 # covers: [HELP 33] 新聞 newsEvent 0x44B6DF（2400ms 阶段机）+ [HELP 28] 命運 fateEvent 0x44DB81
 # timeout: 80000
+# 注：news/fate 用**确定性效果号**直火（news 4=灾害破坏、fate 2=假冒贷款）——
+#     随机抽取会命中 idx7 拍卖等交互面板无人点击而卡回合；2026-09-29 AI 回合动作
+#     改变 RNG 流后随机抽取错位，回归钉死。
 wait idle 1000
-news
+news 4
 wait trace "news idx=" 10000
-fate
+fate 2
 wait trace "fate idx=" 12000
 quit
