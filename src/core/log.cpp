@@ -2,8 +2,10 @@
 
 #include <cstdarg>
 #include <atomic>
+#include <chrono>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 #include <deque>
 #include <mutex>
 #include <string>
@@ -29,7 +31,31 @@ const char* levelTag(LogLevel level) {
     return "?????";
 }
 
-// [PORT] 日志同时落 rich4.log（调试用；>4MB 截断重建）。依据: 实机问题需回传日志
+// [NEW] 墙钟时间戳 "YYYY-MM-DD HH:MM:SS.mmm"（本地时间，毫秒精度）。
+//   仅用于人读通道（stderr / rich4.log）；内存日志环保持无时间戳，
+//   以免 `assert log`/`wait log` 样本引入时钟非确定性。
+//   localtime_s/localtime_r 线程安全（logMessage 可能在持锁外被多线程调用）。
+void formatStamp(char* out, size_t cap) {
+    using namespace std::chrono;
+    const auto now = system_clock::now();
+    const std::time_t tt = system_clock::to_time_t(now);
+    auto ms = duration_cast<milliseconds>(now.time_since_epoch()).count() % 1000;
+    if (ms < 0) {
+        ms += 1000;
+    }
+    std::tm tmBuf{};
+#ifdef _WIN32
+    localtime_s(&tmBuf, &tt);
+#else
+    localtime_r(&tt, &tmBuf);
+#endif
+    std::snprintf(out, cap, "%04d-%02d-%02d %02d:%02d:%02d.%03d", tmBuf.tm_year + 1900,
+                  tmBuf.tm_mon + 1, tmBuf.tm_mday, tmBuf.tm_hour, tmBuf.tm_min, tmBuf.tm_sec,
+                  static_cast<int>(ms));
+}
+
+// [PORT] 日志同时落 rich4.log（调试用；>4MB 截断重建；每次运行写一行会话分隔
+//   banner，便于 append 模式下区分多次启动）。依据: 实机问题需回传日志
 std::FILE* logFile() {
     static std::FILE* f = [] {
         const char* path = "rich4.log";
@@ -43,7 +69,14 @@ std::FILE* logFile() {
                 }
             }
         }
-        return std::fopen(path, "a");
+        std::FILE* h = std::fopen(path, "a");
+        if (h) {
+            char stamp[40];
+            formatStamp(stamp, sizeof(stamp));
+            std::fprintf(h, "==== rich4 log session @ %s ====\n", stamp);
+            std::fflush(h);
+        }
+        return h;
     }();
     return f;
 }
@@ -55,12 +88,14 @@ void logMessage(LogLevel level, const char* fmt, ...) {
     va_start(args, fmt);
     std::vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
-    std::fprintf(stderr, "[rich4][%s] %s\n", levelTag(level), buf);
+    char stamp[40];
+    formatStamp(stamp, sizeof(stamp));
+    std::fprintf(stderr, "[rich4][%s][%s] %s\n", stamp, levelTag(level), buf);
     if (std::FILE* f = logFile()) {
-        std::fprintf(f, "[rich4][%s] %s\n", levelTag(level), buf);
+        std::fprintf(f, "[rich4][%s][%s] %s\n", stamp, levelTag(level), buf);
         std::fflush(f);
     }
-    // [NEW] 同步写入内存环（assert log 检索用）
+    // [NEW] 同步写入内存环（assert log 检索用；不带时间戳，保持断言确定性）
     {
         std::lock_guard<std::mutex> lk(g_logRingMutex);
         std::string line = "[";
