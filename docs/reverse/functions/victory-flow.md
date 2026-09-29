@@ -117,6 +117,11 @@ WinMain 处理 byte_46CAF8:
   scene4→读档继续（近似 AUTO=SAVE0）；`gameClearFlow 0x4075C1`（`src/app/victory.cpp`）标记
   `clearedMaps[mapIndex]=1` + 4 图全通 `quitGame` + 自动选下一未通关图；LABEL_5 入口
   `memset clearedMaps`（0x401C9E）。测试 280/282 断言分派+标记。
-- 待精修（M3-A3 视觉）：`mapSelectWndProc 0x4060E9` 交互选图面板（JUMP 预览滚动 / 角色通关动画 /
-  红勾帧8 滑入 / 已通关不可选 / 多人「恭喜過關」）——现功能版自动选图；scene4 原版 `loadDialog 0x403D74`
-  选档框（现近似 AUTO 档）；284 四图连通关闭环 + 灰名单跨局测试待此面板落地。
+- **✅ 2026-09-29（M3-A3 视觉主体）**：`mapSelectWndProc 0x4060E9` → `mapSelectDialog`（`victory.cpp`）
+  实机弹面板交互（JUMP jumpUi 面板底帧 15/20 + 4 地图项帧 11-14/16-19 @(320,300+40·i) +
+  已通关不可选 + 悬停音效 + 点击设 `word_4991B8`/mapIndex + 多人「恭喜過關」48 号 + 50ms 滑入）；
+  headless `--quickstart` 自动选下一未通关图（bypass 交互，280/282 断言 auto map=1）。全通 → quitGame。
+- 待精修（观感/低频，实机核对）：mapSelect 滚动预览 `blitScrolledMap` / 角色行走 `blitSpriteFrame` /
+  装饰随机 / 红勾帧精确位（现用 CLEAR 文字标记）；scene4 原版 `loadDialog 0x403D74` 选档框
+  （现近似 AUTO=SAVE0）；284 四图连通关 + 灰名单跨局 headless（多次选人/选图模态应答）留实机验收；
+  AVI(A5) END/THANKS/OVER 不实现（Indeo5）。

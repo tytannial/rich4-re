@@ -11,8 +11,10 @@
 > 公佈欄交互/乐透截断等），详见 AGENTS 与 docs 盘点。
 >
 > **进度**：A2 `checkVictory`、A4 `defeatFlow`、A6 run scene 分派、A1 clearedMaps 生命周期、
-> A3 `gameClearFlow`（功能版自动选图）✅（`src/app/victory.cpp`+`application.cpp`，测试 280/282/286）；
-> 余 A3 视觉（`mapSelectWndProc` 选图面板）、scene4 选档框、A2 选人目标 UI、B 组。
+> A3 `gameClearFlow` + `mapSelectDialog`(0x4060E9) 选图面板 ✅（`src/app/victory.cpp`+`application.cpp`，
+> 测试 280/282/286）；**A2 选人目标两档 UI 经核实已于 M2 实现**（`applyListSelection` list4/5）。
+> M3-A 终局链**功能闭环达成**。余观感精修：mapSelect 滚动预览/角色动画/红勾精确位、scene4 选档框
+> （现近似 AUTO）、284 连通关闭环（实机）；A5 AVI 不实现。转 B 组功能缺口。
 
 ## 1. M3-A：终局链（最高优先，档案 victory-flow.md 已备齐依据）
 

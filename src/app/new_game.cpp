@@ -286,6 +286,12 @@ bool newGameInit(Application& app, bool mode1) {
     state.gameDaysLimit = static_cast<int32_t>(kGameDays[state.newGameConfig.gameTimeIndex]);
     state.winMoney = state.startMoneyVal * static_cast<int32_t>(
                                                 kWinMoneyMul[state.newGameConfig.winCondIndex]);
+    // [NEW] 目标局配置日志（选人界面 gameTimeIndex/winCondIndex → gameDaysLimit/winMoney，
+    //   checkVictory 0x41D89E 消费；0=无限不判）
+    RICH4_LOGI("new game target: gameTimeIndex=%d winCondIndex=%d -> daysLimit=%d winMoney=%d "
+               "(RE 0x407389/0x4073A3)",
+               state.newGameConfig.gameTimeIndex, state.newGameConfig.winCondIndex,
+               state.gameDaysLimit, state.winMoney);
     state.moneyMul = 1;
     state.dayCount = 0;
     state.turnCounter = 0;

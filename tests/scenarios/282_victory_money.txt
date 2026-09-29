@@ -10,4 +10,5 @@ day 1
 assert log "checkVictory: winner=p0 byTime=0 byMoney=1 scene=2"
 wait log "gameClearFlow: cleared=1" 8000
 assert log "clear map=0 cleared=1"
+assert log "mapSelect: auto map=1"
 quit

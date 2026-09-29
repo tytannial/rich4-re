@@ -2,6 +2,7 @@
 
 #include <SDL3/SDL.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <vector>
 
@@ -18,6 +19,7 @@
 #include "game/render/surface.h"
 #include "game/render/text.h"
 #include "game/render/ui_image.h"
+#include "game/platform/audio.h"
 
 namespace rich4 {
 
@@ -162,6 +164,108 @@ bool defeatHandler(const SDL_Event* event, void* user) {
     return false;
 }
 
+// ===== [RE 0x4060E9] mapSelectWndProc 地图选择面板（通关后选下一图）=====
+struct MapSelState {
+    Application* app = nullptr;
+    UiImage ui;            // jumpUi = JUMP.MKF[8]
+    int panelFrame = 15;   // [RE 0x4061D4] 面板底帧 普通=15 / 时空=20
+    int itemBase = 10;     // [RE 0x4061DE] 地图项帧基 普通=10(→11-14) / 时空=15(→16-19)
+    int panelY = -80;      // [RE dword_48A421] 面板滑入 y（-80 → 360）
+    int slideStep = 30;    // [RE dword_48A425]
+    int hover = 0;         // [RE byte_48A439] 1..4，0=无
+    bool multiple = false; // [RE byte_48A435] 多人→仅「恭喜過關」文字
+};
+
+// [RE 0x40645A] 面板 + 4 地图项帧；已通关项标 CLEAR（原版附加勾选帧，观感精修待实机）
+void drawMapSelect(MapSelState& ms) {
+    Surface& s = ms.app->surface();
+    GameState& st = ms.app->gameState();
+    if (ms.ui.frameCount() > ms.panelFrame) {
+        blitElementOpaque(s, ms.ui.frame(ms.panelFrame), 320, ms.panelY);
+    }
+    for (int item = 1; item <= 4; ++item) {
+        const int fr = ms.itemBase + item;
+        const int y = 40 * (item - 1) + 300;
+        if (ms.ui.frameCount() > fr) {
+            blitElementOpaque(s, ms.ui.frame(fr), 320, y);
+        }
+        if (st.clearedMaps[item - 1] != 0) {
+            ms.app->text().setFont(16, 0xFF5050, 0x101010, kTextStyleShadow | kTextStyleBold, 1);
+            ms.app->text().drawText(s, "CLEAR", 468, y, 4);
+        }
+    }
+    if (ms.multiple) {
+        ms.app->text().setFont(48, 0xF0F0F0, 0x101010, kTextStyleShadow | kTextStyleBold, 1);
+        ms.app->text().drawText(s, "恭喜勝利過關！！", 320, 240, 4); // [RE byte_463176]
+    }
+}
+
+bool mapSelHandler(const SDL_Event* event, void* user) {
+    MapSelState& ms = *static_cast<MapSelState*>(user);
+    GameState& st = ms.app->gameState();
+    if (!event) {
+        drawMapSelect(ms);
+        return true;
+    }
+    if (event->type == kModalTimerEvent) {
+        if (ms.panelY < 360) {
+            ms.panelY = std::min(360, ms.panelY + ms.slideStep);
+            ms.slideStep = std::max(1, ms.slideStep - 2);
+            drawMapSelect(ms);
+        }
+        return true;
+    }
+    const bool ready = (ms.panelY >= 360);
+    if (event->type == SDL_EVENT_MOUSE_MOTION && !ms.multiple && ready) {
+        const int x = static_cast<int>(event->motion.x);
+        const int y = static_cast<int>(event->motion.y);
+        int h = 0;
+        if (x >= 200 && x <= 440 && y >= 280 && y < 440) {
+            h = std::clamp((y - 280) / 40 + 1, 1, 4);
+        }
+        if (h != ms.hover) {
+            ms.hover = h;
+            if (h > 0 && st.clearedMaps[h - 1] == 0) {
+                ms.app->audio().playEffect(0); // [RE g_uiSoundHover]
+            }
+            drawMapSelect(ms);
+        }
+        return true;
+    }
+    if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+        if (event->button.button == SDL_BUTTON_RIGHT) {
+            ms.app->events().requestExit(0);
+            return true;
+        }
+        if (event->button.button == SDL_BUTTON_LEFT) {
+            if (ms.multiple) { // [RE 0x4067F9] 多人：点击退出
+                ms.app->events().requestExit(0);
+                return true;
+            }
+            if (!ready) { // [RE setPauseDraw] 点击提前到位
+                ms.panelY = 360;
+                ms.slideStep = 0;
+                drawMapSelect(ms);
+                return true;
+            }
+            const int x = static_cast<int>(event->button.x);
+            const int y = static_cast<int>(event->button.y);
+            if (x >= 200 && x <= 440 && y >= 280 && y < 440) {
+                const int item = std::clamp((y - 280) / 40 + 1, 1, 4);
+                if (st.clearedMaps[item - 1] == 0) { // [RE 0x406821] 已通关不可选
+                    ms.app->audio().playEffect(2);   // [RE g_uiSoundConfirm]
+                    st.mapIndex = item - 1;          // [RE 0x406935] word_4991B8 = 选中
+                    st.newGameConfig.mapIndex = item - 1;
+                    RICH4_LOGI("mapSelect: chose map=%d (RE 0x4060E9)", item - 1);
+                    ms.app->events().requestExit(1);
+                }
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
 } // namespace
 
 // [RE 0x407842] defeatFlow
@@ -228,20 +332,38 @@ void gameClearFlow(Application& app) {
         st.quitGame = true;
         return;
     }
-    // [RE 0x407780] 原版 runModal(mapSelectWndProc 0x4060E9) 弹面板手动选下一图；
-    //   功能版：自动选下一张未通关图（JUMP 预览滚动 / 角色动画 / 红勾滑入面板属视觉精修批）。
-    int next = st.mapIndex;
-    for (int k = 1; k <= 4; ++k) {
-        const int cand = (st.mapIndex + k) % 4;
-        if (st.clearedMaps[cand] == 0) {
-            next = cand;
-            break;
+    // [RE 0x407780] mapSelectWndProc 0x4060E9：单人选下一图，多人仅「恭喜過關」。
+    //   headless(quickstart)：跳过交互面板，自动选下一未通关图（实机走下方 mapSelectDialog）
+    if (st.debugQuickstart) {
+        if (st.humanCount == 1) {
+            for (int k = 1; k <= 4; ++k) {
+                const int c = (st.mapIndex + k) % 4;
+                if (st.clearedMaps[c] == 0) {
+                    st.mapIndex = c;
+                    st.newGameConfig.mapIndex = c;
+                    break;
+                }
+            }
         }
+        RICH4_LOGI("mapSelect: auto map=%d (headless bypass RE 0x4060E9)", st.mapIndex);
+    } else {
+        MapSelState ms;
+        ms.app = &app;
+        ms.multiple = (st.humanCount != 1);
+        if (st.gameMode != 0) {
+            ms.panelFrame = 20;
+            ms.itemBase = 15;
+        }
+        if (auto blob = st.jump.read(8)) {
+            ms.ui.load(std::move(*blob));
+        }
+        std::vector<uint16_t> bg;
+        saveRegion(bg, app.surface(), 0, 0, 640, 480);
+        trace::logf("dialog open name=map_select");
+        runModal(app, &mapSelHandler, &ms, 50); // [RE 0x40621E] SetTimer 50ms 滑入动画
+        restoreRegion(app.surface(), bg, 0, 0, 640, 480);
     }
-    st.mapIndex = next;
-    st.newGameConfig.mapIndex = next;
-    RICH4_LOGI("gameClearFlow: cleared=%d -> next map=%d (RE 0x4075C1; mapSelectWndProc 0x4060E9 TODO)",
-               cleared, next);
+    RICH4_LOGI("gameClearFlow: cleared=%d -> map=%d (RE 0x4075C1/0x4060E9)", cleared, st.mapIndex);
 }
 
 } // namespace rich4
