@@ -37,6 +37,7 @@
 #include "game/app/map_tables.h"
 #include "game/app/message_dialog.h"
 #include "game/app/minigame.h"
+#include "game/app/victory.h"
 #include "game/app/month_settle.h"
 #include "game/app/news_dialog.h"
 #include "game/app/roulette_dialog.h"
@@ -3760,6 +3761,13 @@ void advanceDay(Application& app) {
     GameState& st = app.gameState();
     const int newMonth = advanceDate(st);
     ++st.dayCount;
+    // [RE 0x41CFB9] 胜利判定（时间上限/资产达标）：返回 1 = 游戏结束（sceneRequest 已置），
+    //   跳过全部每日处理（原版 checkVictory 在 ++g_dayCount 之后、每日处理之前）
+    if (checkVictory(app) == 1) {
+        RICH4_LOGI("advance day: game over (checkVictory) scene=%d (RE 0x41CF67/0x41D89E)",
+                   st.sceneRequest);
+        return;
+    }
     // [RE 0x41CFBF] 物價指數每日更新（只升不降；原版位于 checkVictory 之后）
     updateMoneyIndex(app);
     // [RE 0x428475] 交易挂单每日 age++（存活玩家每挂单 +1；advanceDay 0x41CFC4 调用）

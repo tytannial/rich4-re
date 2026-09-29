@@ -16,6 +16,7 @@
 #include "game/app/stock_system.h"
 #include "game/app/target_select_dialog.h"
 #include "game/app/turn_system.h"
+#include "game/app/victory.h"
 #include "game/application.h"
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
@@ -611,9 +612,11 @@ void eliminatePlayer(Application& app, int p) {
     // [RE 0x40CFB0] 单人局且破产者是人类 → defeatFlow 失败界面（返回 1=回主菜单 / 4=读档，
     //   见 victory-flow.md；界面属 M3）——重写近似为 sceneRequest=1 回主菜单
     if (st.humanCount == 1 && (wasAlive & 1) != 0) {
-        st.sceneRequest = 1;
-        RICH4_LOGI("eliminatePlayer: p%d single-human defeat -> scene 1 (RE 0x40CD87/defeatFlow)",
-                   p);
+        // [RE 0x40CD87/0x407842] 失败界面 defeatFlow(0)（播 FLC556 演出）：
+        //   确认 → 4（读档继续）/ 超时 → 1（回主菜单）
+        st.sceneRequest = defeatFlow(app, /*playExitFlc=*/true);
+        RICH4_LOGI("eliminatePlayer: p%d single-human defeat -> scene %d (RE 0x40CD87/defeatFlow)",
+                   p, st.sceneRequest);
         return;
     }
     // （淘汰台词已在 0x40D237 位置接入，见上）

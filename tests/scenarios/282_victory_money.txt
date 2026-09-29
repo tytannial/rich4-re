@@ -1,0 +1,12 @@
+# id: 282_victory_money
+# covers: [M3-A2] 胜利判定·资产达标（winMoney 0x499108）：bestAssets>=winMoney → 单人人类赢 scene=2
+# quickstart: 0,4,1
+# timeout: 60000
+settings.anim 0
+wait idle 2000
+player.cash 0 9000000
+victory 0 1000000
+day 1
+assert log "checkVictory: winner=p0 byTime=0 byMoney=1 scene=2"
+assert state errors == 0
+quit

@@ -377,6 +377,19 @@ bool getStateInt(const GameState& st, const std::string& path, long long& out) {
         out = g_selected;
         return true;
     }
+    // [NEW] 终局判定调试（docs/testing.md；对应 0x46CAF8/0x49911C/0x499108）
+    if (path == "scene") {
+        out = st.sceneRequest;
+        return true;
+    }
+    if (path == "daysLimit") {
+        out = st.gameDaysLimit;
+        return true;
+    }
+    if (path == "winMoney") {
+        out = st.winMoney;
+        return true;
+    }
     return false;
 }
 
@@ -559,6 +572,14 @@ bool cmdAllLevel1(Application& app, const std::vector<std::string>&, std::string
             st.estates[i].level = 1;
         }
     }
+    return true;
+}
+
+// [NEW] victory <days> <money>：注入终局目标（天数上限 [RE 0x49911C] / 胜利资金 [RE 0x499108]），0=不判
+bool cmdVictory(Application& app, const std::vector<std::string>& a, std::string& err) {
+    if (!argCount(a, 2, err, "victory <daysLimit> <winMoney>")) return false;
+    app.gameState().gameDaysLimit = static_cast<int32_t>(parseInt(a[1]));
+    app.gameState().winMoney = static_cast<int32_t>(parseInt(a[2]));
     return true;
 }
 
@@ -1651,6 +1672,7 @@ const Cmd kCmds[] = {
     {"land", cmdLand},
     {"roll", cmdRoll},
     {"day", cmdDay},
+    {"victory", cmdVictory},
     {"find.estate", cmdFindEstate},
     {"find.evtcell", cmdFindEvtCell},
     {"find.lab", cmdFindLab},

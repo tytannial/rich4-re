@@ -1,0 +1,13 @@
+# id: 280_victory_time
+# covers: [M3-A2] 胜利判定·时间到（checkVictory 0x41D89E / advanceDay 0x41CF67）：
+#          gameDaysLimit 到 + 存活资产最高者为人类 → 单人局 sceneRequest=2（通关结算属 A3）
+# quickstart: 0,4,1
+# timeout: 60000
+settings.anim 0
+wait idle 2000
+player.cash 0 9000000
+victory 1 0
+day 2
+assert log "checkVictory: winner=p0 byTime=1 byMoney=0 scene=2"
+assert state errors == 0
+quit

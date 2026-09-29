@@ -105,6 +105,12 @@ WinMain 处理 byte_46CAF8:
   时序对齐：未入场玩家 alive=0（**跳伞落地才置位** 0x418C55/0x418D07），原版 231 处目标/统计/
   排行引用（投降候选/AI 用卡/物价指数/拍卖名单…）自动排除未入场者；出生点分配抽为
   `spawnPlayerAt` 并在 `beginPlayerTurn` 前触发（重写 updateGameState 时序保证）
-- 待实现（M3）：`sub_41D89E` 胜利判定 `checkVictory`（时间到/资产最高）、
-  `sub_4075C1`+`sub_4060E9` 通关结算与地图选择、`sub_407842`+`sub_406B14` 失败界面
-  （当前近似回主菜单）、`dword_4990F0` 通关进度（含存档字段）
+- **✅ 2026-09-29（M3-A2/A4）已实现**（`src/app/victory.cpp`）：`sub_41D89E` 胜利判定
+  `checkVictory`（时间上限 `g_gameDaysLimit`/资产达标 `g_winMoney`，接 `advanceDay 0x41CF67`
+  ++dayCount 之后；赢家台词 `kMoneyLines[charIndex][21]` expr3、其余 alive=0、单人人类赢→
+  其余 AI `aiUsed=2` + scene2 / 单人 AI 赢→defeatFlow / 多人人类赢→scene3 / AI 赢→scene1）+
+  `sub_407842`+`sub_406B14` 失败界面 `defeatFlow`（panel.mkf[112] 10s 倒计时模态，确认→4 读档、
+  超时→1 主菜单，破产路径播 FLC556）；调试注入 `victory <days> <money>`；测试 280/282/286。
+- 待实现（M3）：`sub_4075C1`+`sub_4060E9` 通关结算与地图选择（scene 2/3，A3）、
+  WinMain `byte_46CAF8` scene 1/2/3/4 分派（A6，现 `game_loop.cpp:462` 仍一律清零回主菜单）、
+  `dword_4990F0` clearedMaps 回主菜单清零（A1）（存档字段 9898 已就位）

@@ -4,6 +4,14 @@
 > 三链闭环，见 `docs/reverse/functions/420e9a-item-ai.md`、`441baa-card-effects.md`、
 > `418c55-ai-turn-actions.md`；headless 全量矩阵 84/84 PASS + L0 ctest）。
 > 本计划为交接文档，执行前先读 `AGENTS.md` 与 `docs/reverse/functions/victory-flow.md`（权威逆向档案）。
+>
+> **范围重定义（2026-09-29）**：M3 = **Windows 原版内容/体验对等（AVI 视频除外）**；
+> 跨平台 → **M4**、现代化（真宽屏/自定义键/窗口全屏选项）→ **M5**。除终局链 A 外，
+> 另纳 B 功能/演出/音频拉齐（节日链/房地产AI/卡门槛/OGG续播/失焦暂停/生日演出/出监出院资源/
+> 公佈欄交互/乐透截断等），详见 AGENTS 与 docs 盘点。
+>
+> **进度**：A2 `checkVictory`+接入 advanceDay、A4 `defeatFlow` 失败界面 ✅（`src/app/victory.cpp`，
+> 测试 280/282/286）；余 A1/A2选人UI/A3/A6 + B 组。
 
 ## 1. M3-A：终局链（最高优先，档案 victory-flow.md 已备齐依据）
 

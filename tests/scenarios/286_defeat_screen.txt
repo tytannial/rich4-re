@@ -1,0 +1,15 @@
+# id: 286_defeat_screen
+# covers: [M3-A2/A4] 单人 AI 赢 → defeatFlow 失败界面（0x41D89E→0x407842/0x406B14）；
+#          headless 虚拟时钟下 10s 倒计时超时 → sceneRequest=1（回主菜单）
+# quickstart: 0,4,1
+# timeout: 60000
+settings.anim 0
+wait idle 2000
+player.alive 1 2
+player.cash 1 9000000
+victory 1 0
+day 2
+assert log "checkVictory: winner=p1 byTime=1 byMoney=0 scene=1"
+assert log "defeatFlow: timeout -> scene 1"
+assert state errors == 0
+quit
