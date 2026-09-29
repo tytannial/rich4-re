@@ -1685,6 +1685,33 @@ int resolveFeePayer(Application& app, int payer, int32_t fee, const char* feeNam
     return c;
 }
 
+// [RE 0x40B455] 房地产公司 AI 预选（selectTargetDialog 0x2090086 的 AI 分支）：返回自己产业中
+//   「当前等级租金最高(estate type0 level<5 → fees[level]) / buildPrice 最高(corp sub<上限)」
+//   的地块 objId(2000+/4000+)，无自有产业 → 0（调用方回落 1000×M）。
+static int realtyAiPick(const GameState& st, int a1) {
+    int bestObj = 0;
+    int bestVal = 0;
+    for (size_t i = 1; i < st.estates.size(); ++i) {
+        const Estate& e = st.estates[i];
+        if (e.owner == static_cast<uint8_t>(a1 + 1) && e.type == 0 && e.level < 5) {
+            const int val = e.fees[e.level]; // [RE 0x40B4A0] +32+2*level
+            if (bestVal < val) {
+                bestVal = val;
+                bestObj = static_cast<int>(i) + 2000;
+            }
+        }
+    }
+    for (size_t i = 1; i < st.corps.size(); ++i) {
+        const Corp& c = st.corps[i];
+        if (c.owner == static_cast<uint8_t>(a1 + 1) && bestVal < c.buildPrice && c.type < 5 &&
+            c.sub < kFacilityMaxLevel[c.type]) { // [RE 0x40B4E4] +34
+            bestVal = c.buildPrice;
+            bestObj = static_cast<int>(i) + 4000;
+        }
+    }
+    return bestObj;
+}
+
 // [RE 0x40F381] landAfterMove：landingEvent 公共末尾（loc_41B077）的**神明落地持续效果**。
 // 依据: 0x40F381 反编译 + 调用点 0x41B077（estate/corp/specPt 各路径——含买地失败/拒绝等
 //   jmp loc_41B074 路径——汇聚后统一执行；事件格 case 直接返回不经过）。前置：
@@ -2612,7 +2639,7 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                     if (st.players[p].alive == 1) {
                         sel = selectTargetDialog(app, 0x2090086);  // [RE 0x446AE8]
                     } else {
-                        sel = 0;  // [RE 0x40B455] AI 预选（P5）
+                        sel = realtyAiPick(st, p);  // [RE 0x40B455] AI 预选自己产业中价值最高者加盖
                     }
                     if (sel != 0) {
                         realtyPickUpgrade(app, sel, 1, false);  // [RE 0x41AD7E] 加盖 1 层 + FLC553
@@ -2688,7 +2715,7 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                         showMessage(app, text, 1500);
                         sel = selectTargetDialog(app, 0x2090086);  // [RE 0x446AE8] 住宅/商业+滚动
                     } else {
-                        sel = 0;  // [RE 0x40B455] AI 预选（P5）
+                        sel = realtyAiPick(st, p);  // [RE 0x40B455] AI 预选自己产业中价值最高者加盖
                     }
                     if (sel != 0) {
                         // [RE 0x41AAE8 + 0x41AAFC] 免费加盖两次（第 1 次封顶则一次）
