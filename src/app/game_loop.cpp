@@ -558,8 +558,9 @@ bool gameEventHandler(const SDL_Event* event, void* user) {
     // [RE 0x401010] 全局键盘钩子 fn 的游戏内功能键（word_49717C 前進指令 / 49717E 選擇骰子數）
     if (event->type == SDL_EVENT_KEY_DOWN) {
         GameState& st = app.gameState();
-        // [NEW] 调试热键（--debug 启用）：Ctrl+1..9 / Ctrl+Shift+1..5 / Ctrl+Shift+字母
-        //   （测试辅助，无原版对应；不受 gamePlayerControl 限制，AI 回合/移动中亦可操作）
+        // [NEW] 调试热键（--debug 启用，docs/debug-keys.md v2）：Ctrl+1..9 构造/诊断 +
+        //   Ctrl+Shift+字母/8（键→命令模板，实现收口 debug::execLine 命令注册表）。
+        //   测试辅助，无原版对应；不受 gamePlayerControl 限制，AI 回合/移动中亦可操作。
         //   mod 判定联合事件 mod 字段（支持 --game-key 合成按键）
         const SDL_Keymod dbgMod = static_cast<SDL_Keymod>(SDL_GetModState() | event->key.mod);
         if (st.debugMode && (dbgMod & SDL_KMOD_CTRL)) {

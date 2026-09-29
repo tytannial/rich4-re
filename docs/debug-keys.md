@@ -1,11 +1,15 @@
 # 调试工具（--debug）
 
 > [NEW] 重写新增的测试辅助功能，**无原版对应**（原版无此热键）。
-> 实现：`src/app/debug_keys.cpp` / `include/game/app/debug_keys.h`；
+> 实现：`src/app/debug_keys.cpp`（**薄封装**：指向桥接 + 键→命令模板）/
+> `src/app/debug/debug.cpp`（**命令注册表 = 状态写入单一事实源**）；
 > 开关 `GameState.debugMode`（`src/main.cpp` 解析 `--debug`）；
 > 接入点 `src/app/game_loop.cpp` 的 `SDL_EVENT_KEY_DOWN` 分支。
 > **headless 自动化测试**（虚拟时钟/随机注入/演出 trace/脚本断言）见 `docs/testing.md`；
-> 命令行测试钩子 `--seed / --headless / --test-clock / --trace / --trace-out` 亦记录于该档。
+> 每个键等价 `--exec "<命令>"`，同一命令层三种入口（热键 / `--exec` / `--script`）共用。
+>
+> **v2（2026-09-29）**：45→30 键精简 + 全部热键收口到命令注册表；相似功能按键盘行相邻聚组。
+> 旧键位迁移表见文末。
 
 ## 启用
 
@@ -17,254 +21,143 @@
 
 ## 键位
 
-按住 **Ctrl** + 数字键（主键盘 `1`..`9`）：
+### Ctrl+数字（主键盘：构造/诊断，1/2·3/4·5/6·7/8 成对）
 
-| 键 | 功能 | 细节 |
-|----|------|------|
-| `Ctrl+1` | 鼠标指向地块 **owner = 当前回合玩家** | 支持地产(estate)/公司(corp)/特殊点(specPt)；同时重建小地图/大地图色块 |
-| `Ctrl+2` | 指向地块 **等级 +1** | 地产 `level` / 公司 `sub`，上限 5 |
-| `Ctrl+3` | 指向地块 **等级 -1** | 下限 0 |
-| `Ctrl+4` | **改建卡效果**（`cardRebuildEffect` 0x44309B，针对当前玩家所站格） | estate：`level!=0` 时 `type^=1`（住宅↔连锁店）；corp：`sub!=0` 时弹设施选择变更 `type`（公園/加油站降为 1 级）；成功 `cardBagRemove(cur,7)`。与工具条卡片栏 case8 走**同一函数** |
-| `Ctrl+5` | **全图住宅用地归当前回合玩家** | 遍历 estates + corps + specPts |
-| `Ctrl+6` | **全图有主住宅用地 level = 1** | 仅 `owner != 0` 的地产（便于快速铺建筑测收租） |
-| `Ctrl+7` | 当前回合玩家 **现金 +100000** | 直接改 `players[cur].cash` |
-| `Ctrl+8` | **打印指向地块详情**（日志） | estate：名字/type/owner/level/flag/dir/priceAdd/priceBase/fees/price/expire；corp/specPt/evtCell 类似；cellEnt：type/objId/sprite/occMask（事件格定位用） |
-| `Ctrl+9` | 指向地块的 **联动组归当前回合玩家** | 住宅用地 = 同街同名全部；连锁店 = 全部连锁店（对齐原版收租联动组定义）|
+| 键 | 功能 | 等价命令 | 细节 |
+|----|------|----------|------|
+| `Ctrl+1` | **获得土地** | `get.land` | 指向地块 owner=当前玩家（estate/corp/specPt 三类通吃）+ 小地图/大地图刷新 |
+| `Ctrl+2` | **获得街区** | `get.street` | 指向住宅联动组归当前玩家：同街同名全部（住宅）/ 全部连锁店（对齐原版收租联动组 [RE 0x419A67]）；仅改归属保留建筑 |
+| `Ctrl+3` | **清空土地** | `clear.cell` | 指向地块归属清零：estate owner/level/type/expire、corp owner/sub/type/研究、specPt 经营权；**格上物件不动**（用 `Ctrl+Shift+P` 踢飞） |
+| `Ctrl+4` | **清空街区** | `clear.street` | 指向住宅联动组全部归无主空地（get.street 反操作） |
+| `Ctrl+5` | **获取全部** | `get.all` | 全图 estates+corps+specPts 归当前玩家 |
+| `Ctrl+6` | **清空全部** | `clear.all` | 全图归无主+清建筑/设施/研究 |
+| `Ctrl+7` | **升级土地** | `level.up` | 指向地块等级 +1（estate level / corp sub，上限 5） |
+| `Ctrl+8` | **降级土地** | `level.down` | 等级 -1（下限 0） |
+| `Ctrl+9` | **dump 指向地块** | `dump.pointed` | 日志详情：estate 名字/type/owner/level/flag/dir/priceAdd/priceBase/fees/price/expire；corp/specPt/evtCell/cellEnt 类似（事件格定位用） |
 
-### Ctrl+Shift（难测机制快捷构造）
+### Ctrl+Shift+字母/数字（按键盘行聚组）
 
-**`Ctrl+Shift+数字`：商業用地一键布置**（指向 corp；owner=当前玩家、sub=1）
+| 键 | 组 | 功能 | 等价命令 |
+|----|----|------|----------|
+| `Ctrl+Shift+G` | 移动 | **传送+落地结算**：指向格→瞬移→`landingEvent`（买地/升级/收租/转盘/事件一次触发） | `land` |
+| `Ctrl+Shift+H` | 移动 | **转向**：当前玩家朝向 +45°（8 向循环），行走资源组立即重载 | `dir.cycle` |
+| `Ctrl+Shift+J` | 状态 | **入狱 3 天** [RE 0x43D593]（移監獄格/FLC 538/保险理赔；后按 [RE 0x40DEFE] 补回合推进） | `jail <cur> 3` |
+| `Ctrl+Shift+K` | 状态 | **住院 3 天** [RE 0x43EC3F]（FLC 524） | `hosp <cur> 3` |
+| `Ctrl+Shift+A` | 事件 | **触发新闻** [RE 0x44B6DF]（抽下一条可触发，阻塞 2400ms；后补回合推进） | `news` |
+| `Ctrl+Shift+Z` | 事件 | **触发命运** [RE 0x44DB81] | `fate` |
+| `Ctrl+Shift+R` | 事件 | **乐透保送中奖**：清号→当前玩家 11 注（>10 → 已售号随机必中）+ 奖金池注入 + 开奖 | `lottery.fixwin <cur>` |
+| `Ctrl+Shift+L` | 建设 | **全图铺建筑**：有主住宅用地 level=1（快速测收租） | `all.level1` |
+| `Ctrl+Shift+C` | 财务 | **现金 +100000**（`addMoney` [RE 0x41D3F4] 原生入账含月度统计） | `player.give <cur> cash 100000` |
+| `Ctrl+Shift+V` | 财务 | **存款 +100000**（同上入账银行） | `player.give <cur> bank 100000` |
+| `Ctrl+Shift+B` | 财务 | **点券 +1000**（監獄/醫院 NPC 保释·出院 300 点券用） | `player.give <cur> points 1000` |
+| `Ctrl+Shift+N` | 财务 | **月初结息** [RE 0x439BFA/0x437E61]（panel[25] 存款×1.1 + 悲情/冠军演出） | `settle` |
+| `Ctrl+Shift+E` | 财务 | **15 号分红** [RE 0x42BA97/0x42B3EB]（panel[76] 按比例分配，亏损分担=负分红） | `dividend` |
+| `Ctrl+Shift+D` | 日期 | **过一天**（`advanceDay`：到期/每日事件/行情；跨月结息、15 号分红） | `day` |
+| `Ctrl+Shift+O` | 物件 | **面朝前 1 格生成物件**：沿当前朝向取下一道路格（无出口回退首出口），类型 1..18 循环 | `obj.createAhead` |
+| `Ctrl+Shift+P` | 物件 | **踢飞指向格物件**：机器娃娃沿路踢除子步复用 [RE 0x41B42D]——`bounceObject` 弹飞 + 删槽（含配对轮替/附身解除） | `obj.kick` |
+| `Ctrl+Shift+Y` | 诊断 | **dump cellTable**：活动槽 type/ent/life/owner/fly + 玩家附身/挂件/luckA/B/C + 礼物池/道具库存 | `dump.celltable` |
+| `Ctrl+Shift+8` | 诊断 | **dump 事件槽**（四大恶人 4..7 + 槽8 機器娃娃：busy/status/bailer/cell/dir/timers） | `npc.dump` |
+| `Ctrl+Shift+F` | 卡道具 | **发放全部 13 种道具 ×2**（`givePlayerItem` [RE 0x445A4D]；id≤8 受礼物池限制）→ 工具条「道具」case7 使用 | `items.all <cur>` |
+| `Ctrl+Shift+I` | 卡道具 | **灌卡 1..15**（清卡包直写 15 槽，不动赠卡池）→ 工具条「卡片」case8 逐卡实测 | `refill.cards <cur> 1` |
+| `Ctrl+Shift+U` | 卡道具 | **灌卡 16..30**（与 I 合覆盖 30 卡） | `refill.cards <cur> 16` |
 
-| 键 | 设施 |
-|----|------|
-| `Ctrl+Shift+1` | 公園（type0，不收过路费） |
-| `Ctrl+Shift+2` | 旅館（type1，收费走**转盘**天数 + 住宿状态） |
-| `Ctrl+Shift+3` | 購物中心（type2，收费走**转盘**倍数） |
-| `Ctrl+Shift+4` | 加油站（type3，载具×步数；需先 `Ctrl+Shift+V` 切载具） |
-| `Ctrl+Shift+5` | 研究所（type4，owner 停留研发入口） |
-
-**`Ctrl+Shift+字母`**
-
-| 键 | 功能 | 细节 |
-|----|------|------|
-| `Ctrl+Shift+G` | **瞬移到指向地块并立即结算** | 指向道路格/任何物件 → 传送到对应 cellEnt → 直接调用 `landingEvent`（买地/升级/收租/转盘/事件一次性触发，省去走路） |
-| `Ctrl+Shift+V` | **切换载具** | 步行→機車→汽車→步行；骰子数同步 `travel+1`（测试加油站/汽车/石油收费） |
-| `Ctrl+Shift+T` | **循环携带神明** | 无→小財神→大財神→小窮神→大窮神→小衰神→大衰神→死神（测试神明调整租金/阻止购地/地主死神免收） |
-| `Ctrl+Shift+S` | **循环玩家状态** | 无→住宿→出國→監獄→醫院→冬眠→夢遊（测试 `ownerCanCollectRent` 免收租；每回合自动倒计时结束并恢复行动） |
-| `Ctrl+Shift+B` | 银行存款 +100000 | 测试收款入银行/贷款 |
-| `Ctrl+Shift+J` | **当前玩家入狱 3 天** | `jailPlayer` 0x43D593：移到監獄格（綠島）/sprite/stateFlags BYTE2/`jailFlags`/FLC 538/保险理赔；**入狱后按原版 `sub_40DEFE` 机制推进回合**（`playerActionFlags\|=0x80` → 显示"坐牢中"并跳过）；FLC 播放中忽略重复触发 |
-| `Ctrl+Shift+L` | **当前玩家住院 3 天** | `hospitalizePlayer` 0x43EC3F：醫院格/stateFlags BYTE3/`hospitalFlags`/FLC 524 |
-| `Ctrl+Shift+K` | 买入指向 specPt 的股票 100 股 | 测试控股/经营権转移（先 `Ctrl+7` 备现金；持股超过他人 → owner 变更/小地图刷新；日志含 shares/owner/control） |
-| `Ctrl+Shift+M` | 打开**股市面板** | `stockMarketDialog`（0x42B58F）；测行情/持股切换、買/賣、走势图、休市 |
-| `Ctrl+Shift+D` | 过一天 | `advanceDay`（日期/到期回收/每日事件/股票行情）；**跨月触发结息、15 号触发分红** |
-| `Ctrl+Shift+N` | **月初结息** | `monthlySettle`（0x439BFA/0x437E61）：panel[25] 结算列表 → 存款 ×1.1 发息（贷款者不发）→ 悲情人物/资产冠军排行演出（#0095/#0108/#0109/#0122 + FLC 全身像）→ 退出后清零 `byte66`/`monthSettleA`/`monthSettleB`（可在任意回合直接测试，不清日期） |
-| `Ctrl+Shift+E` | **15 号分红** | `dividendMeeting`（0x42BA97/0x42B3EB）：panel[76] 按持股比例分配 12 家上市公司 `specPt.fund` → 确认界面（3 秒自动退/点击退）→ 分红入银行 |
-| `Ctrl+Shift+P` | **点券 +1000** | 测试監獄/醫院 NPC 保释·出院（费用 300 点券） |
-| `Ctrl+Shift+C` | 清空玩家状态+神明 | `stateFlags`/`byte54`/`state37`/`cellTableIdx` 归零 |
-| `Ctrl+Shift+O` | **当前格生成物件** | `createMapObject` 类型 1..18 循环（神明/禮物/寶箱/死神/路障/地雷/炸彈），测附身挂身、渲染跟随、寿命 |
-| `Ctrl+Shift+X` | **附身/挂身寿命→1** | `cellTable[..].life` 置 1，下次落地/回合开始归零 → 测飘走轮替 / 炸弹爆炸链 |
-| `Ctrl+Shift+I` | **清空卡包并填入前 15 种卡**（id 1..15） | 直写 `cardState60` 15 槽（不动赠卡池 `propStock`），配合工具条「卡片」case8 逐卡实测 |
-| `Ctrl+Shift+H` | **清空卡包并填入后 15 种卡**（id 16..30） | 同上；两键合起来覆盖 30 卡全效果 |
-| `Ctrl+Shift+W` | **打开百貨公司商店** | 扫描地图上的百货公司格（cellType 15）→ `shopDialog`（0x42E931）：自家赠礼 / 人类商店 UI / AI 自动买卖 |
-| `Ctrl+Shift+R` | **乐透保送中奖** | 清空号码表 → 当前玩家 11 注（>10 → 开奖从已售号随机 = 必中）→ 奖金池注入 3000 → 立即弹开奖界面（中奖演出 + 奖金入现金） |
-| `Ctrl+Shift+F` | **发放全部 13 种道具** | 当前回合玩家每种 ×2（`givePlayerItem`；id1..8 受礼物池限制）→ 开工具条「道具」按钮（case7）使用 |
-| `Ctrl+Shift+Y` | **dump cellTable** | 活动槽 type/ent/life/owner/fly + 玩家附身/挂件/luckA/B/C + 礼物池/道具库存（每玩家 itemStock 13 项 + travel/dice），日志诊断刷新轮替 |
-| `Ctrl+Shift+A` | **触发新闻** | `newsDebugFire`（newsEvent 0x44B6DF：抽下一条可触发事件，阻塞 2400ms）；事件后自动补回合推进（0x40DEFE） |
-| `Ctrl+Shift+Z` | **触发命运** | `fateDebugFire`（fateEvent 0x44DB81：抽下一条可触发事件）；事件后自动补回合推进 |
-| `Ctrl+Shift+0` | **触发魔法屋** | `magicHouseVisit`（0x43380A：人类=施法 UI 选惩罚 / AI=随机；惩罚含坐牢/住院/拍卖，后自动补回合推进） |
-| `Ctrl+Shift+6` | **发免罪卡** | `giveCardToBag(21)`（测惩罚类事件自动免罪 0x444BB2） |
-| `Ctrl+Shift+7` | **发嫁祸卡** | `giveCardToBag(19)`（测惩罚转移选人 0x44476A） |
+预留空位（新键优先就近分组）：`Q/W/T/M/X/S`、Shift+数字 `1..7/9/0`。
 
 拾取与右键物件提示同一套：鼠标位置 → `pickMapObject`（复用渲染期 `mapHitRegions`，
-含 SPR 像素掩码精确命中）。日志前缀 `debug:`。
+含 SPR 像素掩码精确命中）。headless/脚本用 `select <kind> <i>` 代替鼠标指向。
+日志前缀 `debug:`。
 
 ## 行为说明
 
 - **不受 `gamePlayerControl` 限制**：AI 回合/掷骰/移动中也可改地块（便于布置测试场景）。
 - **跳伞入场期间被屏蔽**（与其他输入一致，原版跳伞阻塞语义）。
 - 修改后地图与小地图立即刷新（`buildMiniMapMarks`）。
-- 部分操作会写入 `RICH4_LOGI` 日志（`logs/`），`Ctrl+8` 是主要诊断手段。
+- **`Ctrl+Shift+G` 传送同步刷新角色朝向**（[NEW v2]）：`prevCellEnt=旧格`、
+  `dir=facingBetween(旧格→新格)` [RE 0x407A8C 同款]、附身物件同步（0x40FC00）、
+  行走资源组重载（0x40B93B）——旧手写块不清 prev/dir = 传送后朝向错乱根因。
+  `player.teleport`/`sel.goto` 命令同用合一 helper `teleportPlayerToCell`。
+- `jail`/`hosp`/`news`/`fate` 直调后若当前玩家失能（stateFlags≠0）自动补回合推进
+  （[RE 0x40DEFE]，`debugAdvanceIfIncapacitated` 仅热键路径；脚本用 `wait idle`）。
 
 ## 典型测试流程
 
 **一键测试任意地块机制**（推荐，省去走路与等待）：
-1. 布置场景：`Ctrl+1`（指向地块归当前玩家）/ `Ctrl+9`（整条街）/ `Ctrl+Shift+2..5`（corp 一键设施）
+1. 布置场景：`Ctrl+1`（指向地块归当前玩家）/ `Ctrl+2`（整条街）/ `Ctrl+5`+`Ctrl+Shift+L`（全图铺建筑）
 2. 鼠标指向目标地块 → **`Ctrl+Shift+G`** → 立即触发结算（买地/升级/收租/转盘/事件）
-3. 日志核对：`debug: Ctrl+Shift+G landingEvent -> wait=N`
+3. 日志核对：`debug: land player 0 -> cell N dir=D` + `debug: key -> land`
 
-**商業用地快速流程**（转盘/住宿/加油站/神明/免收）：
-1. 指向無主城市地块 → `Ctrl+Shift+2`（直接建成**旅館** 1 级且归自己）
-2. 轮到 AI 时指向该地块 → `Ctrl+1`（归 AI）
-3. 指向该地块 → `Ctrl+Shift+G` → 立即收租：**转盘动画**（**点击左键可提前停止**）→
-   「休息N天 費用N元！」→ **走进旅館**（角色移动至旅館建筑后消失）→ **住宿 N 天**
-   （每回合倒计时并显示「住宿中 還剩N天」）→ **走出旅館回到道路**后恢复行动（不重复收费）
-4. 加油站：先 `Ctrl+Shift+V` 切到機車/汽車 → `Ctrl+Shift+4` 建加油站 → `Ctrl+Shift+G`
-5. 神明调整：`Ctrl+Shift+T` 携带小財神 → `Ctrl+Shift+G` → 租金减半提示（大財神免付/小窮神+50%/大窮神加倍）
-6. 免收租：`Ctrl+Shift+S` 设地主状态（住宿/出國/監獄/醫院/冬眠/夢遊）→ `Ctrl+Shift+G` → 免收提示
-7. 購物中心同 1-3（`Ctrl+Shift+3`）；公園/研究所不收费（对照验证）
+**商業用地全流程**（购地→建设施→升级→他人收费——v2 走真实 UI，不再调试直建）：
+1. `Ctrl+1` 指向無主城市地块 → `Ctrl+Shift+G` → 弹「費用N元 是否買下此地?」YES
+2. 再 `Ctrl+Shift+G` → 弹「請選擇設施類別」**真实选设施面板**（公園/旅館/購物中心/加油站/研究所）
+3. `Ctrl+7` 升级设施等级 → G 再落地弹升级询问；批量脚本用 `--exec "corp.build <i> <type> [sub]"`
+4. 旅館/購物中心收费走**转盘**（左键提前停）；加油站先 `--exec "player.vehicle 0 1"` 换載具或道具機車/汽車
 
-**行業設施點收费 / 控股 / 股票行情**：
-1. 指向地图上的行業設施點 → `Ctrl+1` 归当前玩家 → 再 `Ctrl+1`（AI 回合时）归 AI
-2. `Ctrl+7` 备现金 → 指向该 specPt → `Ctrl+Shift+G` → 收费提示（航空/保險走**转盘**；
-   汽車/石油需先 `Ctrl+Shift+V` 切载具）→ **认购股份**确认框 → **数字输入框**（键盘/滑块/最大/确定）
-3. `Ctrl+7` + `Ctrl+Shift+K` 反复买入 → 持股超过他人 → **owner 变更**（日志 + 小地图刷新）
-4. `Ctrl+Shift+D` 过天 → 日志 `stockTick: market=...`（股价随机涨跌 + 大盘指数）
+**神明/载具/状态调整**（v2 改 `--exec` 注入或真实玩法获得）：
+```powershell
+--exec "player.god 0 2"          # 大財神（槽=cellTableIdx，1..15）
+--exec "player.vehicle 0 1"      # 機車（diceCount=travel+1 [RE 0x407236]）
+--exec "player.state 0 3"        # 監獄状态（0无/1住宿/2出國/3監獄/4醫院/5冬眠/6夢遊）
+```
+真实入口：請神符（卡 23）、機車/汽車道具、命运/事件格。**免收租验证**：
+`--exec "player.state <地主> 4"` → 他人 G 落地 → 「住院中 免收過路費！」
 
-**收租·整条街联动**（停留结算 `landingEvent` 0x419A67；金额 = 同街 `fees[level]` 之和 × `moneyMul`）：
-1. `Ctrl+5` 全图归自己 → `Ctrl+6` 全图 level=1（建筑可见）
-2. 轮到 AI 玩家时，鼠标指向目标街的任一块按 **`Ctrl+9`**（该**整条街**归 AI）；
-   或逐块 `Ctrl+1`
-3. 自己回合走到该街任一块 → **整条街地块先闪烁**（原版 `highlightBlink`，16 帧约 0.9 秒）
-   → **再弹出**「請付N元過路費」；**付款方现金减少、地主存款（银行）增加**
-   （`transferMoney` flags=0 = 收款入银行）；角色面向地块片刻后**恢复原朝向**
-4. 日志核对（`estateRouteRent` 诊断）：
-   ```
-   routeRent: owner=2 cur=(台北市 type=0) matched=4 sum=4800 total=4800 (M=1)
-   ```
-   `matched` = 参与联动的地块数（整条街 4 块应 = 4）；若为 1 说明该街其他块 owner 不属于同一地主
-5. 神明调整验证：AI 携带小/大財神（槽 1/2）或小/大窮神（槽 5/6）时金额变化并弹出神明提示
+**事件类格子全部走传送**（v2 移除直开面板键 W/U/M/Q/K/0）：
+指向对应格 → `Ctrl+Shift+G`：監獄(保释面板)/醫院(出院)/銀行(柜员机+停留週轉)/
+樂透(投注)/百貨(商店)/魔法屋(施法)/四大恶人释放用 `--exec "npc.release <npc> [fromJail]"`。
+股市面板/查詢面板用**工具条真实按钮**（`--exec "open.stock"` / `open.query` 亦可）。
 
-**收租·连锁店**（金额 = 同地主全部连锁店数 × 2000 × `moneyMul`）：
-1. `Ctrl+5` 归自己 → `Ctrl+6` 铺 level=1
-2. 轮到 AI 时，指向若干地块按 **`Ctrl+4`**（变连锁店；需 `level!=0`），再按 `Ctrl+9`（全部连锁店归 AI）
-3. 自己走到任一连锁店 → 金额 = 连锁店数 × 2000 × M（例：3 家 = 6000），**全部连锁店闪烁**（跨街道）
-4. 连锁店不可加盖（升级分支 `type!=0` 跳过）；外观为连锁店旗帜 + 地主色
+**收租·整条街联动**：
+1. `Ctrl+5` 全图归自己 → `Ctrl+Shift+L` 铺 level=1
+2. 轮到 AI 时指向目标街按 **`Ctrl+2`**（整条街归 AI）；连锁店按 `Ctrl+2`（指向任意连锁店=全部）
+3. 自己走到 → 联动地块闪烁（`highlightBlink` 16 帧）→「請付N元過路費」，收款入银行
+4. 日志 `routeRent: owner=2 cur=(台北市 type=0) matched=4 sum=4800 total=4800 (M=1)`
 
-> 状态机 case 3 仅在日志打印 `landing due: player ... owes ...`（原版只记欠款矩阵、不转账），
-> 不再直接扣款；实际收租统一在停留结算完成。
-> 联动组定义（原版收租循环）：住宅 = 同 owner + 同名 + `type==0`；连锁店 = 同 owner + `type!=0`。
+**连锁店**：改建走**工具条卡片栏 case8 真实用改建卡**（所站格 `type^=1`）；
+脚本 `--exec "card.rebuild"`。收费 = 同地主全部连锁店 ×2000×M。
 
-**商業用地（corp）**（购地 `+34×M` / 建设施 `+34×M` / 升级 `+36×M` / 收费按 type）：
-1. `Ctrl+1` 指向無主商業用地（城市名地块，如花蓮市）→ 走到 → 弹「費用N元 是否買下此地?」
-2. 再走一次（自己的）→ 弹「請選擇設施類別」→ 点图标选 公園/旅館/購物中心/加油站/研究所 → 建成（sub=1）
-3. 再走 → 弹「升級費用N元 是否升級?」（公園/加油站上限 1 级不可升；旅館/購物/研究所可升 5 级）
-4. 他人收费：`Ctrl+1` 在 AI 回合给 AI → 自己走到：
-   - 旅館：先**转盘动画**（panel.mkf[69]，指针滚动→减速→停在休息天数，约 5 秒）→
-     「休息N天 費用N元！」→ 付款后**住宿 N 天**（住宿中免收租）
-   - 購物中心：先**转盘动画**（panel.mkf[70]，指针停在消費倍數）→
-     「您的消費金額為 NxM倍=N元」
-   - 加油站：无转盘（直接按载具×步数计算）；需有载具（非步行）→
-     「加油站 董事長X 請付N元加油費」（步行免付）
-5. `Ctrl+4` 指向有设施的 corp → 弹设施选择变更类型（改建卡效果）
+**物件链（附身/挂身/弹飞/轮替）**：
+1. `Ctrl+Shift+H` 调整朝向 → `Ctrl+Shift+O` 向**面朝前 1 格**生成物件（类型 1..18 循环）
+2. 指向物件格 `Ctrl+Shift+P` **踢飞**（弹跳动画 + 配对轮替 [RE 0x40E278]：小↔大、惡犬↔土地公）
+3. `Ctrl+Shift+Y` dump cellTable 核对槽位/寿命/飞行；`Ctrl+Shift+8` 核对事件槽/機器娃娃槽 8
 
-**事件格·得點券**（`landingEvent` case 10/11/12，FLC 537 + 50/30/10 點券）：
-1. 鼠标指向地图上的得點券格（type 10/11/12，图块 19/21/23；`Ctrl+8` 可打印类型确认）
-2. **`Ctrl+Shift+G`** → 立即结算：FLC 537（31x39 透明动画，14 帧约 1 秒，Effect.mkf[98]）→
-   「得點券ＮＮ點」（1 秒）→ 玩家 `points` +50/30/10
-3. 日志核对：`landingEvent: cellType 10 得點券 +50 (total N) RE 0x41982D case 10`
-   （角色语音 `sub_44EF41` 待 P4；case 12 原版无语音）
+**樂透保送**：`Ctrl+Shift+R` → 当前玩家 11 注 + 立即开奖（必中演出 + 奖金入现金）；
+无人中奖路径：G 传送乐透格投注 → `Ctrl+Shift+D` 推到 15 号。
 
-**事件格·卡片**（`landingEvent` case 13，FLC 536 + 赠卡池抽卡，`sub_441E12`）：
-1. 鼠标指向地图上的卡片格（type 13，图块 25；`Ctrl+8` 可打印类型确认）
-2. **`Ctrl+Shift+G`** → 立即结算：FLC 536（28x40 透明动画）→ 抽卡 → 「得到ＸＸ卡！」+
-   卡片图（165×256 @ (138,200)，显示 1.5 秒，音效槽 23）
-3. 日志核对：`landingEvent: card cell -> 得到ＸＸ卡！` + `card get: id N -> ...`
-4. 边界：卡包满 15 张 → 先舍弃价格最低的一张（`kCardPrices`）；赠卡池（`propStock`）空 → 不弹提示；
-   `Ctrl+7` 可多次触发观察不同卡
+**監獄/醫院/保释**：`Ctrl+Shift+J/L` 入狱住院 → `Ctrl+Shift+D` 过天倒计时；
+NPC 保释：G 传送監獄格弹面板（`Ctrl+Shift+B` 先补点券 ≥300）。
 
-**事件格·百貨公司**（`landingEvent` case 15，卡片店/道具店 0x42E931/0x42D37F）：
-1. **`Ctrl+Shift+W`** → 直接打开商店（自动定位地图上的百货公司格）；或鼠标指向百货公司格按
-   `Ctrl+Shift+G` 走完整落地结算（`Ctrl+8` 可打印类型确认 cellType 15）
-2. 首次进入：欢迎消息（#0000/#0005，2 秒+语音）→ **抽屉缓动滑入**（x -222→5 / y 640→227，约 0.4 秒）
-   → 「請挑選你想要兌換的卡片」提示 → 点券框出现；点击可跳过消息（跳过则动画直接到位）
-3. 商店界面：右上 85×85 按钮**切页**（卡片店 ↔ 道具店）；右下按钮**离开**（告别消息后关闭）；
-   左列商品列表（卡片行高 24 / 道具行高 48）点击**购买**；右下卡包/道具包 5×3 格按住**卖出**
-   （下沉浮雕，抬起结算，返还 90% 点券）；右键/ESC 直接关闭
-4. 卡片店商品随机 6..15 种（按 `propStock` 库存加权，购买后售罄）；道具店最多 8 种（`misc8A` 礼物池）
-5. 边界：点券不足（#0002/#0007）、卡包满 15（#0003）、道具满 9（#0008）各弹对应浮动消息
-6. 购买后该行**置灰保留**（不消失，原版灰字画入表面）；店员表情动画应精确覆盖脸部
-   （两店落点 (405,60)/(417,50)）；抽屉到位后**才**出现点券框与右上/右下按钮
-7. 店员**眼睛**常驻随机眨眼（频率较低）；**嘴部口型**在消息显示期间持续动
-   （随机张嘴 → 短暂后闭嘴 → 再动），消息结束即静止；浏览商店时不说话
-6. 自家百货（`Ctrl+1` 指向百货公司格设 owner？该格非地产/公司，需用股市控股或读档构造）→
-   踩中时 50% 送道具 / 50% 送卡 + 「歡迎董事長光臨 送您ＸＸ！」 + 角色价值语音（0x44F230）
-7. AI/托管玩家踩中 → 无 UI 自动买卖（日志 `shop AI: p... revenue=...`）；结束后营业额入
-   `specPt.fund/+44`（日志 `shop: close revenue=...`）
+**道具/卡片实测**：`Ctrl+Shift+F` 全道具 + `Ctrl+Shift+C` 备现金 → 工具条「道具」case7；
+`Ctrl+Shift+I/U` 灌上半/下半卡 → 工具条「卡片」case8；`Ctrl+Shift+Y` 核对库存。
 
-**監獄/醫院**（入狱 `jailPlayer` 0x43D593 / 住院 `hospitalizePlayer` 0x43EC3F）：
-1. `Ctrl+Shift+J` 入狱 → 角色消失并移到監獄格（綠島），播 FLC 538（`settings[1]` 动画过程开启时）
-2. `Ctrl+Shift+D` 过天 3 次 → 日志 `player states: ... flags=00030000`（BYTE2 递减）→ 到期后
-   自动出狱（`flags=00800000` → 下回合恢复占用/朝向，角色重现）
-3. 收租验证：入狱期间他人踩其地 → 「ＸＸ坐牢中 免收過路費！」（`ownerCanCollectRent`）
-4. 保险理赔：先踩 specPt 保險公司（转盘投保天数）→ `Ctrl+Shift+J` → 弹「保險期間 得到理賠金 N元」
-   （N = 2000×M×天数，由保险公司付款；无保险则不弹不扣）
-5. `Ctrl+Shift+L` 住院同理（FLC 524）；`Ctrl+Shift+S` 可辅助验证免收租状态
-6. 保释验证：**开局監獄默认在押小偷/強盜（0x40734F，重写已补）**，任意玩家回合
-   `Ctrl+Shift+G` 传送到監獄格（type 4）即弹保释面板（NPC 头像 + 悬停「保釋點數 300點」）；
-   若另有人类玩家入狱，则其头像也在格内（悬停 30 点）→ 点选 + YES → 扣点券、格子擦除、
-   犯人 BYTE=0x80（下回合走出出狱）；点券不足 → 「抱歉！你的點數不足！」浮动消息（语音 #0002）
-7. **NPC 保释/出院动画**（`Ctrl+Shift+P` 先加点券到 ≥300）：点 NPC 格 → YES →
-   格子擦除 + **panel[64] 全身像标记**（監獄 @(365,450)、醫院 @(420,450)）+ **答谢浮动消息**
-   （#0123~#0126，監獄板 @(210,150)、醫院 @(200,200)）→ 消息播完面板重绘并退出；
-   点券仍不足时显示「點數不足」。**NPC 释放后事件槽全链 ✅ 2026-09-26**（路面行走/行窃/保护费/
-   抢卡/抓回；`Ctrl+Shift+8` dump 槽状态、`Ctrl+Shift+9` 一键释放全部在押 NPC）
-8. 出院验证：**开局醫院默认在院流氓/間諜（同上）**，`Ctrl+Shift+G` 传送到醫院格（type 5）即弹
-   办理出院面板（开场问候语音 #0127 → 两列头像格 → 确认「OK！您的朋友已经可以出院了！」→
-   扣点券出院；右键「要保重身體喔！」告别退出；上窗偶发护士行走、下窗小像驻留微动画）；
-   也可先 `Ctrl+Shift+L` 住院再验证玩家出院
-9. 场景音乐：监狱面板 track25、医院 track26，退出恢复原曲（音乐栈）
+## 已删键位迁移表（v1 → v2）
 
-**銀行**（路过柜员机 ✅；停留贷款/週轉 1.4 待实现）：
-1. 指向银行格（type 14）→ `Ctrl+Shift+G` → 弹出**柜员机**（panel.mkf[24]）：顶部
-   「銀行帳戶 / 身上現金 / 離開」→ 数字键盘或拖动金额滑条输入 → 「確認」→ 银行↔现金转账；
-   数字滚动动画 + 进度条；`C` 清除 / `←`(Backspace) 删位 / `M`/Enter 确认 / 右键或 ESC 退出
-2. 路过银行：正常掷骰走到银行格且仍有剩余步数 → 自动弹出柜员机（`onPlayerActionPhase` 0x41B540）
-3. 贷款到期数据层：每回合开始 `checkLoanDue`（日志 `loan due:`）；贷款发放（1.4）接入后可完整验证
-4. 拒绝往来/暫停放款天数：数据层已接（命运事件 +30 / 特别融资状态）；当前无调试键直接设置
-
-**升级/加盖**（`priceBase × moneyMul`）：
-1. `Ctrl+1` 指向地块归己（或 `Ctrl+5` 全归己）
-2. 走到该格 → 弹出「升級費用N元 是否升級?」→ 确认后 `level + 1`
-3. `Ctrl+2/3` 可直接调等级验证各级外观与费用
-
-**樂透（case 9，`lottery-system.md`）**：
-1. 投注 UI：鼠标指向乐透格（`Ctrl+8` 打印类型确认 cellType 9）→ `Ctrl+Shift+G` 触发落地 →
-   投注界面（点号买一注 + 红圈标记 + 已售格变暗；右键/ESC 退出；钱不足走 #0015→#0016）
-2. **保送中奖**：`Ctrl+Shift+R` → 当前玩家 11 注 + 立即开奖（摇号必中）→
-   中奖演出（#0019 → panel[17] 中奖 FLC + 角色名爆炸气泡 + #0032 恭喜）→ 日志 `lottery settle: winner=N`;
-   核对现金增加（奖金池全额入现金）与号码表清空
-3. 无人中奖：先投注（1 注即可，也可用 `Ctrl+Shift+G` 触发 AI 自动投注）→ `Ctrl+Shift+D` 推到 15 号 →
-   大概率无人中奖：SORRY 板 + 奖金/号码**累积**（下月可继续中）
-4. 完整 15 号流程：`Ctrl+Shift+D` 推到 15 号 → **先分红**（同 `Ctrl+Shift+E`）→ **后乐透开奖**
-5. 破产清号：买号后让该玩家破产（`Ctrl+Shift+B` 后大额消费/收租），号码作废不退款
-
-**道具（P4，13 种）** —— 准备：`Ctrl+Shift+F` 全道具 + `Ctrl+7` 现金；工具条「道具」按钮（case7）使用；
-`Ctrl+Shift+Y` 核对库存；日志前缀 `item effect`/`place item`/`playItemLine`。
-顺序建议：简单→依赖递增：
-
-| 道具 | 步骤 | 预期 |
-|------|------|------|
-| 機車/汽車 | 道具栏用 → 开道具栏看右下角 | 角色变机车（2 骰）/汽车（3 骰）；右下出现**下車按鈕**（panel[11] 帧15/16），点击回包恢复步行 |
-| 遙控骰子 | 骑行时使用 → 面板选 6 点 | 面板六骰（panel[72]）不花屏；确认后**单骰**滚动停在 6；走 6 步（`diceShowCount=1`） |
-| 路障 | 指向他人前方路格放置 → 换他人走过去 | 路障飞落（flyObject 100 帧）+ 音效；踩到**强制停止**+ 哭台词；停留者可等待 |
-| 地雷 | 放他人路格 → 停留 | 爆炸 FLC 525 + 车毁 + 住院 3 + 哭台词 |
-| 定時炸彈 | 放 → 停留踩上 | 挂身跟随 + 头顶 **38 倒数**（每步 -1）→ 归零爆炸（拆本格一级 + 住院 5）；同格他人可转移 |
-| 飛彈 | 指向**他人有建筑**地块 → 确认 | 视口跳目标 → FLC 528 → 范围内地产降一级（房主欠 30M/级）+ 范围内玩家受伤 90M×M + 住院 3 |
-| 核子飛彈 | 同上任意目标 | 全图地产**归公**（owner/level 清 0）+ FLC 530 + 全部受伤玩家同上 |
-| 機器工人 | 指向自己/无主空地或建筑 → 确认 | 视口对准 → 无设施商业地先弹**设施选择**，关闭后才施工；FLC 553 期间显示**旧建筑**，第 44 帧后出现加盖（无主加盖 = 黑轮廓） |
-| 傳送機 | 选目标（房/神明/玩家/物件）→ 选目的地 | 房→無主**空地**；人物/神明/物品→**空道路**（占用格/房屋设施特殊点事件格会被拒并提示）；完全空的无主地不可为源；选目标时鼠标移出视口边缘可**滚动地图**（方向箭头光标）；玩家落点立即结算 |
-| — 滚动选点 | 飞弹/核弹选目标时鼠标移到视口边缘 | 地图向该方向滚动（越靠边越快）；移回视口内可确认，滚动中点击仅提示音 |
-| 時光機 | 先掷骰/买地/花销 → 再用 | 全部回滚到**本回合掷骰前**（日期/玩家/现金/库存/股市/地图五表）；库存中的时光机 -1 |
-| 機器娃娃 | 用 → 观察 | 机器娃娃（data.mkf[521]/[522] 形象）从角色位走出 9 步；沿途**真实物件**被弹飞+删除；走完角色继续本回合 |
-
-> 已知设计：AI 使用道具分支（`sub_420EEE` 预选）、目标选择模态的地图滚动（飞弹/核弹出屏选点）
-> 未接入 → 人类测试请在屏幕内选目标。
-
-**大地图/小地图填色**：
-1. `Ctrl+1` 或 `Ctrl+5` 改所属
-2. 工具条「地圖」按钮 → 大地图应出现玩家色块（与小地图一致）
+| 旧键 | 去向 |
+|------|------|
+| `Ctrl+2/3` 等级± | 主区 `Ctrl+7/8` |
+| `Ctrl+4` 改建卡直调 | 工具条卡片栏 case8 真实使用 / `--exec "card.rebuild"`（命令保留供脚本） |
+| `Ctrl+6` 全图铺 level=1 | `Ctrl+Shift+L`（`all.level1`） |
+| `Ctrl+7` 现金 | `Ctrl+Shift+C`（改走 `addMoney` 原生入账） |
+| `Ctrl+8` dump 地块 | 主区 `Ctrl+9`（`dump.pointed`） |
+| `Ctrl+9` 联动组 | 主区 `Ctrl+2`（`get.street`）；新增清空对：`Ctrl+3`/`Ctrl+4`/`Ctrl+6` |
+| `Ctrl+Shift+1..5` 设施一键布置 | G 落地真实 `selectFacilityDialog` / `--exec "corp.build <i> <t> [sub]"` |
+| `Ctrl+Shift+V` 载具循环 | `--exec "player.vehicle <p> <0..2>"` / 真實機車·汽車道具 |
+| `Ctrl+Shift+T` 神明循环 | `--exec "player.god <p> <slot>"` / 真實請神符 |
+| `Ctrl+Shift+S` 状态循环 | `--exec "player.state <p> <0..6>"` / 真實事件 |
+| `Ctrl+Shift+C` 清状态+神 | `--exec "player.state <p> 0; player.god <p> 0"` |
+| `Ctrl+Shift+X` 寿命置 1 | 踢飞链改用 `Ctrl+Shift+P`（obj.kick）；飘走轮替自然触发 |
+| `Ctrl+Shift+O` 当前格生成 | 改语义「面朝前 1 格」（`obj.createAhead`）——观察飞行/附身来向 |
+| `Ctrl+Shift+6/7` 发免罪/嫁祸卡 | `Ctrl+Shift+I/U` 灌包后卡片栏选用 / `--exec "give.card <p> 21"` |
+| `Ctrl+Shift+9` 批量释放 NPC | `--exec "npc.release 4"`…逐个（命令保留） |
+| `Ctrl+Shift+B` 存款 | 保留（改 `player.give … bank`） |
+| `Ctrl+Shift+P` 点券 | 保留（`player.give … points`）；P 位让给 obj.kick |
+| `Ctrl+Shift+M/Q` 股市/查询面板 | 工具条真实按钮 / `open.stock`·`open.query` |
+| `Ctrl+Shift+K` 买股 100 | 股市面板真实买入 / `stock.buy <p> <s> <n>` |
+| `Ctrl+Shift+W/U` 百货/银行 | G 传送对应格原生触发（百货 case15/銀行 case14） |
+| `Ctrl+Shift+0` 魔法屋（**死键**：派发层从未映射 `SDLK_0`） | G 传送魔法屋格（case16）原生触发 |
 
 ## 已知限制
 
-- 卡片系统完整流程（选卡 UI/卡片消耗/`useCardFlow`）留 P4；`Ctrl+4` 只提供调试直调
-  （estate `type^=1` / corp `selectFacilityDialog(1)` 均已接入）。
-- 大地块（`estate.type != 0` = 连锁店）不能通过升级分支加盖，应走**改建卡**（`Ctrl+4`；
-  舊稱「建造菜單」的 tool bar case 6 实为查詢面板，无建造动作，见 `ui-controls.md` §27）。
-- 不修改 `dword_496BB4` 欠款矩阵（重写未建模，见任务 D 说明）。
-- ~~联动高亮不含**同盟地块**（`g_playerAlly`）~~ ✅ 2026-09-27（收租分账 + 高亮含同盟同组地块）。
-- 事件格已实现得點券/卡片格/監獄·醫院（含开局默认在押 NPC 的面板）/新聞/命運/小游戏/魔法屋；
-  **監獄·醫院 NPC 格保释释放 + 事件槽行走/抓回 ✅ 2026-09-26**（`498df0-event-slot-npc.md`）；
-  **新聞 ✅ 2026-09-26**，调试 `Ctrl+Shift+A`；**命運 ✅ 2026-09-26**，调试 `Ctrl+Shift+z`
-  （49 效果 + 幸运判定 + 免罪/嫁祸/生日选卡）；**小游戏 case 6/7/8 ✅ 2026-09-25**，`Ctrl+Shift+G` 踩格即玩；
-  **魔法屋 ✅ 2026-09-26**，调试 `Ctrl+Shift+0`（施法 UI + 12 惩罚 + 拍卖面板 auction_dialog.cpp，
-  新闻 idx 7 同步激活）。
+- ~~联动高亮不含同盟地块~~ ✅ 2026-09-27；`get.street` 联动组定义不含同盟对象（构造用，无碍）。
+- 主区数字键不含 `Ctrl+0`（派发层映射 `SDLK_1..9`）；需要 0 位键时先扩展 `game_loop.cpp`。
+- `obj.createAhead` 的前 1 格按 `cellEnt.exits` 与朝向匹配，转角处可能回退首出口（日志有 `dir=`）。
+- 不修改欠款矩阵（重写未建模，见任务 D 说明）。

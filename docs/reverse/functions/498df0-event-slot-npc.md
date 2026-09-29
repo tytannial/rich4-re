@@ -216,8 +216,9 @@ st = status & 0x7F
 
 ## 5. 验收 / 调试
 
-- 调试键（`--debug`）：`Ctrl+Shift+8` dump 4 槽状态（busy/status/bailer/cell/timers/标志/镜像）；
-  `Ctrl+Shift+9` 释放全部在押 NPC（bailer=当前玩家，按 busy 决定監獄/醫院）
+- 调试键（`--debug`，v2 2026-09-29 收口命令层）：`Ctrl+Shift+8` dump 5 槽状态
+  （busy/status/bailer/cell/timers/标志/镜像，= `npc.dump`）；释放全部在押 NPC 改走
+  `--exec "npc.release <4..7> [fromJail]"`（逐 NPC，bailer=当前玩家；旧 `Ctrl+Shift+9` 已删）
 - 实机剧本：开局不在图 → 踩監獄/醫院格保释 → 上路；绕回**同类**建筑抓回、再保释；
   小偷/強盜/流氓/間諜恶行按 §0 表格；小偷踩 13/14/16/17/18 给 bailer 对应道具/点券；
   5/6/7 踩路障/地雷差异；保释人破产自动关回；冬眠卡停 5 回合；存读档 NPC 一致

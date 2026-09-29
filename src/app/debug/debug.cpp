@@ -30,9 +30,11 @@
 #include "game/app/stock_system.h"
 #include "game/app/turn_system.h"
 #include "game/app/game_panel.h"
+#include "game/app/map_tables.h"
 #include "game/application.h"
 #include "game/core/clock.h"
 #include "game/core/debug_hooks.h"
+#include "game/core/encoding.h"
 #include "game/core/log.h"
 #include "game/core/trace.h"
 
@@ -576,12 +578,287 @@ bool cmdAllLevel1(Application& app, const std::vector<std::string>&, std::string
     return true;
 }
 
+// ======================= [NEW] 调试热键收口组（docs/debug-keys.md v2） =======================
+// 交互热键层只做「鼠标指向→selected→拼命令串→execLine」，状态写入统一在本区实现
+// （单一事实源；旧 debug_keys.cpp 与命令层双实现分叉的根因修正）。
+
+uint16_t resolveTargetCell(Application& app);  // 前向（定义见事件触发区）
+
+// select/pointed 对象 id 段分解：1=estate 2=corp 3=specPt（idx 输出表内下标；0=无）
+int selKindIndex(uint16_t id, int& idx) {
+    if (id >= 2000 && id < 4000) {
+        idx = id - 2000;
+        return 1;
+    }
+    if (id >= 4000 && id < 6000) {
+        idx = id - 4000;
+        return 2;
+    }
+    if (id >= 6000 && id < 8000) {
+        idx = id - 6000;
+        return 3;
+    }
+    idx = 0;
+    return 0;
+}
+
+std::string nameAt(const uint8_t* p, int maxLen) {
+    char buf[24] = {};
+    int n = 0;
+    while (n < maxLen && n < 23 && p[n]) {
+        buf[n] = static_cast<char>(p[n]);
+        ++n;
+    }
+    return big5ToUtf8(buf, n);
+}
+
+// [NEW] 调试传送合一（参照 [RE 0x4477C3] 传送机语义，剥离时光机快照/状态机接线）：
+//   清旧格占位→置新格 + prevCellEnt=旧格 + dir=facingBetween（**朝向刷新**）+
+//   updatePlayerCarriedObjects + 清行走资源组标志 + loadWalkResources。
+// 旧 4 处手写块（cmdLand/cmdPlayerTeleport/cmdSelGoto/Ctrl+Shift+G）均不刷新
+//   prev/dir = 传送后角色朝向错误的根因（2026-09-29 收口）。
+void teleportPlayerToCell(GameState& st, int p, uint16_t cell) {
+    if (cell == 0 || cell >= static_cast<int>(st.cellEnts.size()) || p < 0 || p >= 9) {
+        return;
+    }
+    Player& pl = st.players[p];
+    const uint32_t mask = 256u << p;
+    const uint16_t old = pl.cellEntId;
+    if (old > 0 && old < st.cellEnts.size()) {
+        st.cellEnts[old].occMask &= ~mask;
+    }
+    pl.prevCellEnt = old;
+    pl.cellEntId = cell;
+    pl.spriteX = static_cast<uint16_t>(st.cellEnts[cell].x);
+    pl.spriteY = static_cast<uint16_t>(st.cellEnts[cell].y);
+    int from = old;
+    if (from <= 0 || from >= static_cast<int>(st.cellEnts.size())) {
+        for (int k = 0; k < 4; ++k) {  // 无旧格时取新格首出口作朝向基准
+            if (st.cellEnts[cell].exits[k] != 0) {
+                from = st.cellEnts[cell].exits[k];
+                break;
+            }
+        }
+    }
+    if (from != 0 && from != cell) {
+        pl.dir = static_cast<uint8_t>(facingBetween(st, from, cell));
+    }
+    st.cellEnts[cell].occMask |= mask;
+    updatePlayerCarriedObjects(st, p);  // [RE 0x40FC00]
+    st.playerActionFlags[p] &= 0xF0;    // 清行走资源组标志（travel/朝向组重载）
+    loadWalkResources(st, p);           // [RE 0x40B93B]
+}
+
+// [RE 0x419A67] 联动组收集（原版收租高亮循环同定义）：
+//   住宅用地 = 同名 + type==0（同街）；连锁店 = 全部 type!=0（跨街道）
+int collectLinkedGroup(GameState& st, int estateIdx, std::vector<int>& out) {
+    out.clear();
+    if (estateIdx < 1 || estateIdx >= static_cast<int>(st.estates.size())) {
+        return 0;
+    }
+    char street[sizeof(Estate::name)] = {};
+    std::memcpy(street, st.estates[estateIdx].name, sizeof(street));
+    const bool chain = st.estates[estateIdx].type != 0;
+    for (size_t j = 1; j < st.estates.size(); ++j) {
+        const Estate& e = st.estates[j];
+        if (chain ? (e.type != 0)
+                  : (e.type == 0 && std::strncmp(e.name, street, sizeof(street)) == 0)) {
+            out.push_back(static_cast<int>(j));
+        }
+    }
+    return static_cast<int>(out.size());
+}
+
+void clearEstateAll(Estate& es) {
+    es.owner = 0;
+    es.level = 0;
+    es.type = 0;
+    es.expireDate = 0;
+}
+
+void clearCorpAll(Corp& cp) {
+    cp.owner = 0;
+    cp.sub = 0;
+    cp.type = 0;
+    cp.researchItem = 0;
+    cp.researchLeft = 0;
+    cp.expireDate = 0;
+}
+
 // [NEW] victory <days> <money>：注入终局目标（天数上限 [RE 0x49911C] / 胜利资金 [RE 0x499108]），0=不判
 bool cmdVictory(Application& app, const std::vector<std::string>& a, std::string& err) {
     if (!argCount(a, 2, err, "victory <daysLimit> <winMoney>")) return false;
     app.gameState().gameDaysLimit = static_cast<int32_t>(parseInt(a[1]));
     app.gameState().winMoney = static_cast<int32_t>(parseInt(a[2]));
     return true;
+}
+
+// ---- get.land：指向地块 owner = 当前回合玩家（旧 Ctrl+1）----
+bool cmdGetLand(Application& app, const std::vector<std::string>&, std::string& err) {
+    GameState& st = app.gameState();
+    const int owner = curPlayer(app) + 1;
+    int i = 0;
+    switch (selKindIndex(g_selected, i)) {
+        case 1:
+            if (i >= 1 && i < static_cast<int>(st.estates.size())) {
+                st.estates[i].owner = static_cast<uint8_t>(owner);
+                buildMiniMapMarks(app);
+                RICH4_LOGI("debug: get.land estate[%d] owner -> %d", i, owner);
+                return true;
+            }
+            break;
+        case 2:
+            if (i >= 1 && i < static_cast<int>(st.corps.size())) {
+                st.corps[i].owner = static_cast<uint8_t>(owner);
+                buildMiniMapMarks(app);
+                RICH4_LOGI("debug: get.land corp[%d] owner -> %d", i, owner);
+                return true;
+            }
+            break;
+        case 3:
+            if (i >= 1 && i < static_cast<int>(st.specPts.size())) {
+                st.specPts[i].owner = static_cast<uint8_t>(owner);
+                buildMiniMapMarks(app);
+                RICH4_LOGI("debug: get.land specPt[%d] owner -> %d", i, owner);
+                return true;
+            }
+            break;
+        default:
+            break;
+    }
+    err = "get.land: no estate/corp/specPt under cursor";
+    return false;
+}
+
+// ---- get.street：指向住宅的联动组归当前玩家（旧 Ctrl+9）----
+bool cmdGetStreet(Application& app, const std::vector<std::string>&, std::string& err) {
+    GameState& st = app.gameState();
+    int i = 0;
+    if (selKindIndex(g_selected, i) != 1 || i < 1 || i >= static_cast<int>(st.estates.size())) {
+        err = "get.street: no estate under cursor";
+        return false;
+    }
+    std::vector<int> group;
+    collectLinkedGroup(st, i, group);
+    const uint8_t owner = static_cast<uint8_t>(curPlayer(app) + 1);
+    for (int j : group) {
+        st.estates[j].owner = owner;  // 联动组仅改归属，保留建筑
+    }
+    buildMiniMapMarks(app);
+    RICH4_LOGI("debug: get.street %d parcels (%s) owner -> %d", static_cast<int>(group.size()),
+               st.estates[i].type == 0 ? "同街" : "连锁店", owner);
+    return true;
+}
+
+// ---- clear.cell：指向地块清空归属（estate owner/level/type、corp 设施、specpt 经营权；
+//      格上物件属 cellTable 生命周期，用 obj.kick 另行处理）----
+bool cmdClearCell(Application& app, const std::vector<std::string>&, std::string& err) {
+    GameState& st = app.gameState();
+    int i = 0;
+    switch (selKindIndex(g_selected, i)) {
+        case 1:
+            if (i >= 1 && i < static_cast<int>(st.estates.size())) {
+                clearEstateAll(st.estates[i]);
+                buildMiniMapMarks(app);
+                RICH4_LOGI("debug: clear.cell estate[%d] -> 无主空地", i);
+                return true;
+            }
+            break;
+        case 2:
+            if (i >= 1 && i < static_cast<int>(st.corps.size())) {
+                clearCorpAll(st.corps[i]);
+                buildMiniMapMarks(app);
+                RICH4_LOGI("debug: clear.cell corp[%d] -> 无主无设施", i);
+                return true;
+            }
+            break;
+        case 3:
+            if (i >= 1 && i < static_cast<int>(st.specPts.size())) {
+                st.specPts[i].owner = 0;
+                buildMiniMapMarks(app);
+                RICH4_LOGI("debug: clear.cell specPt[%d] owner -> 0", i);
+                return true;
+            }
+            break;
+        default:
+            break;
+    }
+    err = "clear.cell: no estate/corp/specPt under cursor";
+    return false;
+}
+
+// ---- clear.street：指向住宅的联动组全部归无主（get.street 反操作）----
+bool cmdClearStreet(Application& app, const std::vector<std::string>&, std::string& err) {
+    GameState& st = app.gameState();
+    int i = 0;
+    if (selKindIndex(g_selected, i) != 1 || i < 1 || i >= static_cast<int>(st.estates.size())) {
+        err = "clear.street: no estate under cursor";
+        return false;
+    }
+    std::vector<int> group;
+    collectLinkedGroup(st, i, group);
+    for (int j : group) {
+        clearEstateAll(st.estates[j]);
+    }
+    buildMiniMapMarks(app);
+    RICH4_LOGI("debug: clear.street %d parcels -> 无主空地", static_cast<int>(group.size()));
+    return true;
+}
+
+// ---- get.all / clear.all：全图归属（get=归当前玩家；clear=全归无主+清建筑）----
+bool cmdGetAll(Application& app, const std::vector<std::string>&, std::string&) {
+    GameState& st = app.gameState();
+    const uint8_t owner = static_cast<uint8_t>(curPlayer(app) + 1);
+    for (size_t i = 1; i < st.estates.size(); ++i) st.estates[i].owner = owner;
+    for (size_t i = 1; i < st.corps.size(); ++i) st.corps[i].owner = owner;
+    for (size_t i = 1; i < st.specPts.size(); ++i) st.specPts[i].owner = owner;
+    buildMiniMapMarks(app);
+    RICH4_LOGI("debug: get.all owner -> %d", owner);
+    return true;
+}
+
+bool cmdClearAll(Application& app, const std::vector<std::string>&, std::string&) {
+    GameState& st = app.gameState();
+    for (size_t i = 1; i < st.estates.size(); ++i) clearEstateAll(st.estates[i]);
+    for (size_t i = 1; i < st.corps.size(); ++i) clearCorpAll(st.corps[i]);
+    for (size_t i = 1; i < st.specPts.size(); ++i) st.specPts[i].owner = 0;
+    buildMiniMapMarks(app);
+    RICH4_LOGI("debug: clear.all -> 全图无主空地");
+    return true;
+}
+
+// ---- level.up / level.down：指向地块等级 ±1（旧 Ctrl+2/3；estate level / corp sub，0..5）----
+bool cmdLevelRel(Application& app, int delta, std::string& err) {
+    GameState& st = app.gameState();
+    int i = 0;
+    switch (selKindIndex(g_selected, i)) {
+        case 1:
+            if (i >= 1 && i < static_cast<int>(st.estates.size())) {
+                st.estates[i].level =
+                    static_cast<uint8_t>(clampi(st.estates[i].level + delta, 0, 5));
+                RICH4_LOGI("debug: level estate[%d] -> %d", i, st.estates[i].level);
+                return true;
+            }
+            break;
+        case 2:
+            if (i >= 1 && i < static_cast<int>(st.corps.size())) {
+                st.corps[i].sub = static_cast<uint8_t>(clampi(st.corps[i].sub + delta, 0, 5));
+                RICH4_LOGI("debug: level corp[%d].sub -> %d", i, st.corps[i].sub);
+                return true;
+            }
+            break;
+        default:
+            break;
+    }
+    err = "level: no estate/corp under cursor";
+    return false;
+}
+
+bool cmdLevelUp(Application& app, const std::vector<std::string>&, std::string& err) {
+    return cmdLevelRel(app, +1, err);
+}
+bool cmdLevelDown(Application& app, const std::vector<std::string>&, std::string& err) {
+    return cmdLevelRel(app, -1, err);
 }
 
 // [NEW] holiday <mode> <map> <y> <m> <d>：设日期/地图并直呼 holidayDaily（测 sub_452444 节日效果）
@@ -594,6 +871,136 @@ bool cmdHoliday(Application& app, const std::vector<std::string>& a, std::string
                   (static_cast<uint32_t>(parseInt(a[4])) << 8) |
                   static_cast<uint32_t>(parseInt(a[5]));
     holidayDaily(app);
+    return true;
+}
+
+// ---- dump.pointed：打印指向地块详情（旧 Ctrl+8，诊断主入口）----
+bool cmdDumpPointed(Application& app, const std::vector<std::string>&, std::string& err) {
+    GameState& st = app.gameState();
+    const uint16_t id = g_selected;
+    int i = 0;
+    switch (selKindIndex(id, i)) {
+        case 1: {
+            if (i < 1 || i >= static_cast<int>(st.estates.size())) break;
+            const Estate& es = st.estates[i];
+            const std::string nm = nameAt(reinterpret_cast<const uint8_t*>(es.name), 19);
+            RICH4_LOGI("debug: estate[%d] id=%u name=%s type=%u owner=%u level=%u flag=%u "
+                       "dir=%u priceAdd=%u priceBase=%u fees=[%u,%u,%u,%u,%u,%u] "
+                       "price=%d expire=%u",
+                       i, id, nm.c_str(), es.type, es.owner, es.level, es.flag, es.dir,
+                       es.priceAdd, es.priceBase, es.fees[0], es.fees[1], es.fees[2], es.fees[3],
+                       es.fees[4], es.fees[5], es.price, es.expireDate);
+            return true;
+        }
+        case 2: {
+            if (i < 1 || i >= static_cast<int>(st.corps.size())) break;
+            const Corp& cp = st.corps[i];
+            RICH4_LOGI("debug: corp[%d] id=%u type=%u owner=%u sub=%u flag=%u "
+                       "buildPrice=%u fees=[%u,%u,%u,%u,%u,%u] lastFee=%d research=%u/%u "
+                       "expire=%u",
+                       i, id, cp.type, cp.owner, cp.sub, cp.flag, cp.buildPrice, cp.feeTable[0],
+                       cp.feeTable[1], cp.feeTable[2], cp.feeTable[3], cp.feeTable[4],
+                       cp.feeTable[5], cp.lastFee, cp.researchItem, cp.researchLeft, cp.expireDate);
+            return true;
+        }
+        case 3: {
+            if (i < 1 || i >= static_cast<int>(st.specPts.size())) break;
+            const SpecPt& sp = st.specPts[i];
+            const std::string nm = nameAt(sp.pad4, 20);
+            RICH4_LOGI("debug: specPt[%d] id=%u name=%s owner=%u stockNo=%u costType=%u "
+                       "sprite=%u fund=%d feeBase=%u capital=%d sharesLeft=%d",
+                       i, id, nm.c_str(), sp.owner, sp.stockNo, sp.costType, sp.sprite, sp.fund,
+                       sp.feeBase, sp.capital, sp.sharesLeft);
+            return true;
+        }
+        default:
+            break;
+    }
+    if (id >= 8000 && id < 10000) {
+        const int ei = id - 8000;
+        if (ei > 0 && ei < static_cast<int>(st.evtCells.size())) {
+            const EvtCell& ev = st.evtCells[ei];
+            const std::string nm = nameAt(ev.pad4, 20);
+            RICH4_LOGI("debug: evtCell[%d] id=%u name=%s sprite=%u", ei, id, nm.c_str(),
+                       ev.sprite);
+            return true;
+        }
+    }
+    if (id >= 1 && id < 2000 && id < st.cellEnts.size()) {
+        const CellEnt& ce = st.cellEnts[id];
+        RICH4_LOGI("debug: cellEnt[%u] type=%u objId=%u sprite=%u occMask=0x%08X", id,
+                   ce.occMask & 0xFF, ce.special, ce.sprite, ce.occMask);
+        return true;
+    }
+    err = "dump.pointed: no object under cursor";
+    return false;
+}
+
+// ---- dir.cycle：当前玩家朝向 +45°（朝向敏感渲染/前 1 格生成测试；资源组立即重载）----
+bool cmdDirCycle(Application& app, const std::vector<std::string>&, std::string&) {
+    GameState& st = app.gameState();
+    const int p = curPlayer(app);
+    Player& pl = st.players[p];
+    pl.dir = static_cast<uint8_t>((pl.dir + 1) & 7);
+    st.playerActionFlags[p] &= 0xF0;  // 清行走资源组标志
+    loadWalkResources(st, p);         // [RE 0x40B93B] 按新朝向重载
+    RICH4_LOGI("debug: dir.cycle p%d dir=%u", p, pl.dir);
+    return true;
+}
+
+// ---- obj.createAhead：面朝前 1 格生成物件（旧 Ctrl+Shift+O「当前格」改「前 1 格」，
+//      观察飞行/附身来向；类型 1..18 循环）----
+bool cmdObjCreateAhead(Application& app, const std::vector<std::string>&, std::string& err) {
+    static int sType = 1;
+    GameState& st = app.gameState();
+    Player& pl = st.players[curPlayer(app)];
+    uint16_t ahead = 0;
+    if (pl.cellEntId > 0 && pl.cellEntId < st.cellEnts.size()) {
+        const CellEnt& ce = st.cellEnts[pl.cellEntId];
+        for (int k = 0; k < 4; ++k) {
+            if (ce.exits[k] != 0 && facingBetween(st, pl.cellEntId, ce.exits[k]) == pl.dir) {
+                ahead = ce.exits[k];
+                break;
+            }
+        }
+        if (ahead == 0) {  // 朝向无出口（转角/朝路外）→ 回退首出口
+            for (int k = 0; k < 4; ++k) {
+                if (ce.exits[k] != 0) {
+                    ahead = ce.exits[k];
+                    break;
+                }
+            }
+        }
+    }
+    if (ahead == 0) {
+        err = "obj.createAhead: no exit cell ahead";
+        return false;
+    }
+    const int obj = createMapObject(app, sType, ahead, 0, 0);  // [RE 0x40E033]
+    RICH4_LOGI("debug: obj.createAhead type %d -> obj %d cell %u (dir=%u)", sType, obj, ahead,
+               pl.dir);
+    sType = sType % 18 + 1;
+    return true;
+}
+
+// ---- obj.kick：踢飞指向格上的物件（机器娃娃沿路踢除子步复用 [RE 0x41B42D p==8]：
+//      bounceObject 0x40FAFD + releaseCellTableSlot 0x40E14D 含配对轮替/附身解除）----
+bool cmdObjKick(Application& app, const std::vector<std::string>&, std::string& err) {
+    GameState& st = app.gameState();
+    const uint16_t cell = resolveTargetCell(app);
+    if (cell < 1 || cell >= static_cast<int>(st.cellEnts.size())) {
+        err = "obj.kick: no cell target (point/select a cell or object)";
+        return false;
+    }
+    const uint8_t slot = static_cast<uint8_t>((st.cellEnts[cell].occMask >> 16) & 0xFF);
+    if (slot == 0) {
+        RICH4_LOGI("debug: obj.kick cell %u has no object", cell);
+        return true;
+    }
+    const int p = curPlayer(app);
+    bounceObject(st, slot, cell, st.players[p].cellEntId);  // 以玩家位为基准弹飞
+    releaseCellTableSlot(app, slot);                        // [RE 0x40E14D]
+    RICH4_LOGI("debug: obj.kick slot %u cell %u -> bounced (RE 0x40FAFD/0x41B42D)", slot, cell);
     return true;
 }
 
@@ -700,14 +1107,7 @@ bool cmdPlayerTeleport(Application& app, const std::vector<std::string>& a, std:
         err = "player.teleport: bad args";
         return false;
     }
-    Player& pl = st.players[p];
-    if (pl.cellEntId > 0 && pl.cellEntId < st.cellEnts.size()) {
-        st.cellEnts[pl.cellEntId].occMask &= ~(256u << p);
-    }
-    pl.cellEntId = static_cast<uint16_t>(cell);
-    pl.spriteX = st.cellEnts[cell].x;
-    pl.spriteY = st.cellEnts[cell].y;
-    st.cellEnts[cell].occMask |= (256u << p);
+    teleportPlayerToCell(st, p, static_cast<uint16_t>(cell));  // [NEW] 合一 helper（含朝向刷新）
     buildMiniMapMarks(app);
     return true;
 }
@@ -764,10 +1164,128 @@ bool cmdGiveItem(Application& app, const std::vector<std::string>& a, std::strin
     return true;
 }
 
-// ---- 事件触发 ----
-uint16_t resolveTargetCell(Application& app);
+// ---- player.give <p> cash|bank|points <v>：增量注入（旧 Ctrl+7/Shift+B/Shift+P；
+//      现金/存款走 addMoney [RE 0x41D3F4] 原生入账，含月度意外之财统计+面板刷新）----
+bool cmdPlayerGive(Application& app, const std::vector<std::string>& a, std::string& err) {
+    if (!argCount(a, 3, err, "player.give <p> cash|bank|points <v>")) return false;
+    const int p = parseInt(a[1]);
+    const int v = parseInt(a[3]);
+    if (p < 0 || p >= 9) {
+        err = "player.give: bad index";
+        return false;
+    }
+    const std::string kind = a[2];
+    if (kind == "cash") {
+        addMoney(app, p, v, true);   // [RE 0x41D3F4] addMoney cash
+    } else if (kind == "bank") {
+        addMoney(app, p, v, false);  // [RE 0x41D3F4] addMoney bank
+    } else if (kind == "points") {
+        app.gameState().players[p].points =
+            static_cast<uint16_t>(app.gameState().players[p].points + v);
+    } else {
+        err = "player.give: cash|bank|points";
+        return false;
+    }
+    RICH4_LOGI("debug: player.give p%d %s %+d -> cash=%d bank=%d points=%u", p, kind.c_str(), v,
+               app.gameState().players[p].cash, app.gameState().players[p].bank,
+               app.gameState().players[p].points);
+    return true;
+}
 
-uint16_t resolveTargetCell(Application& app);
+// ---- refill.cards <p> <first>：清卡包并连填 15 种卡（旧 Ctrl+Shift+I/H；直写卡槽，
+//      不走 giveCardToBag 赠卡池扣减/满弃最低价——纯测试发牌，propStock 不动）----
+bool cmdRefillCards(Application& app, const std::vector<std::string>& a, std::string& err) {
+    if (!argCount(a, 2, err, "refill.cards <p> <first 1|16>")) return false;
+    GameState& st = app.gameState();
+    const int p = parseInt(a[1]);
+    const int first = parseInt(a[2]);
+    if (p < 0 || p >= 4 || first < 1 || first + 14 > 30) {
+        err = "refill.cards: bad args";
+        return false;
+    }
+    const size_t off = static_cast<size_t>(15 * p);
+    for (int i = 0; i < 15; ++i) {
+        st.cardState60[off + i] = static_cast<uint8_t>(first + i);
+    }
+    RICH4_LOGI("debug: refill.cards p%d = id %d..%d (工具条 卡片 case8 逐卡实测)", p, first,
+               first + 14);
+    return true;
+}
+
+// ---- items.all <p>：全 13 种道具 ×2（旧 Ctrl+Shift+F；givePlayerItem [RE 0x445A4D]
+//      原生发放，id≤8 受礼物池 misc8A 限制）----
+bool cmdItemsAll(Application& app, const std::vector<std::string>& a, std::string& err) {
+    if (!argCount(a, 1, err, "items.all <p>")) return false;
+    GameState& st = app.gameState();
+    const int p = parseInt(a[1]);
+    if (p < 0 || p >= 4) {
+        err = "items.all: bad index";
+        return false;
+    }
+    for (int id = 1; id <= 13; ++id) {
+        givePlayerItem(st, p, id);
+        givePlayerItem(st, p, id);
+    }
+    RICH4_LOGI("debug: items.all p%d 13 types x2 (工具条 case7 使用)", p);
+    return true;
+}
+
+// ---- lottery.fixwin [p]：保送中奖构造（旧 Ctrl+Shift+R：清号→11 注>10 → 开奖从
+//      已售号随机必中；奖金池 <3000 注入便于观察金额）----
+bool cmdLotteryFixwin(Application& app, const std::vector<std::string>& a, std::string& err) {
+    GameState& st = app.gameState();
+    const int p = a.size() > 1 ? parseInt(a[1]) : curPlayer(app);
+    if (p < 0 || p >= 4) {
+        err = "lottery.fixwin: bad index";
+        return false;
+    }
+    std::memset(st.lotteryNumbers, 0, sizeof(st.lotteryNumbers));
+    for (int i = 0; i < 11; ++i) {
+        st.lotteryNumbers[i] = static_cast<uint8_t>(p + 1);
+    }
+    if (st.publicFund < 3000) {
+        st.publicFund = 3000;
+    }
+    RICH4_LOGI("debug: lottery.fixwin p%d 11 notes pool=%d -> draw (RE 0x431712)", p,
+               st.publicFund);
+    lotteryDrawMeeting(app);
+    return true;
+}
+
+// ---- dump.celltable：活动槽/附身/池/道具库存全景（旧 Ctrl+Shift+Y）----
+bool cmdDumpCellTable(Application& app, const std::vector<std::string>&, std::string&) {
+    GameState& st = app.gameState();
+    for (int slot = 0; slot < 46; ++slot) {
+        const uint8_t* e = &st.cellTable[24 * slot];
+        if (e[2] == 0 && e[3] == 0 && e[5] == 0 && e[6] == 0) {
+            continue;
+        }
+        const uint16_t ent = static_cast<uint16_t>(e[2] | (e[3] << 8));
+        RICH4_LOGI("  cellTable[%d] type %u(%s) ent %u dir %u life %u owner %u fly %u", slot, e[0],
+                   e[0] < 19 ? kObjectNames[e[0]] : "?", ent, e[1], e[4], e[5], e[6]);
+    }
+    for (int i = 0; i < st.playerCount && i < 4; ++i) {
+        const Player& pl = st.players[i];
+        RICH4_LOGI("  player %d attached %u cellNo %u luckA/B/C %d/%d/%d", i, pl.cellTableIdx,
+                   pl.cellNo, pl.luckA, pl.luckB, pl.luckC);
+    }
+    RICH4_LOGI("  giftPool %u,%u,%u,%u,.. trapStock %u,%u,%u", st.misc8A[0], st.misc8A[1],
+               st.misc8A[2], st.misc8A[3], st.trapStock[0], st.trapStock[1], st.trapStock[2]);
+    for (int i = 0; i < st.playerCount && i < 4; ++i) {
+        RICH4_LOGI("  itemStock p%d = 娃娃%u 路障%u 地雷%u 炸彈%u 機車%u 汽車%u 飛彈%u "
+                   "骰子%u 工人%u 時光機%u 傳送機%u 工程車%u 核彈%u | travel=%u dice=%u",
+                   i, st.itemStock[15 * i + 0], st.itemStock[15 * i + 1], st.itemStock[15 * i + 2],
+                   st.itemStock[15 * i + 3], st.itemStock[15 * i + 4], st.itemStock[15 * i + 5],
+                   st.itemStock[15 * i + 6], st.itemStock[15 * i + 7], st.itemStock[15 * i + 8],
+                   st.itemStock[15 * i + 9], st.itemStock[15 * i + 10], st.itemStock[15 * i + 11],
+                   st.itemStock[15 * i + 12], st.players[i].travel, st.players[i].diceCount);
+    }
+    RICH4_LOGI("debug: dump.celltable done");
+    return true;
+}
+
+// ---- 事件触发 ----
+uint16_t resolveTargetCell(Application& app);  // 前向（定义见文件后；收口区另有声明）
 
 // [NEW] roll: scriptable human dice entry = 0x40DD1F startPlayerMove
 //   (dice value via rng.dice; turn snapshot 0x44808A saved inside, same as real path)
@@ -793,18 +1311,11 @@ bool cmdLand(Application& app, const std::vector<std::string>& a, std::string& e
         return false;
     }
     const int cur = curPlayer(app);
-    Player& pl = st.players[cur];
-    if (pl.cellEntId != cell) {
-        if (pl.cellEntId > 0 && pl.cellEntId < st.cellEnts.size()) {
-            st.cellEnts[pl.cellEntId].occMask &= ~(256u << cur);
-        }
-        pl.cellEntId = cell;
-        pl.spriteX = st.cellEnts[cell].x;
-        pl.spriteY = st.cellEnts[cell].y;
-        st.cellEnts[cell].occMask |= (256u << cur);
+    if (st.players[cur].cellEntId != cell) {
+        teleportPlayerToCell(st, cur, cell);  // [NEW] 合一：含 prev/dir 朝向刷新
         buildMiniMapMarks(app);
     }
-    RICH4_LOGI("debug: land player %d -> cell %u", cur, cell);
+    RICH4_LOGI("debug: land player %d -> cell %u dir=%u", cur, cell, st.players[cur].dir);
     const int wait = landingEvent(app, cell);
     RICH4_LOGI("debug: land landingEvent -> wait=%d", wait);
     return true;
@@ -1362,16 +1873,9 @@ bool cmdSelGoto(Application& app, const std::vector<std::string>& a, std::string
         err = "sel.goto: no target cell";
         return false;
     }
-    Player& pl = st.players[p];
-    if (pl.cellEntId > 0 && pl.cellEntId < st.cellEnts.size()) {
-        st.cellEnts[pl.cellEntId].occMask &= ~(256u << p);
-    }
-    pl.cellEntId = cell;
-    pl.spriteX = st.cellEnts[cell].x;
-    pl.spriteY = st.cellEnts[cell].y;
-    st.cellEnts[cell].occMask |= (256u << p);
+    teleportPlayerToCell(st, p, cell);  // [NEW] 合一：含 prev/dir 朝向刷新
     buildMiniMapMarks(app);
-    RICH4_LOGI("debug: sel.goto p%d -> cell %u", p, cell);
+    RICH4_LOGI("debug: sel.goto p%d -> cell %u dir=%u", p, cell, st.players[p].dir);
     return true;
 }
 
@@ -1773,6 +2277,24 @@ const Cmd kCmds[] = {
     {"day", cmdDay},
     {"victory", cmdVictory},
     {"holiday", cmdHoliday},
+    // [NEW] 热键收口组（docs/debug-keys.md v2 键位映射目标）
+    {"get.land", cmdGetLand},
+    {"get.street", cmdGetStreet},
+    {"clear.cell", cmdClearCell},
+    {"clear.street", cmdClearStreet},
+    {"get.all", cmdGetAll},
+    {"clear.all", cmdClearAll},
+    {"level.up", cmdLevelUp},
+    {"level.down", cmdLevelDown},
+    {"dump.pointed", cmdDumpPointed},
+    {"dir.cycle", cmdDirCycle},
+    {"obj.createAhead", cmdObjCreateAhead},
+    {"obj.kick", cmdObjKick},
+    {"player.give", cmdPlayerGive},
+    {"refill.cards", cmdRefillCards},
+    {"items.all", cmdItemsAll},
+    {"lottery.fixwin", cmdLotteryFixwin},
+    {"dump.celltable", cmdDumpCellTable},
     {"find.estate", cmdFindEstate},
     {"find.evtcell", cmdFindEvtCell},
     {"find.lab", cmdFindLab},
@@ -1846,9 +2368,9 @@ bool isBlockingCmd(const std::string& name) {
     // 内部会 runModal 阻塞（弹框/动画）的命令：阻塞期间重入 tick 只放行交互 step
     // （click/confirm 等），其它 step 冻结 pc——保证断言严格晚于阻塞命令完成
     static const char* const kBlock[] = {"land",  "day",        "news",       "fate",    "magic",
-                                         "lottery.draw",       "settle",      "dividend", "shop",
-                                         "bank",               "jail",        "hosp",     "open.stock",
-                                         "open.query"};
+                                         "lottery.draw",       "lottery.fixwin", "settle", "dividend",
+                                         "shop",               "bank",           "jail",   "hosp",
+                                         "open.stock",         "open.query"};
     for (const char* b : kBlock) {
         if (name == b) {
             return true;
@@ -1909,10 +2431,16 @@ bool execTokenCmd(Application& app, const std::vector<std::string>& a, std::stri
         return true;
     }
     if (a[0] == "settle") {
+        if (!app.gameState().gameLoopActive) {
+            return true;  // 对局外忽略（旧热键 Ctrl+Shift+N 同语义）
+        }
         monthlySettle(app);
         return true;
     }
     if (a[0] == "dividend") {
+        if (!app.gameState().gameLoopActive) {
+            return true;  // 对局外忽略（旧热键 Ctrl+Shift+E 同语义）
+        }
         dividendMeeting(app);
         return true;
     }

@@ -23,7 +23,8 @@
 `resolveFeePayer`）、收费公式全部逆向归档 ✅（`pricing-formulas.md`）；
 **商業用地 corp 全流程 ✅**（购地/建设施 `selectFacilityDialog`/升级/他人收费/旅館住宿，
 `facility_dialog.cpp`+`roulette_dialog.cpp`）、**行業設施點 specPt 收费 ✅**（6 公式 + 公库 `fund`）、
-**连锁店 ✅**（改建卡 0x44309B + `Ctrl+4`）；Debug 工具（Ctrl+1..9 + Ctrl+Shift 扩展）✅、
+**连锁店 ✅**（改建卡 0x44309B + 卡片栏 case8/`--exec card.rebuild`）；
+Debug 工具 v2（Ctrl+1..9 构造/诊断 + Ctrl+Shift 分组，30 键全收口命令注册表，见 `debug-keys.md`）✅、
 大地图填色 ✅、买地面板背景 ✅；**查詢面板 ✅（2026-09-25，旧称"建造菜单"为误：工具条 case 6
 `sub_424492`→`sub_423CF3` = 帮助 idx 16 資產/地產/股票清單，无建造动作；`query_dialog.cpp` +
 右侧資訊面板 4 页签 `game_panel.cpp`，见 `ui-controls.md` §27）**；**P2 事件格推进中**
@@ -46,7 +47,7 @@
    **命運 case 3 ✅ 2026-09-26**（`fate_event.cpp` + `event_common.cpp`：37 项判定/载具改写 +
    49 效果（通用 33 + 4 地图专属坐牢 16，文本 #0185..#0233）/幸运判定 `sub_44B896`（luckB/C →
    免付/逃过/作废/加倍）/卡片联动（生日选卡面板 0x44192A、免罪 0x444BB2、嫁祸 0x44476A、
-   选人对话框 0x440E1A）/出国·绑架状态 0x40D375；公共辅助自新闻提取；调试 `Ctrl+Shift+z`；
+   选人对话框 0x440E1A）/出国·绑架状态 0x40D375；公共辅助自新闻提取；调试 `Ctrl+Shift+Z`；
    详见 `44db81-fate-events.md`）；
    **魔法屋 case 16 ✅ 2026-09-26**（`magic_house_dialog.cpp` 0x43380A：施法 UI 100ms 状态机
    （panel[18] 五段浮字 #0037..#0041 + 随机条件 0x431842（12 条件：财产/土地/房屋/现金/存款/点券
@@ -54,7 +55,7 @@
    音效 39）+ panel[20] FLC 退出；AI 条件+惩罚双随机排除自肥/拍卖）+ `auction_dialog.cpp`
    （0x43BDE5/0x43A2DD/0x439F0D 拍卖面板：7 按钮 PASS/5 档加价/放弃 + AI 出价公式 + 头像翻滚气泡 +
    落槌台词 #0136..#0147，**新闻 idx 7 同步激活**；`43bde5-auction.md`）；`43380a-magic-house.md`、`ui-controls.md`
-   §33/§34；调试 `Ctrl+Shift+0`；**P2 事件格 case 2..16 全部完成**）；
+    §33/§34；调试=传送魔法屋格 `Ctrl+Shift+G`（v2 删直开键）；**P2 事件格 case 2..16 全部完成**）；
    事件格 FLC 阻塞播放模板 `playEventFlc` + `drawEventFlcFrame` +
 `showCardGet` + `jailPlayer`/`hospitalizePlayer`/`insurancePayout`；面板底座
 `FloatMessage`/语音 `playVoice`/音乐栈见 `ui-controls.md` §25）。
@@ -91,7 +92,7 @@ damagePlayer/demolish/givePlayerItem）；`economy.cpp` deleteMapObject **配对
 AI 目的地 `sub_420EEE`=表读取 ✅ 已接；卡片/道具选 NPC 保持拒绝（原版双记录空转，见
 `item-effects.md` §4.3 已知差异））。
 请神/送神符效果函数 ✅（0x444E1A/0x444C45，`useInviteGodCard`/`useBanishGodCard`，
-调试 `Ctrl+Shift+I/H` 直调）；cellTable 拾取 id 改 0xA100|槽+1 修段重叠。
+调试 `--exec "use.god invite|banish"` 直调）；cellTable 拾取 id 改 0xA100|槽+1 修段重叠。
 研究所研发道具 ✅（2026-09-26，`lab_dialog.cpp` 0x44101D + `updatePlayerStates` 0x41C84F 尾倒计时产出）：
 owner 停留 type4 逐级解锁选 1（`corp.sub` 门槛**灰度**）→ `researchItem/researchLeft=5` → 归零
 `givePlayerItem(researchItem+8)`；机器工人/時光機/傳送機/工程車/核子飛彈 5 非卖品唯一入口，**道具 13 获取闭环**（`44101d-lab-develop.md`、`ui-controls.md` §35）；
@@ -152,7 +153,7 @@ trace `msg/line/flc skip` + 场景 `300_skip_msg`；详见 `ui-controls.md` §39
 - ~~P2 事件格实现~~ ✅ **case 2..16 全部完成 2026-09-26**（见 `41982d-p2-events.md`；
   银行/小游戏/樂透/百貨/新聞/命運/魔法屋全链 ✅；**魔法屋+拍卖 2026-09-26**：
   `magic_house_dialog.cpp` 0x43380A + `auction_dialog.cpp` 0x43BDE5（新闻 idx 7 激活），
-  `43380a-magic-house.md`/`43bde5-auction.md`、`ui-controls.md` §33/§34，调试 `Ctrl+Shift+0`；
+  `43380a-magic-house.md`/`43bde5-auction.md`、`ui-controls.md` §33/§34，调试=传送魔法屋格 `Ctrl+Shift+G`；
   面板底座 `ui-controls.md` §25，事件槽 NPC 四大恶人 ✅ 2026-09-26；**投降召唤死神 ✅ 2026-09-27**
   （`surrenderPlayer` 0x411AE0 + `deathGodSummonDialog` 0x4339D9/0x433088））
 - **P2 樂透（case 9）✅ 2026-09-25**：`lottery_dialog.cpp` + `lottery.h`——投注界面
@@ -165,7 +166,7 @@ trace `msg/line/flc skip` + 场景 `300_skip_msg`；详见 `ui-controls.md` §39
 - **P2 百貨公司（case 15）✅ 2026-09-25**：`shop_dialog.cpp`（0x42E931/0x42D37F——自家赠礼 +
   人类商店 UI（panel[10] 38 帧：抽屉缓动滑入/店员/招牌动画/切页/卡片·道具买卖/卖出 90%）+
   AI 自动买卖；`playValueLine` 0x44F230；`drawCardBagAt/drawItemBagAt` 带坐标复用；
-  `landingEvent` case 15（实参 objId=special 6000+n）；调试 `Ctrl+Shift+W`；
+  `landingEvent` case 15（实参 objId=special 6000+n）；调试=传送百货格 `Ctrl+Shift+G`（v2 删直开键）；
   详见 `42e931-department-store.md`、`ui-controls.md` §28
 - ~~任务 F 建造菜单~~ ✅ 2026-09-25 订正为**查詢面板**（资产/地产/股票清單 + 右侧面板 4 页签；
   工具条 case 6 `sub_424492`→`sub_423CF3`；旧称"建造队列"的 `g_miscTable336`/`sub_428475`
@@ -188,7 +189,7 @@ trace `msg/line/flc skip` + 场景 `300_skip_msg`；详见 `ui-controls.md` §39
   **`--save-selftest` 验证 SAVE0..5 往返 STABLE=YES、与原版同尺寸**；`402fd1-save-load.md`。
 - ~~事件槽 NPC（玩家 4-7）~~ ✅ **2026-09-26 全链实现**（`498df0-event-slot-npc.md`：
   开局关押 busy=1/1/2/2 → 保释行走 → `LABEL_88` 恶行 → 同类建筑抓回；物件分支/回合联动/
-  渲染面板/存档；调试 `Ctrl+Shift+8/9`）
+  渲染面板/存档；调试 `Ctrl+Shift+8` dump、释放 `--exec "npc.release <npc>"`）
 - **P4 语音专项 ✅ 全部完成（2026-09-27）**：清单 → `docs/reverse/functions/p4-voice-batch.md`
   （**P4-A** 踩中台词+`playLine` 表情帧 expr；**P4-B/D1** `kMoneyLines` 金额/状态台词 +
   收款/付款/欠债/状态天数/连锁/意外之财六函数（收租/同盟分账/corp/封顶/连锁/住宿入狱住院出国/
@@ -251,8 +252,9 @@ cmake --build build
 ./build/rich4.exe --game resources/MultiverseJourney --debug
 ```
 
-`--debug` 启用 **Ctrl+1..8** 测试热键（改地块所属/等级、批量铺地、加现金、打印地块详情），
-完整键位与测试流程见 `docs/debug-keys.md`。
+`--debug` 启用 **Ctrl+1..9 构造/诊断 + Ctrl+Shift 分组** 测试热键（30 键 v2，
+每键等价 `--exec "<命令>"`，实现收口 `src/app/debug/debug.cpp` 命令注册表），
+完整键位、旧键迁移表与测试流程见 `docs/debug-keys.md`。
 
 ## 测试
 
