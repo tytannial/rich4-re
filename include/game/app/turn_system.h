@@ -111,9 +111,11 @@ void playHighlightBlink(Application& app, bool preRedraw = true);
 //   事件格/神明插图共用；soundId<0 无声；freeze=true 播完冻结末帧至下次全量重绘；
 //   switchFrame = 原版 flcOpen flags BYTE2 场景切换帧 [RE 0x450CED]：>0 保帧播放
 //   （背景=开始前画面）至该帧全量重绘切换场景（住院 524=30 / 入狱 538=18 / 爆炸拆除=3 /
-//   碾过=1），0=逐帧重绘（动画期无状态变化的插图类）
+//   碾过=1），0=逐帧重绘（动画期无状态变化的插图类）；
+//   interruptible = 原版 flcOpen flags bit1（g_flcInterruptible 0x48C880 [RE 0x450D97]）：
+//   左键/Esc/Enter/Space 可提前结束播放（原版检测 514/517/257，各调用点 flags 逐点回验）
 void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId,
-                  bool freeze = false, int switchFrame = 0);
+                  bool freeze = false, int switchFrame = 0, bool interruptible = false);
 
 // [RE 0x40B93B] loadWalkResources（行走资源加载，定义见 turn_system.cpp；
 //   状态结束/载具损毁/住院等复用）

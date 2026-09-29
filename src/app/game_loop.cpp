@@ -605,6 +605,9 @@ void overlayEventFlcFrame(Application& app) {
 // 顶部工具条 + 地图区 + 按 byte_49715D 布局的右侧面板；每 tick 全量重绘
 // 公开供阻塞动画流程（收租联动闪烁 0x451985）主动重绘
 void renderGameFrame(Application& app) {
+    // [NEW] 本函数全量重绘整个表面——光标保存背景作废，跳过陈旧 uncompose 写回
+    //   （防演出/移动期间光标处旧背景脏块闪现；见 Cursor::invalidate）
+    app.cursor().invalidate();
     GameState& state = app.gameState();
     if (state.manualView) {
         // [RE 0x48BE18] dword_48BE18 非 0：用平滑视口中心（原版 dword_48BE1C/BE20）
@@ -613,18 +616,20 @@ void renderGameFrame(Application& app) {
         // 否则以当前玩家位置为中心
         renderMap(app, -1, 0);
     }
-    if (state.parachuteActive && state.parachute.valid()) {
-        drawParachuteFrame(app);
-    }
-    // [RE 0x45144F] 事件 FLC 叠加（得點券；地图图元之上、面板之下）
-    if (state.eventFlcActive && state.eventFlc.valid()) {
-        drawEventFlcFrame(app);
-    }
-    // [RE 0x451985] 收租联动高亮（整条街/连锁店闪烁；地图图元之上、提示框之下）
-    drawEstateHighlight(app);
     // [RE 0x417559] 右键物件提示框（地图区之上、面板之下）
     drawObjectTip(app);
     renderGamePanel(app);
+    // [RE 0x45144F/0x451985] 演出叠加层在**面板（含前进 GO 面板 0x417191）之后**——
+    //   原版 flcPlay/高亮/跳伞都在完整场景（地图+工具条+右侧/前进面板已画完）的
+    //   backbuffer 上 saveBackground 后末层叠加 = 动画盖住 GO（2026-09-29 层级修正；
+    //   重排前重写把 GO 画在动画之上，演出动画被 GO 按钮遮挡）
+    if (state.parachuteActive && state.parachute.valid()) {
+        drawParachuteFrame(app);
+    }
+    if (state.eventFlcActive && state.eventFlc.valid()) {
+        drawEventFlcFrame(app);
+    }
+    drawEstateHighlight(app);
 }
 
 void enterGameLoop(Application& app) {

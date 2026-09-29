@@ -90,7 +90,24 @@ bool itemLineHandler(const SDL_Event* event, void* user) {
         }
         return true;
     }
-    return true;  // 纯延时，期间不响应输入
+    // [RE 0x4544F6/0x4528B9] 原版台词延时消息泵检测 WM_LBUTTONUP(514)/WM_MBUTTONDOWN(517)/
+    //   WM_KEYUP(257) → 提前结束并 voiceStop（sub_454493），后续流程照常；
+    //   迁移: 左键按下/Esc/Enter/Space → 停语音 + 退出（消息被栈顶消费不穿透）
+    if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN && event->button.button == SDL_BUTTON_LEFT) {
+        trace::logf("line skip (RE 0x4544F6)");
+        ctx.app->audio().stopVoice();
+        ctx.app->events().requestExit(0);
+        return true;
+    }
+    if (event->type == SDL_EVENT_KEY_DOWN &&
+        (event->key.key == SDLK_ESCAPE || event->key.key == SDLK_RETURN ||
+         event->key.key == SDLK_SPACE)) {
+        trace::logf("line skip key (RE 0x4544F6)");
+        ctx.app->audio().stopVoice();
+        ctx.app->events().requestExit(0);
+        return true;
+    }
+    return true;  // 其余输入期间不响应（原版 PeekMessage 只取不派发）
 }
 
 }  // namespace

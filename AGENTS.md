@@ -121,6 +121,20 @@ owner 停留 type4 逐级解锁选 1（`corp.sub` 门槛**灰度**）→ `resear
 `player.bankrupt <p>` 调试命令 + `283_victory_last_stand`（全矩阵 89/89 绿）；
 详见 `victory-flow.md`、`ui-controls.md` §38；余 284 四图连通实机验收、A5 AVI 不实现。
 
+**M3-B 体验优化 ✅（2026-09-29）**：**演出打断加速**——原版核实 `sub_4528B9`/`sub_4544F6`
+延时消息泵检测 514/517/257 **可提前结束并吞掉消息**（重写曾误做死等：showMessage/playLine/
+showCardGet/showGodNarration/新闻·命运阶段/掛牌提示全部接左键按下+Esc/Enter/Space 打断，
+playLine 打断并 `stopVoice`、showMessage 不停=原版语义）；`flcPlay` 打断由
+`flcOpen flags bit1`（g_flcInterruptible）门控——**55 调用点全量回验：仅开场 playIntro 与
+月结悲情/冠军全身像（kFlcParams 表 3/515/1027/1539）可断，游戏事件动画全部不可断**
+（`playEventFlc(interruptible)` 默认 false=1:1，`playSettleFlc` 可断）。**GO 层级**——原版
+=面板先画、FLC/高亮/跳伞在 backbuffer 末层叠加（动画盖 GO@(180,120)）→ `renderGameFrame`
+重排为 地图→提示→面板→跳伞/FLC/高亮。**演出段隐藏光标**（增强）——`Cursor::setHidden`
+由 renderFrame 按 `eventFlcActive||parachuteActive` 统一驱动 + 乐透开奖 3/5 / 月结全身像段。
+**乐透花屏根因修复**——`Cursor::update` 旧"移动先 uncompose 写回陈旧 32×32 背景"在即时
+模式全量重绘界面闪脏块 → 改为只跟踪动画/位置，compose 每帧从最新干净背景重抓。
+trace `msg/line/flc skip` + 场景 `300_skip_msg`；全矩阵 **89/89 绿**；详见 `ui-controls.md` §39。
+
 **M2 执行计划**：见 `docs/m2-plan.md`
 
 **M2 完成纪要**（✅ 全部完成 2026-09-29；各档案标注的「待实机验证/待实机验收」项——分红/週轉/

@@ -180,8 +180,15 @@ void Application::pumpEvents() {
         }
         // [PORT Win32:WM_LBUTTONUP] 模态 UI 点击标志（转盘 sub_43F7C6 提前停止；
         //   原版检测 514/517/257，重写用按下以便即时反馈）
+        // [RE 0x4528B9/0x4544F6/0x45144F] 同步置演出打断标志（consumeSkipInput 消费）
         if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN && event.button.button == SDL_BUTTON_LEFT) {
             m_uiClicked = true;
+            m_skipInput = true;
+        }
+        if (event.type == SDL_EVENT_KEY_DOWN &&
+            (event.key.key == SDLK_ESCAPE || event.key.key == SDLK_RETURN ||
+             event.key.key == SDLK_SPACE)) {
+            m_skipInput = true;
         }
         // [PORT Win32:SetWindowsHookExA(WH_KEYBOARD)] 原版全局键盘钩子 fn(0x401010)
         // **先于**窗口过程无条件运行（钩子 return 0 不吞消息，故两者都处理原始按键）;
@@ -741,6 +748,13 @@ void Application::renderFrame() {
     int mx = 0;
     int my = 0;
     mouseLogicalPos(mx, my);
+    // [NEW] 演出段隐藏软件光标（现代化增强，原版全程自绘）：事件 FLC 阻塞播放/冻结
+    //   （eventFlcActive）与跳伞入场（parachuteActive）期间不显示；此处统一驱动，
+    //   与 Cursor::setHidden 的模态界面级用法（乐透开奖/月结全身像）并存
+    const bool perfHidden = m_state.parachuteActive || m_state.eventFlcActive;
+    if (perfHidden != m_cursor.hidden()) {
+        m_cursor.setHidden(m_surface, perfHidden);
+    }
     m_cursor.update(m_surface, mx, my);
     if (!m_cursor.visible()) {
         // [RE 0x402250] sub_402250：绘制后重绘光标

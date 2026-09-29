@@ -49,6 +49,9 @@
 | 拍卖竞价面板（7 按钮/AI 出价/头像翻滚/落槌） | 0x43BDE5/0x43A2DD/0x439F0D | `auction_dialog.cpp` | 魔法屋惩罚 11 / 新聞 idx 7 | §34 |
 | 图标条选择框（等级门槛灰度禁用） | 0x44101D/0x4402D7 | `lab_dialog.cpp` | 研究所研发道具 | §35 |
 | 挂单网格 + 按下滑动子按钮 + 详情模态 | 0x4284BE/0x427C21/0x42704E | `trade_market.cpp` | 交易市場「公佈欄」 | §36 |
+| 色彩蒙膜叠加（涨价红/查封蓝/闪烁） | 0x456C33/0x4554FC | `map_render.cpp` | estate/corp 状态色 | §37 |
+| 全屏演出模态（滚动预览+sprite 行走+帧预合成） | 0x4060E9/0x456180/0x4562A5 | `victory.cpp` | 通关选图/失败读档 | §38 |
+| 演出打断（msg/line/flc skip）+ 光标隐藏/脏块修复 | 0x4528B9/0x4544F6/0x45144F | `message/item_effects/turn_system/cursor` | 全局 | §39 |
 
 ## 1. 渲染原语速查（`render/blit.h` / `surface.h`）
 
@@ -903,6 +906,48 @@ UI 音效与游戏音效槽**是两套**，勿混：
   （只画 hover 项），非全部常显；③ 单人右键不可退出（0x406970 仅 multiple 响应），
   点击确认后 10 tick（500ms）延迟退出（byte_48A43A/48A43B 状态机）展示红勾；
   ④ 进入 `musicPlayScene(0x8006)` bit15=不压栈、退出 `musicStop`
+
+## 39. 演出打断与光标管理（0x4528B9 / 0x4544F6 / 0x45144F g_flcInterruptible / 0x450D97）
+- 原版依据：`sub_4528B9(ms)` 通用延时消息泵 PeekMessage(PM_REMOVE) 检测
+  WM_LBUTTONUP(514)/WM_MBUTTONDOWN(517)/WM_KEYUP(257) → 返回 1 **提前结束并吞掉该消息**
+  （不派发窗口过程）；`sub_4544F6(ms)`（playLine 0x44EF41 台词等待）先等语音（同三消息打断
+  → voiceStop 0x454493）再转 sub_4528B9 补足差额。`flcPlay 0x45144F` 的打断由
+  `flcOpen flags bit1`（g_flcInterruptible 0x48C880，置位于 0x450D97）门控，命中提前退出
+  = 停在当前帧、不重绘。**2026-09-29 全量回验 55 处 flcPlay 调用点 flags：仅开场
+  playIntro（0x415A04/0x415B60/0x415C7E，flags=3/0x14000003）与月结悲情/冠军全身像
+  （0x43894E/0x439050，flags 表 dword_475A0B/0x4759F7 值 3/515/1027/1539 全含 bit1）可断；
+  游戏事件动画（神明插图 540..551/施工 523/拆除 526/入狱 538/住院 524/新闻 527..539/
+  命运/魔法屋 553·529/得點券 537/卡片 536/骰子/跳伞 559/破产 555·556…）全部**不可断**。
+  `sub_45285E`（物件飞行停留）纯延时不可断
+- 交互（重写定稿 2026-09-29）：左键**按下** + Esc/Enter/Space（现代化跟手；原版为抬起，
+  消息被吞不穿透下层按钮）
+- 重写位置：`Application::consumeSkipInput()`（pumpEvents 置位、一次性消费，
+  `include/game/application.h`）；事件驱动打断：showMessage（`message_dialog.cpp`）、
+  playLine（`item_effects.cpp` itemLineHandler，打断+`stopVoice`）、showCardGet
+  （`turn_system.cpp` cardGetHandler）、showGodNarration（`map_objects.cpp`）、
+  新闻/命运阶段（`startMs` 提前到下一 tick 推进）、掛牌提示（`trade_market.cpp`
+  tradeTipEvent）；标志轮询打断：`playEventFlc(interruptible)`（调用点默认 false=1:1 原版）、
+  `playSettleFlc`（`month_settle_dialog.cpp`，原版表值全含 bit1=可断）。trace：
+  `msg skip` / `line skip` / `flc skip`；场景 `tests/scenarios/300_skip_msg.txt`
+- 光标：`Cursor::setHidden`（[NEW] 演出段隐藏软件光标，原版全程自绘不隐藏=纯增强）——
+  `Application::renderFrame` 按 `eventFlcActive || parachuteActive` 统一驱动（事件 FLC
+  含冻结旁白期 + 跳伞入场）；乐透开奖 state3/5、月结全身像段按界面级 state 设置。
+  **乐透"轻微闪烁花屏"根因与修复（2026-09-29）**：`Cursor::update` 旧实现在鼠标移动/
+  换帧时**先 `uncompose` 把上一轮 compose 保存的 32×32 旧背景写回表面**——即时模式界面
+  （乐透投注/开奖每 tick 全量重绘、变暗格/装饰/FLC 持续变化）新背景与旧块不符 →
+  下一帧 present 出现光标旧位置脏块一帧（鼠标静止不闪）。重写管线
+  renderFrame 已保证"compose（抓当前干净背景）→ present → uncompose（精确恢复）"，
+  表面恒为无光标内容 → update 改为**只推进动画与位置跟踪**，重绘交 renderFrame
+  每帧 `if(!visible) compose` 从最新背景重抓（`src/render/cursor.cpp`）。
+  `Cursor::invalidate()` 备用：调用方整帧重绘后作废保存块（增量绘制界面勿调，否则拖影）
+- 经验/坑：① 演出等待入口先 `consumeSkipInput()` 清残留（上一次关对话框的按钮点击
+  不应秒跳过下一段旁白/动画）；② showMessage 打断**不停语音**（原版 sub_4528B9 无
+  voiceStop），playLine 打断**要停**（sub_4544F6 打断分支 voiceStop）——两套语义勿混；
+  ③ **前进 GO 面板（0x417191）与演出叠加层的层级**：原版 = WM_PAINT 画完整场景
+  （地图+工具条+右侧/前进面板，GO 在地图区 ~(180,120)）后，flcPlay/高亮/跳伞在
+  backbuffer 上 saveBackground(0,40..440,440) 末层叠加 = **动画盖住 GO**；重写
+  `renderGameFrame` 已同步为 地图→物件提示→面板(含GO)→跳伞/事件FLC/高亮
+  （2026-09-29 层级修正，此前 GO 恒在动画之上）
 
 ## 新增控件模板（发现新控件时复制填写）
 

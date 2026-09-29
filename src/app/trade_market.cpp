@@ -172,7 +172,18 @@ bool tradeTipEvent(const SDL_Event* event, void* user) {
         }
         return true;
     }
-    return true;  // 原版 sub_4528B9 纯延时，期间不响应输入
+    // [RE 0x4528B9(1500)] 原版延时消息泵 514/517/257 提前结束（订正"纯延时不响应"误标）
+    if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN && event->button.button == SDL_BUTTON_LEFT) {
+        s.app->events().requestExit(0);
+        return true;
+    }
+    if (event->type == SDL_EVENT_KEY_DOWN &&
+        (event->key.key == SDLK_ESCAPE || event->key.key == SDLK_RETURN ||
+         event->key.key == SDLK_SPACE)) {
+        s.app->events().requestExit(0);
+        return true;
+    }
+    return true;
 }
 
 void tradeTipBlocking(Application& app, const UiImage& sheet, const char* text, int y) {

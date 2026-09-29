@@ -49,7 +49,22 @@ bool messageEventHandler(const SDL_Event* event, void* user) {
         }
         return true;
     }
-    // [RE 0x440CAC] 原版为纯延时（sub_4528B9），期间不响应输入
+    // [RE 0x440CAC/0x4528B9] 原版延时消息泵检测 WM_LBUTTONUP(514)/WM_MBUTTONDOWN(517)/
+    //   WM_KEYUP(257) → 提前结束等待（消息被 PM_REMOVE 吞掉不派发窗口过程，后续流程照常；
+    //   原版打断**不停语音**——sub_4528B9 无 voiceStop，与 FloatMessage::finish 不同）;
+    //   迁移: 左键按下/Esc/Enter/Space → 退出模态
+    if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN && event->button.button == SDL_BUTTON_LEFT) {
+        trace::logf("msg skip (RE 0x4528B9)");
+        st.app->events().requestExit(0);
+        return true;
+    }
+    if (event->type == SDL_EVENT_KEY_DOWN &&
+        (event->key.key == SDLK_ESCAPE || event->key.key == SDLK_RETURN ||
+         event->key.key == SDLK_SPACE)) {
+        trace::logf("msg skip key (RE 0x4528B9)");
+        st.app->events().requestExit(0);
+        return true;
+    }
     return true;
 }
 

@@ -149,6 +149,12 @@
    state 6 时刻的「累積獎金」文字原版右端被重铺截断约 20px，重写画完整（微小差异）。
 7. 存档：`saveGameToSlot` 已写 `publicFund` + `lotteryNumbers`；`loadGameFromSlot` 完整恢复待 P5。
    时光机快照 `TurnSnapshot` 已含两者（原版 0x44808A 引用）。
+8. **闪烁花屏修复（2026-09-29）**：投注/开奖界面每 tick 全量重绘 + 软件光标
+   `Cursor::update` 旧实现"先 uncompose 写回上一轮保存的 32×32 背景"——移动鼠标时
+   旧块与新背景（变暗格/装饰/FLC 变化）不符 → 一帧脏块（实机"轻微闪烁花屏"）。
+   update 改为只推进动画与位置跟踪，compose 由 `Application::renderFrame` 每帧从最新
+   干净背景重抓（present 后 uncompose 恢复）。开奖摇奖（state 3）/中奖 FLC（state 5）
+   动画段 `Cursor::setHidden` 隐藏光标（现代化增强，原版全程自绘）；见 ui-controls §39。
 
 ## 8. 待深入
 

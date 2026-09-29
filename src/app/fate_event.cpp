@@ -832,7 +832,19 @@ bool fateHandler(const SDL_Event* event, void* user) {
         }
         return true;
     }
-    return true; // [RE sub_4544F6(1600)] 阻塞期间不响应输入
+    // [RE sub_4544F6(1600)] 原版展示/尾部延时消息泵检测 514/517/257 提前结束；
+    //   迁移: 打断 = startMs 提前满 (展示+尾部) 总时长，下一 16ms tick 走 phase1 或直接退出
+    if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN && event->button.button == SDL_BUTTON_LEFT) {
+        ctx.startMs = static_cast<int>(nowMs()) - (kFateShowMs + kFateTailMs);
+        return true;
+    }
+    if (event->type == SDL_EVENT_KEY_DOWN &&
+        (event->key.key == SDLK_ESCAPE || event->key.key == SDLK_RETURN ||
+         event->key.key == SDLK_SPACE)) {
+        ctx.startMs = static_cast<int>(nowMs()) - (kFateShowMs + kFateTailMs);
+        return true;
+    }
+    return true;
 }
 
 void fateRun(Application& app, int tableIdx) {

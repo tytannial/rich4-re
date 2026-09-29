@@ -66,6 +66,13 @@ void Cursor::uncompose(Surface& dst) {
 }
 
 void Cursor::compose(Surface& dst, int x, int y) {
+    // [NEW] 演出段隐藏：不画也不保存背景（位置跟踪由 update 维持）
+    if (m_hidden) {
+        m_posX = x;
+        m_posY = y;
+        m_visible = false;
+        return;
+    }
     const UiFrameView* frame = currentFrame();
     if (!frame || !frame->pixels) {
         return;
@@ -120,19 +127,22 @@ void Cursor::update(Surface& dst, int mouseX, int mouseY) {
         return;
     }
     // [RE 0x401F98] 动画帧推进：word_48A176 >= word_48A174 时 word_48A172 递增回绕
-    bool frameChanged = false;
     if (m_frameCount > 1 && ++m_frameTick >= m_frameDelay) {
         m_frameTick = 0;
         if (++m_frame >= m_frameCount) {
             m_frame = 0;
         }
-        frameChanged = true;
     }
-
-    if (frameChanged || mouseX != m_posX || mouseY != m_posY) {
-        uncompose(dst);
-        compose(dst, mouseX, mouseY);
-    }
+    // [PORT 乐透花屏修正 2026-09-29] 原版 fptc 定时器独立于绘制，位置变化时需先恢复背景
+    //   再重绘；重写管线 renderFrame 已保证"每帧 compose（从当前干净表面抓背景）→
+    //   present → uncompose 恢复"，表面恒为无光标内容——若沿用旧"先 uncompose 上一帧
+    //   保存块再 compose"的写法，即时模式界面（乐透/月结/游戏内每 tick 全量重绘）里
+    //   上一帧保存块与新背景不符 → 光标旧位置 32x32 旧背景脏块闪现一帧（乐透"轻微闪烁
+    //   花屏"根因）。改为 update 只推进动画与位置跟踪，重绘交 renderFrame 的
+    //   "if (!visible) compose" 每帧从最新背景重抓。
+    m_posX = mouseX;
+    m_posY = mouseY;
+    (void)dst;
 }
 
 void Cursor::getRect(int mouseX, int mouseY, int outRect[4]) const {

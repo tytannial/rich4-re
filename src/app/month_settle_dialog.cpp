@@ -14,6 +14,7 @@
 #include "game/application.h"
 #include "game/core/log.h"
 #include "game/core/clock.h"
+#include "game/core/trace.h"
 #include "game/game_state.h"
 #include "game/platform/audio.h"
 #include "game/render/blit.h"
@@ -389,6 +390,8 @@ int findRich(Application& app, const SettleCtx& ui) {
 }
 
 // [RE 0x45144F] FLC 全身像播放（阻塞；背景 = 当前结息画面快照 + 色键叠加）
+//   原版实参 flags = kFlcParams（dword_475A0B/0x4759F7 表，值 3/515/1027/1539 **全部含 bit1**
+//   = g_flcInterruptible）→ 悲情/冠军全身像动画可被左键/Esc/Enter/Space 提前打断（2026-09-29 回验）
 void playSettleFlc(SettleCtx& ui, int mkfIndex, int x, int y) {
     Application& app = *ui.app;
     GameState& st = app.gameState();
@@ -399,6 +402,9 @@ void playSettleFlc(SettleCtx& ui, int mkfIndex, int x, int y) {
         return;
     }
     Surface& dst = app.surface();
+    // [RE 0x4528B9] 清进入前残留 + [NEW] 演出段隐藏光标
+    app.consumeSkipInput();
+    app.cursor().setHidden(dst, true);
     ui.flcBg.assign(dst.pixels(), dst.pixels() + static_cast<size_t>(Surface::kWidth) *
                                                        Surface::kHeight);
     const int interval = std::max(1, flc.speedMs());
@@ -424,13 +430,27 @@ void playSettleFlc(SettleCtx& ui, int mkfIndex, int x, int y) {
                 dst.pixels()[static_cast<size_t>(py) * Surface::kWidth + px] = c;
             }
         }
+        // [NEW] 全量回卷 + 叠加 = 本帧背景已重建，光标保存块作废（防陈旧 uncompose 写回闪块）
+        app.cursor().invalidate();
         app.renderFrame();
         app.pumpEvents();
+        // [RE 0x45144F] g_flcInterruptible（flags bit1，本处表值全含）：帧间延时循环检测
+        //   打断输入提前结束（停在当前帧，调用方 drawAfterFlc* 照常重铺终态画面）
+        bool skipHit = false;
         for (int t = 0; t < interval; t += 5) {
+            if (app.consumeSkipInput()) {
+                skipHit = true;
+                break;
+            }
             app.audio().update();
             delayMs(5);
         }
+        if (skipHit) {
+            trace::logf("flc skip idx=%d (monthSettle RE 0x45144F)", mkfIndex);
+            break;
+        }
     }
+    app.cursor().setHidden(dst, false);
     RICH4_LOGI("monthSettle: FLC data.mkf[%d] played @(%d,%d) (RE 0x45144F)", mkfIndex, x, y);
 }
 

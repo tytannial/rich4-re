@@ -1350,7 +1350,19 @@ bool newsHandler(const SDL_Event* event, void* user) {
         }
         return true;
     }
-    return true; // [RE 0x4544F6(2400)] 阻塞期间不响应输入
+    // [RE 0x4544F6(2400)] 原版插画展示延时消息泵检测 514/517/257 提前结束 →
+    //   效果阶段照常执行；迁移: 打断 = startMs 提前满 kNewsShowMs，下一 16ms tick 触发 phase1
+    if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN && event->button.button == SDL_BUTTON_LEFT) {
+        ctx.startMs = static_cast<int>(nowMs()) - kNewsShowMs;
+        return true;
+    }
+    if (event->type == SDL_EVENT_KEY_DOWN &&
+        (event->key.key == SDLK_ESCAPE || event->key.key == SDLK_RETURN ||
+         event->key.key == SDLK_SPACE)) {
+        ctx.startMs = static_cast<int>(nowMs()) - kNewsShowMs;
+        return true;
+    }
+    return true;
 }
 
 void newsRun(Application& app, int idx) {

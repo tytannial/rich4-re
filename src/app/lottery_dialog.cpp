@@ -859,6 +859,9 @@ bool drawHandler(const SDL_Event* event, void* user) {
             }
         }
         updateAnim(ui);
+        // [NEW] 摇奖/中奖动画段隐藏软件光标（现代化增强；投注/静态阶段保持显示）
+        app.cursor().setHidden(app.surface(),
+                               ui.state == kDrawRolling || ui.state == kDrawWinFlc);
         drawDraw(ui);
         if (ui.msg.active()) {
             ui.msg.redraw(app);

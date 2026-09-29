@@ -43,6 +43,24 @@ public:
     // [RE 0x4024C0] sub_4024C0 光标包围矩形（裁剪到 640x480）
     void getRect(int mouseX, int mouseY, int outRect[4]) const;
 
+    // [NEW] 背景作废：调用方已/即将全量重绘整个表面，m_saved 陈旧——
+    //   下一轮 update/compose 不做 uncompose 写回（防"旧背景脏块闪现"，
+    //   即时模式每 tick 全量重绘界面必调；增量绘制界面勿调，否则光标拖影）
+    void invalidate() { m_visible = false; }
+
+    // [NEW] 演出段隐藏软件光标（原版无此行为，现代化增强）：
+    //   隐藏时先恢复背景保持表面干净，compose/update 跳过绘制
+    void setHidden(Surface& dst, bool hidden) {
+        if (hidden == m_hidden) {
+            return;
+        }
+        m_hidden = hidden;
+        if (m_hidden) {
+            uncompose(dst);
+        }
+    }
+    bool hidden() const { return m_hidden; }
+
     bool initialized() const { return m_initialized; }
     bool visible() const { return m_visible; }
 
@@ -59,6 +77,7 @@ private:
     int m_posX = 0;         // dword_48A164
     int m_posY = 0;         // dword_48A168（x 坐标；-1 表示未绘制）
     bool m_visible = false;
+    bool m_hidden = false; // [NEW] 演出段隐藏光标
     int m_saveX = 0;        // dword_48A0EC
     int m_saveY = 0;        // dword_48A0F0
     int m_saveW = 0;

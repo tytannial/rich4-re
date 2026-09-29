@@ -68,7 +68,23 @@ public:
         return clicked;
     }
     // [NEW] 合成点击（debug move/click 直投）也置位 uiClicked（与真实按下语义一致）
-    void setUiClicked() { m_uiClicked = true; }
+    void setUiClicked() {
+        m_uiClicked = true;
+        m_skipInput = true;
+    }
+
+    // [RE 0x4528B9/0x4544F6/0x45144F] 演出打断（跳过加速）标志：
+    // 依据: 原版 sub_4528B9/sub_4544F6 延时消息泵与 flcPlay（g_flcInterruptible=
+    //       flcOpen flags&2，0x48C880）检测 WM_LBUTTONUP(514)/WM_MBUTTONDOWN(517)/
+    //       WM_KEYUP(257) 即提前结束等待并吞掉该消息（PM_REMOVE 不派发窗口过程）;
+    // 迁移: 左键按下 或 Esc/Enter/Space 按下置位，showMessage/playLine/playEventFlc
+    //       等演出循环 consumeSkipInput() 轮询消费（一次性，不穿透下层逻辑）
+    bool consumeSkipInput() {
+        const bool v = m_skipInput;
+        m_skipInput = false;
+        return v;
+    }
+    void setSkipInput() { m_skipInput = true; }
 
     // [NEW] 调试：第 25 帧合成 ESC 按下（验证弹出层关闭/主菜单无操作）
     void setAutoEsc(bool on, int frame = 25) {
@@ -192,6 +208,7 @@ private:
     Cursor m_cursor;
     TextRenderer m_text;
     bool m_uiClicked = false;
+    bool m_skipInput = false; // [RE 0x4528B9/0x4544F6/0x45144F] 演出打断标志
     std::string m_shotPath;
     int m_shotFrame = 0;
     int m_shotCursorX = -1;

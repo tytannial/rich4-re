@@ -1,0 +1,15 @@
+# id: 300_skip_msg
+# covers: 演出打断加速（showMessage/playLine = 原版 0x4528B9/0x4544F6 延时可打断，2026-09-29）
+# timeout: 40000
+wait idle 1000
+find.evtcell 10
+assert state selected >= 1
+land
+wait log "得點券" 8000
+click 320 240
+assert trace "msg skip"
+wait frames 20
+click 320 240
+assert trace "line skip"
+assert state players.0.points >= 50
+quit

@@ -1124,6 +1124,14 @@ void playHighlightBlink(Application& app, bool preRedraw) {
 //       首帧解码后 sub_45434F 播放 Effect.mkf[soundId]（-1 不播）；播完释放资源。
 // 迁移: 逐帧 renderGameFrame（经 eventFlc 叠加）+ renderFrame + pumpEvents + 分段延时，
 //       音频续喂同 playHighlightBlink
+// interruptible = 原版 flcOpen flags bit1（g_flcInterruptible 0x48C880）：
+//   2026-09-29 全量回验原版 55 处 sub_45144F 调用点 flags——**仅开场 playIntro
+//   （0x415A04/0x415B60/0x415C7E，flags=3/0x14000003）与月结悲情/冠军全身像
+//   （0x43894E/0x439050，flags 表 dword_475A0B/0x4759F7 值 3/515/1027/1539 全含 bit1，
+//   重写= month_settle_dialog.cpp playSettleFlc）可打断**；游戏事件动画
+//   （神明插图 540..551/施工 523/拆除 526/入狱 538/住院 524/新闻 527..539/命运/
+//   魔法屋 553/529/得點券 537/卡片 536/骰子/跳伞 559/破产 555/556…）flags 低 2 位
+//   恒 01 → 全部**不可打断**（保持原版）；本参数默认 false 即 1:1，无需逐点改动
 // freeze=true: 播完**冻结末帧**持续显示（原版 backbuffer 保留，直到下一次全量重绘/
 //       showGodNarration 释放）——神明插图 + 旁白叠加需要
 // switchFrame（原版 flcOpen flags BYTE2 = dword_48C85C 场景切换帧，[RE 0x450CED]）：
@@ -1135,13 +1143,15 @@ void playHighlightBlink(Application& app, bool preRedraw) {
 //   538=帧18（警车到中间）、525/532/526=帧3、552=帧1；0=不切换（插图期无状态变化的
 //   动画，逐帧重绘与原版表面静止等价）。2026-09-24 三轮实机修正（跳视口→保帧→锁视口）
 void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, bool freeze,
-                  int switchFrame) {
+                  int switchFrame, bool interruptible) {
     GameState& st = app.gameState();
     auto blob = st.data.read(mkfIndex);
     if (!blob || !st.eventFlc.open(std::move(*blob))) {
         RICH4_LOGW("eventFlc: data.mkf[%d] unavailable (RE 0x45144F)", mkfIndex);
         return;
     }
+    // [RE 0x4528B9] 清除进入前残留的打断输入（防上一次界面点击误打断本次动画）
+    app.consumeSkipInput();
     st.eventFlcX = x;
     st.eventFlcY = y;
     st.eventFlcActive = true;
@@ -1178,7 +1188,11 @@ void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, boo
     bool soundPlayed = false;
     int frameNo = 0;       // 1 基（对应原版解码后 dword_48C874）
     bool switched = false;
-    while (st.eventFlc.nextFrame()) {
+    // [RE 0x45144F] g_flcInterruptible（flcOpen flags bit1）：原版延时循环内
+    //   PeekMessage 检测 514/517/257 → v6=1 提前退出（停在当前帧、不重绘）
+    //   光标隐藏由 Application::renderFrame 按 eventFlcActive 统一驱动
+    bool aborted = false;
+    while (!aborted && st.eventFlc.nextFrame()) {
         ++frameNo;
         if (preserve && rw > 0 && rh > 0) {
             if (!switched && frameNo >= switchFrame) {
@@ -1220,9 +1234,20 @@ void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, boo
             app.audio().playEffect(soundId);
             soundPlayed = true;
         }
+        // [RE 0x45144F] 打断检测（g_flcInterruptible=flags bit1）：原版在帧间延时循环内
+        //   PeekMessage 检测 514/517/257 → v6=1 提前结束，表面停在当前帧（不重绘）
         for (int t = 0; t < interval; t += 5) {
+            if (interruptible && app.consumeSkipInput()) {
+                aborted = true;
+                break;
+            }
             app.audio().update();
             delayMs(5);
+        }
+        if (aborted) {
+            trace::logf("flc skip idx=%d frame=%d (RE 0x45144F g_flcInterruptible)", mkfIndex,
+                        frameNo);
+            break;
         }
     }
     if (!freeze) {
@@ -1405,7 +1430,19 @@ bool cardGetHandler(const SDL_Event* event, void* user) {
         }
         return true;
     }
-    return true; // [RE 0x4528B9(1500)] 纯延时，期间不响应输入
+    // [RE 0x4528B9(1500)] 原版延时消息泵检测 514/517/257 提前结束（吞掉不穿透）：
+    //   卡片获得展示可被左键按下/Esc/Enter/Space 打断（2026-09-29 订正"纯延时"误标）
+    if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN && event->button.button == SDL_BUTTON_LEFT) {
+        ctx.app->events().requestExit(0);
+        return true;
+    }
+    if (event->type == SDL_EVENT_KEY_DOWN &&
+        (event->key.key == SDLK_ESCAPE || event->key.key == SDLK_RETURN ||
+         event->key.key == SDLK_SPACE)) {
+        ctx.app->events().requestExit(0);
+        return true;
+    }
+    return true;
 }
 } // namespace
 

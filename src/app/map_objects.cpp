@@ -505,10 +505,16 @@ void showGodNarration(Application& app, const char* text) {
     app.text().setFont(28, 0xFFFFFF, 0x101010, kTextStyleShadow, 0);
     app.text().drawText(dst, text, 220, 460, 7);
     app.renderFrame();
+    // [RE 0x4528B9] 清进入前残留的打断输入（上一次按钮点击不应秒跳过旁白）
+    app.consumeSkipInput();
     const uint64_t end = nowMs() + 2400;
     while (static_cast<int64_t>(nowMs() - end) < 0) {
         app.audio().update();
         app.pumpEvents();
+        // [RE 0x4528B9] 原版旁白延时检测 514/517/257 提前结束（消息吞掉不穿透）
+        if (app.consumeSkipInput()) {
+            break;
+        }
         delayMs(20);
     }
     st.eventFlcActive = false;
