@@ -200,6 +200,7 @@ struct Audio::Impl {
     bool musicEof = false;
     int track = 0;       // 1-8 = 可选曲目；-1 = 场景音乐；0 = 无
     int sceneIndex = -1; // 场景音乐索引
+    bool musicPaused = false; // [RE 0x4019DD WM_ACTIVATEAPP] 失焦暂停（冻结解码/混音推进）
 
     std::vector<uint8_t> mixBuf;
 };
@@ -270,8 +271,8 @@ void Audio::update() {
     }
     std::memset(impl.mixBuf.data(), 128, static_cast<size_t>(need));
 
-    // 音乐混入
-    if (impl.decoder.valid() && m_musicVolume > 0) {
+    // 音乐混入（失焦暂停时冻结：不推进解码/musicPos，恢复后原位续播）
+    if (impl.decoder.valid() && m_musicVolume > 0 && !impl.musicPaused) {
         const int gain = kVolumeGain[std::clamp(m_musicVolume, 0, 4)];
         while (!impl.musicEof &&
                impl.musicBuf.size() - impl.musicPos < static_cast<size_t>(need)) {
@@ -567,6 +568,11 @@ void Audio::resumeSceneMusic() {
     m_musicStack.pop_back();
     playMusic(idx);
 }
+
+// [RE 0x4019DD WM_ACTIVATEAPP] 窗口失焦/回焦暂停/恢复音乐（原版 pause mid / resume；重写
+//   暂停 update 混音/解码推进，musicBuf/musicPos 冻结 → 回焦从原位置续播）
+void Audio::setMusicPaused(bool paused) { m_impl->musicPaused = paused; }
+bool Audio::musicPaused() const { return m_impl->musicPaused; }
 
 void Audio::stopMusic() {
     m_impl->decoder.close();

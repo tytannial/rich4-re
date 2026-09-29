@@ -157,6 +157,15 @@ void Application::pumpEvents() {
             m_running = false;
             continue;
         }
+        // [RE 0x4019DD WM_ACTIVATEAPP] 窗口失焦暂停音乐、回焦恢复（对等原版 pause mid/resume）
+        if (event.type == SDL_EVENT_WINDOW_FOCUS_LOST) {
+            m_audio.setMusicPaused(true);
+            continue;
+        }
+        if (event.type == SDL_EVENT_WINDOW_FOCUS_GAINED) {
+            m_audio.setMusicPaused(false);
+            continue;
+        }
         // [PORT Win32:GetCursorPos] 鼠标事件坐标转换（定义见 transformMouseEvent）
         transformMouseEvent(event);
         // [NEW] 真实鼠标移动清除合成输入覆盖与调试选择器（脚本 select 仅在无人动鼠标时生效）

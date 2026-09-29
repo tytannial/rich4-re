@@ -88,6 +88,10 @@ public:
     void setMusicVolume(int volume);
     int musicVolume() const { return m_musicVolume; }
     bool musicPlaying() const;
+    // [RE 0x4019DD WM_ACTIVATEAPP] 窗口失焦暂停 / 回焦恢复音乐（暂停=冻结解码与混音推进，
+    //   恢复从原位置续播；原版 pause mid / resume cdtrack）
+    void setMusicPaused(bool paused);
+    bool musicPaused() const;
 
     // 兼容旧接口：播放一段 WAV（RIFF）数据
     bool playWav(const std::vector<uint8_t>& wav);
