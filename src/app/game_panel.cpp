@@ -396,19 +396,27 @@ void drawMiniMap(Application& app) {
 }
 
 // [RE 0x4521F0] 节日查询：组 base=4*gameMode+mapIndex，遍历 24 条，命中返回索引(0..23)否则 -1
-// 依据: 0x4521F0; type 0=固定(月,日)、2=第N个星期X；1=浮动(需 dword_47639C 表)
-// 差异: type1 浮动节日暂未实现（跳过）
+// 依据: 0x4521F0; type 0=固定(月,日)、1=浮动(查 kFloatHoliday 农历表)、2=第N星期X
 int findHoliday(const GameState& st, uint32_t date) {
     const int base = 4 * st.gameMode + st.mapIndex;
     const int year = static_cast<int>((date >> 16) & 0xFFFF);
     const int month = static_cast<int>((date >> 8) & 0xFF);
     const int day = static_cast<int>(date & 0xFF);
     const int v2 = (month << 8) | day;
+    const int32_t days = daysSince1998(date);
     for (int i = 0; i < 24; ++i) {
         const uint8_t* h = kHoliday[base][i];
         const int type = h[1];
         int a1 = -1;
+        int vcmp = v2;
         if (type == 0) {
+            a1 = (h[2] << 8) | h[3];
+        } else if (type == 1) {
+            // [RE 0x452285] 浮动（农历）节日：查农历表；越界（表止 ~2021）不命中
+            if (days < 0 || days >= kFloatHolidayLen) {
+                continue;
+            }
+            vcmp = kFloatHoliday[days];
             a1 = (h[2] << 8) | h[3];
         } else if (type == 2) {
             if (h[2] != month) {
@@ -426,9 +434,9 @@ int findHoliday(const GameState& st, uint32_t date) {
             }
             a1 = (month << 8) | d;
         } else {
-            continue; // type1 浮动，暂不支持
+            continue;
         }
-        if (v2 == a1 && h[0] < 0x80) {
+        if (vcmp == a1 && h[0] < 0x80) {
             return i;
         }
     }

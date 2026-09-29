@@ -136,18 +136,26 @@ int firstWeekday(int year, int month) {
     return (total + 4) % 7;
 }
 
-// [RE 0x4521F0] 节日查询（type 0 固定 / type 2 第 N 个星期X；type1 浮动未实现）
+// [RE 0x4521F0] 节日查询（type 0 固定 / 1 浮动农历 / 2 第 N 个星期X）
 int findHoliday(const GameState& st, uint32_t date) {
     const int base = 4 * st.gameMode + st.mapIndex;
     const int year = static_cast<int>((date >> 16) & 0xFFFF);
     const int month = static_cast<int>((date >> 8) & 0xFF);
     const int day = static_cast<int>(date & 0xFF);
     const int v2 = (month << 8) | day;
+    const int32_t days = daysSince1998(date);
     for (int i = 0; i < 24; ++i) {
         const uint8_t* h = kHoliday[base][i];
         const int type = h[1];
         int a1 = -1;
+        int vcmp = v2;
         if (type == 0) {
+            a1 = (h[2] << 8) | h[3];
+        } else if (type == 1) {
+            if (days < 0 || days >= kFloatHolidayLen) {
+                continue; // 农历表止 ~2021，越界不命中
+            }
+            vcmp = kFloatHoliday[days];
             a1 = (h[2] << 8) | h[3];
         } else if (type == 2) {
             if (h[2] != month) {
@@ -166,7 +174,7 @@ int findHoliday(const GameState& st, uint32_t date) {
         } else {
             continue;
         }
-        if (v2 == a1 && h[0] < 0x80) {
+        if (vcmp == a1 && h[0] < 0x80) {
             return i;
         }
     }

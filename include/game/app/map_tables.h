@@ -63,6 +63,9 @@ extern const char* const kNpcNames[8];
 extern const uint16_t kCalendarRes[8];
 // [RE 0x47FF4A] byte_47FF4A.. 节日表 [组=4*mode+map][24][12]{flag,type,month,day,weekday, effectFlags,resFlc,flcParam,music}
 extern const uint8_t kHoliday[8][24][12];
+// [RE 0x47639C] 农历浮动节日表（findHoliday type1；越界=不命中）
+extern const uint16_t kFloatHoliday[];
+extern const int kFloatHolidayLen;
 // [RE 0x475218] byte_475218 月份->背景帧组
 extern const uint8_t kMonthFrame[12];
 // [RE 0x4752AA] dword_4752AA 小地图 y 位置（按 byte_49715D 布局索引）

@@ -84,8 +84,8 @@ def main() -> None:
         mt = Path("src/app/map_tables.cpp")
         mt_src = mt.read_text(encoding="utf-8")
         pat = _re.compile(r"// \[RE 0x47FF4A\].*?\nconst uint8_t kHoliday\[8\]\[24\]\[5\] = \{.*?\n\};", _re.S)
-        assert pat.search(mt_src), "kHoliday define block not matched"
-        mt.write_text(pat.sub(lambda _m: block, mt_src), encoding="utf-8")
+        if pat.search(mt_src):
+            mt.write_text(pat.sub(lambda _m: block, mt_src), encoding="utf-8")
         hdr = Path("include/game/app/map_tables.h")
         hs = hdr.read_text(encoding="utf-8")
         hs = hs.replace("extern const uint8_t kHoliday[8][24][5];",
@@ -94,6 +94,34 @@ def main() -> None:
                         "[组=4*mode+map][24][12]{flag,type,month,day,weekday, effectFlags,resFlc,flcParam,music}")
         hdr.write_text(hs, encoding="utf-8")
         print("[write] updated map_tables.cpp + map_tables.h (kHoliday[..][12])")
+
+        # 农历浮动节日表 dword_47639C → src/app/holiday_tables.cpp + extern
+        flen = 8401
+        fb = va_to_raw(FLOAT_VA)
+        rows = [int.from_bytes(data[fb + i * 4: fb + i * 4 + 2], "little") for i in range(flen)]
+        fl = [
+            "// [RE 0x47639C] 农历浮动节日表（索引=daysSince1998，值=农历月<<8|日；findHoliday type1）",
+            "// 生成: tools/gen_holiday_tables.py --write（勿手改）",
+            '#include "game/app/map_tables.h"',
+            "",
+            "namespace rich4 {",
+            "",
+            "const uint16_t kFloatHoliday[] = {",
+        ]
+        for i in range(0, flen, 12):
+            fl.append("    " + ",".join(str(x) for x in rows[i:i + 12]) + ",")
+        fl += ["};", "", f"const int kFloatHolidayLen = {flen};", "", "}  // namespace rich4", ""]
+        ht = Path("src/app/holiday_tables.cpp")
+        ht.write_text("\n".join(fl), encoding="utf-8")
+        hs2 = hdr.read_text(encoding="utf-8")
+        if "kFloatHoliday" not in hs2:
+            hs2 = hs2.replace(
+                "extern const uint8_t kHoliday[8][24][12];",
+                "extern const uint8_t kHoliday[8][24][12];\n"
+                "// [RE 0x47639C] 农历浮动节日表（findHoliday type1；越界=不命中）\n"
+                "extern const uint16_t kFloatHoliday[];\nextern const int kFloatHolidayLen;")
+            hdr.write_text(hs2, encoding="utf-8")
+        print(f"[write] {ht} kFloatHoliday[{flen}] + extern")
 
     # 探测浮动表 dword_47639C：dump days 0..40 的 u32（低16=月<<8|日）
     print("[probe] dword_47639C (u32[] low16 = month<<8|day, high16):")

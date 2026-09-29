@@ -8,7 +8,7 @@
 
 | 项 | 现状 | 缺口 |
 |----|------|------|
-| `findHoliday` | `game_panel.cpp:396` + `bank_stay_dialog.cpp:140` **两份副本**，仅 type 0/2 | type1 浮动跳过；两副本应统一 |
+| `findHoliday` | 两副本（`game_panel.cpp:396` / `bank_stay_dialog.cpp:140`）✅ type 0/1/2（type1 查 `kFloatHoliday` + 越界 clamp；1998 春节 1/28 冒烟命中 idx17 音乐14） | 两副本重复（可选后续统一） |
 | 节日数据表 | `kHoliday[8][24][5]`（`map_tables.cpp:717`）`{flag,type,month,day,weekday}` | **丢原版 +5..+11**：效果 flags / 插画FLC / 音乐idx（`sub_452444` 必需） |
 | 浮动节日表 | 无 | 需 `dword_47639C`（按 `daysSince1998` 索引） |
 | `sub_452444` 每日节日处理 | ✅ 阶段1+2a：`holidayDaily`（`advanceDay` 0x41D07B 接线）插画 FLC + 节日音乐 + 人人发卡（type0/2 命中即生效；圣诞 12/25 flags=0xf 冒烟全触发） | **type1 农历节日待**（需 `kFloatHoliday` 表 + `findHoliday` type1 + 超界 clamp） |
@@ -52,10 +52,12 @@
 ## 3. `dword_47639C` 浮动节日表
 
 `u32[]`，按 `daysSince1998(date)` 索引，取低 16 位 = `月<<8|日`（样本首项 `0x0c03`=12/3、递增）。
-- 覆盖范围需 ≥ 游戏最长时限（时间上限最大 730 天 + 起始年余日 + 缓冲）；提取时确认数组尾界
-  （下一符号 / 值停止递增处）。
-- **语义待核**：`0x0c03` 在 `daysSince1998=0`（1998/1/1）→ 疑为"该浮动节每年对应公历日"预计算表；
-  实现时对拍若干 type1 节日（如农历春节）命中日期与原版/帮助核对，再定索引基准。
+- **已确定（2026-09-29）**：表长 **8401** 项（day0..8400，1997/12/3→约 2021；day8401 起为紧邻垃圾数据），
+  生成 `kFloatHoliday[8401]` u16（`holiday_tables.cpp`，`gen_holiday_tables.py --write` 提取，存 low16=农历月<<8|日）。
+- **语义确认**：`kFloatHoliday[daysSince1998(公历日)] = 农历月<<8|日`；type1 节日 `h[2]<<8|h[3]` 为农历目标
+  月日，相等即命中（春节=农历1/1、端午=5/5、中秋=8/15、除夕=12/大尽）。验证 1998-01-28→float[27]=0x0101→
+  base0 idx17（音乐14）命中。**超界保护**：`days<0 || days>=8401`（2021 后系统日期）→ type1 不命中
+  （与原版表边界一致；原版越界为未定义读，重写显式 clamp 更安全）。
 
 ## 4. `sub_452444 0x452444`（每日节日处理，`advanceDay` 0x41D07B 调用）
 
