@@ -79,7 +79,8 @@ damagePlayer/demolish/givePlayerItem）；`economy.cpp` deleteMapObject **配对
 天使 `angelUpgrade` 0x40B110 免费加盖/建设施·封顶 FLC523、惡魔拆一层+记债 30×M+FLC526、土地公強佔
 +赔偿 M×price×(level+2)/5）；福神付费升级后 `godBlessUpgrade` 0x40F8BE 免费追加一级；
 死神代付 `resolveFeePayer`（0x40FBB8，三收费管线，含原版寶箱 idx14 照抄）+ 欠款矩阵
-`addPlayerDebt` 0x40DF69（不入存档，破产清算接入 TODO）；**消息文本 BIG5 截断踩坑修正**
+`addPlayerDebt` 0x40DF69（不入存档同原版；破产清算欠款列归集 ✅ `eliminatePlayer` 2026-09-27）；
+**消息文本 BIG5 截断踩坑修正**
 （0x4634C0/0x463514 IDA 显示 "%s" 实为 "%s顯靈\n\n加蓋一層房屋！/投資失敗！"）+
 `checkCarriedGod` 守卫 helper（五处付费流标 [HELP 41/45/51]）；详见 `map-object-refresh.md` §13。
 道具放置入口（0x446BAA/C88/D69）与 13 道具效果 ✅（2026-09-25，`item_effects.md`）；角色台词
@@ -111,7 +112,9 @@ owner 停留 type4 逐级解锁选 1（`corp.sub` 门槛**灰度**）→ `resear
 
 **M2 执行计划**：见 `docs/m2-plan.md`
 
-**M2 待办**（详见 `docs/reverse/functions/` 各档案「差异」段，按选定路线排序）：
+**M2 完成纪要**（✅ 全部完成 2026-09-29；各档案标注的「待实机验证/待实机验收」项——分红/週轉/
+公告栏挂牌/买股卖股等——统一并入 **M3 收尾后一批实机测试**（用户 2026-09-29 决策）。
+详见 `docs/reverse/functions/` 各档案「差异」段）：
 
 - ~~P2 事件格实现~~ ✅ **case 2..16 全部完成 2026-09-26**（见 `41982d-p2-events.md`；
   银行/小游戏/樂透/百貨/新聞/命運/魔法屋全链 ✅；**魔法屋+拍卖 2026-09-26**：
