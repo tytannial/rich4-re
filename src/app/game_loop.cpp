@@ -457,9 +457,11 @@ bool gameEventHandler(const SDL_Event* event, void* user) {
             return true;
         }
         if (st.sceneRequest != 0) {
-            // [RE 0x401B9C] 重新游戏（sceneRequest=1）→ 回主菜单（LABEL_5 重置后 mainMenuScene）
-            RICH4_LOGI("system menu: scene=%d -> back to main menu (RE 0x401B9C)", st.sceneRequest);
-            st.sceneRequest = 0;
+            // [RE 0x401D6F] 游戏结束/场景切换：仅退出游戏内循环，**不清 sceneRequest**，
+            //   交由 WinMain run 按 scene 值分派（1→主菜单 LABEL_5；2→通关结算续局 LABEL_6；
+            //   3→结算回菜单；4→失败读档继续）。原重写一律清零回主菜单是 M2 近似。
+            RICH4_LOGI("exit game loop for scene dispatch: scene=%d (RE 0x401D6F)",
+                       st.sceneRequest);
             app.events().requestExit(0);
             return true;
         }

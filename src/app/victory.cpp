@@ -207,4 +207,41 @@ int defeatFlow(Application& app, bool playExitFlc) {
     return 1;
 }
 
+// [RE 0x4075C1] gameClearFlow
+void gameClearFlow(Application& app) {
+    GameState& st = app.gameState();
+    // [RE 0x4075CF] 标记当前地图已通关
+    if (st.mapIndex >= 0 && st.mapIndex < 4) {
+        st.clearedMaps[st.mapIndex] = 1;
+    }
+    int cleared = 0;
+    for (int i = 0; i < 4; ++i) {
+        if (st.clearedMaps[i] != 0) {
+            ++cleared;
+        }
+    }
+    trace::logf("clear map=%d cleared=%d", st.mapIndex, cleared);
+    if (cleared >= 4) {
+        // [RE 0x407797] 4 图全通：原版按模式播 END%02d/THANKS（时空之旅）或 END/OVER.AVI（普通）。
+        //   A5 决策：不实现 AVI 解码（Indeo5 / FFmpeg GPLv3 不引入）→ TODO 静态致谢，直接 quitGame。
+        RICH4_LOGI("gameClearFlow: ALL 4 cleared -> quit (AVI playback TODO A5) (RE 0x4075C1)");
+        st.quitGame = true;
+        return;
+    }
+    // [RE 0x407780] 原版 runModal(mapSelectWndProc 0x4060E9) 弹面板手动选下一图；
+    //   功能版：自动选下一张未通关图（JUMP 预览滚动 / 角色动画 / 红勾滑入面板属视觉精修批）。
+    int next = st.mapIndex;
+    for (int k = 1; k <= 4; ++k) {
+        const int cand = (st.mapIndex + k) % 4;
+        if (st.clearedMaps[cand] == 0) {
+            next = cand;
+            break;
+        }
+    }
+    st.mapIndex = next;
+    st.newGameConfig.mapIndex = next;
+    RICH4_LOGI("gameClearFlow: cleared=%d -> next map=%d (RE 0x4075C1; mapSelectWndProc 0x4060E9 TODO)",
+               cleared, next);
+}
+
 } // namespace rich4

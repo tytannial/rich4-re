@@ -10,8 +10,9 @@
 > 另纳 B 功能/演出/音频拉齐（节日链/房地产AI/卡门槛/OGG续播/失焦暂停/生日演出/出监出院资源/
 > 公佈欄交互/乐透截断等），详见 AGENTS 与 docs 盘点。
 >
-> **进度**：A2 `checkVictory`+接入 advanceDay、A4 `defeatFlow` 失败界面 ✅（`src/app/victory.cpp`，
-> 测试 280/282/286）；余 A1/A2选人UI/A3/A6 + B 组。
+> **进度**：A2 `checkVictory`、A4 `defeatFlow`、A6 run scene 分派、A1 clearedMaps 生命周期、
+> A3 `gameClearFlow`（功能版自动选图）✅（`src/app/victory.cpp`+`application.cpp`，测试 280/282/286）；
+> 余 A3 视觉（`mapSelectWndProc` 选图面板）、scene4 选档框、A2 选人目标 UI、B 组。
 
 ## 1. M3-A：终局链（最高优先，档案 victory-flow.md 已备齐依据）
 

@@ -111,6 +111,12 @@ WinMain 处理 byte_46CAF8:
   其余 AI `aiUsed=2` + scene2 / 单人 AI 赢→defeatFlow / 多人人类赢→scene3 / AI 赢→scene1）+
   `sub_407842`+`sub_406B14` 失败界面 `defeatFlow`（panel.mkf[112] 10s 倒计时模态，确认→4 读档、
   超时→1 主菜单，破产路径播 FLC556）；调试注入 `victory <days> <money>`；测试 280/282/286。
-- 待实现（M3）：`sub_4075C1`+`sub_4060E9` 通关结算与地图选择（scene 2/3，A3）、
-  WinMain `byte_46CAF8` scene 1/2/3/4 分派（A6，现 `game_loop.cpp:462` 仍一律清零回主菜单）、
-  `dword_4990F0` clearedMaps 回主菜单清零（A1）（存档字段 9898 已就位）
+- **✅ 2026-09-29（M3-A6/A1/A3 功能版）已实现**：WinMain `run()` LABEL_5/LABEL_6
+  scene 分派（`src/application.cpp`，`m_runFlow` 驱动）——scene1→主菜单、scene2→`gameClearFlow`
+  续新游戏（**不清通关进度**，`newGameInit(1)` 保配置+灰名单）、scene3→结算回菜单、
+  scene4→读档继续（近似 AUTO=SAVE0）；`gameClearFlow 0x4075C1`（`src/app/victory.cpp`）标记
+  `clearedMaps[mapIndex]=1` + 4 图全通 `quitGame` + 自动选下一未通关图；LABEL_5 入口
+  `memset clearedMaps`（0x401C9E）。测试 280/282 断言分派+标记。
+- 待精修（M3-A3 视觉）：`mapSelectWndProc 0x4060E9` 交互选图面板（JUMP 预览滚动 / 角色通关动画 /
+  红勾帧8 滑入 / 已通关不可选 / 多人「恭喜過關」）——现功能版自动选图；scene4 原版 `loadDialog 0x403D74`
+  选档框（现近似 AUTO 档）；284 四图连通关闭环 + 灰名单跨局测试待此面板落地。

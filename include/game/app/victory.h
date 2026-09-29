@@ -20,4 +20,10 @@ int checkVictory(Application& app);
 // 依据: 0x407842 反编译。
 int defeatFlow(Application& app, bool playExitFlc);
 
+// [RE 0x4075C1] gameClearFlow：通关结算。标记 clearedMaps[mapIndex]=1；
+//   4 图全通 → 原版 END/THANKS/OVER.AVI（Indeo5，A5 决策不实现）降级为 quitGame + TODO；
+//   否则选下一张地图（mapSelectWndProc 0x4060E9 交互面板属视觉精修批，功能版自动选下一未通关图）。
+//   选定图写入 mapIndex/newGameConfig.mapIndex，供 run LABEL_6 续局 newGameInit(1) 使用。
+void gameClearFlow(Application& app);
+
 } // namespace rich4

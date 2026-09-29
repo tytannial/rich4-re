@@ -248,6 +248,9 @@ private:
     int m_mouseOvY = 0;
     int m_frameCount = 0;
     bool m_running = false;
+    // [RE 0x401B9C] WinMain 主循环 LABEL_5/LABEL_6 驱动：0=走 LABEL_5（回主菜单，清通关进度）；
+    //   1=LABEL_6 通关续新游戏（不清进度，newGameInit(1) 保留配置+灰名单）；2=LABEL_6 失败读档继续
+    int m_runFlow = 0;
 };
 
 } // namespace rich4

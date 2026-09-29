@@ -5,8 +5,10 @@
 #include "game/app/game_shutdown.h"
 #include "game/app/main_menu.h"
 #include "game/app/new_game.h"
+#include "game/app/victory.h"
 #include "game/core/log.h"
 
+#include <cstring>
 #include <filesystem>
 
 namespace rich4 {
@@ -62,48 +64,86 @@ bool Application::init(const std::string& gameDir, bool headless) {
 }
 
 void Application::run() {
-    // [RE 0x401B9C] WinMain 主循环（定义见 Application::init）
-    // 主循环语义: LABEL_5 每次进主菜单前重置 word_4991B6/4991B8/byte_46CAFC;
-    //       sub_4029FD 返回按钮索引后 switch 分发:
-    //       0/4 新游戏（sub_406DE7 取消返回 0 → continue 回主菜单）, 1 读档,
-    //       3 退出（sub_401815 + DestroyWindow）
+    // [RE 0x401B9C] WinMain 主循环：LABEL_5（回菜单：清通关进度 g_clearedMaps + 重置
+    //   word_4991B6/4991B8/byte_46CAFC + mainMenuScene）/ LABEL_6（续局：不清进度，
+    //   newGameInit(byte_46CAFC=1) 保留配置与上轮 AI 灰名单）。游戏结束按 g_sceneRequest 分派。
+    GameState& st = m_state;
     while (m_running) {
-        // [RE 0x4991B6/0x4991B8/0x46CAFC] LABEL_5 重置
-        m_state.gameMode = 0;
-        m_state.mapIndex = 0;
-        m_state.gameInited = false;
         int scene;
-        if (m_state.debugQuickstart) {
-            // [NEW] headless 测试开局：跳过主菜单模态直接新游戏（docs/testing.md）
-            scene = 0;
-            RICH4_LOGI("quickstart: bypass main menu (RE 0x4029FD)");
+        if (m_runFlow == 0) {
+            // LABEL_5 [RE 0x401C8C..0x401CA6]：清通关进度 + 重置模式/地图/进入标志
+            std::memset(st.clearedMaps, 0, sizeof(st.clearedMaps)); // [RE 0x401C9E] g_clearedMaps=0
+            st.gameMode = 0;       // word_4991B6
+            st.mapIndex = 0;       // word_4991B8
+            st.gameInited = false; // byte_46CAFC
+            if (st.debugQuickstart) {
+                scene = 0; // [NEW] headless 测试开局：跳过主菜单（docs/testing.md）
+                RICH4_LOGI("quickstart: bypass main menu (RE 0x4029FD)");
+            } else {
+                scene = mainMenuScene(*this); // [RE 0x4029FD]
+            }
+            if (!m_running) {
+                return; // 原版 Msg.message == 18(WM_QUIT) 时 WinMain 直接返回
+            }
         } else {
-            scene = mainMenuScene(*this); // [RE 0x4029FD]
+            // LABEL_6：通关续局(1) / 失败读档继续(2)——不清通关进度、不走主菜单
+            scene = (m_runFlow == 2) ? 1 : 0;
         }
-        if (!m_running) {
-            // 原版 Msg.message == 18(WM_QUIT) 时 WinMain 直接返回
-            return;
-        }
+        m_runFlow = 0;
+
+        bool started = false;
         switch (scene) {
             case 0:
             case 4:
-                // [RE 0x401B9C] case 0/4: sub_406DE7 → ... → sub_401981(0)
-                // 取消（newGameInit 返回 0）时 continue 回主菜单（原版 if (!newGameInit) continue）
-                // case 4 时 word_4991B6 = 1（时空之旅）
-                if (!startGame(*this, scene == 4)) {
+                if (scene == 4) {
+                    st.gameMode = 1; // [RE 0x401CBF] word_4991B6=1（时空之旅）
+                }
+                // mode1 == gameMode（newGameInit 里 restore 由 gameInited 决定，LABEL_6 保留进度）
+                started = startGame(*this, st.gameMode == 1);
+                if (!started) {
                     RICH4_LOGI("startGame cancelled, back to main menu (RE 0x406DE7)");
                 }
-                continue; // 游戏内循环返回后回主菜单
+                break;
             case 1:
-                // [RE 0x401B9C] case 1: 读档进入游戏（对话框内确认后经 sub_401966(1) 返回）
-                if (!loadGameFromSlot(*this, m_state.pendingLoadSlot)) {
+                started = loadGameFromSlot(*this, st.pendingLoadSlot); // [RE 0x402AC5]
+                if (!started) {
                     RICH4_LOGI("loadGameFromSlot failed, back to main menu (RE 0x402AC5)");
                 }
-                continue;
+                break;
             case 3:
             default:
-                // 原版 case 3: sub_401815(); DestroyWindow(hWnd)
-                return;
+                return; // 原版 case 3: gameShutdown + DestroyWindow
+        }
+        if (!started) {
+            continue; // 取消 → 下轮 LABEL_5 回主菜单
+        }
+
+        // [RE 0x401D6F] 游戏结束按 sceneRequest 分派（enterGameLoop 已退出，sceneRequest 保留至今）
+        if (st.quitGame) {
+            return;
+        }
+        const int v10 = st.sceneRequest;
+        st.sceneRequest = 0;
+        st.musicTimer = 0; // [RE 0x401DC4] g_musicTimer=0
+        switch (v10) {
+            case 2: // 通关结算 → 续新游戏（LABEL_6，不清通关进度）
+                gameClearFlow(*this);
+                if (st.quitGame) {
+                    return;
+                }
+                m_runFlow = 1;
+                break;
+            case 3: // 通关结算 → 回主菜单（LABEL_5）
+                gameClearFlow(*this);
+                break;
+            case 4: // 失败读档继续（原版 loadDialog(0) 选档；重写近似：续最近自动存档 SAVE0=AUTO）
+                st.pendingLoadSlot = 0; // [RE 0x403D74] TODO 读档对话框选档
+                m_runFlow = 2;
+                break;
+            case 1:
+            case 0:
+            default:
+                break; // → 下轮 LABEL_5 回主菜单
         }
     }
 }
