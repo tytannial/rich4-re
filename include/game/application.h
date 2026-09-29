@@ -86,6 +86,17 @@ public:
     }
     void setSkipInput() { m_skipInput = true; }
 
+    // [RE 0x401CFC/0x401D14] enterGameLoop(a1) 续局换曲标志：LABEL_6 快速入局
+    //   （通关续战 runFlow=1 / 失败读档 runFlow=2）置位 → enterGameLoop 内
+    //   musicPlayTrack(0) 顺序下一首；主菜单完整新开局不置位（a1=0 不换曲，
+    //   开局曲=playIntro musicPlayTrack(1) 游标0 第一首）
+    void setEnterSwitchMusic(bool on) { m_enterSwitchMusic = on; }
+    bool consumeEnterSwitchMusic() {
+        const bool v = m_enterSwitchMusic;
+        m_enterSwitchMusic = false;
+        return v;
+    }
+
     // [NEW] 调试：第 25 帧合成 ESC 按下（验证弹出层关闭/主菜单无操作）
     void setAutoEsc(bool on, int frame = 25) {
         m_shotEsc = on;
@@ -209,6 +220,7 @@ private:
     TextRenderer m_text;
     bool m_uiClicked = false;
     bool m_skipInput = false; // [RE 0x4528B9/0x4544F6/0x45144F] 演出打断标志
+    bool m_enterSwitchMusic = false; // [RE 0x401CFC/0x401D14] enterGameLoop a1
     std::string m_shotPath;
     int m_shotFrame = 0;
     int m_shotCursorX = -1;

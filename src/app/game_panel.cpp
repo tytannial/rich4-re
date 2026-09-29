@@ -671,11 +671,13 @@ void holidayDaily(Application& app) {
     }
     RICH4_LOGI("holidayDaily: base=%d holiday=%d flags=0x%x (RE 0x452444)", base, holiday, eflags);
     trace::logf("holiday base=%d idx=%d flags=0x%x", base, holiday, eflags);
-    if ((eflags & 4) != 0 && st.musicTimer == 0) {
+    // [RE 0x4525C7] 节日音乐：g_musicTimer 非0 期间 playSceneMusic 整体被禁（Audio 内部
+    //   门控 2026-09-29），此处 ==0 判定与原版 if(!g_musicTimer) 双保险等价
+    if ((eflags & 4) != 0 && app.audio().switchDays() == 0) {
         const int musicIdx = h[10] | (h[11] << 8);
         if (musicIdx != 0) {
             app.audio().playSceneMusic(musicIdx, /*saveCurrent=*/false); // 原版 |0x8000 不压栈
-            st.musicTimer = 0x33; // [RE 0x4525DE] 51（原版按后续 word 判 51/17）
+            app.audio().setSwitchDays(0x33); // [RE 0x4525DE] 51（原版按后续 word 判 51/17）
         }
     }
     if ((eflags & 1) != 0) {

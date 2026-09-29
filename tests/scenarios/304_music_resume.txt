@@ -1,0 +1,12 @@
+# id: 304_music_resume
+# covers: 场景音乐栈续播——playIntro 游标0 开局曲 → 面板进场景音乐（musicOnTrackEnd 压栈
+#         同曲+位置）→ 退出弹栈 "play mid from <pos>"（[RE 0x454BCC] seek 续播，非从头）
+# timeout: 40000
+wait idle 1000
+assert trace "music track=0"
+wait frames 30
+music.scene 6
+assert trace "music scene=6"
+music.resume
+assert trace "music resume track=0"
+quit

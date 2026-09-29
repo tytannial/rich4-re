@@ -332,9 +332,9 @@ struct GameState {
     //       x∈[448,474]→0、x∈[478,504]→1（日历区左右箭头切换），切换后 sub_4169BC(1) 重绘
     int calendarMode = 0;
 
-    // [RE 0x46CB06] byte_46CB06 游戏内音乐切换计时器（高4位=目标天数 / 低4位=当前；
-    //   过天递减，低4位到0 → sub_454ACB + sub_454D91(0) 切下一首可选曲目）
-    int musicTimer = 0;
+    // [RE 0x46CB06] 游戏内音乐切换计时器 g_musicTimer → **迁入 Audio::switchDays**
+    //   （2026-09-29 音乐机制修正：原版 playSceneMusic/PopRestore 门控与过天周期切歌
+    //   都读该全局，收口到 Audio；见 audio.h / 41cf67 音乐段）
 
     // [RE 0x451387] 骰子 FLC 落地音效标志：FLC 第30帧触发一次 + 播放结束一次（共两次槽2）
     bool diceLandPlayed = false;

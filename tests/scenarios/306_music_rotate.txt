@@ -1,0 +1,15 @@
+# id: 306_music_rotate
+# covers: 游戏内音乐轮换=持久游标 byte_47E771 顺序 (cur+1)&7（[RE 0x454D91 a1==0]，
+#         非随机、不随 stopMusic/场景音乐丢失）；开局 playIntro musicPlayTrack(1)=游标0
+# timeout: 40000
+wait idle 1000
+assert trace "music track=0"
+music.next
+assert trace "music track=1"
+music.next
+assert trace "music track=2"
+music.days 0x33
+music.days 3
+music.next
+assert trace "music track=3"
+quit

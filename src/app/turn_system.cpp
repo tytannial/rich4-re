@@ -1156,6 +1156,10 @@ void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, boo
     }
     // [RE 0x4528B9] 清除进入前残留的打断输入（防上一次界面点击误打断本次动画）
     app.consumeSkipInput();
+    // [NEW] 演出段暂停背景音乐（[RE 0x45144F] 原版 MCI 独立线程动画期间照常播放——重写
+    //   混音与阻塞循环同线程，长动画期间易显仓促；暂停=冻结解码/混音，出口 pop 原位续播，
+    //   与 Audio::pauseFocus（失焦）引用合成。音效不受影响）
+    app.audio().pushMusicPause();
     // [NEW] 事件动画演出：先清物件提示（preserve 模式回卷快照必须是干净场景，
     //   抬起消息期间被吞，不清则动画后幽灵悬挂）
     clearObjectTipForPerf(app);
@@ -1260,6 +1264,7 @@ void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, boo
     if (!freeze) {
         st.eventFlcActive = false;
     }
+    app.audio().popMusicPause(); // [NEW] 演出结束恢复背景音乐（原位续播）
     trace::logf("flc done idx=%d frames=%d", mkfIndex, frameNo);
     RICH4_LOGI("eventFlc: data.mkf[%d] played @(%d,%d)%s%s (RE 0x45144F)", mkfIndex, x, y,
                freeze ? " frozen" : "", switchFrame > 0 ? " switch" : "");
@@ -3937,14 +3942,10 @@ void advanceDay(Application& app) {
         }
         ++st.stockDivPeriod; // [RE 0x499084] 分红期数递增
     }
-    // [RE 0x41CF67] 音乐切换计时器（byte_46CB06）：低4位递减到0 → 切下一首可选曲目
-    if ((st.musicTimer & 0xF) != 0) {
-        --st.musicTimer;
-        if ((st.musicTimer & 0xF) == 0) {
-            app.audio().playNextMusic();
-            st.musicTimer = 0x33; // 重置（原版由事件 sub_452444 设 0x33/0x11）
-        }
-    }
+    // [RE 0x41CF67] 音乐切换计时器（word_46CB06，迁入 Audio::switchDays）：低4位递减到0 →
+    //   停乐 + 顺序下一首 + **置0**（原版不自动重置 0x33；0 期间不再周期切，
+    //   且 Audio 门控解除——面板场景音乐恢复可切）
+    app.audio().musicTickDay();
     RICH4_LOGI("advance day: %d/%d/%d dayCount=%d (RE 0x41CF67)",
                static_cast<int>((st.gameDate >> 16) & 0xFFFF),
                static_cast<int>((st.gameDate >> 8) & 0xFF), static_cast<int>(st.gameDate & 0xFF),

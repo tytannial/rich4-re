@@ -125,7 +125,7 @@ void Application::run() {
         }
         const int v10 = st.sceneRequest;
         st.sceneRequest = 0;
-        st.musicTimer = 0; // [RE 0x401DC4] g_musicTimer=0
+        m_audio.setSwitchDays(0); // [RE 0x401DC4] g_musicTimer=0（切歌计时清零，迁入 Audio）
         switch (v10) {
             case 2: // 通关结算 → 续新游戏（LABEL_6，不清通关进度）
                 gameClearFlow(*this);
@@ -133,6 +133,7 @@ void Application::run() {
                     return;
                 }
                 m_runFlow = 1;
+                m_enterSwitchMusic = true; // [RE 0x401D14] LABEL_6 快速入局 enterGameLoop(1)
                 break;
             case 3: // 通关结算 → 回主菜单（LABEL_5）
                 gameClearFlow(*this);
@@ -142,6 +143,11 @@ void Application::run() {
                 if (lslot >= 0) {
                     st.pendingLoadSlot = lslot;
                     m_runFlow = 2;
+                    // [RE 0x40412D/0x404135] loadDialog 尾：g_musicTimer≠0 → 清0+musicStop；
+                    //   musicPlayTrack(0) 顺序下一首。LABEL_6 scene1 enterGameLoop(1) 的
+                    //   换曲由 loadGameFromSlot 路径同标志消费（原版两处调用都推进游标）
+                    m_audio.setSwitchDays(0);
+                    m_enterSwitchMusic = true;
                 }
                 break;
             }

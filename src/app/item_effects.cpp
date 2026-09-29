@@ -639,7 +639,9 @@ int useItemTimeMachine(Application& app) {
     playItemLine(app, p, 10);  // [RE 0x44EF41] off_480D7E（列9）
     const bool ok = restoreTurnSnapshot(app, p);  // [RE 0x448544]
     if (ok) {
-        // [RE 0x4473BD..0x4473F6] 音乐 g_musicTimer 处理（停/重播 track0）——重写简化跳过
+        // [RE 0x4473BD..0x4473F6] 音乐 g_musicTimer（Audio::switchDays）处理：非0 → ++，
+        //   低4>高4 则 置0 + stopMusic + musicPlayTrack(0) 下一首（2026-09-29 补 1:1）
+        app.audio().musicTimeMachineRestore();
         takePlayerItem(st, p, 10);  // [RE 0x445AA2]
         renderGameFrame(app);       // [RE 0x41906A(1)] 全屏重绘
         RICH4_LOGI("time machine: p%d rolled back (RE 0x447387)", p);

@@ -1740,6 +1740,30 @@ bool cmdStockBuy(Application& app, const std::vector<std::string>& a, std::strin
     return true;
 }
 
+// ---- 音乐机制调试（0x454D91/0x4549CF/0x454BCC/0x41CF67 系列；trace 断言续播/轮播，
+//      产品完整路径由实机验证）----
+bool cmdMusicNext(Application& app, const std::vector<std::string>&, std::string&) {
+    app.audio().playNextMusic(); // [RE 0x454D91 a1==0] 持久游标 +1&7
+    return true;
+}
+bool cmdMusicScene(Application& app, const std::vector<std::string>& a, std::string& err) {
+    if (!argCount(a, 1, err, "music.scene <idx>")) return false;
+    if (!app.audio().playSceneMusic(parseInt(a[1]))) {
+        err = "music.scene blocked (switchDays/volume/open)"; // [RE 0x4549CF 门控]
+        return false;
+    }
+    return true;
+}
+bool cmdMusicResume(Application& app, const std::vector<std::string>&, std::string&) {
+    app.audio().resumeSceneMusic(); // [RE 0x454BCC] play mid from <pos> 续播
+    return true;
+}
+bool cmdMusicDays(Application& app, const std::vector<std::string>& a, std::string& err) {
+    if (!argCount(a, 1, err, "music.days <v>")) return false;
+    app.audio().setSwitchDays(parseInt(a[1])); // [RE word_46CB06] g_musicTimer
+    return true;
+}
+
 bool cmdFindRoad(Application& app, const std::vector<std::string>& a, std::string& err) {
     // 首个可拾取道路格（mapHitRegions 中 id<2000 者——0xFFFF00 占用格原版不登记，
     // 天然排除站人/已占格；供地雷/路障/炸弹放置目标）
@@ -2302,6 +2326,10 @@ const Cmd kCmds[] = {
     {"surrender", cmdSurrender},
     {"find.road", cmdFindRoad},
     {"stock.buy", cmdStockBuy},
+    {"music.next", cmdMusicNext},
+    {"music.scene", cmdMusicScene},
+    {"music.resume", cmdMusicResume},
+    {"music.days", cmdMusicDays},
     {"sel.owner", cmdSelOwner},
     {"sel.level", cmdSelLevel},
     {"sel.type", cmdSelType},

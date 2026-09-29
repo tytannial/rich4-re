@@ -683,10 +683,14 @@ void enterGameLoop(Application& app) {
             debug::registerRegion(nm, 616, t * 70, 24, 70);
         }
     }
-    // [RE 0x4019C8] 进游戏切可选曲目（sub_454D91(0) = 切下一首），替换选人场景音乐
-    app.audio().playNextMusic();
-    // [RE 0x452444] 游戏内音乐切换计时器初值（0x33 = 3 天；事件中设 0x33/0x11）
-    app.gameState().musicTimer = 0x33;
+    // [RE 0x4019C8] enterGameLoop(a1)：**a1≠0（LABEL_6 通关续战/读档继续快速入局）才
+    //   musicPlayTrack(0) 顺序下一首**；主菜单完整新开局 a1=0 **不换曲**——开局曲由
+    //   playIntro musicPlayTrack(1)（[RE 0x415965] 游标置 0 = 第一首）。
+    //   g_musicTimer 初值 0（原版此处**不设 0x33**；0x33/0x11 仅节日 sub_452444 设置）
+    if (app.consumeEnterSwitchMusic()) {
+        app.audio().playNextMusic();
+    }
+    app.audio().setSwitchDays(0);
     initTurnState(app);
     runModal(app, &gameEventHandler, &app, 16);
 }

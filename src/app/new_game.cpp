@@ -183,7 +183,7 @@ bool newGameInit(Application& app, bool mode1) {
     state.diceAnimOpened = false;
     state.diceLandPlayed = false;
     state.showDice = false;
-    state.musicTimer = 0;
+    app.audio().setSwitchDays(0); // [RE 0x46CB06] g_musicTimer=0（迁入 Audio）
     state.pendingSpawnPlayer = 0;
     state.gamePlayerControl = false;
     for (int k = 0; k < 9; ++k) {
@@ -569,11 +569,12 @@ void stockInit(Application& app) {
 
 // [RE 0x415872] playIntro
 // 依据: 0x415872 反编译; JUMP.MKF 45/46 资源 + sub_451677 播放 AVI
-//       （AIRPLANE.AVI 或 off_4750E8[地图索引]）
-// 差异: AVI 播放依赖 MCI，SDL 侧暂无替代（跳过）
+//       （AIRPLANE.AVI 或 off_4750E8[地图索引]）；AVI 检查后 audioRegisterEffects(unk_4750F8) +
+//       **musicPlayTrack(1)**（[RE 0x415965] byte_47E771=0 → 游标置 0、播 off_47E773[0]=第一首）
+// 差异: AVI 播放依赖 MCI，SDL 侧暂无替代（跳过）；开场曲保留
 void playIntro(Application& app) {
-    (void)app;
-    RICH4_LOGW("TODO: intro AVI playback skipped (RE 0x415872)");
+    app.audio().playMusic(0); // [RE 0x415965] musicPlayTrack(1)：游标0（首局=第一首）
+    RICH4_LOGW("TODO: intro AVI playback skipped (RE 0x451677)");
 }
 
 } // namespace

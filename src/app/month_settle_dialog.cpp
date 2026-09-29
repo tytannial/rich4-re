@@ -402,9 +402,10 @@ void playSettleFlc(SettleCtx& ui, int mkfIndex, int x, int y) {
         return;
     }
     Surface& dst = app.surface();
-    // [RE 0x4528B9] 清进入前残留 + [NEW] 演出段隐藏光标
+    // [RE 0x4528B9] 清进入前残留 + [NEW] 演出段隐藏光标 + 暂停背景音乐（出口成对恢复）
     app.consumeSkipInput();
     app.cursor().setHidden(dst, true);
+    app.audio().pushMusicPause();
     ui.flcBg.assign(dst.pixels(), dst.pixels() + static_cast<size_t>(Surface::kWidth) *
                                                        Surface::kHeight);
     const int interval = std::max(1, flc.speedMs());
@@ -451,6 +452,7 @@ void playSettleFlc(SettleCtx& ui, int mkfIndex, int x, int y) {
         }
     }
     app.cursor().setHidden(dst, false);
+    app.audio().popMusicPause(); // [NEW] 恢复背景音乐（原位续播）
     RICH4_LOGI("monthSettle: FLC data.mkf[%d] played @(%d,%d) (RE 0x45144F)", mkfIndex, x, y);
 }
 
