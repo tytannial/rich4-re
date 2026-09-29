@@ -110,6 +110,17 @@ owner 停留 type4 逐级解锁选 1（`corp.sub` 门槛**灰度**）→ `resear
 
 **M3 执行计划**：见 `docs/m3-plan.md`（终局链 checkVictory/通关地图选择/失败界面/AVI + 宽屏/快捷键 + 跨平台冻结）
 
+**M3-A 终局链 ✅ 完成（2026-09-29，实机问题驱动修正）**：`checkVictory`/`defeatFlow`/run scene
+分派/`gameClearFlow`+`mapSelectDialog` 全链 + **观感修正**——playLine 视口切说话玩家
+（0x44EFBD `refreshGameUi`，修"破产致胜卡倒闭画面弹不出气泡"）、破产致胜 `currentPlayer=winner`
++ 认输台词位序订正（0x40D060/0x40D237 清算后、仅总存活>1）、选图界面全屏演出重做（滚动预览
+`blitScrolledMap`+胜者角色行走 `panel[charIdx+100]`+装饰 `panel[93]`/`byte_46CCC4`，即时模式
+每帧全屏重画**消重影**）、**蓝星(帧10)/红勾(帧8)预合成**（`UiImage::blitIntoFrame`，
+`blitElementToCanvas 0x4562A5`=(dst帧,src帧,x,y) 语义）、multiple 仅「恭喜過關」大字无面板
+（**多人局回主菜单=原版行为**，连续通关仅单人）、scene4 真 `loadDialog` 选档；
+`player.bankrupt <p>` 调试命令 + `283_victory_last_stand`（全矩阵 89/89 绿）；
+详见 `victory-flow.md`、`ui-controls.md` §38；余 284 四图连通实机验收、A5 AVI 不实现。
+
 **M2 执行计划**：见 `docs/m2-plan.md`
 
 **M2 完成纪要**（✅ 全部完成 2026-09-29；各档案标注的「待实机验证/待实机验收」项——分红/週轉/

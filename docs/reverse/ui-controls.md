@@ -884,6 +884,26 @@ UI 音效与游戏音效槽**是两套**，勿混：
   绘制列表**之下**（原版排序前绘制），放 items 之后会被建筑盖住；③ flag 颜色选择是
   `flag&1`（高位 nibble 只是倒计时）
 
+## 38. 全屏演出模态（滚动预览+sprite 行走，0x4060E9 / 0x456180 / 0x4562A5）
+- 原版依据：`mapSelectWndProc 0x4060E9` WM_TIMER 0x406283..0x40657E：每 50ms tick
+  **双缓冲全屏重铺**——`blitScrolledMap(dword_48A08C, g_mapPreview, scrollX)`（0x456180，
+  640×480 RGB555 每行 1280 字节环绕拷贝，scrollX +=4/tick、1280 回绕）→
+  `blitSpriteFrame` 角色（`panel[charIdx+100]` SPR 25 帧：5 站立 + 2 方向×10 行走，
+  帧=((dir^1)·(count−4)/2+walk+5)；walkX −100..740 ±10/tick，出端 → walkY=rand%360+100
+  随机重入+换向；x=walkX±90）→ 装饰（`panel[93]` 19 帧，帧表 `byte_46CCC4`
+  {0,1,2,3,5,6|12,13,14,15,17,18}，x 与角色对侧 ∓90）→ 前景面板/文字 → flip
+- **图集帧预合成** `blitElementToCanvas 0x4562A5`：**参数 = (dst帧描述符, src帧描述符,
+  x, y)**（= `blitElement(dstW,dstH,dstPixels,srcDesc,x,y,0)`），落点=实参−src.offset、
+  色键 0 透明——通关蓝星（jumpUi 帧10 27×27 off(14,14)）合成进面板底 @(220,40·i+28)
+  与悬停项帧 @(32,22)；红勾（帧8 27×25）合成进点击项帧 @(214,8)
+- 重写位置：`src/app/victory.cpp`（MapSelState/redrawMapSelect/mapSelHandler +
+  gameClearFlow 素材加载/蓝星合成）；`UiImage::blitIntoFrame`（`src/render/ui_image.cpp`）
+- 经验/坑：① **即时模式必须每帧全屏重画**——往残留表面叠滑入面板 = 重影（2026-09-29
+  实机根因）；② 原版面板底帧 15/20 **已含 4 项槽位**，项帧 11-14/16-19 是**悬停高亮**
+  （只画 hover 项），非全部常显；③ 单人右键不可退出（0x406970 仅 multiple 响应），
+  点击确认后 10 tick（500ms）延迟退出（byte_48A43A/48A43B 状态机）展示红勾；
+  ④ 进入 `musicPlayScene(0x8006)` bit15=不压栈、退出 `musicStop`
+
 ## 新增控件模板（发现新控件时复制填写）
 
 ```

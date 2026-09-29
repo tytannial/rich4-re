@@ -1157,6 +1157,19 @@ bool cmdSurrender(Application& app, const std::vector<std::string>& a, std::stri
     return true;
 }
 
+// [NEW] player.bankrupt <p>：指定玩家破产淘汰（0x40CD87 全链：FLC555/台词/终局判定），
+//   同 surrender 经 tick 处理避免脚本 step 内嵌套模态/阻塞动画
+bool cmdPlayerBankrupt(Application& app, const std::vector<std::string>& a, std::string& err) {
+    if (!argCount(a, 1, err, "player.bankrupt <p>")) return false;
+    const int p = parseInt(a[1]);
+    if (p < 0 || p >= 4) {
+        err = "player.bankrupt: bad index";
+        return false;
+    }
+    app.gameState().bankruptRequest = p;
+    return true;
+}
+
 // [NEW] player.spawn <p>：直接入場定位（spawnPlayerAt 0x40829D 純狀態部分，無跳傘演出）
 bool cmdPlayerSpawn(Application& app, const std::vector<std::string>& a, std::string& err) {
     if (!argCount(a, 1, err, "player.spawn <p>")) return false;
@@ -1681,6 +1694,7 @@ const Cmd kCmds[] = {
     {"player.teleport", cmdPlayerTeleport},
     {"player.dice", cmdPlayerDice},
     {"player.alive", cmdPlayerAlive},
+    {"player.bankrupt", cmdPlayerBankrupt},
     {"give.card", cmdGiveCard},
     {"give.item", cmdGiveItem},
     {"land", cmdLand},

@@ -595,13 +595,6 @@ void eliminatePlayer(Application& app, int p) {
         st.currentPlayer = p;
         app.audio().playSceneMusic(2);
         renderGameFrame(app);
-        // [RE 0x40D237] 淘汰认输台词 off_4808AE（列25、expr2；sub_41906A(1) 后、FLC555 前）
-        if (p < 4) {
-            const int ci = st.players[p].charIndex;
-            if (ci >= 0 && ci < 12) {
-                playLine(app, p, kMoneyLines[ci][22], 2);
-            }
-        }
         playEventFlc(app, 555, 0, 40, 100);
         for (int t = 0; t < 2000; t += 5) {
             app.audio().update();
@@ -648,6 +641,9 @@ void eliminatePlayer(Application& app, int p) {
             }
         }
         if (winner >= 0 && winner < 4) {
+            // [RE 0x40D060] 终局胜利大笑（off_4808AA 列24、expr3）：playLine 视口对准胜利者
+            //   （原版 LABEL_70 在台词后才还原 currentPlayer，scene2/3 随即退出循环无副作用）
+            st.currentPlayer = winner;
             const int ci = st.players[winner].charIndex;
             if (ci >= 0 && ci < 12) {
                 playLine(app, winner, kMoneyLines[ci][21], 3);
@@ -709,7 +705,16 @@ void eliminatePlayer(Application& app, int p) {
             auctionIds[pick] = 0;
         }
     }
-    // [RE 0x40D2C4] 棋子精灵 frame0 灰度（淘汰者棋子变灰；0 像素保持）
+    renderGameFrame(app); // [RE 0x40D213 sub_41906A(1)]
+    // [RE 0x40D237] 淘汰认输台词 off_4808AE（列25、expr2；sub_41906A(1) 后、棋子灰度前，
+    //   仅总存活>1 的清算路径；终局/单人破产路径原版不播）
+    if (p < 4) {
+        const int ci = st.players[p].charIndex;
+        if (ci >= 0 && ci < 12) {
+            playLine(app, p, kMoneyLines[ci][22], 2);
+        }
+    }
+    // [RE 0x40D26C sub_4553FE] 棋子精灵 frame0 灰度（淘汰者棋子变灰；0 像素保持）
     if (st.pieceAnim[p].frameCount() > 0) {
         UiImage& img = st.pieceAnim[p];
         std::vector<uint8_t> copy = img.data();
@@ -720,7 +725,6 @@ void eliminatePlayer(Application& app, int p) {
                        static_cast<size_t>(f.width) * f.height);
         img.load(std::move(copy));
     }
-    renderGameFrame(app); // [RE 0x40D3F0 sub_41906A(1)]
     trace::logf("eliminate p=%d", p);
     RICH4_LOGI("eliminatePlayer: p%d aliveHumans=%d aliveTotal=%d auction=%zu (RE 0x40CD87)", p,
                aliveHumans, aliveTotal, auctionIds.size());

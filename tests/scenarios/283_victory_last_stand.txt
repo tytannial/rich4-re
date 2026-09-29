@@ -1,0 +1,25 @@
+# id: 283_victory_last_stand
+# covers: [M3-A] 破产致胜（eliminatePlayer 0x40CD87 尾段）：单人局 3 AI 全灭 → 最后存活者
+#          胜利 = currentPlayer 切胜者 + playLine(列24 expr3) + sceneRequest=2 →
+#          gameClearFlow 标记通关 + headless 自动换图续局（map=1 实开新局验证）；
+#          前两名走清算路径（无资产不拍）；全员入场（begin player 3 turn）后才淘汰
+# quickstart: 0,4,1
+# timeout: 90000
+wait idle 1500
+roll
+wait log "confirm dialog" 3000
+confirm no
+wait log "begin player 3 turn" 60000
+player.bankrupt 1
+wait log "eliminatePlayer: p1" 15000
+player.bankrupt 2
+wait log "eliminatePlayer: p2" 15000
+player.bankrupt 3
+wait log "last player wins" 15000
+assert log "playLine: p0 expr3"
+assert log "eliminatePlayer: p3 eliminated -> last player wins, scene 2"
+wait log "gameClearFlow: cleared=1" 15000
+assert log "clear map=0 cleared=1"
+assert log "mapSelect: auto map=1"
+assert state errors == 0
+quit

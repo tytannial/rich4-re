@@ -38,6 +38,11 @@ public:
     bool isSprite() const { return m_isSprite; }
     const std::vector<uint8_t>& data() const { return m_data; }
 
+    // [RE 0x4562A5] blitElementToCanvas：把 src 帧色键(0 透明)合成进本图集 dstFrame 像素。
+    //   落点 = (x - src.offsetX, y - src.offsetY)（帧锚点语义，同 blitElement a5/a6 减 offset）；
+    //   仅 SMP→SMP（16bit RGB555）。通关星星/选中标记预合成用（victory.cpp gameClearFlow）。
+    bool blitIntoFrame(int dstFrame, const UiFrameView& src, int x, int y);
+
     // SPR 调色板（256 x RGB555，位于 data_offset 处）；非 SPR 返回 nullptr
     const uint16_t* palette() const { return m_palette; }
     // [RE 0x40986A] 图块调色板末项（索引 255）= 拥有者颜色：

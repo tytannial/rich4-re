@@ -13,8 +13,13 @@
 > **进度**：A2 `checkVictory`、A4 `defeatFlow`、A6 run scene 分派、A1 clearedMaps 生命周期、
 > A3 `gameClearFlow` + `mapSelectDialog`(0x4060E9) 选图面板 ✅（`src/app/victory.cpp`+`application.cpp`，
 > 测试 280/282/286）；**A2 选人目标两档 UI 经核实已于 M2 实现**（`applyListSelection` list4/5）。
-> M3-A 终局链**功能闭环达成**。余观感精修：mapSelect 滚动预览/角色动画/红勾精确位、scene4 选档框
-> （现近似 AUTO）、284 连通关闭环（实机）；A5 AVI 不实现。转 B 组功能缺口。
+> M3-A 终局链**功能闭环达成**。
+> **✅ 2026-09-29 A 终局链观感修正完成**（实机问题驱动，详见 `victory-flow.md`）：playLine
+> 视口切说话玩家（0x44EFBD）、破产致胜切胜者+认输台词位序订正（0x40D060/0x40D237）、
+> 选图界面全屏演出重做（滚动预览+角色行走+装饰，消重影）、**蓝星(帧10)/红勾(帧8)预合成**
+> （`UiImage::blitIntoFrame` 0x4562A5 语义）、multiple 仅大字无面板（多人回主菜单=原版行为）、
+> `player.bankrupt` 调试命令 + `283_victory_last_stand`（全矩阵 89/89 绿）。
+> 余：284 连通关闭环（实机）；A5 AVI 不实现。转 B 组功能缺口。
 
 ## 1. M3-A：终局链（最高优先，档案 victory-flow.md 已备齐依据）
 

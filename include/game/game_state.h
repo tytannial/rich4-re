@@ -591,6 +591,9 @@ struct GameState {
     bool quitGame = false;
     // [RE 0x411AE0] 認輸投降请求（当前玩家出局）
     bool surrenderRequest = false;
+    // [NEW] debug 脚本用：下一游戏循环 tick 触发 eliminatePlayer(p)（0x40CD87 全链含演出，
+    //   经 tick 处理避免脚本 step 内嵌套 runModal/playEventFlc，同 surrenderRequest 模式）
+    int bankruptRequest = -1;
 
     // ===== 回合/移动状态机（0x40D7C4）=====
     // 每玩家 52 字节步进数组（0x498EA0 起，索引 = 玩家号 0..8）

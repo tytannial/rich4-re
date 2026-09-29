@@ -136,7 +136,26 @@ void playLine(Application& app, int player, const char* line, int exprFrame) {
     ctx.expr = exprFrame;
     RICH4_LOGI("playLine: p%d expr%d %s (RE 0x44EF41)", player, exprFrame, line);
     trace::logf("line p=%d expr=%d text=\"%s\"", player, exprFrame, line);
+    // [RE 0x44EFBD] refreshGameUi(g_playerSpriteX[a1], g_playerSpriteY[a1], 0)：
+    //   视口对准说话玩家（说话者==当前玩家 → 复位跟随；否则手动视口）。
+    //   原版 flags=0 不重绘，气泡首帧 renderGameFrame 即按新视口呈现；模态结束还原。
+    const bool savedMv = st.manualView;
+    const int savedSx = st.viewSmoothX;
+    const int savedSy = st.viewSmoothY;
+    const bool savedSc = st.viewScrolling;
+    if (player == st.currentPlayer) {
+        st.manualView = false;
+    } else {
+        st.manualView = true;
+        st.viewSmoothX = st.players[player].spriteX;
+        st.viewSmoothY = st.players[player].spriteY;
+        st.viewScrolling = false;
+    }
     runModal(app, &itemLineHandler, &ctx, 16);
+    st.manualView = savedMv;
+    st.viewSmoothX = savedSx;
+    st.viewSmoothY = savedSy;
+    st.viewScrolling = savedSc;
 }
 
 // [RE 0x44EF41] playItemLine：道具/卡片效果入口台词（查 kItemLines 表）

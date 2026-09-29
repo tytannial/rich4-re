@@ -475,6 +475,17 @@ bool gameEventHandler(const SDL_Event* event, void* user) {
             renderGameFrame(app);
             return true;
         }
+        if (st.bankruptRequest >= 0) {
+            // [NEW] debug：对指定玩家触发破产淘汰全链（0x40CD87，含 FLC555/台词/终局判定）
+            const int bp = st.bankruptRequest;
+            st.bankruptRequest = -1;
+            eliminatePlayer(app, bp);
+            if (st.sceneRequest == 0) {
+                nextPlayer(app);
+            }
+            renderGameFrame(app);
+            return true;
+        }
         // [RE 0x417E26] WM_TIMER(0x113): dword_48BDD4 ^= 1（前进面板 GO 闪烁，约 500ms）
         static int s_blinkTick = 0;
         if (++s_blinkTick >= 31) {

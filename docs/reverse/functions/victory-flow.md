@@ -121,7 +121,33 @@ WinMain 处理 byte_46CAF8:
   实机弹面板交互（JUMP jumpUi 面板底帧 15/20 + 4 地图项帧 11-14/16-19 @(320,300+40·i) +
   已通关不可选 + 悬停音效 + 点击设 `word_4991B8`/mapIndex + 多人「恭喜過關」48 号 + 50ms 滑入）；
   headless `--quickstart` 自动选下一未通关图（bypass 交互，280/282 断言 auto map=1）。全通 → quitGame。
-- 待精修（观感/低频，实机核对）：mapSelect 滚动预览 `blitScrolledMap` / 角色行走 `blitSpriteFrame` /
-  装饰随机 / 红勾帧精确位（现用 CLEAR 文字标记）；284 四图连通关 + 灰名单跨局 headless
-  （多次选人/选图模态应答）留实机验收；
-  AVI(A5) END/THANKS/OVER 不实现（Indeo5）。
+- **✅ 2026-09-29（M3-A 终局链观感修正，实机问题驱动）**：
+  - **playLine 视口切换**（`item_effects.cpp`）：原版 `sub_44EF41` 首步
+    `refreshGameUi(spriteX[a1], spriteY[a1], 0)`——说话玩家==当前玩家→复位跟随，否则
+    `manualView` 对准说话者像素坐标；模态结束还原。修复"破产致胜卡在倒闭画面、气泡弹在
+    旧视口"（2026-09-29 实机）。
+  - **破产致胜**（`economy.cpp` 0x40CD87 尾段）：剩 1 存活分支 playLine 前
+    `currentPlayer = winner`（原版 LABEL_70 在台词后还原，scene2/3 随即退循环无副作用）；
+    **认输台词（列25 expr2）位置订正**——原版 0x40D237 在**清算之后、棋子灰度前**且仅
+    总存活>1 路径播（重写曾误置于 FLC555 之前、所有路径都播）。
+  - **选图界面全屏演出重做**（`victory.cpp`，消重影+蓝星+动画）：原版为双缓冲界面，每
+    50ms tick 全屏重铺 → 重写即时模式每帧重画（旧版往游戏残留画面叠画滑入面板 = 重影根因）：
+    ① 背景 = **刚通关地图**预览 `JUMP.MKF[map+4·mode]`（640×480 RGB555）水平环绕滚动
+    （`blitScrolledMap` 0x456180，+4/tick，1280 周期）；② 胜者角色行走 `panel[charIdx+100]`
+    SPR 25 帧 = 5 站立 + 2 方向×10 行走（帧=((dir^1)·(count−4)/2+walk+5)，walkX −100..740
+    ±10/tick 到端随机 walkY=rand%360+100 换向重入，x=walkX±90）；③ 装饰 `panel[93]`
+    19 帧，帧表 `byte_46CCC4`={0,1,2,3,5,6|12,13,14,15,17,18}，与角色对侧 ∓90；
+    ④ **蓝星预合成**：`gameClearFlow` 把 jumpUi **帧10（蓝星 27×27 off(14,14)）** blit 进
+    每个已通关地图的悬停项帧 @(32,22) + 面板底帧 @(220,40·i+28)（**blitElementToCanvas
+    0x4562A5 语义 = (dst帧, src帧, x, y)**，目标=实参−src.offset，色键0；helper
+    `UiImage::blitIntoFrame`）；⑤ 点击确认把**帧8（红勾 27×25）**合成进选中项帧 @(214,8)
+    → 10 tick（500ms）后退出；单人右键**不可退**（必须选图，0x406970 仅 multiple 响应）；
+    ⑥ 进入 `musicPlayScene(0x8006)`（playSceneMusic(6,false) 不压栈）、退出 `musicStop`。
+  - **多人局终局语义确认**（用户实机疑问）：`humanCount≠1` 赢家=scene3 → 选图界面
+    `byte_48A435=1` **仅演出背景+「恭喜勝利過關！！」大字（无面板/星星/选图）**→ 点击退出
+    → LABEL_5 清通关进度回主菜单——**多人局不进下一关为原版行为**；连续通关仅单人局。
+  - 新增 `player.bankrupt <p>` 调试命令（bankruptRequest 标志经游戏循环 tick 处理，
+    仿 surrenderRequest 模式避免脚本 step 嵌套模态）；测试 `283_victory_last_stand`
+    （3 AI 全灭→致胜台词→scene2→auto map=1→**实开 map=1 新局**，5 断言）。
+- 待精修（观感/低频，实机核对）：284 四图连通关 + 灰名单跨局 headless（多次选人/选图模态应答）
+  留实机验收；AVI(A5) END/THANKS/OVER 不实现（Indeo5）。
