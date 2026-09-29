@@ -1657,13 +1657,17 @@ int resolveFeePayer(Application& app, int payer, int32_t fee, const char* feeNam
         return payer;
     }
     GameState& st = app.gameState();
+    // [RE 0x419E58/0x419EB8] 卡片抵用/转嫁门槛：fee ≥ 2000×物价 或 fee > 付款人现金+存款；
+    //   小额费用不再弹询问（原版對免費/嫁祸同门槛，此前重写对所有 fee>0 直接询问=差异）
+    const bool cardGate = (fee >= 2000 * st.moneyMul) ||
+                          (fee > st.players[payer].cash + st.players[payer].bank);
     // [RE 0x419E58] 免費卡(20)：抵用成功 → 免付
-    if (cardBagHas(st, payer, 20) && applyFreeCard(app, payer, fee) == 1) {
+    if (cardGate && cardBagHas(st, payer, 20) && applyFreeCard(app, payer, fee) == 1) {
         RICH4_LOGI("resolveFeePayer: p%d free card covers fee %d (RE 0x444A60)", payer, fee);
         return -1;
     }
     // [RE 0x419EB8] 嫁祸卡(19)：转嫁他人（原版 0x44476A(payer, 2, 0)）
-    if (cardBagHas(st, payer, 19)) {
+    if (cardGate && cardBagHas(st, payer, 19)) {
         const int r = passOnCardDialog(app, payer);
         if (r != -1) {
             payer = r;
