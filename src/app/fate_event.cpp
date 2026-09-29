@@ -562,6 +562,7 @@ void fateApplyBirthday(FateCtx& ctx) {
     GameState& st = app.gameState();
     const int cur = st.currentPlayer;
     const int n = st.playerCount < 4 ? st.playerCount : 4;
+    int got = 0;
     for (int i = 0; i < n; ++i) {
         if (i == cur || st.players[i].alive == 0 || cardBagCount(st, i) == 0) {
             continue;
@@ -580,6 +581,7 @@ void fateApplyBirthday(FateCtx& ctx) {
                 takePlayerItem(st, i, itemId);
                 givePlayerItem(st, cur, itemId);
             }
+            ++got;
         } else {
             // [RE sub_41E6F2(1)] AI：随机拿一张卡（无卡则道具）
             const int card = discardRandomCard(app, i);
@@ -592,9 +594,17 @@ void fateApplyBirthday(FateCtx& ctx) {
                     givePlayerItem(st, cur, itemId);
                 }
             }
+            ++got;
         }
     }
-    // 偷卡效果原版无台词（sub_44EF41 xref 全表核实；旧 [TODO P4] 系误标）
+    // [RE 0x44C5C5] 生日者收到 ≥1 张 → 价值台词 off_48084A（kValueLines 列 rand&1，expr0；
+    //   区别于偷卡 0x443E3D 无台词）
+    if (got != 0) {
+        const int ci = st.players[cur].charIndex;
+        if (ci >= 0 && ci < 12) {
+            playLine(app, cur, kValueLines[ci][std::rand() & 1], 0);
+        }
+    }
 }
 
 void fateApplyTravel(FateCtx& ctx, bool abducted) {
