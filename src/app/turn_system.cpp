@@ -26,6 +26,7 @@
 #include "game/app/facility_dialog.h"
 #include "game/app/fate_event.h"
 #include "game/app/game_loop.h"
+#include "game/app/game_panel.h"
 #include "game/app/item_bag_dialog.h"
 #include "game/app/item_lines.h"
 #include "game/app/jail_dialog.h"
@@ -3834,6 +3835,8 @@ void advanceDay(Application& app) {
     stockTick(app);
     // [RE 0x42915A] 每日交易量刷新（保留股份 → 交易量 10%~30%）
     refreshBankStockShares(app);
+    // [RE 0x41D07B] 每日节日处理（sub_452444：节日插画 FLC + 节日音乐；见 452444-holiday-system.md）
+    holidayDaily(app);
     // [RE 0x41CF67] 15 号：股东大会分红（sub_42BA97）+ 乐透开奖（sub_431712）——顺序：先分红后乐透
     if ((st.gameDate & 0xFF) == 15) {
         trace::logf("dayevt name=dividend");

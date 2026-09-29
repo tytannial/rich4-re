@@ -7,8 +7,11 @@
 #include "game/app/economy.h"
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
+#include "game/app/turn_system.h"   // playEventFlc [RE 0x45144F]
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/trace.h"
+#include "game/platform/audio.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
 #include "game/render/raw_bitmap.h"
@@ -639,6 +642,40 @@ void drawAdvancePanel(Application& app) {
 }
 
 } // namespace
+
+// [RE 0x452444] 每日节日处理（advanceDay 0x41D07B 调用；见 452444-holiday-system.md）：
+//   命中节日(当前覆盖 type0/2)且效果 flags≠0 → 节日音乐(flags&4，无 musicTimer 时
+//   playSceneMusic 不压栈) + 全屏节日插画 FLC(flags&1，data.mkf[res] @(0,40) 透明)。
+//   人人发卡(flags&8)链需节日赠卡文案表 unk_4661C4.. 留后续。
+void holidayDaily(Application& app) {
+    GameState& st = app.gameState();
+    const int holiday = findHoliday(st, st.gameDate);
+    if (holiday < 0) {
+        return;
+    }
+    const int base = 4 * st.gameMode + st.mapIndex;
+    const uint8_t* h = kHoliday[base][holiday];
+    const int eflags = h[5];
+    if (eflags == 0) {
+        return;
+    }
+    RICH4_LOGI("holidayDaily: base=%d holiday=%d flags=0x%x (RE 0x452444)", base, holiday, eflags);
+    trace::logf("holiday base=%d idx=%d flags=0x%x", base, holiday, eflags);
+    if ((eflags & 4) != 0 && st.musicTimer == 0) {
+        const int musicIdx = h[10] | (h[11] << 8);
+        if (musicIdx != 0) {
+            app.audio().playSceneMusic(musicIdx, /*saveCurrent=*/false); // 原版 |0x8000 不压栈
+            st.musicTimer = 0x33; // [RE 0x4525DE] 51（原版按后续 word 判 51/17）
+        }
+    }
+    if ((eflags & 1) != 0) {
+        const int flcRes = h[6] | (h[7] << 8);
+        const int flcSound = h[8] | (h[9] << 8);
+        if (flcRes != 0 && st.data.read(static_cast<size_t>(flcRes))) {
+            playEventFlc(app, flcRes, 0, 40, flcSound);
+        }
+    }
+}
 
 // [RE 0x4523D5] 股市休市日封装（isSpecialDate 为匿名 ns，此处导出供 stockTick/面板复用）
 bool stockIsHoliday(const GameState& st) {

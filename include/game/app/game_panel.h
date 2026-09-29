@@ -9,6 +9,10 @@ class Application;
 // [RE 0x4523D5] stockIsHoliday：股市休市日（星期日或命中节日）；封装 isSpecialDate(gameDate)
 bool stockIsHoliday(const GameState& st);
 
+// [RE 0x452444] holidayDaily：每日节日处理（advanceDay 调用；插画 FLC + 节日音乐，
+//   发卡链留后续）。见 docs/reverse/functions/452444-holiday-system.md
+void holidayDaily(Application& app);
+
 // [RE 0x417E26] 游戏内面板绘制（WM_PAINT 分支；定义见 game_loop.cpp gameEventHandler）
 // sub_415D31（顶部工具条）+ 按 byte_49715D 布局:
 //   0 = sub_415F69 + sub_4169BC / 1 = sub_415F69 + sub_416E6D /

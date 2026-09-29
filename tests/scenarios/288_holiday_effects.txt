@@ -1,0 +1,11 @@
+# id: 288_holiday_effects
+# covers: [M3-B] 节日效果 sub_452444（holidayDaily：命中节日 flags → 插画 FLC / 节日音乐；advanceDay 0x41D07B 接线）
+# quickstart: 0,4,1
+# timeout: 60000
+settings.anim 0
+wait idle 2000
+holiday 0 0 1998 1 1
+assert log "holidayDaily: base=0 holiday=0 flags=0x3"
+assert trace "flc idx=523"
+assert state errors == 0
+quit

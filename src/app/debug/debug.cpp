@@ -29,6 +29,7 @@
 #include "game/app/stock_market_dialog.h"
 #include "game/app/stock_system.h"
 #include "game/app/turn_system.h"
+#include "game/app/game_panel.h"
 #include "game/application.h"
 #include "game/core/clock.h"
 #include "game/core/debug_hooks.h"
@@ -580,6 +581,19 @@ bool cmdVictory(Application& app, const std::vector<std::string>& a, std::string
     if (!argCount(a, 2, err, "victory <daysLimit> <winMoney>")) return false;
     app.gameState().gameDaysLimit = static_cast<int32_t>(parseInt(a[1]));
     app.gameState().winMoney = static_cast<int32_t>(parseInt(a[2]));
+    return true;
+}
+
+// [NEW] holiday <mode> <map> <y> <m> <d>：设日期/地图并直呼 holidayDaily（测 sub_452444 节日效果）
+bool cmdHoliday(Application& app, const std::vector<std::string>& a, std::string& err) {
+    if (!argCount(a, 5, err, "holiday <mode> <map> <y> <m> <d>")) return false;
+    GameState& st = app.gameState();
+    st.gameMode = parseInt(a[1]);
+    st.mapIndex = parseInt(a[2]);
+    st.gameDate = (static_cast<uint32_t>(parseInt(a[3])) << 16) |
+                  (static_cast<uint32_t>(parseInt(a[4])) << 8) |
+                  static_cast<uint32_t>(parseInt(a[5]));
+    holidayDaily(app);
     return true;
 }
 
@@ -1673,6 +1687,7 @@ const Cmd kCmds[] = {
     {"roll", cmdRoll},
     {"day", cmdDay},
     {"victory", cmdVictory},
+    {"holiday", cmdHoliday},
     {"find.estate", cmdFindEstate},
     {"find.evtcell", cmdFindEvtCell},
     {"find.lab", cmdFindLab},
