@@ -170,6 +170,20 @@ roulette_dialog 0x43F7C6 处 [NEW] 注释）；`roulette theme=<t> cell=<c>` tra
 | `40_roulette_hotel.txt` | [HELP 22] | 旅館轮盘：`rng roulette 7` 注入→人类 click 停→`roulette theme=1 cell=7` trace→收费转账 |
 | `41_roulette_no_inject.txt` | [HELP 22] | 旅館轮盘**无注入回归**：首次不得被 `g_inject` 零初始化钉 cell0→255（`assert no trace "value=255"`，ISS-019） |
 
+**AI 行为专项（2026-09-28，`run_tests.py --filter ai_` 全绿）**——覆盖道具链（0x420E9A）、
+卡片链（0x41E69E/0x420xxx）、回合动作链（0x418DE6..0x418E70，档案 `418c55-ai-turn-actions.md`）：
+
+| 脚本 | 覆盖 | 验证点 |
+|------|------|--------|
+| `84_ai_marathon` | L2 全 AI 长跑 | `wait log aiItemSelect` 链路实际执行 + 120k 帧自然回合不崩（errors==0；实测触发 道具312/卡73/骰调29/买股16/卖股5） |
+| `260_ai_items` | 道具 AI 候选域 | aiItemSelect 命中/`rejected` 日志；target 在前方/回溯路径∩视口（0x40B221/0x40B343） |
+| `262_ai_turn_guard` | 0x418E31 状态守卫 | AI 置态后全程 `assert no trace " p=1"`（不掷骰不移动） |
+| `264_ai_dice_adjust` | 0x4221C0 骰子调整 | 汽车 AI → `aiDiceAdjust: ... ownFree=4 other=0` → diceCount 1..3 |
+| `266_ai_bank_advance` | 0x418DFE 週轉接入 | 非经营者欠 bankAdvance → AI 回合「銀行經營權易主」清算 |
+| `268_ai_stock_buy` | 0x42BF03 | rng(ai)=0 过门槛 → `aiStockBuy: p1 stock=n`（预算只用 bank、24/6 日均线择优） |
+| `270_ai_stock_sell` | 0x42C79F | 持仓 + rng → `aiStockSell`（初始配股 AI 卖出）；贷款临期强制循环 |
+| `272_ai_card_recheck` | 卡片 AI 链 | 给 AI 发查封/烏龜/怪獸/同盟/黑卡/涨价 → aiCardSelect 命中/拒用日志链 |
+
 ### 2.3 named region 控件层（基座已通，逐面板铺开中）
 
 - debug::registerRegion(name,x,y,w,h)：产品侧 nterGameLoop 一次性登记，矩形与既有

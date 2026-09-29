@@ -1,0 +1,10 @@
+# id: 84_ai_marathon
+# covers: L2 全 AI 长跑稳定性——wait 期内 AI 道具判定链实际执行（aiItemSelect 命中/拒用），
+#          再自然推进 120k 帧（约百回合）验证回合动作链（视口刷新→股票→週轉→交易→
+#          卡/道具→状态守卫→骰子调整→移动）不崩，不变量 errors==0
+# quickstart: 0,4,0
+# timeout: 400000
+wait log "aiItemSelect" 80000
+wait frames 120000
+assert state errors == 0
+quit
