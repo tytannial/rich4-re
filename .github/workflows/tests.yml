@@ -1,5 +1,5 @@
 # [NEW] CI（docs/testing.md §4 设计）：L0 单测可在无游戏资源环境跑（test_save/test_mkf
-# 对缺失资源自动 SKIP）；L1 场景需要 resources/game（版权不入库）→ 本地/自托管跑：
+# 对缺失资源自动 SKIP）；L1 场景需要 resources/MultiverseJourney（版权不入库）→ 本地/自托管跑：
 #   python tools/run_tests.py --wall-cap 90
 name: tests
 
@@ -34,7 +34,7 @@ jobs:
       - name: unit
         run: ctest --test-dir build -R unit --output-on-failure
 
-  # L1 headless 场景（需要 resources/game 的私有 runner / 本地 CI 循环）：
-  #   ./build/rich4.exe --game resources/game --headless ... （见 tools/run_tests.py）
+  # L1 headless 场景（需要 resources/MultiverseJourney 的私有 runner / 本地 CI 循环）：
+  #   ./build/rich4.exe --game resources/MultiverseJourney --headless ... （见 tools/run_tests.py）
   #   注：Linux 下随机序列与 MSVC 不同（ISS-007/013 记录）→ 场景断言均走定点注入，
   #   平台无关；仅 80_autoplay 的回合内容随种子平台变化（不变量断言不受影响）。

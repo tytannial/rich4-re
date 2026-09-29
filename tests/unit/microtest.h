@@ -23,7 +23,7 @@ struct Add {
 
 inline int g_fails = 0;
 inline int g_checks = 0;
-inline std::string g_gameDir = "../resources/game"; // rich4_tests <gameDir>
+inline std::string g_gameDir = "../resources/MultiverseJourney"; // rich4_tests <gameDir>
 
 } // namespace mt
 

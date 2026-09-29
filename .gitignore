@@ -19,7 +19,7 @@ __pycache__/
 .idea/
 
 # 原始游戏资源（版权 + 体积，不提交）
-/resources/game/
+/resources/MultiverseJourney/
 # 媒体资源（音乐/视频，版权 + 体积，不提交）
 /resources/Media/
 

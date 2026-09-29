@@ -36,7 +36,7 @@ def _format(data: bytes, name: str) -> str:
 
 
 def main(argv: list[str]) -> int:
-    exe_path = Path(argv[1]) if len(argv) > 1 else Path("resources/game/rich4.exe")
+    exe_path = Path(argv[1]) if len(argv) > 1 else Path("resources/MultiverseJourney/rich4.exe")
     out_path = Path(argv[2]) if len(argv) > 2 else Path("src/resource/lzhuf_tables.cpp")
 
     exe = exe_path.read_bytes()

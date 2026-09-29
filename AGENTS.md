@@ -208,7 +208,7 @@ trace `msg/line/flc skip` + 场景 `300_skip_msg`；详见 `ui-controls.md` §39
 
 | 路径 | 说明 |
 |------|------|
-| `resources/game/` | 原始游戏文件（exe + mkf + dat + cfg），**只读，不提交** |
+| `resources/MultiverseJourney/` | Steam 原版游戏文件（exe + mkf + dat + cfg）+ IDB，**不提交** |
 | `docs/formats/` | 资源格式规范（已完整解析，见 `README.md`） |
 | `docs/reverse/` | 逆向规范与函数档案（注释格式、地址映射表、逐函数笔记） |
 | `tools/` | Python 逆向与资源解析工具 |
@@ -242,13 +242,13 @@ cmake --build build
 ## 运行
 
 ```powershell
-./build/rich4.exe --game resources/game
+./build/rich4.exe --game resources/MultiverseJourney
 ```
 
 ## 调试
 
 ```powershell
-./build/rich4.exe --game resources/game --debug
+./build/rich4.exe --game resources/MultiverseJourney --debug
 ```
 
 `--debug` 启用 **Ctrl+1..8** 测试热键（改地块所属/等级、批量铺地、加现金、打印地块详情），
@@ -268,18 +268,18 @@ named region、L2 长跑不变量、trace 批2~4、旧热键迁移命令表。
 **推进疑难点/设计取舍/实机对照清单 → `docs/testing-issues.md`**（实施时持续更新）。
 
 ```powershell
-./build/rich4.exe --game resources/game --headless --seed 42 --quickstart 0,4,1 --script tests/scenarios/20_rent_route.txt
+./build/rich4.exe --game resources/MultiverseJourney --headless --seed 42 --quickstart 0,4,1 --script tests/scenarios/20_rent_route.txt
 python tools/run_tests.py --matrix    # ctest + 全场景 + 覆盖矩阵（build/test-report.json）
-./build/rich4.exe --game resources/game --save-selftest 0   # 存档 save∘parse∘save 字节稳定
+./build/rich4.exe --game resources/MultiverseJourney --save-selftest 0   # 存档 save∘parse∘save 字节稳定
 ```
 
 ## Python 工具
 
 ```bash
 # 一键解包全部资源 + 生成索引
-python tools/extract_all.py resources/game --out ./assets --manifest docs/formats/resource-manifest.csv
+python tools/extract_all.py resources/MultiverseJourney --out ./assets --manifest docs/formats/resource-manifest.csv
 
-python tools/mkf.py list resources/game/Data.mkf
+python tools/mkf.py list resources/MultiverseJourney/Data.mkf
 python tools/spr.py extract <spr.bin> <outdir> [--rgb565]
 python tools/smp.py extract <smp.bin> <outdir> [--rgb565]
 
@@ -488,7 +488,8 @@ python tools/re_map.py
 
 ## 注意事项
 
-- `resources/game/` 下的文件**不要修改或提交**（版权 + 体积）
-- `resources/game/rich4.exe.i64` 是权威逆向数据库（重命名/注释成果），**修改后需保存**
+- `resources/MultiverseJourney/` 下的游戏资源文件**不要修改或提交**（版权 + 体积；
+  IDB 文件与 `rich4.exe` 同目录，由全局 `*.i64`/`*.id0` 等规则同样不入库）
+- `resources/MultiverseJourney/rich4.exe.i64` 是权威逆向数据库（重命名/注释成果），**修改后需保存**
 - `src/resource/lzhuf_tables.cpp` 由 `tools/gen_lzhuf_tables.py` 从 exe 生成，**勿手改**
 - LZHUF 解压器每次解压需重置工作区（自适应树有状态）

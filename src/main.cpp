@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
     //        默认 CP936 会把 UTF-8 中文 stderr 日志显示成乱码）
     SetConsoleOutputCP(CP_UTF8);
 #endif
-    std::string gameDir = "resources/game";
+    std::string gameDir = "resources/MultiverseJourney";
     std::string shotPath;
     int shotFrame = 47;
     int shotCursorX = -1;

@@ -94,7 +94,7 @@ def fmt_i8(v: int) -> str:
 
 
 def main(argv: list[str]) -> int:
-    exe_path = Path(argv[1]) if len(argv) > 1 else Path("resources/game/rich4.exe")
+    exe_path = Path(argv[1]) if len(argv) > 1 else Path("resources/MultiverseJourney/rich4.exe")
     out_path = Path(argv[2]) if len(argv) > 2 else Path("src/app/map_tables.cpp")
     r = ExeReader(exe_path.read_bytes())
 

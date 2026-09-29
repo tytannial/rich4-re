@@ -116,7 +116,7 @@ def str_array(name: str, values: list[str], count: int) -> str:
 
 
 def main(argv: list[str]) -> int:
-    exe_path = Path(argv[1]) if len(argv) > 1 else Path("resources/game/rich4.exe")
+    exe_path = Path(argv[1]) if len(argv) > 1 else Path("resources/MultiverseJourney/rich4.exe")
     out_path = Path(argv[2]) if len(argv) > 2 else Path("src/app/new_game_tables.cpp")
 
     reader = ExeReader(exe_path.read_bytes())

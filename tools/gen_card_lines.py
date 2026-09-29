@@ -2,7 +2,7 @@
 """生成 src/app/card_lines.cpp：卡片台词表（0x48123A，12 角色 x 90 槽指针）
 与受害台词表（0x48089E = 价值表 0x48084A 第 21 列，12 角色；梦游受害者台词）。
 
-用法: python tools/gen_card_lines.py [--exe resources/game/rich4.exe]
+用法: python tools/gen_card_lines.py [--exe resources/MultiverseJourney/rich4.exe]
 """
 import argparse
 import struct
@@ -16,7 +16,7 @@ VICTIM_VA = 0x48089E      # 价值表 0x48084A + 21*4（列 21）
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--exe", default="resources/game/rich4.exe")
+    ap.add_argument("--exe", default="resources/MultiverseJourney/rich4.exe")
     ap.add_argument("--out", default="src/app/card_lines.cpp")
     args = ap.parse_args()
 

@@ -28,7 +28,7 @@
   （0x402CA7）重建。故重写只要保证 `charIndex`/`map`/`mode` 正确，产出档即可被原版读取（name
   指针位写 0 安全）。
 
-## 2. 存档字段序（version 起，旧档 `resources/game/SAVE*.DAT` 实测偏移）
+## 2. 存档字段序（version 起，旧档 `resources/MultiverseJourney/SAVE*.DAT` 实测偏移）
 
 | 偏移 | 大小 | 原版符号 | 字段 | 重写来源 |
 |---|---|---|---|---|
@@ -152,7 +152,7 @@ dword 索引 ×4 = 字节偏移（`save_data.cpp kBlk*`）：
 
 ## 7. 验证
 
-`--save-selftest <slot>`（headless，仅依赖自由函数）对 `resources/game/SAVE0..5.DAT`：
+`--save-selftest <slot>`（headless，仅依赖自由函数）对 `resources/MultiverseJourney/SAVE0..5.DAT`：
 - 全部 `parseSaveBody` 成功，运行时值合理（cash/bank/points/charIndex/alive、stocks
   cur/prev/spec/reserved/vol/halt/news、每玩家快照 valid）；
 - 往返 `save(a)→parse→save(b)` 字节 **STABLE=YES**，且 `save(a)` 尺寸 == 原版 `orig` 尺寸

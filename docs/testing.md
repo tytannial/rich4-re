@@ -113,16 +113,16 @@ magicHouse 惩罚/结息分红/小游戏 phase/…）随测试用例铺开。
 
 ```powershell
 # 场景脚本（断言失败 → 退出码 1；--exec 多命令用 ; 分隔）
-./build/rich4.exe --game resources/game --headless --seed 42 --quickstart 0,4,1 `
+./build/rich4.exe --game resources/MultiverseJourney --headless --seed 42 --quickstart 0,4,1 `
   --script tests/scenarios/20_rent_route.txt
 
 # 无头全 AI 冒烟（虚拟时钟快进 + trace 导出；确定性回归的基准命令）
-./build/rich4.exe --game resources/game --headless --seed 42 --quickstart 0,4,0 `
+./build/rich4.exe --game resources/MultiverseJourney --headless --seed 42 --quickstart 0,4,0 `
   --trace-out build/trace.json --shot build/s.bmp --shot-frame 4000
 
 # 确定性回归（存档往返字节稳定；--seed 固定随机）
-./build/rich4.exe --game resources/game --save-selftest 0
-./build/rich4.exe --game resources/game --debug --seed 12345 --load-game 0
+./build/rich4.exe --game resources/MultiverseJourney --save-selftest 0
+./build/rich4.exe --game resources/MultiverseJourney --debug --seed 12345 --load-game 0
 
 # 参数：--seed <n>  --headless  --test-clock  --trace  --trace-out <json>
 #       --quickstart <map[,players[,humans]]>  --script <file>  --exec "<a; b; c>"
@@ -207,7 +207,9 @@ roulette_dialog 0x43F7C6 处 [NEW] 注释）；`roulette theme=<t> cell=<c>` tra
 4. **trace 批2~4 全量插桩**（演出/判定边界约 40 点）。
 5. **待登记 UI（交互链下一批）**：银行柜员机 18 键面板（kVisitRects 0x475914 →
    atm.btn.*）、研究所/前进面板内部按钮；64 场景已覆盖 99 条主干+多数模态。
-6. **旧热键迁移到命令注册表**（45 键位现保留原实现；`--script` 已与命令层并存）。
+6. ~~旧热键迁移到命令注册表~~ ✅ **2026-09-29 v2**：45→30 键精简（删面板直开/单卡/设施直建等
+   重叠与功能期键，迁移表见 `debug-keys.md`）；热键层重写为「指向桥接 + 键→命令模板 →
+   `debug::execLine`」，状态写入单一事实源；传送合一 helper 含朝向刷新。
 
 ### 3.1 已完成：L0 单测 + 编排器
 

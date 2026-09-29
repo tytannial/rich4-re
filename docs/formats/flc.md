@@ -131,7 +131,7 @@ FLC 经 `sub_450CED`（初始化，校验 `0xAF12`）装载、`sub_450F04`（逐
 ```bash
 python tools/flc.py info    <flc.bin>
 python tools/flc.py extract <flc.bin> <outdir> [--all | --frames N]
-python tools/extract_all.py resources/game --out ./assets --extract --flc-frames 8
+python tools/extract_all.py resources/MultiverseJourney --out ./assets --extract --flc-frames 8
 ```
 
 ## 验证（抽查解码成图）

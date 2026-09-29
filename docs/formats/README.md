@@ -68,13 +68,13 @@
 
 ```bash
 # 生成资源索引
-python tools/extract_all.py resources/game --out ./assets --manifest docs/formats/resource-manifest.csv
+python tools/extract_all.py resources/MultiverseJourney --out ./assets --manifest docs/formats/resource-manifest.csv
 
 # 导出全部图像与音频（含 FLC 帧动画、RAW 位图）
-python tools/extract_all.py resources/game --out ./assets --extract --flc-frames 8
+python tools/extract_all.py resources/MultiverseJourney --out ./assets --extract --flc-frames 8
 
 # 单独解析/导出某个 FLC
-python tools/mkf.py extract resources/game/Panel.mkf ./out --index 20
+python tools/mkf.py extract resources/MultiverseJourney/Panel.mkf ./out --index 20
 python tools/flc.py info    ./out/0020.bin
 python tools/flc.py extract ./out/0020.bin ./out/panel20 --all
 ```

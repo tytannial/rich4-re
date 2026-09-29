@@ -10,7 +10,7 @@
   align    在基准帧上全范围搜索候选帧的最佳落点（像素差均值最小）
 
 用法：
-  python tools/frame_align.py offsets resources/game/Panel.mkf --index 65
+  python tools/frame_align.py offsets resources/MultiverseJourney/Panel.mkf --index 65
   python tools/frame_align.py offsets Panel_0065.bin
   python tools/frame_align.py align --base f4.png --base-at 104,110 --cand f8.png
 """

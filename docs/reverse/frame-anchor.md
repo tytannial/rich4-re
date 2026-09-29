@@ -61,11 +61,11 @@ int __cdecl blitElementOpaque(int w, int h, dst, unsigned __int16 *elem, int x, 
 
 ```bash
 # ① 导出资源帧为 PNG（MKF → bin → 帧 PNG）
-python tools/mkf.py extract resources/game/Panel.mkf <dir> --index 65
+python tools/mkf.py extract resources/MultiverseJourney/Panel.mkf <dir> --index 65
 python tools/smp.py extract <dir>/Panel_0065.bin <dir>/frames
 
 # ② 查帧表 offset（SPR/SMP 均支持，*.mkf 需 --index）
-python tools/frame_align.py offsets resources/game/Panel.mkf --index 65
+python tools/frame_align.py offsets resources/MultiverseJourney/Panel.mkf --index 65
 
 # ③ 全范围搜索最佳落点：以"大图/静止帧"为基准，待校准帧为候选
 #    --base-at = 基准帧在屏幕上的实参（如 104,110）；err 最小处即最佳落点

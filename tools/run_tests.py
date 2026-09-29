@@ -8,7 +8,7 @@
   python tools/run_tests.py                       # 全部
   python tools/run_tests.py --filter rent         # 名称子串
   python tools/run_tests.py --matrix              # 覆盖矩阵报告
-  python tools/run_tests.py --exe build/rich4.exe --game resources/game
+  python tools/run_tests.py --exe build/rich4.exe --game resources/MultiverseJourney
 """
 from __future__ import annotations
 
@@ -131,7 +131,7 @@ def matrix(all_sc: list[dict], results: list[dict]) -> None:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--exe", default=str(ROOT / "build" / "rich4.exe"))
-    ap.add_argument("--game", default=str(ROOT / "resources" / "game"))
+    ap.add_argument("--game", default=str(ROOT / "resources" / "MultiverseJourney"))
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--filter", default="")
     ap.add_argument("--repeat", type=int, default=1)

@@ -109,7 +109,7 @@ python tools/re_map.py
 python tools/re_map.py --report
 
 # 帧锚点 offset 查询 / 像素对齐（元素错位类问题；方法见 frame-anchor.md）
-python tools/frame_align.py offsets resources/game/Panel.mkf --index 65
+python tools/frame_align.py offsets resources/MultiverseJourney/Panel.mkf --index 65
 python tools/frame_align.py align --base <大图帧.png> --base-at 104,110 --cand <待校准帧.png>
 ```
 

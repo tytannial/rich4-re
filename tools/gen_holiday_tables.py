@@ -27,7 +27,7 @@ def va_to_raw(va: int) -> int:
 
 
 def main() -> None:
-    exe = Path(next((a for a in sys.argv[1:] if not a.startswith("--")), "resources/game/rich4.exe"))
+    exe = Path(next((a for a in sys.argv[1:] if not a.startswith("--")), "resources/MultiverseJourney/rich4.exe"))
     data = exe.read_bytes()
     t = data[va_to_raw(HOLIDAY_VA): va_to_raw(HOLIDAY_VA) + HOLIDAY_N]
     assert len(t) == HOLIDAY_N, f"short read {len(t)}"

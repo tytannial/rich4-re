@@ -3,7 +3,7 @@
 被踩中台词表（同表列 14/15/16 = 路障/地雷/定時炸彈）与价值台词表（0x48084A，12 角色 x 27 列指针，
 取列 0..2 = 高/中/低价）。
 
-用法: python tools/gen_item_lines.py [--exe resources/game/rich4.exe]
+用法: python tools/gen_item_lines.py [--exe resources/MultiverseJourney/rich4.exe]
 """
 import argparse
 import struct
@@ -26,7 +26,7 @@ VALUE_STRIDE, VALUE_COL_N = 27, 3
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--exe", default="resources/game/rich4.exe")
+    ap.add_argument("--exe", default="resources/MultiverseJourney/rich4.exe")
     ap.add_argument("--out", default="src/app/item_lines.cpp")
     args = ap.parse_args()
 
