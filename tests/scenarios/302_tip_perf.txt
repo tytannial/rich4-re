@@ -1,0 +1,14 @@
+# id: 302_tip_perf
+# covers: 物件提示演出屏蔽——按住地图中心（玩家棋子，视口跟随必然命中）弹出提示 →
+#         land 演出吞掉抬起 → 进入演出即清除（tip clear (perf)），动画播完不"幽灵悬挂"
+# timeout: 40000
+wait idle 1000
+find.evtcell 10
+press 220 240
+wait frames 10
+assert trace "tip show"
+land
+assert trace "tip clear (perf)"
+release
+assert state players.0.points >= 50
+quit

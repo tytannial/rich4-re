@@ -12,6 +12,7 @@
 #include "game/app/economy.h"
 #include "game/app/event_common.h"
 #include "game/app/event_stack.h"
+#include "game/app/object_tip.h"
 #include "game/app/game_loop.h"
 #include "game/app/game_panel.h"
 #include "game/app/map_render.h"
@@ -501,6 +502,8 @@ int slotMachineDialog(Application& app, int a1) {
 // 迁移: 结束清 eventFlcActive 解冻（下一次 renderGameFrame 恢复场景）
 void showGodNarration(Application& app, const char* text) {
     GameState& st = app.gameState();
+    // [NEW] 演出阻塞期：抬起消息无人处理，先清除物件提示（=原版全量重绘抹掉增量像素）
+    clearObjectTipForPerf(app);
     Surface& dst = app.surface();
     app.text().setFont(28, 0xFFFFFF, 0x101010, kTextStyleShadow, 0);
     app.text().drawText(dst, text, 220, 460, 7);
@@ -534,6 +537,8 @@ void attachEnd(Application& app, int p) {
     if (objId == 0) {
         return;
     }
+    // [NEW] 飘走演出期抬起无人处理，先清除物件提示（原版=每帧场景重绘抹掉增量提示像素）
+    clearObjectTipForPerf(app);
     const size_t off = static_cast<size_t>(24 * (objId - 1));
     const uint8_t type = st.cellTable[off];
     if (pl.stateFlags != 0) {
@@ -1029,6 +1034,9 @@ void flyObjectSprite(Application& app, int objId, int fromX, int fromY, int toX,
     const int frames = static_cast<int>(dist * kFlyFrameScale) + 1;
     const double stepX = static_cast<double>(x1 - x0) / frames;  // 起点 → 终点
     const double stepY = static_cast<double>(y1 - y0) / frames;
+    // [NEW] 背景快照前清除物件提示（飞行全程=快照冻结，原版动画重绘会抹掉增量提示像素；
+    //   抬起消息期间无人处理，不清将结束后幽灵悬挂）
+    clearObjectTipForPerf(app);
     // [RE 0x451A97 saveBackground] 地图区 (0,40)-(440,480) 像素快照
     constexpr int kSnapX = 0;
     constexpr int kSnapY = 40;

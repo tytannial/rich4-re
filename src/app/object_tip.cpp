@@ -4,6 +4,7 @@
 #include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/encoding.h"
+#include "game/core/trace.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
 #include "game/render/text.h"
@@ -204,6 +205,7 @@ void showObjectTip(Application& app, int x, int y) {
         state.objectTipText = text;
         state.objectTipX = x;
         state.objectTipY = y;
+        trace::logf("tip show id=%u text=\"%s\"", it->id, text.c_str());
         app.audio().playEffect(1); // [RE 0x4175CB] g_uiSoundClick
         return;
     }
@@ -262,6 +264,16 @@ void drawObjectTip(Application& app) {
         }
         start = end + 1;
     }
+}
+
+// [NEW] 演出期清除（见 object_tip.h）：非空才清 + trace，天然每段演出一条
+void clearObjectTipForPerf(Application& app) {
+    GameState& state = app.gameState();
+    if (state.objectTipText.empty()) {
+        return;
+    }
+    state.objectTipText.clear();
+    trace::logf("tip clear (perf)");
 }
 
 } // namespace rich4

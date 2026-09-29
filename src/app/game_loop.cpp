@@ -236,6 +236,29 @@ void handleTopBarButton(Application& app, int index) {
     }
 }
 
+// [NEW] 物件提示演出屏蔽谓词：原版提示（0x417559）是**一次性增量绘制**——任何场景全量
+//   重绘（事件 FLC/跳伞/棋子移动/掷骰/小地图滚动/动画结束 refreshGameUi(0,0,1)）都会把它
+//   直接抹掉，抬起消息被动画消息泵吞掉也不残留；重写为状态式即时重绘，必须在演出进行期
+//   屏蔽显示与按下、并在进入演出时清除，否则"动画期间松开左键 → 提示幽灵悬挂"
+//   （gameEventHandler 512 守卫吞掉 WM_LBUTTONUP，objectTipText 无人清理）
+bool tipPerfBlocked(Application& app) {
+    GameState& st = app.gameState();
+    if (st.eventFlcActive || st.parachuteActive || st.pendingSpawnPlayer ||
+        st.viewScrolling) {
+        return true;
+    }
+    // [RE 0x498EA2] 任一玩家行动状态非 0：1=移动中 2=掷骰 3=特殊移动（别的棋子移动同样屏蔽）
+    for (int p = 0; p < st.playerCount && p < 9; ++p) {
+        if (st.playerActionState[p] != 0) {
+            return true;
+        }
+    }
+    // 游戏主模态之上叠了任何 runModal（showMessage/playLine/showCardGet/新闻/命运/
+    //   乐透/任意对话框）——演出/模态期屏蔽；纯静止停顿（AI 等待、倒计时、非控制无演出）
+    //   仍可按住查看 = 保留原版 0x4186BE 语义
+    return app.events().depth() > 1;
+}
+
 // [RE 0x417E26] WM_MOUSEMOVE
 void handleMouseMove(Application& app, int x, int y) {
     GameState& state = app.gameState();
@@ -277,6 +300,11 @@ void handleMouseMove(Application& app, int x, int y) {
 // [RE 0x417E26] WM_LBUTTONDOWN
 void handleLeftButtonDown(Application& app, int x, int y) {
     GameState& state = app.gameState();
+    // [NEW] 演出/棋子移动/掷骰/模态期间点地图不弹物件提示
+    //   （原版此类场景必有全量重绘即时抹掉增量提示像素，等价屏蔽；见 tipPerfBlocked）
+    if (tipPerfBlocked(app)) {
+        return;
+    }
     state.objectTipText.clear(); // [RE 0x417559] 左键操作清除物件提示
     // [RE 0x4186BE] 非玩家控制期（AI 回合/掷骰/移动/结算）：仅保留地图区物件提示，
     //   其余点击（工具条/日历/面板）忽略（原版 0x4186BE 在 byte_46CAFD 检查之前）
@@ -609,6 +637,10 @@ void renderGameFrame(Application& app) {
     //   （防演出/移动期间光标处旧背景脏块闪现；见 Cursor::invalidate）
     app.cursor().invalidate();
     GameState& state = app.gameState();
+    // [NEW] 进入演出帧即清除物件提示（抬起消息被动画泵吞掉也不残留；见 tipPerfBlocked）
+    if (tipPerfBlocked(app)) {
+        clearObjectTipForPerf(app);
+    }
     if (state.manualView) {
         // [RE 0x48BE18] dword_48BE18 非 0：用平滑视口中心（原版 dword_48BE1C/BE20）
         renderMap(app, state.viewSmoothX, state.viewSmoothY);
@@ -616,8 +648,10 @@ void renderGameFrame(Application& app) {
         // 否则以当前玩家位置为中心
         renderMap(app, -1, 0);
     }
-    // [RE 0x417559] 右键物件提示框（地图区之上、面板之下）
-    drawObjectTip(app);
+    // [RE 0x417559] 右键物件提示框（地图区之上、面板之下）；演出期双保险不画
+    if (!tipPerfBlocked(app)) {
+        drawObjectTip(app);
+    }
     renderGamePanel(app);
     // [RE 0x45144F/0x451985] 演出叠加层在**面板（含前进 GO 面板 0x417191）之后**——
     //   原版 flcPlay/高亮/跳伞都在完整场景（地图+工具条+右侧/前进面板已画完）的

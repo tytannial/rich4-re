@@ -133,7 +133,15 @@ playLine 打断并 `stopVoice`、showMessage 不停=原版语义）；`flcPlay` 
 由 renderFrame 按 `eventFlcActive||parachuteActive` 统一驱动 + 乐透开奖 3/5 / 月结全身像段。
 **乐透花屏根因修复**——`Cursor::update` 旧"移动先 uncompose 写回陈旧 32×32 背景"在即时
 模式全量重绘界面闪脏块 → 改为只跟踪动画/位置，compose 每帧从最新干净背景重抓。
-trace `msg/line/flc skip` + 场景 `300_skip_msg`；全矩阵 **89/89 绿**；详见 `ui-controls.md` §39。
+**物件提示演出屏蔽 ✅（2026-09-29 实机反馈）**——原版提示（0x417559）是一次性增量绘制、
+动画泵吞掉抬起也会被后续重绘抹掉；重写状态式即时重绘导致"动画期间松开左键提示不消失
+（幽灵悬挂）"。收口 `tipPerfBlocked`（eventFlc/跳伞/入场/滚动/任一玩家行动状态 1·2·3/
+`events().depth()>1` 任意模态）：`renderGameFrame` 演出帧清除+不画、`handleLeftButtonDown`
+演出期忽略（原版等价"看不到"；纯静止停顿仍可按住查看=保留 0x4186BE 语义）、
+flyObjectSprite/attachEnd/playHighlightBlink/showGodNarration/playEventFlc 入口
+`clearObjectTipForPerf`；调试命令 `press/presssel/release`（单 DOWN/UP 模拟按住）+
+trace `tip show`/`tip clear (perf)` + 场景 `302_tip_perf`；全矩阵 **91/91 绿**。
+trace `msg/line/flc skip` + 场景 `300_skip_msg`；详见 `ui-controls.md` §39。
 
 **M2 执行计划**：见 `docs/m2-plan.md`
 

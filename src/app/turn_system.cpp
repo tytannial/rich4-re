@@ -34,6 +34,7 @@
 #include "game/app/lottery.h"
 #include "game/app/magic_house_dialog.h"
 #include "game/app/map_objects.h"
+#include "game/app/object_tip.h"
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
 #include "game/app/message_dialog.h"
@@ -1072,6 +1073,9 @@ void playHighlightBlink(Application& app, bool preRedraw) {
     if (st.highlightFrame < 0) {
         return; // 联动组 ≤ 1（原版 v141 > 1 才播放）
     }
+    // [NEW] 闪烁演出期抬起被 presentFrame 的 pumpEvents 吞掉（非控制期），先清物件提示
+    //   （原版=每帧背景重绘抹掉增量提示像素；preRedraw=false 的快照会冻结提示更需先清）
+    clearObjectTipForPerf(app);
     // [RE 0x451985] 形状快照（原版 pickBuffer 标记语义：启动时提取，播放期间不随地图数据
     //   重建——拆除后的地块仍显示高亮，如新闻 idx 19 山洪归公）
     Surface& dst = app.surface();
@@ -1152,6 +1156,9 @@ void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, boo
     }
     // [RE 0x4528B9] 清除进入前残留的打断输入（防上一次界面点击误打断本次动画）
     app.consumeSkipInput();
+    // [NEW] 事件动画演出：先清物件提示（preserve 模式回卷快照必须是干净场景，
+    //   抬起消息期间被吞，不清则动画后幽灵悬挂）
+    clearObjectTipForPerf(app);
     st.eventFlcX = x;
     st.eventFlcY = y;
     st.eventFlcActive = true;

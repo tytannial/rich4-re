@@ -1073,14 +1073,20 @@ struct QueuedInput {
     int y;
     bool right;
     bool isMove;
+    int kind = 0;  // [NEW] 0=down+up（原 click 语义）1=仅按下（按住不放）2=仅释放
 };
 std::vector<QueuedInput> g_queue;
 int g_inputTick = 0;
+// [NEW] 最近一次直投的指针位置（release 无参时在该点合成 UP，模拟"按住后松开"）
+int g_lastPointerX = 0;
+int g_lastPointerY = 0;
 
-void queueInput(int x, int y, bool right, bool isMove) {
-    g_queue.push_back({g_inputTick + 1, x, y, right, true});   // 先 move
+void queueInput(int x, int y, bool right, bool isMove, int kind = 0) {
+    g_lastPointerX = x;
+    g_lastPointerY = y;
+    g_queue.push_back({g_inputTick + 1, x, y, right, true, 0});   // 先 move
     if (!isMove) {
-        g_queue.push_back({g_inputTick + 2, x, y, right, false}); // 再 click
+        g_queue.push_back({g_inputTick + 2, x, y, right, false, kind}); // 再按/放/both
     }
 }
 
@@ -1096,17 +1102,26 @@ void dispatchQueuedInputs(Application& app) {
         ev.motion.y = static_cast<float>(q.y);
         app.events().dispatch(ev);
         if (!q.isMove) {
-            ev.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
-            ev.button.button = q.right ? SDL_BUTTON_RIGHT : SDL_BUTTON_LEFT;
-            ev.button.clicks = 1;
-            ev.button.x = static_cast<float>(q.x);
-            ev.button.y = static_cast<float>(q.y);
-            if (!q.right) {
-                app.setUiClicked(); // 与真实左键按下语义一致（转盘提前停等 consumeUiClick）
+            const bool down = q.kind == 0 || q.kind == 1;
+            const bool up = q.kind == 0 || q.kind == 2;
+            if (down) {
+                ev.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+                ev.button.button = q.right ? SDL_BUTTON_RIGHT : SDL_BUTTON_LEFT;
+                ev.button.clicks = 1;
+                ev.button.x = static_cast<float>(q.x);
+                ev.button.y = static_cast<float>(q.y);
+                if (!q.right) {
+                    app.setUiClicked(); // 与真实左键按下语义一致（转盘提前停等 consumeUiClick）
+                }
+                app.events().dispatch(ev);
             }
-            app.events().dispatch(ev);
-            ev.type = SDL_EVENT_MOUSE_BUTTON_UP;
-            app.events().dispatch(ev);
+            if (up) {
+                ev.type = SDL_EVENT_MOUSE_BUTTON_UP;
+                ev.button.button = q.right ? SDL_BUTTON_RIGHT : SDL_BUTTON_LEFT;
+                ev.button.x = static_cast<float>(q.x);
+                ev.button.y = static_cast<float>(q.y);
+                app.events().dispatch(ev);
+            }
         }
     }
 }
@@ -1636,6 +1651,62 @@ bool cmdClick(Application& app, const std::vector<std::string>& a, std::string& 
     return true;
 }
 
+// [NEW] presssel：在 clicksel 同源的选中物件命中点合成**单 DOWN（按住不放）**——
+//   验证"按住查看物件提示 → 演出/动画吞掉抬起 → 提示不残留"（release 在上次指针处补 UP）
+bool cmdPressSel(Application& app, const std::vector<std::string>& a, std::string& err) {
+    (void)a;
+    GameState& st = app.gameState();
+    if (g_selected == 0) {
+        err = "presssel: nothing selected";
+        return false;
+    }
+    for (const auto& hr : st.mapHitRegions) {
+        if (hr.id != g_selected || hr.w <= 0 || hr.h <= 0) {
+            continue;
+        }
+        const int cx = hr.x + hr.w / 2;
+        const int cy = hr.y + hr.h / 2;
+        int bx = -1;
+        int by = -1;
+        int best = 1 << 30;
+        for (int y2 = hr.y; y2 < hr.y + hr.h; y2 += 4) {
+            for (int x2 = hr.x; x2 < hr.x + hr.w; x2 += 4) {
+                if (pickMapObject(st, x2, y2) == g_selected) {
+                    const int d = (x2 - cx) * (x2 - cx) + (y2 - cy) * (y2 - cy);
+                    if (d < best) {
+                        best = d;
+                        bx = x2;
+                        by = y2;
+                    }
+                }
+            }
+        }
+        if (bx >= 0) {
+            queueInput(bx, by, false, false, 1);
+            trace::logf("pressed presssel id=%u at=(%d,%d)", g_selected, bx, by);
+            return true;
+        }
+        err = "presssel: no mask-hit point found in rect";
+        return false;
+    }
+    err = "presssel: selected id not in hit list";
+    return false;
+}
+
+// [NEW] press/release：单 DOWN（按住）/ 单 UP（松开），验证"按住物件提示 + 演出吞抬起"
+bool cmdPress(Application& app, const std::vector<std::string>& a, std::string& err) {
+    (void)app;
+    if (!argCount(a, 2, err, "press <x> <y>")) return false;
+    queueInput(parseInt(a[1]), parseInt(a[2]), false, false, 1);
+    return true;
+}
+bool cmdRelease(Application& app, const std::vector<std::string>& a, std::string& err) {
+    (void)app;
+    if (!argCount(a, 0, err, "release")) return false;
+    queueInput(g_lastPointerX, g_lastPointerY, false, false, 2);
+    return true;
+}
+
 bool cmdRClick(Application& app, const std::vector<std::string>& a, std::string& err) {
     (void)app;
     if (!argCount(a, 2, err, "rclick <x> <y>")) return false;
@@ -1730,12 +1801,15 @@ const Cmd kCmds[] = {
     {"dump", cmdDump},
     {"click", cmdClick},
     {"clickr", cmdClickR},
+    {"press", cmdPress},
+    {"release", cmdRelease},
     {"tap", cmdTap},
     {"use.item", cmdUseItem},
     {"use.card", cmdUseCard},
     {"clickcell", cmdClickCell},
     {"clickplayer", cmdClickPlayer},
     {"clicksel", cmdClickSel},
+    {"presssel", cmdPressSel},
     {"rclick", cmdRClick},
     {"move", cmdMove},
     {"key", cmdKey},
@@ -1787,7 +1861,8 @@ bool isInteractiveCmd(const std::string& name) {
     // 阻塞模态期间仍需可执行的应答类命令（点地图/选目标也属应答）
     static const char* const kInter[] = {"click",     "clickr",  "rclick",    "move",
                                          "key",       "confirm", "tap",       "clickcell",
-                                         "clickplayer", "clicksel"};
+                                         "clickplayer", "clicksel", "press",  "presssel",
+                                         "release"};
     for (const char* i : kInter) {
         if (name == i) {
             return true;

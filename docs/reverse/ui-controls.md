@@ -27,7 +27,7 @@
 | 金额/数字格式化 | 0x452793/0x429691 | `game_panel/stock` | 全局 | §12 |
 | 数字输入框 | 0x453544/0x452C02 | `number_input_dialog.cpp` | 买卖/认购 | §13 |
 | 键位捕获编辑 | 0x411122 | `hotkey_dialog.cpp` | 热键设置 | §14 |
-| 提示/消息/气泡/拾取/卡片获得 | 0x440CAC/0x417559/0x441F73 | `message/object_tip/turn_system` | 全局 | §15 |
+| 提示/消息/气泡/拾取/卡片获得 | 0x440CAC/0x417559/0x441F73 | `message/object_tip/turn_system` | 全局 | §15（演出屏蔽+打断见 §39） |
 | HUD 常驻（工具条/页签/日历/小地图/前进面板） | 0x417E26/0x417191 | `game_panel/game_loop` | 游戏内 | §16 |
 | 头像/精灵选择网格 | 0x40423C/0x404E44 | `new_game_dialog.cpp` | 选人 | §17 |
 | 动画（转盘/进场/闪烁/棋子/FLC/事件FLC 阻塞播放） | 0x43F7C6/0x404E44/0x45144F | `roulette/new_game/game_loop/turn_system` | 事件、开局 | §18 |
@@ -945,9 +945,22 @@ UI 音效与游戏音效槽**是两套**，勿混：
   voiceStop），playLine 打断**要停**（sub_4544F6 打断分支 voiceStop）——两套语义勿混；
   ③ **前进 GO 面板（0x417191）与演出叠加层的层级**：原版 = WM_PAINT 画完整场景
   （地图+工具条+右侧/前进面板，GO 在地图区 ~(180,120)）后，flcPlay/高亮/跳伞在
-  backbuffer 上 saveBackground(0,40..440,440) 末层叠加 = **动画盖住 GO**；重写
+  backbuffer 上 saveBackground 后末层叠加 = **动画盖住 GO**；重写
   `renderGameFrame` 已同步为 地图→物件提示→面板(含GO)→跳伞/事件FLC/高亮
-  （2026-09-29 层级修正，此前 GO 恒在动画之上）
+  （2026-09-29 层级修正，此前 GO 恒在动画之上）；
+  ④ **按住查看的物件提示（0x417559）在演出期必须屏蔽+清除**（2026-09-29 实机反馈）：
+  原版提示=一次性增量绘制，动画消息泵吞掉 WM_LBUTTONUP 也无妨——任何后续全量重绘
+  自动抹掉；重写状态式即时重绘若不管，演出期间抬起被
+  `gameEventHandler` 守卫吞掉 → 动画播完提示"幽灵悬挂"。重写收口
+  `tipPerfBlocked(app)`（`game_loop.cpp`：eventFlcActive/parachuteActive/
+  pendingSpawnPlayer/viewScrolling/任一 `playerActionState!=0`（1 移动 2 掷骰 3 特殊）/
+  `events().depth()>1`（showMessage·playLine·对话框等任意模态））+
+  `clearObjectTipForPerf()`（trace `tip clear (perf)`）：`renderGameFrame` 演出帧清除并
+  不绘制、`handleLeftButtonDown` 演出期整体忽略（原版=重绘即时抹掉，等价"看不到"）、
+  `flyObjectSprite`/`attachEnd`/`playHighlightBlink`/`showGodNarration`/`playEventFlc`
+  入口显式清（这些不走带谓词的 renderGameFrame 或先快照背景）。纯静止停顿（AI 等待、
+  倒计时、非控制无演出）**仍可按住查看** = 保留原版 0x4186BE 语义。trace `tip show`；
+  场景 `302_tip_perf`（presssel/release 按住调试命令见 debug.cpp）
 
 ## 新增控件模板（发现新控件时复制填写）
 
