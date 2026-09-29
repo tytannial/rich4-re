@@ -100,6 +100,15 @@ owner 停留 type4 逐级解锁选 1（`corp.sub` 门槛**灰度**）→ `resear
 **功能总览**：`docs/help-checklist.md`（帮助文档 99 条 → 实现状态，当前 ✅ 99 / 🟡 0 / ❌ 0；
 **存档/读档/自动存档/时光机专项 ✅ 2026-09-28**，见 `docs/reverse/functions/402fd1-save-load.md`）。
 
+**AI 功能专项 ✅ 完成（2026-09-29）**：道具链（0x420E9A 13 目标 + 0x40B221/0x40B343 路径候选域
++ 0x40A0B1/nearIso 溅射）+ 卡片链（0x41E69E + 31 目标函数**全量回验 11 处订正**，含烏龜条件方向
+汇编核验）+ **回合动作链**（0x418DE6 买股 / 0x418DF4 卖股 / 0x418DFE 週轉 / 0x418E13 交易 /
+0x418E31 状态守卫 / 0x418E70 骰子动态调整 / beginPlayerTurn 视口刷新）全实装；专项测试
+`run_tests.py --filter ai_` 8 场景 + L2 `84_ai_marathon` 全绿；**全量矩阵 84/84 PASS 冻结基线**。
+档案：`420e9a-item-ai.md`、`441baa-card-effects.md`、`418c55-ai-turn-actions.md`。
+
+**M3 执行计划**：见 `docs/m3-plan.md`（终局链 checkVictory/通关地图选择/失败界面/AVI + 宽屏/快捷键 + 跨平台冻结）
+
 **M2 执行计划**：见 `docs/m2-plan.md`
 
 **M2 待办**（详见 `docs/reverse/functions/` 各档案「差异」段，按选定路线排序）：
