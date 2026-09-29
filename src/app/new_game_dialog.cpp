@@ -480,7 +480,10 @@ void handleLeftButtonUp(DialogState& st) {
         st.pressedCtrl = -1;
         if (st.selectedCount > 0) {
             st.phase = kPhaseFillAi;
-            st.fillTick = 0;
+            // [RE 0x404E44] 进入状态1时原版 dword_48A3CC = 10（确定分支内预置），
+            //   配合 handleTimer `++fillTick >= 10` 使首个 100ms tick 立即检查满员/补第 1 个 AI；
+            //   置 0 会多等一整轮 10 tick（约 1s），即"确认后迟迟不进游戏"的根因
+            st.fillTick = 10;
             st.app->audio().playEffect(1); // [RE 0x4542CE] unk_482322
         }
         redrawAll(st);
@@ -582,8 +585,11 @@ void handleTimer(DialogState& st) {
         st.transSlotX[i] += st.transAccel;
     }
     redrawTransition(st);
-    // [RE 0x404E44] 状态 2 过渡动画完成后进入游戏（原版动画结束 postModalExit(1)）
-    if (st.transMapX <= -640) {
+    // [RE 0x404E44] 状态 2 动画阻塞退出：原版 WM_PAINT 中最后玩家槽 blitSpriteFrame
+    //   (0x45663E) 越界（x>=640）返回 1 → 写 dword_48A3D8[playerCountIdx]（= dword_48A3D4[最后槽]）
+    //   → 下一帧 PostMessage WM_KEYDOWN → postModalExit(1)。即以"最后头像飞出右边界"为结束时机
+    const int lastSlot = st.config->playerCount() - 1;
+    if (lastSlot >= 0 && lastSlot < 4 && st.transSlotX[lastSlot] >= 640) {
         st.app->events().requestExit(1);
     }
 }
