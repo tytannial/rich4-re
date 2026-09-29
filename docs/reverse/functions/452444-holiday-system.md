@@ -11,7 +11,7 @@
 | `findHoliday` | `game_panel.cpp:396` + `bank_stay_dialog.cpp:140` **两份副本**，仅 type 0/2 | type1 浮动跳过；两副本应统一 |
 | 节日数据表 | `kHoliday[8][24][5]`（`map_tables.cpp:717`）`{flag,type,month,day,weekday}` | **丢原版 +5..+11**：效果 flags / 插画FLC / 音乐idx（`sub_452444` 必需） |
 | 浮动节日表 | 无 | 需 `dword_47639C`（按 `daysSince1998` 索引） |
-| `sub_452444` 每日节日处理 | **完全未实现**（`advanceDay` 无此调用） | 插画 / 音乐 / 发卡三效果 |
+| `sub_452444` 每日节日处理 | ✅ 阶段1+2a：`holidayDaily`（`advanceDay` 0x41D07B 接线）插画 FLC + 节日音乐 + 人人发卡（type0/2 命中即生效；圣诞 12/25 flags=0xf 冒烟全触发） | **type1 农历节日待**（需 `kFloatHoliday` 表 + `findHoliday` type1 + 超界 clamp） |
 | 日历红字 / 节日背景 / 休市 / 停业 | 已实现（type0/2 命中即生效） | type1 命中的节日这些链自动补齐 |
 
 ## 1. 数据表：`g_holidayTable 0x47FF4A` = `[8][24][12]`

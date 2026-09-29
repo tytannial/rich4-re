@@ -5,6 +5,8 @@
 
 #include "game/app/date_util.h"
 #include "game/app/economy.h"
+#include "game/app/event_common.h"   // playerNameNoSpace [RE 0x452946]
+#include "game/app/item_lines.h"   // playValueLine [RE 0x44F230]
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
 #include "game/app/turn_system.h"   // playEventFlc [RE 0x45144F]
@@ -673,6 +675,27 @@ void holidayDaily(Application& app) {
         const int flcSound = h[8] | (h[9] << 8);
         if (flcRes != 0 && st.data.read(static_cast<size_t>(flcRes))) {
             playEventFlc(app, flcRes, 0, 40, flcSound);
+        }
+    }
+    // [RE 0x45263F] 人人发卡（flags&8）：每存活玩家从赠卡池抽一张 + 展示，文案按地图组 4*mode+map
+    if ((eflags & 8) != 0) {
+        const int v13 = 4 * st.gameMode + st.mapIndex;
+        const char* msg = (v13 == 4) ? "銀河系和平日\n\n%s得到%s！"   // [RE 0x4661C4]
+                        : (v13 == 5) ? "恐龍蛋節\n\n%s得到%s！"        // [RE 0x4661DD]
+                        : (v13 == 6) ? "除夕\n\n%s得到%s！"            // [RE 0x4661F2]
+                                     : "聖誕節\n\n%s得到%s！";         // [RE 0x466203]
+        for (int i = 0; i < st.playerCount && i < 9; ++i) {
+            if (st.players[i].alive == 0) {
+                continue;
+            }
+            const int c = drawFreeCard(st, i); // [RE sub_441E12] 赠卡池抽卡入包（0=池空）
+            if (c == 0) {
+                continue;
+            }
+            char text[192];
+            std::snprintf(text, sizeof text, msg, playerNameNoSpace(st, i).c_str(), kCardNames[c]);
+            showCardGet(app, c, text);             // [RE sub_441F73]
+            playValueLine(app, i, kCardPrices[c]); // [RE sub_44F230]
         }
     }
 }
