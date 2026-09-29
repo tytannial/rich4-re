@@ -4,6 +4,7 @@
 #include "game/app/game_init.h"
 #include "game/app/game_shutdown.h"
 #include "game/app/main_menu.h"
+#include "game/app/load_dialog.h"
 #include "game/app/new_game.h"
 #include "game/app/victory.h"
 #include "game/core/log.h"
@@ -136,10 +137,14 @@ void Application::run() {
             case 3: // 通关结算 → 回主菜单（LABEL_5）
                 gameClearFlow(*this);
                 break;
-            case 4: // 失败读档继续（原版 loadDialog(0) 选档；重写近似：续最近自动存档 SAVE0=AUTO）
-                st.pendingLoadSlot = 0; // [RE 0x403D74] TODO 读档对话框选档
-                m_runFlow = 2;
+            case 4: { // [RE 0x403D74] 失败读档继续：弹原版 loadDialog 选档 → 载入续局；取消→主菜单
+                const int lslot = loadDialog(*this);
+                if (lslot >= 0) {
+                    st.pendingLoadSlot = lslot;
+                    m_runFlow = 2;
+                }
                 break;
+            }
             case 1:
             case 0:
             default:
