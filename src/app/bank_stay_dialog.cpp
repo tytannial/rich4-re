@@ -9,6 +9,7 @@
 
 #include "game/app/date_util.h"
 #include "game/app/economy.h"
+#include "game/app/event_common.h"
 #include "game/app/event_stack.h"
 #include "game/app/float_message.h"
 #include "game/app/map_tables.h"
@@ -892,7 +893,7 @@ bool dueHandler(const SDL_Event* event, void* user) {
         GameState& st = app.gameState();
         const int p = st.currentPlayer;
         std::snprintf(ui.helloMsg, sizeof(ui.helloMsg), "%s您好",
-                      playerName(st.players[p])); // [RE 0x43616F sprintf("%s您好")]
+                      playerNameNoSpace(st, p).c_str()); // [RE 0x43616F sprintf 前 0x436185 copyNameNoSpaces]
         ui.state = 1;
         ui.msg.show(app, ui.helloMsg); // [RE 0x4361AE]
         return true;

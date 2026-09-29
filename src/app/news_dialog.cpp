@@ -891,7 +891,7 @@ void evt27_stockHaltOne(NewsCtx& ctx, int phase) {
     const int s = dbg::roll(dbg::SlotNews, 12); // [RE 0x44B0F8]
     char text[192];
     std::snprintf(text, sizeof(text), kNewsTexts[27],
-                  kStockNames[st.gameMode * 4 + st.mapIndex][s]);
+                  nameNoSpaces(kStockNames[st.gameMode * 4 + st.mapIndex][s]).c_str()); // [RE 0x44B113 copyNameNoSpaces(公司名)]
     drawEffectText(ctx, text, 310);
     st.stockHalted[s] = 15; // [RE 0x44B154] byte_496986[36*s] = 15
     st.stocks[s][5] = st.stocks[s][4]; // [RE 0x44B17B] 现价 = 昨收
@@ -917,7 +917,7 @@ void evt28_stockResume(NewsCtx& ctx, int phase) {
     const int s = list[static_cast<size_t>(dbg::roll(dbg::SlotNews, static_cast<int>(list.size())))];
     char text[192];
     std::snprintf(text, sizeof(text), kNewsTexts[28],
-                  kStockNames[st.gameMode * 4 + st.mapIndex][s]);
+                  nameNoSpaces(kStockNames[st.gameMode * 4 + st.mapIndex][s]).c_str()); // [RE 0x44B20A copyNameNoSpaces(公司名)]
     drawEffectText(ctx, text, 310);
     st.stockHalted[s] = 0; // [RE 0x44B24D] 恢复交易
 }

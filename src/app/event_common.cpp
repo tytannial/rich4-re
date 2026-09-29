@@ -179,17 +179,25 @@ int objOwner(const GameState& st, int objId) {
     return 0;
 }
 
-std::string playerNameNoSpace(const GameState& st, int p) {
+// [RE 0x452946] sub_452946 copyNameNoSpaces：逐字节复制并跳过 0x20
+std::string nameNoSpaces(const char* s) {
     std::string out;
-    if (p < 0 || p >= 9 || st.players[p].name == nullptr) {
+    if (s == nullptr) {
         return out;
     }
-    for (const char* q = st.players[p].name; *q != '\0'; ++q) {
+    for (const char* q = s; *q != '\0'; ++q) {
         if (*q != ' ') {
             out += *q;
         }
     }
     return out;
+}
+
+std::string playerNameNoSpace(const GameState& st, int p) {
+    if (p < 0 || p >= 9 || st.players[p].name == nullptr) {
+        return std::string();
+    }
+    return nameNoSpaces(st.players[p].name);
 }
 
 } // namespace rich4

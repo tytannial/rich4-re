@@ -270,7 +270,8 @@ void applyMagicPenalty(Application& app, int pen, const std::vector<int>& target
         renderGameFrame(app);
         app.renderFrame();
         char text[256];
-        std::snprintf(text, sizeof(text), "%s\n\n%s", playerNameNoSpace(st, t).c_str(),
+        std::snprintf(text, sizeof(text), "%s\n\n%s",
+                      pl.name ? pl.name : "", // [RE 0x431CE7 系列 sprintf 直引 g_players 不去空格]
                       kPenalties[pen + 1].name);
         showMessage(app, text, 1500);
         const uint16_t objId =
@@ -335,7 +336,7 @@ void applyMagicPenalty(Application& app, int pen, const std::vector<int>& target
                 char cardText[64];
                 std::snprintf(cardText, sizeof(cardText), "得%s！", kCardNames[card]);
                 std::snprintf(text2, sizeof(text2), "%s\n\n%s",
-                              playerNameNoSpace(st, t).c_str(), cardText);
+                              pl.name ? pl.name : "", cardText); // [RE 0x432395 系列 sprintf 直引不去空格]
                 showMessage(app, text2, 1500);
             }
             break;

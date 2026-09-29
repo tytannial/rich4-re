@@ -165,6 +165,11 @@ owner 停留 type4 逐级解锁选 1（`corp.sub` 门槛**灰度**）→ `resear
   淘汰/终局胜利；勘误：选卡·道具栏=空函数、请神符=卡片表槽22 已播；**修正 playStatusDaysLine
   列映射 bug**（原误用付款列9/10/11 → 倒霉列3/4/5）；checkVictory/defeatFlow 留 M3；
   **注意 expr 不是表选择器**——详情见专项 §1）
+- **角色名/公司名空格专项 ✅（2026-09-29）**：原版名字表带 `0x20` 排版空格（4 字宽），
+  消息 sprintf 经 `copyNameNoSpaces`(0x452946) 去空格、drawText 直绘保留——重写逐点回验 44 调用点
+  矩阵并订正 13 处消息漏去空格 / 6 处误去空格（魔法屋惩罚·復仇/免費/免罪卡·AI 銀行回退）、
+  补齐 AI 紅黑卡「對%s使用%s！」消息与「買進/賣出%d**張**」量词；
+  详见 `452946-name-no-space.md`
 
 ## 目录结构
 
@@ -278,6 +283,8 @@ python tools/re_map.py
   过滤/32 调用点矩阵/批次清单；道具·卡牌·事件"以地图为目标"的统一核查入口）
 - `docs/reverse/functions/41982d-estate-rent.md` — 收租/收费专项（case 0 他人住宅用地收租全流程）
 - `docs/reverse/functions/stock-system.md` — **股市系统**（行情 stockTick/控股/认购/行情界面/交易市场/数字输入框）
+- `docs/reverse/functions/452946-name-no-space.md` — **角色名/公司名空格双轨制**（原版 4 字宽补空格、
+  消息经 copyNameNoSpaces 去空格、drawText 保留；44 调用点矩阵 + 不去空格例外清单）
 - `docs/reverse/functions/42b58f-stock-panel.md` — **股市面板**（0x42B58F 行情/持股/买卖/走勢圖/休市 精确实现）
 - `docs/reverse/ui-controls.md` — **游戏内 UI 控件指南**（浮雕按钮/变暗表/文本对齐/数字框/模态框架/…；**发现新控件必须更新此文件**）
 - `docs/reverse/frame-anchor.md` — **帧锚点 offset 与落点对齐**（原版落点=实参−offset、
@@ -408,6 +415,12 @@ python tools/re_map.py
   `nextPlayer` busy 0→3。**循环移动音 = 槽 9**（`&dword_482382[4]` == `&g_effectSlots[2*9]`，
   勿用 `playEffectLooping(effectId)`，用 `playEffectSlotLooping(slot)`）；收尾 `sub_40FAD6`
   等 46 槽 flyCount 清空才交还回合。**勿再建 `workerPlayer` 之类独立字段**（2026-09-27 并入）。
+- **角色名/公司名空格双轨制**：原版 `g_charData+0`（0x4665C4）与 `g_stocks+0` 名字表按
+  **4 字宽排版补 `0x20` 空格**（「約 翰 喬」「台 積 電」）。`drawText` 直绘（选人/右侧面板/
+  物件提示/行情/分红…）**保留空格**；`sprintf` 进消息前原版经 `copyNameNoSpaces`(0x452946)
+  **去空格**（44 调用点矩阵见 `452946-name-no-space.md` §2.1），但**有例外**：魔法屋惩罚、
+  復仇/免費/免罪卡、AI 銀行還借款、週轉強制償還、aiStock 消息的玩家名部分等**直引不去空格**。
+  勿"顺手"统一去空格或加空格；两轨与例外清单为准（重写 helper：`nameNoSpaces`/`playerNameNoSpace`）。
 - **音乐**：取消对话框**不改动**音乐；確定仅在音量 0↔非0 时停/重播（非0 之间只调音量）。
 - **重新开局**：`newGameInit` 需重置 `mapRotation`/骰子/回合/音乐计时器等残留状态。
 - **音效 id 空间**：UI 音效（`g_uiSoundHover/Click/Confirm/Cancel` = Effect.mkf 0/1/2/4）

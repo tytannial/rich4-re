@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "game/app/economy.h"
+#include "game/app/event_common.h"
 #include "game/app/event_stack.h"
 #include "game/app/message_dialog.h"
 #include "game/application.h"
@@ -393,7 +394,7 @@ void bankAdvanceSettle(Application& app, int one) {
         if (othersBank < need) {
             char text[64];
             std::snprintf(text, sizeof(text), "銀行資金準備\n\n不足%d元\n\n由經營者%s墊", need - othersBank,
-                          st.players[owner].name ? st.players[owner].name : ""); // [RE 0x464B75]
+                          playerNameNoSpace(st, owner).c_str()); // [RE 0x436BF2 copyNameNoSpaces + 0x464B75]
             showMessage(app, text, 2500);
             payFromBank(app, owner, need - othersBank);
             st.players[owner].bankAdvance -= (need - othersBank);

@@ -1035,6 +1035,14 @@ int cardEffectRedStock(Application& app) {
     }
     st.stockNews[v - 1] = 0x30;  // [RE byte_496987=32] 高 4 位 3 = 涨停 3 天
     stockNewsApply(app, v);      // [RE 0x429040]
+    if (st.players[cur].alive != 1) {
+        // [RE 0x444FA8/0x444FC9] AI 分支消息"對%s使用%s！"：公司名 copyNameNoSpaces 去空格
+        char text[96];
+        std::snprintf(text, sizeof text, "對%s使用%s！",
+                      nameNoSpaces(kStockNames[st.gameMode * 4 + st.mapIndex][v - 1]).c_str(),
+                      kCardNames[24]);
+        showMessage(app, text, 1500); // [RE 0x444FDB]
+    }
     cardBagRemove(st, cur, 24);  // [RE 0x444F74 sub_441343(cur,24)]
     renderGameFrame(app);        // [RE sub_41906A(1)]
     RICH4_LOGI("cardRedStock: stock=%d halted=0x30 (RE 0x444F25)", v);
@@ -1056,6 +1064,14 @@ int cardEffectBlackStock(Application& app) {
     }
     st.stockNews[v - 1] = 0x03;  // [RE byte_496987=2] 低 4 位 3 = 跌停 3 天
     stockNewsApply(app, v);      // [RE 0x429040]
+    if (st.players[cur].alive != 1) {
+        // [RE 0x445121/0x445142] AI 分支消息"對%s使用%s！"：公司名 copyNameNoSpaces 去空格
+        char text[96];
+        std::snprintf(text, sizeof text, "對%s使用%s！",
+                      nameNoSpaces(kStockNames[st.gameMode * 4 + st.mapIndex][v - 1]).c_str(),
+                      kCardNames[25]);
+        showMessage(app, text, 1500); // [RE 0x445154]
+    }
     // [RE v9 = 快照价 - 现价（跌为正）；持股者 j 欠使用者 股数×v9/200]
     const float diff = before[v - 1] - st.stocks[v - 1][5];
     for (int j = 0; j < st.playerCount && j < 4; ++j) {
@@ -1079,7 +1095,9 @@ void triggerRevengeCard(Application& app, int victim) {
     }
     renderGameFrame(app);  // [RE refreshGameUi(受害者XY,0)]
     char text[160];
-    std::snprintf(text, sizeof text, "%s\n\n", playerNameNoSpace(st, victim).c_str());
+    // [RE 0x4446D1] sprintf(aS_41="%s\n\n復仇卡生效！", g_players) 直引**不去空格**（原版保留排版空格）
+    std::snprintf(text, sizeof text, "%s\n\n復仇卡生效！",
+                  st.players[victim].name ? st.players[victim].name : "");
     showCardGet(app, 18, text);   // [RE sub_441F73(18,...)]
     cardBagRemove(st, victim, 18);  // [RE sub_441343(victim,18)]
     playCardLine(app, victim, 17);  // [RE 0x44471F 受害者台词 復仇]
@@ -1099,7 +1117,7 @@ int applyFreeCard(Application& app, int target, int32_t fee) {
     if (st.players[target].alive == 1) {
         char text[160];
         std::snprintf(text, sizeof text, "%s\n\n是否使用免費卡？",
-                      playerNameNoSpace(st, target).c_str());  // [RE aS_42 0x465388]
+                      st.players[target].name ? st.players[target].name : ""); // [RE 0x444AE9 sprintf aS_42 直引不去空格]
         use = confirmDialog(app, text, 220, 320);  // [RE askDialog]
     } else {
         // [RE AI 分支] 阈值 (rand%3000+3000)×M；费用 ≤ 现金且阈值 ≥ 费用 → 不用
@@ -1110,9 +1128,8 @@ int applyFreeCard(Application& app, int target, int32_t fee) {
         return 0;
     }
     char text[160];
-    std::snprintf(text, sizeof text, "%s\n\n免費卡生效！",
-                  playerNameNoSpace(st, target).c_str());
-    showCardGet(app, 20, text);    // [RE "使用%s" + sub_441F73(20,...)]
+    std::snprintf(text, sizeof text, "使用%s", kCardNames[20]); // [RE 0x444B18 sprintf("使用%s", off_47FE8A=免費卡)；原版此处不含玩家名]
+    showCardGet(app, 20, text);    // [RE sub_441F73(20,...)]
     cardBagRemove(st, target, 20);  // [RE sub_441343(target,20)]
     playCardLine(app, target, 19);  // [RE 0x444B0x 使用者台词 免費]
     RICH4_LOGI("applyFreeCard: p%d fee=%d used (RE 0x444A60)", target, fee);

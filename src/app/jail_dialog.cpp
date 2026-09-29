@@ -9,6 +9,7 @@
 
 #include "game/app/confirm_dialog.h"
 #include "game/app/economy.h"
+#include "game/app/event_common.h"
 #include "game/app/event_stack.h"
 #include "game/app/float_message.h"
 #include "game/app/map_tables.h"
@@ -372,10 +373,12 @@ void bailAi(Application& app) {
     if (!ok) {
         return;
     }
-    const char* name = target < 4 ? (st.players[target].name ? st.players[target].name : "")
-                                  : kNpcNames[target]; // dword_47ED5A 小偷/強盜
+    // [RE 0x43D50B/0x43D524] 玩家名经 copyNameNoSpaces 去空格；NPC 名（dword_47ED5A）本无空格
+    const std::string name =
+        target < 4 ? playerNameNoSpace(st, target)
+                   : (kNpcNames[target] ? kNpcNames[target] : "");
     char text[64];
-    std::snprintf(text, sizeof(text), "保釋%s", name); // [RE 0x465169]
+    std::snprintf(text, sizeof(text), "保釋%s", name.c_str()); // [RE 0x465169]
     showMessage(app, text, 1500);
     st.players[cur].points = static_cast<uint16_t>(pts - cost);
     if (target >= 4) {
@@ -829,10 +832,12 @@ void visitAi(Application& app) {
     if (!ok) {
         return;
     }
-    const char* name = target < 4 ? (st.players[target].name ? st.players[target].name : "")
-                                  : kNpcNames[target]; // dword_47ED5A 流氓/間諜
+    // [RE 0x43EBB7/0x43EBD0] 玩家名经 copyNameNoSpaces 去空格；NPC 名本无空格
+    const std::string name =
+        target < 4 ? playerNameNoSpace(st, target)
+                   : (kNpcNames[target] ? kNpcNames[target] : "");
     char text[64];
-    std::snprintf(text, sizeof(text), "保釋%s", name); // [RE 0x465207 医院版同文本]
+    std::snprintf(text, sizeof(text), "保釋%s", name.c_str()); // [RE 0x465207 医院版同文本]
     showMessage(app, text, 1500);
     st.players[cur].points = static_cast<uint16_t>(pts - cost);
     if (target >= 4) {

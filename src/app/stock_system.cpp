@@ -5,6 +5,7 @@
 #include <cstring>
 
 #include "game/app/date_util.h"
+#include "game/app/event_common.h"
 #include "game/app/game_panel.h"
 #include "game/app/map_render.h"
 #include "game/app/map_tables.h"
@@ -521,9 +522,10 @@ void aiStockBuy(Application& app, int player) {
     buyStock(app, player, pick, static_cast<int>(n), true);
     refreshPlayerPanelFor(app, player);
     char text[96];
-    std::snprintf(text, sizeof text, "%s\n\n買進%s%d股",
-                  pl.name != nullptr ? pl.name : "",
-                  kStockNames[st.gameMode * 4 + st.mapIndex][pick], static_cast<int>(n));
+    std::snprintf(text, sizeof text, "%s\n\n買進%s%d張",
+                  pl.name != nullptr ? pl.name : "", // [RE 0x42C769 sprintf 玩家名直引不去空格]
+                  nameNoSpaces(kStockNames[st.gameMode * 4 + st.mapIndex][pick]).c_str(), // [RE 0x42C755 copyNameNoSpaces=公司名]
+                  static_cast<int>(n));
     showMessage(app, text, 1500);
     RICH4_LOGI("aiStockBuy: p%d stock=%d n=%d (RE 0x42BF03)", player, pick, static_cast<int>(n));
 }
@@ -645,9 +647,10 @@ void aiStockSell(Application& app, int player) {
             sellStock(app, player, best, cnt, true);
             refreshPlayerPanelFor(app, player);
             char text[96];
-            std::snprintf(text, sizeof text, "%s\n\n賣出%s%d股",
-                          pl.name != nullptr ? pl.name : "",
-                          kStockNames[st.gameMode * 4 + st.mapIndex][best], cnt);
+            std::snprintf(text, sizeof text, "%s\n\n賣出%s%d張",
+                          pl.name != nullptr ? pl.name : "", // [RE 0x42D06F sprintf 玩家名直引不去空格]
+                          nameNoSpaces(kStockNames[st.gameMode * 4 + st.mapIndex][best]).c_str(), // [RE 0x42D05B copyNameNoSpaces=公司名]
+                          cnt);
             showMessage(app, text, 1500);
             RICH4_LOGI("aiStockSell: p%d stock=%d n=%d forced=%d (RE 0x42C79F)", player, best,
                        cnt, forced ? 1 : 0);

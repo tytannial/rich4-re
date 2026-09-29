@@ -1294,8 +1294,8 @@ int resolvePenaltyTarget(Application& app, int player) {
     if (cardBagHas(st, player, 21)) {
         char text[160];
         std::snprintf(text, sizeof text, "%s\n\n免罪卡生效！",
-                      playerNameNoSpace(st, player).c_str());
-        showCardGet(app, 21, text); // [RE 0x444BB2 sub_441F73(21,...)]
+                      st.players[player].name ? st.players[player].name : "");
+        showCardGet(app, 21, text); // [RE 0x444BB2 sub_441F73(21,...); 0x444BF2 sprintf 直引 g_players 不去空格]
         cardBagRemove(st, player, 21);
         playCardLine(app, player, 20);  // [RE 0x444BB2 使用者台词 免罪]
         RICH4_LOGI("resolvePenaltyTarget: p=%d 免罪卡抵消 (RE 0x441210/0x444BB2)", player);
@@ -1437,26 +1437,27 @@ void showCardGet(Application& app, int cardId, const char* text) {
 bool ownerCanCollectRent(Application& app, int ownerIdx, uint8_t flag, const char* feeName) {
     GameState& st = app.gameState();
     const Player& owner = st.players[ownerIdx];
-    const char* ownerName = owner.name ? owner.name : "";
+    // [RE 0x41D585] copyNameNoSpaces：免收租提示消息名字去空格
+    const std::string ownerName = playerNameNoSpace(st, ownerIdx);
     char text[192];
     if ((flag & 0xF0) != 0 && (flag & 0x0F) != 0) {
         std::snprintf(text, sizeof(text), "房屋查封中\n\n免收%s！", feeName);
     } else if (owner.ally == static_cast<uint8_t>(st.currentPlayer + 1)) {
-        std::snprintf(text, sizeof(text), "與%s同盟中\n\n免收%s！", ownerName, feeName);
+        std::snprintf(text, sizeof(text), "與%s同盟中\n\n免收%s！", ownerName.c_str(), feeName);
     } else if (owner.cellTableIdx == 15) {
         std::snprintf(text, sizeof(text), "死神顯靈\n\n免收%s！", feeName);
     } else if ((owner.stateFlags & 0xFFu) != 0) {
-        std::snprintf(text, sizeof(text), "%s住宿中\n\n免收%s！", ownerName, feeName);
+        std::snprintf(text, sizeof(text), "%s住宿中\n\n免收%s！", ownerName.c_str(), feeName);
     } else if ((owner.stateFlags & 0xFF00u) != 0) {
-        std::snprintf(text, sizeof(text), "%s消失中\n\n免收%s！", ownerName, feeName);
+        std::snprintf(text, sizeof(text), "%s消失中\n\n免收%s！", ownerName.c_str(), feeName);
     } else if ((owner.stateFlags & 0xFF0000u) != 0) {
-        std::snprintf(text, sizeof(text), "%s坐牢中\n\n免收%s！", ownerName, feeName);
+        std::snprintf(text, sizeof(text), "%s坐牢中\n\n免收%s！", ownerName.c_str(), feeName);
     } else if ((owner.stateFlags & 0xFF000000u) != 0) {
-        std::snprintf(text, sizeof(text), "%s住院中\n\n免收%s！", ownerName, feeName);
+        std::snprintf(text, sizeof(text), "%s住院中\n\n免收%s！", ownerName.c_str(), feeName);
     } else if (owner.byte54 != 0) {
-        std::snprintf(text, sizeof(text), "%s冬眠中\n\n免收%s！", ownerName, feeName);
+        std::snprintf(text, sizeof(text), "%s冬眠中\n\n免收%s！", ownerName.c_str(), feeName);
     } else if (owner.state37 != 0) {
-        std::snprintf(text, sizeof(text), "%s夢遊中\n\n免收%s！", ownerName, feeName);
+        std::snprintf(text, sizeof(text), "%s夢遊中\n\n免收%s！", ownerName.c_str(), feeName);
     } else {
         return true;
     }
@@ -1672,7 +1673,7 @@ int resolveFeePayer(Application& app, int payer, int32_t fee, const char* feeNam
     }
     char text[192];
     std::snprintf(text, sizeof(text), "死神顯靈\n\n由%s賠償%s",
-                  st.players[c].name ? st.players[c].name : "", feeName);
+                  playerNameNoSpace(st, c).c_str(), feeName); // [RE 0x419EED/0x41A6A4/0x41AF99 管线 sprintf 前 copyNameNoSpaces]
     showMessage(app, text, 1500);
     RICH4_LOGI("death god pays: player %d covers %d fee %d (RE 0x40FBB8)", c, payer, fee);
     return c;
@@ -2231,19 +2232,17 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                 //   原版以 ally 非 0 选格式而非 v134 > 0，照抄）
                 if (total > 0) {
                     const std::string label = big5ToUtf8(es.name, sizeof(es.name));
-                    const Player& owner = st.players[es.owner - 1];
-                    const char* ownerName = owner.name ? owner.name : "";
+                    const std::string ownerName = playerNameNoSpace(st, es.owner - 1); // [RE 0x419CA0]
                     char text[192];
                     if (ally != 0) {
-                        const Player& mate = st.players[ally - 1];
-                        const char* mateName = mate.name ? mate.name : "";
+                        const std::string mateName = playerNameNoSpace(st, ally - 1); // [RE 0x419CF9]
                         // [RE 0x46399A] "%s\n\n屬%s與%s\n\n請付%d元%s"
                         std::snprintf(text, sizeof(text), "%s\n\n屬%s與%s\n\n請付%d元%s",
-                                      label.c_str(), ownerName, mateName, total, kFeeName);
+                                      label.c_str(), ownerName.c_str(), mateName.c_str(), total, kFeeName);
                     } else {
                         // [RE 0x4639B3] "%s\n\n此地屬%s\n\n請付%d元%s"
                         std::snprintf(text, sizeof(text), "%s\n\n此地屬%s\n\n請付%d元%s",
-                                      label.c_str(), ownerName, total, kFeeName);
+                                      label.c_str(), ownerName.c_str(), total, kFeeName);
                     }
                     showMessage(app, text, 1500);
                 }
@@ -2456,21 +2455,20 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                 if (cp.flag != 0) {
                     base *= 2; // [RE 0x41A44C] flag 非 0 翻倍
                 }
-                const Player& owner = st.players[cp.owner - 1];
-                const char* ownerName = owner.name ? owner.name : "";
+                const std::string ownerName = playerNameNoSpace(st, cp.owner - 1); // [RE 0x41A3FC]
                 char text[192];
                 int32_t rent = 0;
                 int hotelDays = 0;
                 if (cp.type == 1) {
                     // 旅館：休息天數 = 转盘(1)（完整 UI：panel[69] + 减速停止）；rent = base × days
-                    hotelDays = roulettePrompt(app, 1, ownerName); // [RE 0x41A458/0x44090E]
+                    hotelDays = roulettePrompt(app, 1, ownerName.c_str()); // [RE 0x41A458/0x44090E]
                     rent = base * hotelDays;
                     // [RE 0x4639FF] "休息%d天\n\n費用%d元！"
                     std::snprintf(text, sizeof(text), "休息%d天\n\n費用%d元！", hotelDays, rent);
                     showMessage(app, text, 1500);
                 } else if (cp.type == 2) {
                     // 購物中心：消費倍數 = 转盘(2)（完整 UI：panel[70] + 减速停止）
-                    const int mult = roulettePrompt(app, 2, ownerName); // [RE 0x41A4B4/0x44090E]
+                    const int mult = roulettePrompt(app, 2, ownerName.c_str()); // [RE 0x41A4B4/0x44090E]
                     rent = base * mult;
                     // [RE 0x463A14] "您的消費金額為\n\n%dx%d倍=%d元"
                     std::snprintf(text, sizeof(text), "您的消費金額為\n\n%dx%d倍=%d元", base, mult,
@@ -2485,8 +2483,8 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                     const int mult = 1 << (travel - 1); // [RE 0x41A4FC]
                     rent = 500 * mult * st.diceValue * st.moneyMul;
                     // [RE 0x463A31] "加油站\n\n董事長%s\n\n請付%d元%s"
-                    std::snprintf(text, sizeof(text), "加油站\n\n董事長%s\n\n請付%d元%s", ownerName,
-                                  rent, feeName);
+                    std::snprintf(text, sizeof(text), "加油站\n\n董事長%s\n\n請付%d元%s",
+                                  ownerName.c_str(), rent, feeName);
                     showMessage(app, text, 1500);
                 }
                 // [RE 0x41A581] 通用后处理：神明调整 → 记账 → 转账（flags=0 收款入银行）→ corp+48
@@ -2567,8 +2565,7 @@ int landingEvent(Application& app, uint16_t cellEntId) {
             if (sp.owner != 0 && sp.owner != p + 1) {
                 // ---- 他人 specPt：收费 ----
                 const uint8_t spIdx = sp.costType; // +26 收费类型（g_specPtCostMap 索引）
-                const char* ownerName =
-                    st.players[sp.owner - 1].name ? st.players[sp.owner - 1].name : "";
+                const std::string ownerName = playerNameNoSpace(st, sp.owner - 1); // [RE 0x41A6C5]
                 const char* feeName = (spIdx < 16) ? kCostNames[kSpecPtCostMap[spIdx]] : "";
                 char text[192];
                 int32_t fee = 0;
@@ -2638,7 +2635,7 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                 if (fee > 0) {
                     // [RE 0x463A31] "%s\n\n董事長%s\n\n請付%d元%s"
                     std::snprintf(text, sizeof(text), "%s\n\n董事長%s\n\n請付%d元%s",
-                                  spName.c_str(), ownerName, fee, feeName);
+                                  spName.c_str(), ownerName.c_str(), fee, feeName);
                     showMessage(app, text, 1500);
                     fee = applyGodRentModifier(app, p, fee, feeName);
                     if (fee > 0) {
@@ -2942,7 +2939,7 @@ int checkPlayerAction(Application& app, int a1) {
                     //   冬眠中\n\n還剩%d天！；天数 = (编码 & 0x7F/0x3F) + 1）
                     //   坐牢/住院/冬眠另有 50% 台词（列19/20/21，expr2/2/1；台词先于消息）
                     char text[128] = {};
-                    const char* name = st.players[p].name ? st.players[p].name : "";
+                    const std::string name = playerNameNoSpace(st, p); // [RE 0x40C997 copyNameNoSpaces]
                     const uint32_t sf = st.players[p].stateFlags;
                     const int ci = st.players[p].charIndex;
                     const auto statusLine = [&](int colIdx, int expr) {
@@ -2951,21 +2948,21 @@ int checkPlayerAction(Application& app, int a1) {
                         }
                     };
                     if (sf & 0xFFu) {
-                        std::snprintf(text, sizeof(text), "%s住宿中\n\n還剩%d天！", name,
+                        std::snprintf(text, sizeof(text), "%s住宿中\n\n還剩%d天！", name.c_str(),
                                       static_cast<int>(sf & 0x7Fu) + 1);
                     } else if ((sf >> 8) & 0xFFu) {
-                        std::snprintf(text, sizeof(text), "%s消失中\n\n還剩%d天！", name,
+                        std::snprintf(text, sizeof(text), "%s消失中\n\n還剩%d天！", name.c_str(),
                                       static_cast<int>((sf >> 8) & 0x3Fu) + 1);
                     } else if ((sf >> 16) & 0xFFu) {
-                        std::snprintf(text, sizeof(text), "%s坐牢中\n\n還剩%d天！", name,
+                        std::snprintf(text, sizeof(text), "%s坐牢中\n\n還剩%d天！", name.c_str(),
                                       static_cast<int>((sf >> 16) & 0x7Fu) + 1);
                         statusLine(13, 2);  // [RE 0x40CA51] 列19「放我出去」
                     } else if ((sf >> 24) & 0xFFu) {
-                        std::snprintf(text, sizeof(text), "%s住院中\n\n還剩%d天！", name,
+                        std::snprintf(text, sizeof(text), "%s住院中\n\n還剩%d天！", name.c_str(),
                                       static_cast<int>((sf >> 24) & 0x7Fu) + 1);
                         statusLine(14, 2);  // [RE 0x40CACA] 列20「我不要打針」
                     } else if (st.players[p].byte54) {
-                        std::snprintf(text, sizeof(text), "%s冬眠中\n\n還剩%d天！", name,
+                        std::snprintf(text, sizeof(text), "%s冬眠中\n\n還剩%d天！", name.c_str(),
                                       static_cast<int>(st.players[p].byte54 & 0x7Fu) + 1);
                         statusLine(15, 1);  // [RE 0x40CB4C] 列21（playLine 冬眠守卫会拦，同原版）
                     }

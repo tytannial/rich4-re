@@ -67,7 +67,11 @@ std::string corpNameUtf8(const Corp& cp);
 std::string objNameUtf8(const GameState& st, int objId);
 int objOwner(const GameState& st, int objId);
 
-// [RE sub_452946] 玩家名去空格（sprintf 用；原版 g_players[26*p] BIG5）
+// [RE 0x452946] copyNameNoSpaces：去掉 0x20 半角空格（原版角色名/公司名表按 4 字宽排版补
+//   空格；进 sprintf 消息前原版统一去空格，drawText 直绘则保留）
+std::string nameNoSpaces(const char* s);
+
+// 玩家名去空格（原版 g_players[26*p] → nameNoSpaces）
 std::string playerNameNoSpace(const GameState& st, int p);
 
 } // namespace rich4
