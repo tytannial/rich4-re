@@ -9,6 +9,7 @@
 #include "game/core/clock.h"
 #include "game/core/debug_hooks.h"
 #include "game/core/log.h"
+#include "game/core/paths.h"
 #include "game/core/trace.h"
 
 #include <cstdio>
@@ -241,10 +242,11 @@ std::vector<std::pair<std::string, int>> gameKeys; // [NEW] --game-key "ctrl+5,1
     if (selftestSlot >= 0) {
         using namespace rich4;
         char pn[128];
-        std::snprintf(pn, sizeof(pn), "%s/SAVE%d.DAT", gameDir.c_str(), selftestSlot);
+        std::snprintf(pn, sizeof(pn), "SAVE%d.DAT", selftestSlot);
+        const std::string savePath = readableDataFile(gameDir, pn);
         std::vector<uint8_t> raw;
-        if (!readSaveFile(pn, raw)) {
-            std::printf("selftest: %s read/version fail\n", pn);
+        if (!readSaveFile(savePath, raw)) {
+            std::printf("selftest: %s read/version fail\n", savePath.c_str());
             return 1;
         }
         GameState a;

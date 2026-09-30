@@ -1,5 +1,6 @@
 #include "game/app/save_data.h"
 
+#include "game/core/paths.h"
 #include "game/game_state.h"
 
 #include <cstdio>
@@ -453,7 +454,8 @@ bool saveGameToSlot(const std::string& gameDir, int slot, const GameState& state
     // [RE 0x402FD1] 依据: 0x402FD1 fwrite 字段序（旧档 SAVE*.DAT 实测逐字节对齐）
     char name[32];
     std::snprintf(name, sizeof(name), "SAVE%d.DAT", slot);
-    const std::string path = gameDir + "/" + name;
+    // [PORT] writableDataFile: 游戏目录不可写（Linux 标准安装）时回退用户数据目录
+    const std::string path = writableDataFile(gameDir, name);
     std::FILE* fp = std::fopen(path.c_str(), "wb");
     if (!fp) {
         return false;

@@ -25,6 +25,10 @@
     python tools/gen_newgame_tables.py [exe] [out.cpp]
 """
 from __future__ import annotations
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
 
 import struct
 import sys
@@ -211,7 +215,7 @@ def main(argv: list[str]) -> int:
         "",
     ]
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text("\n".join(parts), encoding="utf-8")
+    out_path.write_text("\n".join(parts), encoding="utf-8", newline="\n")
     print(f"wrote {out_path}")
     for name in ("kPlayerCountText", "kTravelModeText", "kCharNames", "kPanelLabels"):
         pass

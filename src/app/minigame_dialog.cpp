@@ -61,6 +61,7 @@
 #include "game/render/fli.h"
 #include "game/render/surface.h"
 #include "game/render/ui_image.h"
+#include "game/core/rng.h"
 
 namespace rich4 {
 
@@ -737,7 +738,7 @@ void moneySpawn(MoneyCtx& ui, int x, bool fromCloud) {
         type = 4;
         ++ui.bombs;
     } else {
-        const int r = std::rand() % 20;
+        const int r = rng::next() % 20;
         type = r < 9 ? 3 : (r < 15 ? 2 : (r < 18 ? 1 : 0));
     }
     const int sway = static_cast<int>(x - 320) * 50 / 210;
@@ -842,9 +843,9 @@ void moneyTick(MoneyCtx& ui, bool runLogic) {
     // 云触发/投弹（[RE 0x41374B] 音效表 g_moneySoundTable={22,23,24,15}）
     if (ui.cloudFrame == -1) {
         if ((ui.richState < 2 && ui.richX > 320) || (ui.richState > 3 && ui.richX < 320)) {
-            if (std::rand() % 10 < 7 && ui.gamePhase == 0) {
+            if (rng::next() % 10 < 7 && ui.gamePhase == 0) {
                 ui.cloudFrame = 0;
-                ui.cloudX = ui.richX <= 320 ? std::rand() % 140 + 360 : std::rand() % 140 + 160;
+                ui.cloudX = ui.richX <= 320 ? rng::next() % 140 + 360 : rng::next() % 140 + 160;
             }
         }
     } else {
@@ -868,8 +869,8 @@ void moneyTick(MoneyCtx& ui, bool runLogic) {
         switch (ui.richState) {
         case 0:
             if (ui.richFrame >= 5) {
-                if ((ui.richX <= 320 || std::rand() % 4) && ui.richX != 530) {
-                    ui.richWait = std::rand() % 5;
+                if ((ui.richX <= 320 || rng::next() % 4) && ui.richX != 530) {
+                    ui.richWait = rng::next() % 5;
                     ui.richX += 12;
                 } else {
                     ui.richState = 2;
@@ -897,8 +898,8 @@ void moneyTick(MoneyCtx& ui, bool runLogic) {
             break;
         case 4:
             if (ui.richFrame >= 5) {
-                if ((ui.richX >= 320 || std::rand() % 4) && ui.richX != 110) {
-                    ui.richWait = std::rand() % 5;
+                if ((ui.richX >= 320 || rng::next() % 4) && ui.richX != 110) {
+                    ui.richWait = rng::next() % 5;
                     ui.richX -= 12;
                 } else {
                     ui.richState = 3;
@@ -1137,14 +1138,14 @@ void balloonTick(BalloonCtx& ui) {
         if (ui.gamePhase != 0) {
             continue;
         }
-        const int r = std::rand() % 1000;
+        const int r = rng::next() % 1000;
         int type;
         if (r < 20) {
             type = r >> 2;
         } else if (r < 28) {
             type = ((27 - r) >> 1) + 5;
         } else if (r < 30) {
-            type = kBalloonSpecial[std::rand() % 10];
+            type = kBalloonSpecial[rng::next() % 10];
         } else {
             continue;
         }
@@ -1166,7 +1167,7 @@ void balloonTick(BalloonCtx& ui) {
             continue;
         }
         ui.app->audio().playEffect(kSfxBalloonNew);
-        b.x = static_cast<int16_t>(cols[std::rand() % nc]);
+        b.x = static_cast<int16_t>(cols[rng::next() % nc]);
         b.y = 420;
         b.type = static_cast<int16_t>(type);
     }
@@ -1202,7 +1203,7 @@ void balloonClick(BalloonCtx& ui, int mx, int my) {
             ui.score >>= 1;
             break;
         case 11: {
-            switch (std::rand() % 6) {
+            switch (rng::next() % 6) {
             case 0: ui.countdown = 1; break;
             case 1: ui.slowdown = 20; break;
             case 2: ui.wind = -1; break;
@@ -1398,7 +1399,7 @@ void miniGameVisit(Application& app, int cellType) {
         // [RE 0x4154B4..0x4154CF] 台词 off_48084A[char*27 + (rand&1)] = 列 0/1
         const int ci = pl.charIndex;
         if (ci >= 0 && ci < 12) {
-            playLine(app, p, kValueLines[ci][std::rand() & 1]);
+            playLine(app, p, kValueLines[ci][rng::next() & 1]);
         }
     }
     pl.points = static_cast<uint16_t>(pl.points + score);  // [RE 0x41B152] += ax

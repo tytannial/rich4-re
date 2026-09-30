@@ -45,6 +45,7 @@
 #include "game/render/surface.h"
 #include "game/render/text.h"
 #include "game/render/ui_image.h"
+#include "game/core/rng.h"
 
 namespace rich4 {
 namespace {
@@ -602,7 +603,7 @@ void fateApplyBirthday(FateCtx& ctx) {
     if (got != 0) {
         const int ci = st.players[cur].charIndex;
         if (ci >= 0 && ci < 12) {
-            playLine(app, cur, kValueLines[ci][std::rand() & 1], 0);
+            playLine(app, cur, kValueLines[ci][rng::next() & 1], 0);
         }
     }
 }

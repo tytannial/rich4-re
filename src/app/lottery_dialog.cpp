@@ -26,6 +26,7 @@
 #include "game/render/surface.h"
 #include "game/render/text.h"
 #include "game/render/ui_image.h"
+#include "game/core/rng.h"
 
 namespace rich4 {
 
@@ -188,7 +189,7 @@ void drawBuy(BuyCtx& ui) {
     // 装饰动画（状态 5 退出中跳过，对齐原版 goto LABEL_58）
     if (ui.state != 5) {
         if ((ui.animFlags & 0xF) == 0) {
-            if ((std::rand() >> 10) == 0) { // [RE 0x42F7FC] 1/32 启动
+            if ((rng::next() >> 10) == 0) { // [RE 0x42F7FC] 1/32 启动
                 ui.animFlags |= 1;
             }
         } else if ((ui.animFlags & 0xF) == 1) {
@@ -207,9 +208,9 @@ void drawBuy(BuyCtx& ui) {
                 if (--ui.blinkTimer > 0) {
                     blitElement(dst, sheet.frame(ui.blinkFrame), 273, 105, false);
                 }
-            } else if ((std::rand() >> 11) < 4) {
-                ui.blinkFrame = 5 + (std::rand() & 1);
-                ui.blinkTimer = std::rand() & 7;
+            } else if ((rng::next() >> 11) < 4) {
+                ui.blinkFrame = 5 + (rng::next() & 1);
+                ui.blinkTimer = rng::next() & 7;
                 if (ui.blinkTimer == 0) {
                     ui.blinkTimer = 1;
                 }
@@ -415,7 +416,7 @@ void updateAnim(DrawCtx& ui) {
     }
     switch (ui.animType) {
     case 0: {
-        const int r = std::rand() >> 9; // 0..63
+        const int r = rng::next() >> 9; // 0..63
         if (r == 0) {
             ui.animType = 1; // 右人物眨眼 4 帧
             ui.animStep = -1;
@@ -442,9 +443,9 @@ void updateAnim(DrawCtx& ui) {
             if (ui.mouthTimer == 0) {
                 ui.mouthFrame = 11; // 闭嘴帧
             }
-        } else if ((std::rand() >> 11) < 4) {
-            ui.mouthFrame = 12 + (std::rand() & 1); // 张嘴帧 12/13
-            ui.mouthTimer = std::rand() & 0xF;
+        } else if ((rng::next() >> 11) < 4) {
+            ui.mouthFrame = 12 + (rng::next() & 1); // 张嘴帧 12/13
+            ui.mouthTimer = rng::next() & 0xF;
             if (ui.mouthTimer == 0) {
                 ui.mouthTimer = 1;
             }
@@ -487,7 +488,7 @@ void drawAnim(DrawCtx& ui) {
         if (ui.animStep == 0) {
             ui.animStep = 1;
         } else {
-            const int pick = std::rand() & 1;
+            const int pick = rng::next() & 1;
             if (pick != (ui.eyeLatchRight ? 1 : 0)) {
                 ui.eyeFrameRight = 9 + pick;
             }
@@ -499,7 +500,7 @@ void drawAnim(DrawCtx& ui) {
         if (ui.animStep == 0) {
             ui.animStep = 1;
         } else {
-            const int pick = std::rand() & 1;
+            const int pick = rng::next() & 1;
             if (pick != (ui.eyeLatchLeft ? 1 : 0)) {
                 ui.eyeFrameLeft = 14 + pick;
             }

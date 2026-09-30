@@ -2,6 +2,7 @@
 #include "game/core/log.h"
 
 #include <cstdarg>
+#include <cstdint>
 #include <cstdio>
 #include <deque>
 #include <mutex>

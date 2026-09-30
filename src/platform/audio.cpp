@@ -10,6 +10,7 @@
 #include <cstdio>
 #include <cstring>
 #include <unordered_map>
+#include <utility>
 
 // stb_vorbis：OGG Vorbis 解码（公共领域单文件库；实现见 stb_vorbis_impl.cpp）
 #define STB_VORBIS_HEADER_ONLY

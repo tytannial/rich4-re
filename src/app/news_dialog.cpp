@@ -11,6 +11,7 @@
 //   （auction_dialog.cpp runAuction 0x43BDE5，价款入公库）。
 
 #include "game/app/news_dialog.h"
+#include "game/core/bit_cast.h"
 
 #include <SDL3/SDL.h>
 
@@ -896,7 +897,7 @@ void evt27_stockHaltOne(NewsCtx& ctx, int phase) {
     st.stockHalted[s] = 15; // [RE 0x44B154] byte_496986[36*s] = 15
     st.stocks[s][5] = st.stocks[s][4]; // [RE 0x44B17B] 现价 = 昨收
     const int slot = (st.turnCounter - 1 + 144) % 144; // [RE 0x44B161]
-    st.stockHistory[s][slot] = *reinterpret_cast<int32_t*>(&st.stocks[s][5]);
+    st.stockHistory[s][slot] = floatBits(st.stocks[s][5]);
 }
 
 // [RE 0x44B1A3] idx 28：%s股票恢復上市交易（随机停牌股复牌）

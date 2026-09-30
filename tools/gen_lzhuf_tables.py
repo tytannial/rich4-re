@@ -60,7 +60,7 @@ def main(argv: list[str]) -> int:
         "",
     ]
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text("\n".join(parts), encoding="utf-8")
+    out_path.write_text("\n".join(parts), encoding="utf-8", newline="\n")
     print(f"wrote {out_path}")
     return 0
 

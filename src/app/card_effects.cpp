@@ -1,5 +1,6 @@
 #include "game/app/card_effects.h"
 
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <vector>

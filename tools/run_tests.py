@@ -78,6 +78,10 @@ def run_scenario(sc: dict, exe: str, game: str, seed: int, wall_cap: int = 0) ->
         out = "TIMEOUT"
         rc = -1
         timeout = True
+    except FileNotFoundError:
+        out = f"EXE NOT FOUND: {exe}"
+        rc = -1
+        timeout = False
     m = re.search(r"TEST asserts=(\d+) failures=(\d+)", out)
     asserts, fails = (int(m.group(1)), int(m.group(2))) if m else (0, -1)
     return {
@@ -130,7 +134,8 @@ def matrix(all_sc: list[dict], results: list[dict]) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--exe", default=str(ROOT / "build" / "rich4.exe"))
+    ap.add_argument("--exe", default=str(ROOT / "build" /
+                    ("rich4.exe" if sys.platform == "win32" else "rich4")))
     ap.add_argument("--game", default=str(ROOT / "resources" / "MultiverseJourney"))
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--filter", default="")
@@ -171,9 +176,9 @@ def main() -> int:
 
     n_fail = sum(1 for r in results if not r["ok"]) + (0 if (ctest and ctest["ok"]) or args.no_ctest else 1)
     report = ROOT / "build" / "test-report.json"
-    report.parent.mkdir(exist_ok=True)
+    report.parent.mkdir(parents=True, exist_ok=True)
     report.write_text(json.dumps({"scenarios": results, "ctest": ctest}, ensure_ascii=False, indent=2),
-                      encoding="utf-8")
+                      encoding="utf-8", newline="\n")
     print(f"\nTOTAL: scenarios={len(results)} fail={n_fail} -> {'PASS' if n_fail == 0 else 'FAIL'}")
     print(f"report: {report}")
 

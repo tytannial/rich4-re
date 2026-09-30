@@ -43,7 +43,10 @@
 
 ## 3. M3-C：平台与冻结
 
-- C1 Linux 构建验证（CMake/SDL3 已就绪；CI 或本机 WSL 跑 `run_tests.py` 全量）。
+- C1 Linux 构建验证 ✅ **2026-09-30 完成**：CMake/SDL3/FreeType Linux 构建 + `run_tests.py` 全量
+  （两平台 92/93 一致，唯一 TIMEOUT 为 `84_ai_marathon` wall-cap 截断）；跨平台改造全量落地
+  （GDI→FreeType 文本、cp950 内嵌表、自带 PRNG、可写路径回退、资源大小写、CI build 主程序），
+  详见 **`docs/cross-platform.md`**；「窗口分辨率高清文本层」列后续专项（同档 §9）。
 - C2 `--save-selftest` + 全量矩阵作为 release 冻结基线；版本号与 CHANGELOG。
 - C3 帮助 99 条终验 + 实机清单（`docs/gameplay-map-mechanics.md` 验收表收尾）。
 

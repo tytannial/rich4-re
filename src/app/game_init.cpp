@@ -5,6 +5,8 @@
 #include "game/core/clock.h"
 #include "game/core/debug_hooks.h"
 #include "game/core/log.h"
+#include "game/core/paths.h"
+#include "game/core/rng.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -20,24 +22,25 @@ bool gameInit(Application& app) {
 
     // [RE 0x4015D6] srand(GetTickCount())
     // [NEW] --seed 固定随机序列（headless 可复现；未提供则保持原版 tick 播种语义）
-    std::srand(dbg::seed() >= 0 ? static_cast<unsigned>(dbg::seed())
+    rng::seed(dbg::seed() >= 0 ? static_cast<unsigned>(dbg::seed())
                                 : static_cast<unsigned>(nowMs()));
 
     // [RE 0x4502FE] 打开 MKF（原版资源管理器按需解压，当前用 MkfArchive 占位）
     // 原版: 0x4015D6 中 sub_4502FE("data.mkf"/"speaking.mkf"/"panel.mkf"/"effect.mkf")
+    // [PORT] resolveResourcePath：Linux 大小写敏感，磁盘实际为 Data.mkf/help.mkf 等混排
     GameState& state = app.gameState();
     const std::string& dir = app.gameDir();
-    if (!state.data.load(dir + "/Data.mkf")) {
+    if (!state.data.load(resolveResourcePath(dir, "Data.mkf"))) {
         RICH4_LOGE("gameInit: Data.mkf load failed");
         return false;
     }
-    if (!state.speaking.load(dir + "/Speaking.mkf")) {
+    if (!state.speaking.load(resolveResourcePath(dir, "Speaking.mkf"))) {
         RICH4_LOGW("gameInit: Speaking.mkf unavailable");
     }
-    if (!state.panel.load(dir + "/Panel.mkf")) {
+    if (!state.panel.load(resolveResourcePath(dir, "Panel.mkf"))) {
         RICH4_LOGW("gameInit: Panel.mkf unavailable");
     }
-    if (!state.effect.load(dir + "/Effect.mkf")) {
+    if (!state.effect.load(resolveResourcePath(dir, "Effect.mkf"))) {
         RICH4_LOGW("gameInit: Effect.mkf unavailable");
     }
 
@@ -46,7 +49,8 @@ bool gameInit(Application& app) {
     //       （byte_497158=1, 497159=1, 49715A=4, 49715B=4, 49715C=1, 49715D=1）
     //       CFG 第 8..11 字节（byte_497158+8）与 dword_497160 重叠，但读取后即被
     //       尾部 dos_getdate 钳位值覆盖（0x411F21..0x411A7C），不落回 settings[8..11]
-    const std::string cfgPath = dir + "/RICH4.CFG";
+    // [PORT] readableDataFile: 写入目录（游戏目录可写时）/用户数据目录两处查找
+    const std::string cfgPath = readableDataFile(dir, "RICH4.CFG");
     if (std::FILE* fp = std::fopen(cfgPath.c_str(), "rb")) {
         std::fread(state.settings, 1, sizeof(state.settings), fp);
         std::fclose(fp);

@@ -3,6 +3,7 @@
 #include <SDL3/SDL.h>
 
 #include <algorithm>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <vector>
@@ -621,9 +622,10 @@ void renderMap(Application& app, int centerX, int centerY) {
                 static_cast<uint16_t>(4000 + i), &state.flagTiles, pickFrame);
     }
 
-    // 按 y 排序（原版 sub_457E6C + sub_4079F9 按 16*y）
-    std::sort(items.begin(), items.end(),
-              [](const SpriteDraw& a, const SpriteDraw& b) { return a.y < b.y; });
+    // 按 y 排序（原版 sub_457E6C + sub_4079F9 按 16*y）；
+    // [PORT] 用 stable_sort：同 y 元素顺序在两 libc 的 introsort 下未定义（影响拾取顺序）
+    std::stable_sort(items.begin(), items.end(),
+                     [](const SpriteDraw& a, const SpriteDraw& b) { return a.y < b.y; });
 
     for (const SpriteDraw& it : items) {
         // [RE 0x409B18] 命中矩形用拾取形状（g_pickMask 帧），无则用绘制帧

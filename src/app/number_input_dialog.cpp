@@ -185,7 +185,8 @@ bool numberInputHandler(const SDL_Event* event, void* user) {
         if (ctx.text[0] == '\0') {
             std::snprintf(ctx.text, sizeof(ctx.text), "0");
         }
-        const long v = std::strtol(ctx.text, nullptr, 10);
+        // [PORT] 用 strtoll：Windows long=32bit / Linux long=64bit，超大输入两平台行为不一致
+        const long long v = std::strtoll(ctx.text, nullptr, 10);
         if (v > ctx.maxValue) {
             std::snprintf(ctx.text, sizeof(ctx.text), "%d", ctx.maxValue);
         }

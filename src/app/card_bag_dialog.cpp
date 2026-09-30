@@ -31,6 +31,7 @@
 #include "game/render/text.h"
 #include "game/render/ui_image.h"
 #include "game/resource/mkf.h"
+#include "game/core/rng.h"
 
 namespace rich4 {
 namespace {
@@ -298,7 +299,7 @@ void useCardDialog(Application& app) {
             return;
         }
         for (int i = n - 1; i > 0; --i) {  // Fisher-Yates（原版随机试序）
-            const int j = std::rand() % (i + 1);
+            const int j = rng::next() % (i + 1);
             const int t = cards[i];
             cards[i] = cards[j];
             cards[j] = t;

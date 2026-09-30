@@ -4,6 +4,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 
 #include "game/app/ai_item.h"
 #include "game/app/event_stack.h"
@@ -66,7 +67,7 @@ void renderItemBag(ItemBagState& s) {
     const uint8_t travel = s.app->gameState().players[s.cur].travel;
     if (travel == 1 || travel == 2) {
         const int frame = (travel == 1) ? 15 : 16;
-        if (s.sheet->frameCount() > static_cast<size_t>(frame)) {
+        if (static_cast<size_t>(s.sheet->frameCount()) > static_cast<size_t>(frame)) {
             blitElement(dst, s.sheet->frame(frame), kPanelX + 325, kPanelY + 117, false);
         }
         s.visibleMap[14] = 14;

@@ -59,6 +59,7 @@
 #include "game/render/surface.h"
 #include "game/render/text.h"
 #include "game/render/ui_image.h"
+#include "game/core/rng.h"
 
 namespace rich4 {
 
@@ -1563,7 +1564,7 @@ constexpr char kNameAngel[] = "天使";                        // [RE off_47ED9A
 // → showMessage(sprintf kFmtGodInvest, 1500)。依据: 0x40FA61 反编译；调用点 = landingEvent
 //   五处付费守卫（0x41A013 购地 / 0x4199AE 升级 / 0x41A261 建设施 / 0x41A86B corp 购地 /
 //   设施升级），原版统一进本函数
-bool checkCarriedGod(Application& app, const GameState& st, uint8_t carried) {
+bool checkCarriedGod(Application& app, const GameState&, uint8_t carried) {
     if (carried != 7 && carried != 8 && carried != 15) {
         return false;
     }
@@ -2091,7 +2092,7 @@ int landingEvent(Application& app, uint16_t cellEntId) {
         if (i < 2 && p < 4) {
             const int ci = st.players[p].charIndex;
             if (ci >= 0 && ci < 12) {
-                playLine(app, p, kValueLines[ci][(i == 0) ? (std::rand() & 1) : 2], 0);
+                playLine(app, p, kValueLines[ci][(i == 0) ? (rng::next() & 1) : 2], 0);
             }
         }
         RICH4_LOGI("landingEvent: cellType %u 得點券 +%d (total %u) RE 0x41982D case %u", cellType,
@@ -3025,7 +3026,7 @@ int checkPlayerAction(Application& app, int a1) {
                     const uint32_t sf = st.players[p].stateFlags;
                     const int ci = st.players[p].charIndex;
                     const auto statusLine = [&](int colIdx, int expr) {
-                        if (ci >= 0 && ci < 12 && (std::rand() & 1)) {
+                        if (ci >= 0 && ci < 12 && (rng::next() & 1)) {
                             playLine(app, p, kMoneyLines[ci][colIdx], expr);
                         }
                     };

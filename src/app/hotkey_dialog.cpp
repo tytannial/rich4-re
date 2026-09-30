@@ -4,6 +4,7 @@
 #include "game/app/new_game_tables.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/paths.h"
 #include "game/platform/input.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
@@ -322,7 +323,7 @@ bool hotkeyEventHandler(const SDL_Event* event, void* user) {
                 // byte_497158+8..11 与 dword_497160（游戏日期）重叠，随设置区一并存盘
                 std::memcpy(cfg + 8, &state.app->gameState().gameDate, 4);
                 std::memcpy(cfg + 16, state.working, kKeyCount * sizeof(uint16_t));
-                saveCfgRaw(state.app->gameDir() + "/RICH4.CFG", cfg);
+                saveCfgRaw(writableDataFile(state.app->gameDir(), "RICH4.CFG"), cfg);
                 RICH4_LOGI("hotkeys saved (RE 0x411F80)");
                 state.app->events().requestExit(1);
                 return true;

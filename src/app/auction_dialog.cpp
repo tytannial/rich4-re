@@ -41,6 +41,7 @@
 #include "game/render/surface.h"
 #include "game/render/text.h"
 #include "game/render/ui_image.h"
+#include "game/core/rng.h"
 
 namespace rich4 {
 
@@ -451,7 +452,7 @@ void tickBlink(AuctionCtx& ui) {
         }
     }
     if (ui.laneA == 0 && ui.laneB == 0) {
-        const int r = static_cast<int>(std::rand()) >> 10;
+        const int r = static_cast<int>(rng::next()) >> 10;
         if (r == 0) {
             ui.laneA = 1;
         } else if (r == 1) {
@@ -470,11 +471,11 @@ void tickBlink(AuctionCtx& ui) {
                                     40, 30, false);
             blitElement(dst, ui.sheet.frame(kFrameWinA), kExprX, kExprY, false);
         }
-    } else if ((std::rand() >> 11) < 4) {
+    } else if ((rng::next() >> 11) < 4) {
         blitElementRegionOpaque(dst, ui.sheet.frame(kFrameBg), kExprX, kExprY, kExprX, kExprY, 40,
                                 30, false);
         blitElement(dst, ui.sheet.frame(kFrameWinB), kExprX, kExprY, false);
-        ui.exprT = (std::rand() & 7) + 1;
+        ui.exprT = (rng::next() & 7) + 1;
     }
 }
 

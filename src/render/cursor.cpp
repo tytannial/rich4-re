@@ -5,6 +5,8 @@
 
 #include <SDL3/SDL.h>
 
+#include <utility>
+
 namespace rich4 {
 
 bool Cursor::init(std::vector<uint8_t> resource) {

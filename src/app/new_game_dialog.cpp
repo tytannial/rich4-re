@@ -4,6 +4,7 @@
 #include "game/app/new_game_tables.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/paths.h"
 #include "game/core/debug_hooks.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
@@ -760,8 +761,8 @@ bool newGameDialog(Application& app, bool restorePrevious, NewGameConfig& config
     st.config = &config;
     st.restore = restorePrevious;
 
-    if (!st.game->jump.load(app.gameDir() + "/Jump.mkf")) {
-        RICH4_LOGE("newGameDialog: Jump.mkf load failed");
+    if (!st.game->jump.load(resolveResourcePath(app.gameDir(), "jump.mkf"))) {
+        RICH4_LOGE("newGameDialog: jump.mkf load failed");
         return false;
     }
     auto uiBlob = st.game->jump.read(8);

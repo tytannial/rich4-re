@@ -3,6 +3,7 @@
 #include <cctype>
 #include <array>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <map>
 #include <sstream>
@@ -1289,7 +1290,7 @@ uint16_t resolveTargetCell(Application& app);  // 前向（定义见文件后；
 
 // [NEW] roll: scriptable human dice entry = 0x40DD1F startPlayerMove
 //   (dice value via rng.dice; turn snapshot 0x44808A saved inside, same as real path)
-bool cmdRoll(Application& app, const std::vector<std::string>& a, std::string& err) {
+bool cmdRoll(Application& app, const std::vector<std::string>&, std::string&) {
     GameState& st = app.gameState();
     trace::logf("roll p=%d", st.currentPlayer);
     startPlayerMove(app);
@@ -1676,7 +1677,7 @@ bool cmdFindEvtCell(Application& app, const std::vector<std::string>& a, std::st
 }
 
 // [NEW] surrender：當前玩家投降 0x411AE0（淘汰+死神召喚選受害者）
-bool cmdSurrender(Application& app, const std::vector<std::string>& a, std::string& err) {
+bool cmdSurrender(Application& app, const std::vector<std::string>&, std::string&) {
     // [FIX 234] 經 surrenderRequest 標誌交主循環 tick 處理（0x411AE0 真人路徑），
     //   直呼 surrenderPlayer 會在腳本 step 內嵌套 runModal（死神對話框收不到 TIMER）
     app.gameState().surrenderRequest = true;
@@ -1719,7 +1720,7 @@ bool cmdPlayerSpawn(Application& app, const std::vector<std::string>& a, std::st
 }
 
 // [NEW] find.lab：找 type==4 行業設施點(研究所) corp 並選中（selected=4000+ci）
-bool cmdFindLab(Application& app, const std::vector<std::string>& a, std::string& err) {
+bool cmdFindLab(Application& app, const std::vector<std::string>&, std::string& err) {
     GameState& st = app.gameState();
     for (size_t i = 1; i < st.corps.size(); ++i) {
         if (st.corps[i].type == 4) {
@@ -1983,7 +1984,7 @@ bool cmdUseGod(Application& app, const std::vector<std::string>& a, std::string&
     return false;
 }
 
-bool cmdTap(Application& app, const std::vector<std::string>& a, std::string& err) {
+bool cmdTap(Application&, const std::vector<std::string>& a, std::string& err) {
     // [NEW] 通用"人工干预一下"：对当前阻塞模态任意处合成一次左键
     //   （老虎机 0x43F767 任意左键停滚 / 转盘 0x44090E 点击提前停 / 其余面板中心兜底）
     (void)err;

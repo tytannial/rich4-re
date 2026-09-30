@@ -172,7 +172,7 @@ void redrawVisit(VisitCtx& ui) {
     const GameState& st = ui.app->gameState();
     const bool financeBlock0 = lit == 0 && st.players[st.currentPlayer].bankFinanceFlags != 0;
     if (lit >= 0 && lit != 3 && lit != modeBtn && !financeBlock0 &&
-        sheet.frameCount() > static_cast<size_t>(lit + 1)) {
+        static_cast<size_t>(sheet.frameCount()) > static_cast<size_t>(lit + 1)) {
         blitElement(dst, sheet.frame(lit + 1), kVisitX + kVisitRects[lit].x0,
                     kVisitY + kVisitRects[lit].y0, false);
     }
@@ -462,7 +462,7 @@ void bankVisitDialog(Application& app) {
         UiImage sheet;
         sheet.load(std::move(*blob));
         if (sheet.frameCount() < 30) {
-            RICH4_LOGW("bankVisit: panel.mkf[24] frames %zu < 30", sheet.frameCount());
+            RICH4_LOGW("bankVisit: panel.mkf[24] frames %d < 30", sheet.frameCount());
             return;
         }
         // [RE 0x436FDD → 0x408] 暫停放款提示：原版在面板绘制后叠加（0x401 画面板 → Post 0x408

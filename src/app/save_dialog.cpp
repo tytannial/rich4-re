@@ -4,6 +4,7 @@
 #include "game/app/save_data.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/paths.h"
 #include "game/app/debug/debug.h"
 #include "game/core/trace.h"
 #include <cstdio>
@@ -160,7 +161,7 @@ int saveDialog(Application& app) {
     for (int i = 0; i < kSlotCount; ++i) {
         char name[32];
         std::snprintf(name, sizeof(name), "SAVE%d.DAT", i + 1);
-        readSaveHeader(app.gameDir() + "/" + name, state.slots[i]);
+        readSaveHeader(readableDataFile(app.gameDir(), name), state.slots[i]);
     }
 
     redrawSaveDialog(state);

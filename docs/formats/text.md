@@ -25,7 +25,7 @@
 
 ## 字体系统
 
-游戏**不使用内嵌点阵字库**，而是通过 GDI 系统字体渲染：
+游戏**不使用内嵌点阵字库**，而是通过 GDI 系统字体渲染（原版，Windows 独占）：
 
 - `sub_44F9D8`（设置字体）：
   `CreateFontA(-size, 0,0,0, weight, 0,0,0, 0x88, 0,0,0,0, &pszFaceName)`
@@ -36,8 +36,16 @@
   - 首字节 ≥ 0x80（BIG5 双字节）时一次输出 2 字节
   - 文本按行高逐字**竖排**（`y += line_height`）
 
-现代化方案：**直接替换为 TTF 字体**（如思源黑体 / 文泉驿），UTF-8 渲染，
-无需逆向字模数据。
+### 重写实现（跨平台，2026-09-30）
+
+GDI 为 Windows 独占 → 统一改为 **FreeType**（`src/render/text.cpp`，
+本地 `third_party/freetype` 或系统 `freetype2`，见 `docs/cross-platform.md` §4）：
+
+- 字体：`resources/Fonts/HarmonyOS_Sans_SC_{Regular,Bold}.ttf`（不入库；缺失时文本降级为空操作）
+- 保持原版 512×200 RGB555 临时缓冲 + `measure` 包围盒 + align 1–7 + 阴影/描边 + 竖排语义
+  —— 调用点零改动、遮挡/快照语义不变
+- 字号映射 `px = round(size × 1.09)`（HarmonyOS 汉字 bbox ≈ 0.915em，对齐原版点阵高度）
+- 已知差异：字形风格（黑体 vs 明朝体）、小字号无点阵 hinting（见 cross-platform.md §4.2）
 
 ## 转码工具
 

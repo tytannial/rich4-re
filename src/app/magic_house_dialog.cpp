@@ -53,6 +53,7 @@
 #include "game/render/surface.h"
 #include "game/render/text.h"
 #include "game/render/ui_image.h"
+#include "game/core/rng.h"
 
 namespace rich4 {
 
@@ -412,7 +413,7 @@ struct MagicCtx {
 };
 
 // 大图区左上角（中心 - 72/-64）
-void bigRect(const MagicCtx& ui, int id, int& x, int& y) {
+void bigRect(const MagicCtx&, int id, int& x, int& y) {
     x = kPenalties[id].bigX - 72;
     y = kPenalties[id].bigY - 64;
 }
@@ -520,14 +521,14 @@ bool magicHandler(const SDL_Event* event, void* user) {
                     blitElement(dst, ui.sheet.frame(kFrameMouthClosed), 286, 220, false);
                 }
                 --ui.mouthT;
-            } else if ((std::rand() >> 11) < 4) {
-                if ((std::rand() & 1) != 0) {
+            } else if ((rng::next() >> 11) < 4) {
+                if ((rng::next() & 1) != 0) {
                     blitElementRegionOpaque(dst, ui.sheet.frame(kFrameBall), 286, 217, 45, 77, 60,
                                             21, false);
                 } else {
                     blitElement(dst, ui.sheet.frame(kFrameMouthOpen), 286, 217, false);
                 }
-                ui.mouthT = (std::rand() & 7) + 1;
+                ui.mouthT = (rng::next() & 7) + 1;
             }
         }
         app.renderFrame();
@@ -698,14 +699,14 @@ bool deathGodHandler(const SDL_Event* event, void* user) {
                     blitElement(dst, ui.sheet.frame(kFrameMouthClosed), 286, 220, false);
                 }
                 --ui.mouthT;
-            } else if ((std::rand() >> 11) < 4) {
-                if ((std::rand() & 1) != 0) {
+            } else if ((rng::next() >> 11) < 4) {
+                if ((rng::next() & 1) != 0) {
                     blitElementRegionOpaque(dst, ui.sheet.frame(kFrameBall), 286, 217, 45, 77, 60,
                                             21, false);
                 } else {
                     blitElement(dst, ui.sheet.frame(kFrameMouthOpen), 286, 217, false);
                 }
-                ui.mouthT = (std::rand() & 7) + 1;
+                ui.mouthT = (rng::next() & 7) + 1;
             }
         }
         // [RE 0x4331B5] 浮字完成推进状态（1→#0043→选择区→#0041→FLC 退出）

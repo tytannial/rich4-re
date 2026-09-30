@@ -4,6 +4,7 @@
 #include "game/application.h"
 #include "game/core/encoding.h"
 #include "game/core/log.h"
+#include "game/core/paths.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
 #include "game/render/text.h"
@@ -444,8 +445,8 @@ void helpDialog(Application& app) {
     state.app = &app;
 
     MkfArchive help;
-    if (!help.load(app.gameDir() + "/Help.mkf")) {
-        RICH4_LOGE("helpDialog: Help.mkf unavailable");
+    if (!help.load(resolveResourcePath(app.gameDir(), "help.mkf"))) {
+        RICH4_LOGE("helpDialog: help.mkf unavailable");
         return;
     }
     state.help = &help;

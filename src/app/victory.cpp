@@ -21,6 +21,7 @@
 #include "game/render/text.h"
 #include "game/render/ui_image.h"
 #include "game/platform/audio.h"
+#include "game/core/rng.h"
 
 namespace rich4 {
 
@@ -272,7 +273,7 @@ bool mapSelHandler(const SDL_Event* event, void* user) {
                 }
             }
         } else {
-            ms.walkY = std::rand() % 360 + 100;
+            ms.walkY = rng::next() % 360 + 100;
             ms.dir ^= 1;
             ms.walkX = ms.dir != 0 ? 740 : -100;
         }

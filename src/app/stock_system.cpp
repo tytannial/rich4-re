@@ -1,6 +1,8 @@
 #include "game/app/stock_system.h"
+#include "game/core/bit_cast.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
@@ -160,7 +162,7 @@ void stockTick(Application& app) {
         s[5] = stockPriceUpdate(s[4], s[7]);
         trace::logf("stock idx=%d prev=%.1f new=%.1f delta=%.1f", i, s[4], s[5], s[7]);
         st.stockHistory[i][st.turnCounter] =
-            *reinterpret_cast<int32_t*>(&s[5]); // 位模式存 float
+            floatBits(s[5]); // 位模式存 float（memcpy 避免 strict aliasing）
         sum += s[5];
     }
     st.turnCounter = (st.turnCounter + 1) % 144;
@@ -182,7 +184,7 @@ void stockNewsApply(Application& app, int stock) {
         }
         st.stocks[i][7] = ((st.stockNews[i] & 0xF0) != 0) ? 10.0f : -10.0f;
         st.stocks[i][5] = stockPriceUpdate(st.stocks[i][4], st.stocks[i][7]);
-        st.stockHistory[i][slot] = *reinterpret_cast<int32_t*>(&st.stocks[i][5]);
+        st.stockHistory[i][slot] = floatBits(st.stocks[i][5]);
     };
     if (stock != 0) {
         const int i = stock - 1;

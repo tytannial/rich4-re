@@ -4,6 +4,7 @@
 #include "game/app/save_data.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/paths.h"
 #include "game/app/debug/debug.h"
 #include <cstdio>
 #include "game/render/blit.h"
@@ -181,7 +182,7 @@ int loadDialog(Application& app) {
     for (int i = 0; i < kSlotCount; ++i) {
         char name[32];
         std::snprintf(name, sizeof(name), "SAVE%d.DAT", i);
-        if (readSaveHeader(app.gameDir() + "/" + name, state.slots[i])) {
+        if (readSaveHeader(readableDataFile(app.gameDir(), name), state.slots[i])) {
             anyValid = true;
         }
     }

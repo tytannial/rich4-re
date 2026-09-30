@@ -27,6 +27,7 @@
 #include "game/render/text.h"
 #include "game/render/ui_image.h"
 #include "game/resource/mkf.h"
+#include "game/core/rng.h"
 
 namespace rich4 {
 namespace {
@@ -53,7 +54,7 @@ void drawItemLine(ItemLineCtx& ctx) {
     if (ctx.player >= 0 && ctx.player < 9 && st.pieceSprites[ctx.player].frameCount() > 1) {
         const UiImage& pc = st.pieceSprites[ctx.player];
         size_t f = static_cast<size_t>(ctx.expr) + 1;
-        if (f >= pc.frameCount()) {
+        if (f >= static_cast<size_t>(pc.frameCount())) {
             f = 1;  // 表情帧缺失时回退普通帧
         }
         blitElement(dst, pc.frame(f), 170, 130, false);
@@ -204,7 +205,7 @@ void playValueLine(Application& app, int player, int price) {
     if (price > 100) {
         line = kValueLines[ci][0];
     } else if (price > 50) {
-        line = (std::rand() & 1) ? kValueLines[ci][1] : kValueLines[ci][0];
+        line = (rng::next() & 1) ? kValueLines[ci][1] : kValueLines[ci][0];
     } else {
         line = kValueLines[ci][2];
     }
@@ -226,7 +227,7 @@ void playCollectorLine(Application& app, int player, int32_t amount) {
     if (amount >= 9000 * m) {
         line = kMoneyLines[ci][0];
     } else if (amount >= 5000 * m) {
-        line = (std::rand() & 1) ? kMoneyLines[ci][1] : kMoneyLines[ci][0];
+        line = (rng::next() & 1) ? kMoneyLines[ci][1] : kMoneyLines[ci][0];
     } else if (amount >= 2000 * m) {
         line = kMoneyLines[ci][2];
     }
@@ -250,7 +251,7 @@ void playPayerLine(Application& app, int player, int32_t amount) {
     if (amount >= 9000 * m) {
         line = kMoneyLines[ci][3];
     } else if (amount >= 5000 * m) {
-        line = (std::rand() & 1) ? kMoneyLines[ci][4] : kMoneyLines[ci][3];
+        line = (rng::next() & 1) ? kMoneyLines[ci][4] : kMoneyLines[ci][3];
     } else if (amount > 0) {
         line = kMoneyLines[ci][5];
     }
@@ -270,7 +271,7 @@ bool playDebtorLine(Application& app, int player, int creditor, int32_t amount) 
         return false;
     }
     if (findMaxCreditor(st, player) == creditor && amount >= 5000 * st.moneyMul &&
-        (std::rand() & 1)) {
+        (rng::next() & 1)) {
         playLine(app, player, kMoneyLines[ci][7], 1);  // [RE 0x44EF41] expr 1（欠债怨念）
         return true;
     }
@@ -291,7 +292,7 @@ void playStatusDaysLine(Application& app, int player, int days) {
     if (days > 6) {
         line = kMoneyLines[ci][18];
     } else if (days > 3) {
-        line = (std::rand() & 1) ? kMoneyLines[ci][19] : kMoneyLines[ci][18];
+        line = (rng::next() & 1) ? kMoneyLines[ci][19] : kMoneyLines[ci][18];
     } else if (days > 0) {
         line = kMoneyLines[ci][20];
     }
@@ -310,7 +311,7 @@ void playUnluckyLine(Application& app, int player, bool random) {
     if (ci < 0 || ci >= 12) {
         return;
     }
-    const int col = (random && (std::rand() & 1)) ? 19 : 18;
+    const int col = (random && (rng::next() & 1)) ? 19 : 18;
     playLine(app, player, kMoneyLines[ci][col], 2);
 }
 
@@ -329,7 +330,7 @@ void playWindfallLine(Application& app, int player, int32_t amount) {
     if (amount >= 9000 * m) {
         line = kMoneyLines[ci][10];
     } else if (amount >= 5000 * m) {
-        line = (std::rand() & 1) ? kMoneyLines[ci][11] : kMoneyLines[ci][10];
+        line = (rng::next() & 1) ? kMoneyLines[ci][11] : kMoneyLines[ci][10];
     } else if (amount > 0) {
         line = kMoneyLines[ci][12];
     }
@@ -361,7 +362,7 @@ void playEstateChainSpeech(Application& app, const char* name, int flag) {
     }
     if (flag != 0) {
         // [RE 0x44F627] 1/3 概率（升级路径）
-        if ((std::rand() % 3) == 0) {
+        if ((rng::next() % 3) == 0) {
             playLine(app, p, kMoneyLines[ci][9], 0);
         }
     } else {
@@ -1028,7 +1029,7 @@ void drawDicePick(DicePickCtx& c) {
         blitElementOpaque(dst, s.frame(0), 92, 300);
     }
     if (c.hover >= 1 && c.hover <= 6 &&
-        s.frameCount() > static_cast<size_t>(c.hover)) {
+        static_cast<size_t>(s.frameCount()) > static_cast<size_t>(c.hover)) {
         // [RE 0x4469xx] 悬停：blitElementFullscreen(帧 hover) @(104+40*(hover-1), 314)
         blitElementOpaque(dst, s.frame(c.hover), 104 + 40 * (c.hover - 1), 314);
     }

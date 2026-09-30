@@ -6,6 +6,10 @@ namespace rich4 {
 
 enum class LogLevel { Debug, Info, Warn, Error };
 
+// [PORT] GCC/Clang 下启用 printf 格式串编译期检查（MSVC 无此 attribute）
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((format(printf, 2, 3)))
+#endif
 void logMessage(LogLevel level, const char* fmt, ...);
 
 // [NEW] 测试断言支持（无原版对应）：内存日志环（最近 4096 条，含级别前缀）

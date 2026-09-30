@@ -1,6 +1,7 @@
 #include "game/render/fli.h"
 
 #include <cstring>
+#include <utility>
 
 #include "game/core/log.h"
 

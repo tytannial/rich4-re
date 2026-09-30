@@ -30,6 +30,7 @@
 #include "game/render/text.h"
 #include "game/render/ui_image.h"
 #include "game/resource/mkf.h"
+#include "game/core/rng.h"
 
 namespace rich4 {
 namespace {
@@ -360,7 +361,7 @@ void shopAdvanceClerk(ShopState& s) {
     const int page = s.page;
     switch (s.animStage & 0xF) {
     case 0: {
-        const int r = std::rand() % 64; // 原版 rand()>>10（0..31）；降频（用户反馈）
+        const int r = rng::next() % 64; // 原版 rand()>>10（0..31）；降频（用户反馈）
         if (r != 0 || (s.animStage & 0xF00) == 0) {
             if (r == 1) {
                 s.animStage = page + 3; // 进入 B 动画（3/4）
@@ -383,7 +384,9 @@ void shopAdvanceClerk(ShopState& s) {
     }
     case 3:
     case 4: {
-        const int r = (page == 0) ? (((3 * std::rand()) >> 15) + 1) : ((std::rand() & 1) + 1);
+        // [PORT] 原版 (3*rand())>>15 依赖 MSVC RAND_MAX=32767；glibc 下 RAND_MAX=2^31-1
+        //   会使 3*rand() 有符号溢出（UB）→ 等价改写 %3（分布一致：0/1/2）
+        const int r = (page == 0) ? (rng::next() % 3 + 1) : ((rng::next() & 1) + 1);
         if (r != ((s.animStage & 0xF00) >> 8)) {
             s.animStage = (s.animStage & 0xF0F0) | (r << 8); // 低 4 位清零（同原版）
             s.clerkEyeFrame = (page == 0) ? r + 3 : r + 22;  // [RE 0x42D8A4] B 帧 4..6 / 23..24
@@ -410,9 +413,9 @@ void shopAdvanceMouth(ShopState& s, bool msgActive) {
         if (old == 1) {
             s.mouthFrame = (page == 0) ? 9 : 25; // [RE 0x42DC8F/0x42DCF6] 倒计时到 1 → 闭嘴
         }
-    } else if ((std::rand() % 16) < 4) { // [RE 0x42DD10] rand()>>11 < 4（1/4）→ 张嘴
-        s.mouthFrame = (std::rand() & 1) + ((page == 0) ? 10 : 26); // [RE 0x42DD64/0x42DDB3]
-        s.mouthTimer |= std::rand() & 7; // [RE 0x42DDD3] dword_48C314 |= rand & 7
+    } else if ((rng::next() % 16) < 4) { // [RE 0x42DD10] rand()>>11 < 4（1/4）→ 张嘴
+        s.mouthFrame = (rng::next() & 1) + ((page == 0) ? 10 : 26); // [RE 0x42DD64/0x42DDB3]
+        s.mouthTimer |= rng::next() & 7; // [RE 0x42DDD3] dword_48C314 |= rand & 7
         if (s.mouthTimer == 0) {
             s.mouthTimer = 1;
         }
@@ -745,7 +748,8 @@ int shopAiVisit(Application& app, int p) {
         }
         if (!cand.empty()) {
             // [RE 0x42D0EF] shopCardPriceCmp：价高在前
-            std::sort(cand.begin(), cand.end(), [](int a, int b) {
+            // [PORT] stable_sort：同价卡顺序在两 libc 下未定义（影响 AI 购买选择）
+            std::stable_sort(cand.begin(), cand.end(), [](int a, int b) {
                 return kCardPrices[a + 1] > kCardPrices[b + 1];
             });
             for (size_t i = 0; i < cand.size(); ++i) {

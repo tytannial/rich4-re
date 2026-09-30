@@ -28,6 +28,7 @@
 #include "game/render/surface.h"
 #include "game/render/text.h"
 #include "game/render/ui_image.h"
+#include "game/core/rng.h"
 
 namespace rich4 {
 
@@ -402,13 +403,13 @@ void tickClerk(StayCtx& ui) {
             ui.clerkBits = 0x80;
         }
     } else if (phase == 2) {
-        const int v = std::rand() % 3;
+        const int v = rng::next() % 3;
         if (((ui.clerkBits & 0xC0) >> 6) != v) {
             drawClerkEye(ui, kFrameEye3 + v);
             ui.clerkBits = static_cast<uint8_t>(v << 6);
         }
     } else {
-        const int v = std::rand() >> 10;
+        const int v = rng::next() >> 10;
         if (v == 0) {
             ui.clerkBits |= 1;
         } else if (v == 1) {
@@ -423,11 +424,11 @@ void tickClerk(StayCtx& ui) {
                 drawClerkSmall(ui, kFrameSmall8);
             }
         } else {
-            if ((std::rand() >> 11) >= 4) {
+            if ((rng::next() >> 11) >= 4) {
                 return;
             }
-            drawClerkSmall(ui, kFrameSmall9 + (std::rand() & 1));
-            ui.smallTimer = static_cast<uint8_t>((std::rand() & 7) + 1);
+            drawClerkSmall(ui, kFrameSmall9 + (rng::next() & 1));
+            ui.smallTimer = static_cast<uint8_t>((rng::next() & 7) + 1);
         }
     }
 }
@@ -590,7 +591,7 @@ void tickAdvAnim(AdvCtx& ui) {
         } else {
             blitElement(dst, ui.sheet->frame(kAdvCycle[idx]), kAdvEyeX, kAdvEyeY, false);
         }
-    } else if ((ui.advBits & 0xF) == 0 && (std::rand() >> 10) == 0) {
+    } else if ((ui.advBits & 0xF) == 0 && (rng::next() >> 10) == 0) {
         ui.advBits |= 1;
     }
     if (ui.msg.active() || ui.smallTimer != 0) {
@@ -601,12 +602,12 @@ void tickAdvAnim(AdvCtx& ui) {
                                         kAdvSmallX, kAdvSmallY, kAdvSmallW, kAdvSmallH, false);
             }
         } else {
-            if ((std::rand() >> 11) >= 4) {
+            if ((rng::next() >> 11) >= 4) {
                 return;
             }
-            blitElement(dst, ui.sheet->frame(kFrameAdvSmall13 + (std::rand() & 1)),
+            blitElement(dst, ui.sheet->frame(kFrameAdvSmall13 + (rng::next() & 1)),
                         kAdvSmallX, kAdvSmallY, false);
-            ui.smallTimer = static_cast<uint8_t>((std::rand() & 7) + 1);
+            ui.smallTimer = static_cast<uint8_t>((rng::next() & 7) + 1);
         }
     }
 }
@@ -861,13 +862,13 @@ void dueTickClerk(DueCtx& ui) {
             ui.clerkBits = 0x80;
         }
     } else if ((ui.clerkBits & 0xF) == 2) {
-        const int v = std::rand() % 3;
+        const int v = rng::next() % 3;
         if (((ui.clerkBits & 0xC0) >> 6) != v) {
             blitElement(dst, ui.sheet->frame(kFrameEye3 + v), kEyeX, kEyeY, false);
             ui.clerkBits = static_cast<uint8_t>(v << 6);
         }
     } else if (ui.clerkBits == 0) {
-        const int v = std::rand() >> 10;
+        const int v = rng::next() >> 10;
         if (v == 0) {
             ui.clerkBits |= 1;
         } else if (v == 1) {
@@ -881,12 +882,12 @@ void dueTickClerk(DueCtx& ui) {
                 blitElement(dst, ui.sheet->frame(kFrameSmall8), kSmallX, kSmallY, false);
             }
         } else {
-            if ((std::rand() >> 11) >= 4) {
+            if ((rng::next() >> 11) >= 4) {
                 return;
             }
-            blitElement(dst, ui.sheet->frame(kFrameSmall9 + (std::rand() & 1)), kSmallX, kSmallY,
+            blitElement(dst, ui.sheet->frame(kFrameSmall9 + (rng::next() & 1)), kSmallX, kSmallY,
                         false);
-            ui.smallTimer = static_cast<uint8_t>((std::rand() & 7) + 1);
+            ui.smallTimer = static_cast<uint8_t>((rng::next() & 7) + 1);
         }
     }
 }
@@ -1218,7 +1219,7 @@ void bankStayDialog(Application& app, int cellEntId) {
         UiImage sheet;
         sheet.load(std::move(*blob));
         if (sheet.frameCount() < 24) {
-            RICH4_LOGW("bankStay: panel.mkf[23] frames %zu < 24", sheet.frameCount());
+            RICH4_LOGW("bankStay: panel.mkf[23] frames %d < 24", sheet.frameCount());
             return;
         }
         StayCtx ui;

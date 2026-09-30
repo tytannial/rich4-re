@@ -662,7 +662,7 @@ void Application::renderFrame() {
             continue;
         }
         RICH4_LOGI("game-key frame=%d spec=%s", m_frameCount, spec.c_str());
-        auto pushKey = [&](SDL_Keycode k, uint8_t type) {
+        auto pushKey = [&](SDL_Keycode k, SDL_EventType type) {
             SDL_Event ev{};
             ev.type = type;
             ev.key.key = k;

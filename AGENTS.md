@@ -146,6 +146,15 @@ trace `msg/line/flc skip` + 场景 `300_skip_msg`；详见 `ui-controls.md` §39
 
 **M2 执行计划**：见 `docs/m2-plan.md`
 
+**跨平台 ✅ 2026-09-30**（原 M3-C，Windows x64 + Linux x86-64）：GDI → **FreeType 统一文本渲染**
+（删 366 行 GDI、字体 `resources/Fonts/` 不入库/缺失降级、`kFontSizeScale` 可调）、
+**cp950 内嵌映射表**（`tools/gen_big5_tables.py` 生成，13752 项，替代 `MultiByteToWideChar(950)`）、
+**自带 PRNG 复刻 MSVC LCG**（71 处 `std::rand` 收口 → `--seed` 两平台序列一致）、
+**可写路径回退**（游戏目录→`SDL_GetPrefPath`）、资源名大小写无关解析、strict-aliasing/格式串/
+事件类型截断等 Linux 首轮编译暴露问题清理（含 `--game-key` 失效 bug 修复）。
+**两平台构建零警告、L0 67/67、L1 93 场景结果完全相同**（92 PASS + 同 1 TIMEOUT）。详见
+**`docs/cross-platform.md`**；「窗口分辨率高清文本层」列后续专项（同档 §9）。
+
 **M2 完成纪要**（✅ 全部完成 2026-09-29；各档案标注的「待实机验证/待实机验收」项——分红/週轉/
 公告栏挂牌/买股卖股等——统一并入 **M3 收尾后一批实机测试**（用户 2026-09-29 决策）。
 详见 `docs/reverse/functions/` 各档案「差异」段）：
@@ -219,22 +228,32 @@ trace `msg/line/flc skip` + 场景 `300_skip_msg`；详见 `ui-controls.md` §39
 
 ## 构建
 
-工具链：**MSVC (VS 18 Community) + CMake + Ninja**。
+工具链：**Windows = MSVC (VS 18 Community)**；**Linux = GCC/Clang**；均用 CMake + Ninja
+（跨平台方案与验证记录见 **`docs/cross-platform.md`**）。
 
-### 准备 SDL3
+### 准备依赖
 
-从 https://github.com/libsdl-org/SDL/releases 下载 `SDL3-devel-<ver>-VC.zip`，
-解压到 `third_party/`（如 `third_party/SDL3-3.4.16/`）。CMake 会自动查找该目录。
-若未提供，则回退到 FetchContent 从源码构建（较慢）。
+- **SDL3**：从 https://github.com/libsdl-org/SDL/releases 下载 `SDL3-devel-<ver>-VC.zip`，
+  解压到 `third_party/`（如 `third_party/SDL3-3.4.16/`）。CMake 会自动查找该目录（Windows）；
+  Linux 走系统包（`sdl3`）或 FetchContent 源码构建（较慢）。
+- **FreeType**（文本渲染）：`third_party/freetype`（本地源码）优先；Linux 可用系统
+  `freetype2`（`find_package` 优先）；均无则 FetchContent（tag `VER-2-14-3`）。
+- **字体**：`resources/Fonts/HarmonyOS_Sans_SC_{Regular,Bold}.ttf`（不入库，需自行准备；
+  缺失时文本渲染降级为空操作，不影响逻辑与 headless 测试）。
 
 ### 编译
 
 ```powershell
-# 加载 MSVC 环境
+# Windows
 & "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvars64.bat"
-
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
+```
+
+```bash
+# Linux（Arch: sudo pacman -S cmake ninja sdl3 freetype2）
+cmake -S . -B build/linux -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build/linux
 ```
 
 > 注意：Strawberry Perl 自带的 cmake/ninja 在本机已损坏（缺 DLL），
@@ -243,7 +262,10 @@ cmake --build build
 ## 运行
 
 ```powershell
+# Windows
 ./build/rich4.exe --game resources/MultiverseJourney
+# Linux
+./build/linux/rich4 --game resources/MultiverseJourney
 ```
 
 ## 调试
@@ -260,7 +282,8 @@ cmake --build build
 
 **自动化=代码级三支柱（状态/演出 Trace/字节-数据），画面观感一律人工**——总纲与已落地
 能力见 **`docs/testing.md`**。已就绪：虚拟时钟（`--headless/--test-clock`，44 处墙钟收口）、
-`--seed` + 定点随机注入（`dbg::roll/raw` 21 槽，装饰随机不接）、演出 trace（`--trace-out`，
+`--seed` + 定点随机注入（`dbg::roll/raw` 21 槽，装饰随机不接；**随机数已收口自带 PRNG
+复刻 MSVC LCG → `--seed` 两平台序列一致**，见 `docs/cross-platform.md` §6）、演出 trace（`--trace-out`，
 批1：FLC/消息/音效/语音/高亮/飞行/落地分派/转盘/模态）、内存日志环、存档往返
 `--save-selftest`（`STABLE=YES`）、dummy 驱动无头渲染 + `--quickstart`、**统一调试命令层 +
 `--script/--exec` 断言 DSL（assert state/log/trace + wait/confirm/click/rng，失败→退出码）**、
@@ -303,6 +326,8 @@ python tools/re_map.py
 
 ## 重要参考
 
+- `docs/cross-platform.md` — **跨平台方案与验证记录**（Windows/Linux 构建、FreeType 文本、
+  cp950 内嵌表、自带 PRNG、可写路径回退；「窗口分辨率文本层」后续专项）
 - `docs/formats/README.md` — 资源格式总览与工具索引
 - `docs/formats/lzhuf.md` — 压缩算法（含易错点说明）
 - `docs/reverse/README.md` — 逆向注释规范与工作流

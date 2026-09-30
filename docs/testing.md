@@ -48,9 +48,10 @@
 
 ### 1.2 确定性与定点注入（`src/core/debug_hooks.{h,cpp}`）
 - `--seed <n>`：`gameInit` 播种改读 `dbg::seed()`（未提供则原版 tick 播种语义）。
-  **跨平台警告**：MSVC 与 glibc 的 `rand()` 序列不同 → 断言不依赖具体随机值，
-  随机分支覆盖一律走注入；种子仅用于单平台复现。
-- `dbg::roll(slot, n)` ≡ `std::rand()%n`、`dbg::raw(slot)` ≡ `std::rand()`：未注入时**逐位等价**。
+  **跨平台一致性**：随机数已收口自带 PRNG（`src/core/rng.{h,cpp}` 复刻 MSVC CRT LCG，
+  RAND_MAX=32767）→ `--seed` 两平台序列 **bit 级一致**，全量场景矩阵可跨平台复用
+  （2026-09-30 验证：93 场景两平台结果完全相同，见 docs/cross-platform.md §6/§8）。
+- `dbg::roll(slot, n)` ≡ `rng::next()%n`、`dbg::raw(slot)` ≡ `rng::next()`：未注入时**逐位等价**。
   已替换全部「结果分支」随机点（~60 处/22 文件）；**装饰类随机（眨眼/口型/表情/柜台动画/
   小游戏交互内生成/栏位洗牌）保留 `std::rand()`**——不接注入，避免消耗序列改变默认行为。
 - 注入为 **one-shot**（命中一次即清除；`rng.clear` 清全部；`SlotAny` 兜底任意未专用槽的下一发）。

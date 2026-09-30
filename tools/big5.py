@@ -9,6 +9,10 @@
     python big5.py strings <file> [--min 4] [--offset 0] [--length 0]
 """
 from __future__ import annotations
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
 
 import argparse
 import sys

@@ -22,6 +22,8 @@ __pycache__/
 /resources/MultiverseJourney/
 # 媒体资源（音乐/视频，版权 + 体积，不提交）
 /resources/Media/
+# 字体资源（版权 + 体积，不提交；缺失时文本渲染降级为空操作，见 src/render/text.cpp）
+/resources/Fonts/
 
 # 调试截图与日志（本地验证产物）
 /shots/

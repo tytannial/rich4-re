@@ -9,7 +9,9 @@
 #include "game/app/stock_system.h"
 #include "game/app/turn_system.h"
 #include "game/application.h"
+#include "game/core/bit_cast.h"
 #include "game/core/log.h"
+#include "game/core/paths.h"
 #include "game/core/debug_hooks.h"
 #include "game/render/raw_bitmap.h"
 #include "game/render/surface.h"
@@ -111,8 +113,8 @@ bool parseMapDat(GameState& state, const std::vector<uint8_t>& d) {
 // 加载 614400 字节全屏预览图到 dword_48A358（转换后存 dword_48A354）
 bool loadMapPreview(Application& app) {
     GameState& state = app.gameState();
-    if (!state.jump.load(app.gameDir() + "/Jump.mkf")) {
-        RICH4_LOGE("loadMapPreview: Jump.mkf load failed");
+    if (!state.jump.load(resolveResourcePath(app.gameDir(), "jump.mkf"))) {
+        RICH4_LOGE("loadMapPreview: jump.mkf load failed");
         return false;
     }
     const int previewIndex = state.mapIndex + 4 * state.gameMode;
@@ -318,8 +320,8 @@ bool newGameInit(Application& app, bool mode1) {
     std::memset(state.stockVolume, 0, sizeof(state.stockVolume));
     // [RE 0x496988] 保留股份初值 = kStockInit 字段[2] 低 u16（10000/5000）
     for (int i = 0; i < 12; ++i) {
-        state.stockReserved[i] = static_cast<int32_t>(
-            static_cast<uint16_t>(*reinterpret_cast<const int32_t*>(&state.stocks[i][2])));
+        state.stockReserved[i] =
+            static_cast<int32_t>(static_cast<uint16_t>(floatBits(state.stocks[i][2])));
     }
     state.stockMarketClosed = 0;
     state.stockDivPeriod = 1;
@@ -403,8 +405,8 @@ void resetSceneForReload(Application& app) {
 bool loadMap(Application& app, bool freshMapDat) {
     GameState& state = app.gameState();
     resetSceneForReload(app); // [RE 0x4080F5] loadMapData 开头复位
-    if (!state.map.load(app.gameDir() + "/Map.mkf")) {
-        RICH4_LOGE("loadMap: Map.mkf load failed");
+    if (!state.map.load(resolveResourcePath(app.gameDir(), "map.mkf"))) {
+        RICH4_LOGE("loadMap: map.mkf load failed");
         return false;
     }
     const int base = 4 * state.gameMode + state.mapIndex;
@@ -586,7 +588,8 @@ bool reloadGameFromSlotData(Application& app, int slot) {
     GameState& state = app.gameState();
     char name[32];
     std::snprintf(name, sizeof(name), "SAVE%d.DAT", slot);
-    const std::string path = app.gameDir() + "/" + name;
+    // [PORT] readableDataFile: 写入目录优先，兼容游戏目录/用户数据目录两处存档
+    const std::string path = readableDataFile(app.gameDir(), name);
 
     std::vector<uint8_t> raw;
     if (!readSaveFile(path, raw)) {

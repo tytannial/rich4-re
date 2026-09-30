@@ -191,7 +191,7 @@ def write_md(entries: list[dict]) -> None:
 
     lines.append("")
     OUT_MD.parent.mkdir(parents=True, exist_ok=True)
-    OUT_MD.write_text("\n".join(lines), encoding="utf-8")
+    OUT_MD.write_text("\n".join(lines), encoding="utf-8", newline="\n")
     print(f"wrote {OUT_MD.relative_to(ROOT)}")
 
 

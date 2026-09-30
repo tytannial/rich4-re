@@ -7,6 +7,7 @@
 #include "game/app/hotkey_dialog.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/core/paths.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
 #include "game/render/text.h"
@@ -304,7 +305,7 @@ void applyControl(SettingsState& state, int control, int rx, int ry) {
             break;
         case 8: // 確定：memcpy(byte_497158) + sub_411F80 写 RICH4.CFG
             std::memcpy(state.app->gameState().settings, state.settings, sizeof(state.settings));
-            saveCfg(state.app->gameDir() + "/RICH4.CFG", state.settings,
+            saveCfg(writableDataFile(state.app->gameDir(), "RICH4.CFG"), state.settings,
                     state.app->input().bindings(), state.app->gameState().gameDate);
             // [RE 0x4106D9] 確定音效：dword_48232A = Effect.mkf[2]
             state.app->audio().playEffect(2);
@@ -488,8 +489,8 @@ int settingsDialog(Application& app, int page) {
                 gs.surrenderRequest = true;
                 break;
             case 3:
-                saveCfg(app.gameDir() + "/RICH4.CFG", gs.settings, app.input().bindings(),
-                        gs.gameDate);
+                saveCfg(writableDataFile(app.gameDir(), "RICH4.CFG"), gs.settings,
+                        app.input().bindings(), gs.gameDate);
                 gs.quitGame = true;
                 break;
             default:

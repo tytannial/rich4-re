@@ -1,6 +1,7 @@
 #include "game/render/ui_image.h"
 
 #include <cstring>
+#include <utility>
 
 namespace rich4 {
 

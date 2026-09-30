@@ -1,5 +1,6 @@
 #include "game/app/stock_market_dialog.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>

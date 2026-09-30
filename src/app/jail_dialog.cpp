@@ -26,6 +26,7 @@
 #include "game/render/surface.h"
 #include "game/render/text.h"
 #include "game/render/ui_image.h"
+#include "game/core/rng.h"
 
 namespace rich4 {
 
@@ -265,7 +266,8 @@ bool bailHandler(const SDL_Event* event, void* user) {
                 blitElementRegionOpaque(dst, ui.sheet->frame(kFrameBg), gx, gy, gx, gy, 140, 137,
                                         false); // [RE 0x43D0F2] blitOpaqueToBackbuffer(帧0)
                 blitElement(dst, ui.sheet->frame(kFrameEmpty), gx, gy, false); // [RE 0x43D117] 帧4
-                if (ui.npcMark && ui.npcMark->frameCount() > static_cast<size_t>(hit - 4)) {
+                if (ui.npcMark && static_cast<size_t>(ui.npcMark->frameCount()) >
+                    static_cast<size_t>(hit - 4)) {
                     // [RE 0x43D13E] sub_456418(panel[64] 帧(i-4), 365, 450)：blit 内部按帧 offset
                     //   定位；背景保存用实际落点 (365−offsetX, 450−offsetY)
                     const UiFrameView& nf = ui.npcMark->frame(hit - 4);
@@ -547,7 +549,7 @@ void nurseTick(HospCtx& ui) {
     Surface& dst = app.surface();
     const int low = ui.nurseState & 0xF;
     if (low == 0) {
-        if ((std::rand() >> 10) == 0) {
+        if ((rng::next() >> 10) == 0) {
             ui.nurseState |= 1; // [RE 0x43EB4A] 1/32 开始行走会话
         }
     } else if (low == 1) {
@@ -588,10 +590,10 @@ void nurseTick(HospCtx& ui) {
         }
         return;
     }
-    if ((std::rand() >> 11) >= 4) {
+    if ((rng::next() >> 11) >= 4) {
         return; // [RE 0x43EC2F] 1/4 概率换姿势
     }
-    if ((std::rand() & 1) != 0) {
+    if ((rng::next() & 1) != 0) {
         // [RE 0x43E132/0x43E26E] 小像区域：左 (139,180)、右 (165,183)（行走帧区域下方，勿用 158）
         blitElementOpaque(dst, ui.sheet->frame(right ? kHIdleRFull : kHIdleLFull),
                           right ? 165 : 139, right ? 183 : 180);
@@ -600,7 +602,7 @@ void nurseTick(HospCtx& ui) {
     } else {
         blitElementRegionOpaque(dst, ui.sheet->frame(kHTitle), 139, 180, 35, 70, 40, 18, false);
     }
-    ui.nurseHold = std::rand() & 7;
+    ui.nurseHold = rng::next() & 7;
     if (ui.nurseHold == 0) {
         ui.nurseHold = 1;
     }

@@ -1,5 +1,7 @@
 #include "game/core/log.h"
 
+#include "game/core/paths.h"
+
 #include <cstdarg>
 #include <atomic>
 #include <chrono>
@@ -9,6 +11,7 @@
 #include <deque>
 #include <mutex>
 #include <string>
+#include <utility>
 
 namespace rich4 {
 
@@ -70,6 +73,14 @@ std::FILE* logFile() {
             }
         }
         std::FILE* h = std::fopen(path, "a");
+        // [PORT] cwd 不可写（Linux 只读安装/挂载）→ 回退用户数据目录
+        if (!h) {
+            const std::string& fb = fallbackDataDir();
+            if (!fb.empty()) {
+                const std::string alt = fb + "/rich4.log";
+                h = std::fopen(alt.c_str(), "a");
+            }
+        }
         if (h) {
             char stamp[40];
             formatStamp(stamp, sizeof(stamp));

@@ -1,4 +1,5 @@
 #include "game/core/debug_hooks.h"
+#include "game/core/rng.h"
 
 #include <array>
 #include <cstring>
@@ -69,7 +70,7 @@ int raw(Slot s) {
         g_inject[SlotAny] = kNoInject;
         return av;
     }
-    return std::rand();
+    return rng::next();
 }
 
 int roll(Slot s, int n) {

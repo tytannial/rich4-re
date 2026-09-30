@@ -1,6 +1,8 @@
 # [NEW] CI（docs/testing.md §4 设计）：L0 单测可在无游戏资源环境跑（test_save/test_mkf
 # 对缺失资源自动 SKIP）；L1 场景需要 resources/MultiverseJourney（版权不入库）→ 本地/自托管跑：
 #   python tools/run_tests.py --wall-cap 90
+# 跨平台说明（docs/cross-platform.md）：Linux 侧 build 主程序 rich4（不再只 build 单测）；
+#   SDL3/FreeType 走 FetchContent（无本地 third_party）；随机数已自带 PRNG，两平台序列一致。
 name: tests
 
 on:
@@ -14,11 +16,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: deps
-        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build
-      - name: configure (SDL3 via FetchContent)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build \
+            libasound2-dev libpulse-dev libudev-dev libdbus-1-dev \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
+            libxfixes-dev libxss-dev libxkbcommon-dev libwayland-dev \
+            libegl1-mesa-dev libgl1-mesa-dev
+      - name: configure (SDL3/FreeType via FetchContent)
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-      - name: build
-        run: cmake --build build --target rich4_tests
+      - name: build (rich4 + rich4_tests)
+        run: cmake --build build
       - name: unit
         run: ctest --test-dir build -R unit --output-on-failure
 
@@ -35,6 +43,5 @@ jobs:
         run: ctest --test-dir build -R unit --output-on-failure
 
   # L1 headless 场景（需要 resources/MultiverseJourney 的私有 runner / 本地 CI 循环）：
-  #   ./build/rich4.exe --game resources/MultiverseJourney --headless ... （见 tools/run_tests.py）
-  #   注：Linux 下随机序列与 MSVC 不同（ISS-007/013 记录）→ 场景断言均走定点注入，
-  #   平台无关；仅 80_autoplay 的回合内容随种子平台变化（不变量断言不受影响）。
+  #   ./build/rich4 --game resources/MultiverseJourney --headless ... （见 tools/run_tests.py）
+  #   注：随机数已收口自带 PRNG（复刻 MSVC LCG）→ --seed 两平台序列一致，场景矩阵可跨平台复用。

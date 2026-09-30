@@ -26,6 +26,10 @@
     python tools/gen_map_tables.py [exe] [out.cpp]
 """
 from __future__ import annotations
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
 
 import struct
 import sys
@@ -312,7 +316,7 @@ def main(argv: list[str]) -> int:
     w("")
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text("\n".join(out), encoding="utf-8")
+    out_path.write_text("\n".join(out), encoding="utf-8", newline="\n")
     print(f"wrote {out_path}")
     print(f"iso={len(iso_vals)} drawOrder={draw_order_n}x{DRAW_ORDER_DIRS} stock={len(stock_vals)}")
     print("tabs:", tab_text)
