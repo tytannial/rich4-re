@@ -25,12 +25,15 @@
 >   `--canvas WxH` 开发入口；L0 新增 4 用例；矩阵 94/94、save-selftest STABLE、re_map 通过，
 >   **800×600 画布与 native 左上 640×480 逐像素一致（A/B diff=0）**。详见 §15。
 > - **批次 A2（scale + 缩放 blit + 文本 1:1 光栅化 + preset/resize）✅ 已实施**：
->   `Surface::scale/logicalToDevice/deviceToLogical` + `SurfaceScaleGuard`；blit 家族 nearest
->   缩放 + `blitScaled` 导出（UI 散点叠加全设备化：区域快照走 `saveRegion/restoreRegion`、
->   FLC/RAW 叠加走 `blitScaled`）；文本 `设计字号×scale` 1:1 光栅化（阴影/描边/字距/边距乘
->   scale）；光标按 scale 放大；**鼠标双坐标**（UI 逻辑 / 地图设备）；**地图层固定
->   worldScale=1**；`--scale <f>` / `--preset native|wide|free`（free 处理窗口 resize）；
->   `run_tests.py --extra`。详见 §16。**下一步 = C 脏区重绘 + UI 布局表 + 命中派生**。
+>   `Surface::scale/logicalToDevice/deviceToLogical` + `SurfaceScaleGuard`；blit 家族
+>   **逻辑像素→设备块展开**（`blitScaled` 导出；UI 散点叠加全设备化：区域快照走
+>   `saveRegion/restoreRegion`、FLC/RAW 叠加走 `blitScaled`；**像素完美**，scale=1 恒等）；
+>   文本 `设计字号×scale` 1:1 光栅化（阴影/描边/字距/边距乘 scale）；光标按 scale 放大；
+>   **鼠标双坐标**（UI 逻辑 / 地图设备）；**free/wide 整幅画面放大**（worldScale=uiScale）；
+>   **演出帧节拍改绝对截止时刻**（放大后动画不变慢）；`--scale <f>` / `--preset
+>   native|wide|free`（free 处理窗口 resize）/ `--stats`；`run_tests.py --extra`。
+>   含 4 项实机修复（§16.3）：free 界面错位 / 光标 SMP / 放大拖慢（17→9.8ms）/ 动画节拍。
+>   **下一步 = C 脏区重绘 + UI 布局表 + 命中派生**。
 
 | 批次 | 内容 | 依赖 | 风险 | 建议顺序 |
 |------|------|------|------|----------|

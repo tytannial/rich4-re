@@ -165,13 +165,16 @@ trace.clear` 同帧清窗，**修前 FAIL 75 次 cur=0 → 修后 0 次**）。�
 开发入口；L0 新增 4 用例。**修复 blitScrolledMap 高画布越界读**（行数 `min(画布高,480)`——
 `--canvas 800x600` 选人界面崩溃根因）。详见 `m4-plan.md` §15。
 **批次 A2 ✅ 2026-09-30（scale + 缩放 blit + 文本 1:1 光栅化 + preset/resize）**：
-`Surface::scale/logicalToDevice/deviceToLogical` + `SurfaceScaleGuard`；blit 家族 nearest 缩放
-（`blitScaled` 导出供 UI 散点叠加）+ 全部散点设备化；文本按 `设计字号×scale` 1:1 光栅化
-（阴影/描边/字距/边距乘 scale）；光标按 scale 放大；**鼠标双坐标**（UI 逻辑 / 地图设备）；
-**地图层固定 worldScale=1**（`renderMap`/高亮/演出叠加 guard）；新增 `--scale <f>` 与
-`--preset native|wide|free`（wide=1280×720 auto；free=drawable + `SDL_EVENT_WINDOW_RESIZED`
-重建画布）；`run_tests.py` 新增 `--extra`。详见 `m4-plan.md` §16。**下一步 = C 脏区重绘 +
-UI 布局表 + 命中派生**（D 宽屏视口的地图区扩展依赖 C 的布局表）。
+`Surface::scale/logicalToDevice/deviceToLogical` + `SurfaceScaleGuard`；blit 家族
+**逻辑像素→设备块展开**（`blitScaled` 导出供 UI 散点复用；**像素完美**，scale=1 恒等）；
+文本按 `设计字号×scale` 1:1 光栅化（阴影/描边/字距/边距乘 scale）；光标按 scale 放大；
+**鼠标双坐标**（UI 逻辑 / 地图设备）；**free/wide 整幅画面放大**（worldScale=uiScale；
+free 1280×960 = native 干净 2 倍）；**演出帧节拍改绝对截止时刻**（`frameWaitStep`，
+放大后动画不变慢）；新增 `--scale <f>` / `--preset native|wide|free`（free 处理
+`SDL_EVENT_WINDOW_RESIZED`）/ `--stats`（FPS/帧耗时诊断）；`run_tests.py` 新增 `--extra`。
+实机修复（用户反馈）：free 界面错位→整幅放大、光标 SMP 不可见→SMP/SPR 双格式、
+放大拖慢→块展开（free 17→9.8ms / wide 12→8.2ms）+ 动画绝对节拍。详见 `m4-plan.md` §16。
+**下一步 = C 脏区重绘 + UI 布局表 + 命中派生**（D 宽屏视口依赖 C 的布局表）。
 
 **跨平台 ✅ 2026-09-30**（原 M3-C，Windows x64 + Linux x86-64）：GDI → **FreeType 统一文本渲染**
 （删 366 行 GDI、字体 `resources/Fonts/` 不入库/缺失降级、`kFontSizeScale` 可调）、
