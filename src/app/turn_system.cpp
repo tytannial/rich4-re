@@ -1403,6 +1403,14 @@ void cardGetDraw(CardGetCtx& ctx) {
     Application& app = *ctx.app;
     Surface& dst = app.surface();
     renderGameFrame(app); // 地图背景
+    // [RE 0x441F73 绘制顺序] tip 框(0x442023) → 文本(0x44203E) → 卡片 blitElementFullscreen
+    //   (0x44205C)；卡片 165×256 @(138,200) **最后贴、覆盖 tip 框左下部分**（此前重写顺序颠倒）
+    const UiImage& tip = app.gameState().estateTiles; // [RE 0x48BAD8] g_tipFrame
+    if (tip.frameCount() > 5) {
+        blitElement(dst, tip.frame(5), 220, 129, false); // [RE 0x456418]
+    }
+    app.text().setFont(16, 0xF0F0F0, 0x101010, kTextStyleShadow | kTextStyleBold, 1);
+    app.text().drawText(dst, ctx.text, 220, 129, 4); // [RE 0x44FABC]
     if (ctx.w > 0 && ctx.h > 0) {
         uint16_t* d = dst.pixels();
         for (int row = 0; row < ctx.h; ++row) {
@@ -1420,12 +1428,6 @@ void cardGetDraw(CardGetCtx& ctx) {
             }
         }
     }
-    const UiImage& tip = app.gameState().estateTiles; // [RE 0x48BAD8] g_tipFrame
-    if (tip.frameCount() > 5) {
-        blitElement(dst, tip.frame(5), 220, 129, false); // [RE 0x456418]
-    }
-    app.text().setFont(16, 0xF0F0F0, 0x101010, kTextStyleShadow | kTextStyleBold, 1);
-    app.text().drawText(dst, ctx.text, 220, 129, 4); // [RE 0x44FABC]
 }
 
 bool cardGetHandler(const SDL_Event* event, void* user) {
@@ -1727,9 +1729,10 @@ int resolveFeePayer(Application& app, int payer, int32_t fee, const char* feeNam
         RICH4_LOGI("resolveFeePayer: p%d free card covers fee %d (RE 0x444A60)", payer, fee);
         return -1;
     }
-    // [RE 0x419EB8] 嫁祸卡(19)：转嫁他人（原版 0x44476A(payer, 2, 0)）
+    // [RE 0x419EB8] 嫁祸卡(19)：转嫁他人（原版 0x44476A(payer, 1, fee)——a2=1 收费模式、
+    //   a3=fee；AI 阈值：fee>现金 或 (rand%4000+4000)×M<fee 才嫁祸）
     if (cardGate && cardBagHas(st, payer, 19)) {
-        const int r = passOnCardDialog(app, payer);
+        const int r = passOnCardDialog(app, payer, 1, fee);
         if (r != -1) {
             payer = r;
         }
@@ -2007,6 +2010,8 @@ static void labDevelopAfterLanding(Application& app, int p, uint16_t objId) {
         return;
     }
     Corp& cp = st.corps[ci];
+    // [RE 0x41B0B3..0x41B106] 条件仅 owner/type4/sub!=0/(flag&0x0F)==0；
+    //   研究中（researchLeft>0）仍可重选覆盖 researchItem（原版行为，照抄）
     if (cp.owner == static_cast<uint8_t>(p + 1) && st.players[p].state37 == 0 && cp.type == 4 &&
         cp.sub != 0 && (cp.flag & 0x0F) == 0) {
         labDevelopDialog(app, cp);  // [RE 0x44101D] 人类选/未解锁灰度，AI 恒选最高解锁项
@@ -3761,10 +3766,39 @@ void updatePlayerStates(Application& app, int p) {
     }
     // byte54 冬眠 / state37 夢遊 / fixedStep（stateFlags 全 0 时才倒计时）
     if (pl.stateFlags == 0) {
-        if (pl.byte54 != 0) {
+        // [RE 0x41C96B] 冬眠到期（bit7）→ 清 0 + 释放动画组资源（sub_40B8D8）+ 重载行走资源（醒来）
+        if ((pl.byte54 & 0x80) != 0) {
+            pl.byte54 = 0;
+            releaseWalkResources(st, p, st.playerMoveGroup[p]);  // [RE 0x41C993 sub_40B8D8]
+            loadWalkResources(st, p);                            // [RE 0x41C99C]
+            RICH4_LOGI("wake: p=%d hibernate end (RE 0x41C96B)", p);
+        } else if (pl.byte54 != 0) {
             pl.byte54 = decay(pl.byte54, 0xFF);
         }
-        if (pl.state37 != 0) {
+        // [RE 0x41C9A7] 梦游到期（bit7）→ 清 0 + 恢复暂存载具（按礼物流通池计数）+ 重载
+        if ((pl.state37 & 0x80) != 0) {
+            pl.state37 = 0;
+            const uint8_t veh = static_cast<uint8_t>(pl.vehicleRestore & 3);
+            const bool restore = (veh == 3) ||
+                                 (veh == 1 && st.itemStock[15 * p + 4] != 0) ||
+                                 (veh == 2 && st.itemStock[15 * p + 5] != 0);
+            if (restore) {
+                pl.travel = pl.vehicleRestore;   // [RE 0x41CA07/0x41CA13]
+                pl.diceCount = pl.diceRestore;
+                if (pl.travel == 1) {
+                    --st.itemStock[15 * p + 4];  // [RE 0x41CA38] 从池中取回
+                }
+                if (pl.travel == 2) {
+                    --st.itemStock[15 * p + 5];  // [RE 0x41CA58]
+                }
+            } else {
+                pl.travel = 0;      // [RE 0x41CA65] 池中已无 → 步行
+                pl.diceCount = 1;
+            }
+            loadWalkResources(st, p);  // [RE 0x41CA72]
+            RICH4_LOGI("wake: p=%d sleepwalk end veh=%u restore=%d (RE 0x41C9A7)", p, veh,
+                       restore ? 1 : 0);
+        } else if (pl.state37 != 0) {
             pl.state37 = decay(pl.state37, 0xFF);
         }
         if (pl.fixedStep != 0) {

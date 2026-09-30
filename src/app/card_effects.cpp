@@ -216,17 +216,25 @@ int cardEffectTurn(Application& app) {
         return 0;
     }
     const int t = bitScanPlayer(static_cast<uint32_t>(v));  // [RE 0x442FCA sub_40D293]
-    if (t < 0 || t >= 4) {
+    if (t < 0) {
         return 0;
     }
     cardBagRemove(st, cur, 6);   // [RE 0x442F8A sub_441343(cur,6)]
     playCardLine(app, cur, 5, 3);  // [RE 0x442FC1 使用者台词 轉向 expr3]
     turnToAdjacentCell(st, t);   // [RE 0x443025 → 0x40C78C] 朝向反向 + 重选来路格
+    if (t >= 4) {
+        // [RE 0x44303A] 事件槽 NPC（4..7）：仅转向，不播台词
+        renderGameFrame(app);
+        RICH4_LOGI("cardTurn: NPC %d turned (RE 0x442F4D)", t);
+        return 1;
+    }
     // [RE 0x44303A/0x443061:0x442313] 转向后：自己（槽35 expr0）/ 目标（槽65 expr2）
     if (t == cur) {
         playCardLine(app, t, kSpeechTurnSelf, 0);
     } else {
         playCardLine(app, t, kSpeechTurnTarget, 2);
+        st.manualView = false;  // [RE 0x44306B sub_41D546]
+        renderGameFrame(app);
     }
     RICH4_LOGI("cardTurn: p%d -> p%d dir=%u prev=%u (RE 0x442F4D)", cur, t, st.players[t].dir,
                st.players[t].prevCellEnt);
@@ -598,12 +606,21 @@ int cardEffectStay(Application& app) {
     if (t != cur) {
         playCardLine(app, cur, 13, 3);
     }
+    if (t >= 4) {
+        // [RE 0x443FE2] 事件槽 NPC（4..7）→ timerC=1（NPC 停留标记，无台词）
+        st.npcSlots[t - 4].timerC = 1;
+        renderGameFrame(app);
+        RICH4_LOGI("cardStay: NPC %d timerC=1 (RE 0x443F80)", t);
+        return 1;
+    }
     // [RE 0x44406C 自己槽43 expr3 / 0x4440A0 目标槽73 expr2]
     playCardLine(app, t, (t == cur) ? kSpeechStaySelf : kSpeechStayTarget, (t == cur) ? 3 : 2);
     if (t == cur) {
         st.players[t].skipMove = 0x80;  // [RE 0x443FFF] 自己（下回合清）
     } else {
         st.players[t].skipMove = 1;     // [RE 0x44400x] 他人：下次前进停留
+        st.manualView = false;          // [RE 0x444018 sub_41D546]
+        renderGameFrame(app);
     }
     RICH4_LOGI("cardStay: p%d -> p%d skipMove=%u (RE 0x443F80)", cur, t, st.players[t].skipMove);
     return 1;
@@ -672,10 +689,21 @@ int cardEffectSleepwalk(Application& app) {
     cardBagRemove(st, cur, 16);  // [RE 0x44421E sub_441343(cur,16)]
     playCardLine(app, cur, 15, 3);  // [RE 0x44424D 使用者台词 夢遊 expr3]
     const int orig = bitScanPlayer(static_cast<uint32_t>(v));  // [RE 0x44423x]
-    if (orig < 0 || orig >= 4) {
+    if (orig < 0) {
         return 0;
     }
-    if (st.players[orig].byte54 != 0) {  // [RE 0x44423F] 已冬眠 → 不叠加
+    if (orig >= 4) {
+        // [RE 0x44449E] 事件槽 NPC（4..7）→ timerB=5（仅 timerA==0 时；冬眠中不叠加）
+        NpcSlot80& slot = st.npcSlots[orig - 4];
+        if (slot.timerA == 0) {
+            slot.timerB = 5;  // [RE 0x4444AC]
+        }
+        renderGameFrame(app);
+        RICH4_LOGI("cardSleepwalk: NPC %d timerB=%d (RE 0x4441DC)", orig, slot.timerB);
+        return 1;
+    }
+    if (st.players[orig].byte54 != 0) {  // [RE 0x4442BE] 已冬眠 → 不叠加（吞卡后无动作）
+        renderGameFrame(app);
         return 1;
     }
     addPlayerDebt(st, orig, cur, 150 * st.moneyMul);  // [RE 0x44426C]
@@ -693,8 +721,8 @@ int cardEffectSleepwalk(Application& app) {
             playLine(app, t, kCardVictimLines[ci], 1);
         }
     }
-    st.players[t].state37 = static_cast<uint8_t>((t != cur) ? 5 : 4);  // [RE 0x4442F4]
-    st.players[t].byte58 = static_cast<uint8_t>(st.players[t].byte58 + 5);  // [RE byte_496BAA? +58]
+    st.players[t].state37 = static_cast<uint8_t>((t != cur) ? 5 : 4);  // [RE 0x444369]
+    st.players[t].byte66 = static_cast<uint8_t>(st.players[t].byte66 + 5);  // [RE 0x444372 unk_496BAA]
     stripVehicle(st, t);  // [RE 0x4442BC 段]
     // [RE 0x4443xx] 原目标未被转嫁且持復仇卡(18) → 復仇：拖使用者下水 5 天
     if (t == orig && cardBagHas(st, orig, 18)) {
@@ -719,10 +747,17 @@ int cardEffectFrame(Application& app) {
     cardBagRemove(st, cur, 17);  // [RE 0x444501 sub_441343(cur,17)]
     playCardLine(app, cur, 16, 3);  // [RE 0x444534 使用者台词 陷害 expr3]
     const int orig = bitScanPlayer(static_cast<uint32_t>(v));  // [RE 0x44450x]
-    if (orig < 0 || orig >= 4) {
+    if (orig < 0) {
         return 0;
     }
-    addPlayerDebt(st, orig, cur, 150 * st.moneyMul);  // [RE 0x444539]
+    if (orig >= 4) {
+        // [RE 0x44467D] 事件槽 NPC（4..7）→ 坐牢 5 天（jailPlayer(cur, npc, 5)）
+        jailPlayer(app, orig, 5);
+        renderGameFrame(app);  // [RE sub_41D546]
+        RICH4_LOGI("cardFrame: NPC %d jailed 5d (RE 0x4444BF)", orig);
+        return 1;
+    }
+    addPlayerDebt(st, orig, cur, 150 * st.moneyMul);  // [RE 0x4445C1]
     // [RE 0x44454C/0x444560] 免罪(21) → 抵消；嫁祸(19) → 改目标
     const int r = resolvePenaltyTarget(app, orig);
     if (r == -1) {
@@ -767,9 +802,9 @@ int cardEffectTaxAudit(Application& app) {
         renderGameFrame(app);
         return 1;
     }
-    // [RE 0x4452A7] 嫁祸(19)（税额 > 2000 才可用）→ 改目标
+    // [RE 0x4452A7] 嫁祸(19)（税额 > 2000 才可用）→ 改目标（a2=2：AI 仅当 4000×M < 现金×0.2）
     if (cardBagHas(st, t, 19) && tax > 2000) {
-        const int r = passOnCardDialog(app, t);
+        const int r = passOnCardDialog(app, t, 2, 0);
         if (r != -1) {
             t = r;
         }
@@ -778,7 +813,8 @@ int cardEffectTaxAudit(Application& app) {
         tax = static_cast<int32_t>(st.players[t].cash * 0.2);  // [RE 0x4452E0 重算]
         transferMoney(app, t, cur, tax, 0);                     // [RE 0x4453A4]
         char text[192];
-        std::snprintf(text, sizeof text, "%s被課稅%d元", playerNameNoSpace(st, t).c_str(), tax);
+        std::snprintf(text, sizeof text, "抽取%s\n\n%d元稅金！", playerNameNoSpace(st, t).c_str(),
+                      tax);
         showMessage(app, text, 1500);         // [RE 0x4453EF unk_4653C0]
         playCardLine(app, t, kSpeechTaxTarget, 2);  // [RE 0x445419 目标台词 expr2（转账+消息后）]
     }
@@ -896,7 +932,7 @@ int cardEffectTurtle(Application& app) {
         return 0;
     }
     const int t = bitScanPlayer(static_cast<uint32_t>(v));  // [RE 0x44591x]
-    if (t < 0 || t >= 4) {
+    if (t < 0) {
         return 0;
     }
     cardBagRemove(st, cur, 30);  // [RE 0x44592E sub_441343(cur,30)]
@@ -904,12 +940,21 @@ int cardEffectTurtle(Application& app) {
     if (t != cur) {
         playCardLine(app, cur, 29, 3);
     }
+    if (t >= 4) {
+        // [RE 0x4459D2] 事件槽 NPC（4..7）→ timerD=3（NPC 固定步数）
+        st.npcSlots[t - 4].timerD = 3;
+        renderGameFrame(app);
+        RICH4_LOGI("cardTurtle: NPC %d timerD=3 (RE 0x4458DF)", t);
+        return 1;
+    }
     // [RE 0x4459EE 自己槽59 expr3 / 0x445A25 目标槽89 expr2]
     playCardLine(app, t, (t == cur) ? kSpeechTurtleSelf : kSpeechTurtleTarget, (t == cur) ? 3 : 2);
     if (t == cur) {
         st.players[t].fixedStep = 2;  // [RE 0x44595x]
     } else {
         st.players[t].fixedStep = 3;  // [RE 0x44597x]
+        st.manualView = false;        // [RE 0x445A37 sub_41D546]
+        renderGameFrame(app);
     }
     RICH4_LOGI("cardTurtle: p%d -> p%d fixedStep=%u (RE 0x4458DF)", cur, t,
                st.players[t].fixedStep);
@@ -1100,7 +1145,7 @@ int cardEffectRedStock(Application& app) {
     if (v == 0) {
         return 0;
     }
-    st.stockNews[v - 1] = 0x30;  // [RE byte_496987=32] 高 4 位 3 = 涨停 3 天
+    st.stockNews[v - 1] = 0x20;  // [RE 0x444F9A unk_496987[36*]=32] 高半字节=2（当天 + 后续 2 天）
     stockNewsApply(app, v);      // [RE 0x429040]
     if (st.players[cur].alive != 1) {
         // [RE 0x444FA8/0x444FC9] AI 分支消息"對%s使用%s！"：公司名 copyNameNoSpaces 去空格
@@ -1131,7 +1176,7 @@ int cardEffectBlackStock(Application& app) {
     if (v == 0) {
         return 0;
     }
-    st.stockNews[v - 1] = 0x03;  // [RE byte_496987=2] 低 4 位 3 = 跌停 3 天
+    st.stockNews[v - 1] = 0x02;  // [RE 0x4450F6 unk_496987[36*]=2] 低半字节=2（当天 + 后续 2 天）
     stockNewsApply(app, v);      // [RE 0x429040]
     if (st.players[cur].alive != 1) {
         // [RE 0x445121/0x445142] AI 分支消息"對%s使用%s！"：公司名 copyNameNoSpaces 去空格
