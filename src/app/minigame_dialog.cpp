@@ -819,20 +819,24 @@ void moneyTick(MoneyCtx& ui, bool runLogic) {
         blitSpriteFrame(dst, ui.cloud, ui.cloudFrame, ui.cloudX, 125);
     }
     blitSpriteFrame(dst, ui.rich, kRichFrames[ui.richState][ui.richFrame], ui.richX, 126);
-    if (runLogic && ui.gamePhase != 2 && !ui.boomActive) {  // 娃娃跟随鼠标
-        float mx = 0, my = 0;
-        SDL_GetMouseState(&mx, &my);
-        const int diff = ui.dollX - static_cast<int>(mx);
-        if (std::abs(diff) > 8) {
-            if (diff > 0) {
-                ui.dollDir = 1;
-                ui.dollX -= 10;
-            } else if (diff < 0) {
-                ui.dollDir = 2;
-                ui.dollX += 10;
-            }
-            ui.dollWalk = (ui.dollWalk + 1) % ui.dollHalf;
+    // [RE 0x4135F4] 娃娃跟随鼠标（原版 GetCursorPos；640x480 全屏下光标坐标 = 逻辑坐标）
+    if (runLogic && ui.gamePhase != 2 && !ui.boomActive) {
+        // [PORT Win32:GetCursorPos] 窗口化 + letterbox 缩放后，窗口坐标 ≠ 逻辑坐标：
+        //   原先直接 SDL_GetMouseState 取窗口像素，非 1:1 窗口（默认 1280x960 = 2x）下
+        //   娃娃追的目标偏右一倍 → 一路贴右边缘不跟手；且绕过鼠标覆盖，headless/调试
+        //   move 命令无法驱动。改走 Application::mouseLogicalPos（窗口→逻辑换算 +
+        //   m_mouseOv 合成输入）。
+        int mx = 0;
+        int my = 0;
+        ui.app->mouseLogicalPos(mx, my);
+        // [PORT 0x41361C/0x41363C] 原版用 SetCursorPos 把光标夹在 640x480 内（全屏下光标
+        //   不可能越界）；窗口化不劫持系统光标，改为夹取采样值——对娃娃判定等价。
+        if (mx < 0) {
+            mx = 0;
+        } else if (mx > 639) {
+            mx = 639;
         }
+        ui.dollX = moneyDollFollowStep(ui.dollX, mx, ui.dollDir, ui.dollWalk, ui.dollHalf);
     }
     const int df = ui.dollDir != 0 ? ui.dollWalk + ui.dollHalf * (ui.dollDir - 1) + 5
                                    : ui.dollExpr;
@@ -1362,6 +1366,31 @@ int miniGameBalloonsRun(Application& app) {
 }
 
 } // namespace
+
+// [RE 0x4135F4/0x41364D] 喜從天降 娃娃跟随鼠标单步判定（定义见 include/game/app/minigame.h）
+// 依据: moneyTick 0x413248 反汇编——
+//   0x413654 `sub esi,[Point.x]` / 0x413659 `abs` / 0x413661 `cmp eax,8; jle 0x4136C1`
+//     （|diff| <= 8 直接跳到跟随段之后：**dir 保持原值、行走帧不推进**）
+//   0x41366A `48BD48=1` + 0x413673 `sub word[48BD4E],0Ah`（diff > 0 → 左行 10px）
+//   0x41367F `48BD48=2` + 0x413688 `add word[48BD4E],0Ah`（diff < 0 → 右行 10px）
+//   0x413692 `48BD48=0` 分支不可达（仅 diff==0 时进入，而 diff==0 已被死区分支拦下）
+//   0x41369B..0x4136BA 行走帧 `48BD50 = (48BD50+1) % 48BD52`（48BD52 = half，仅移动时推进）
+int moneyDollFollowStep(int dollX, int cursorLogicalX, int& dir, int& walk, int walkHalf) {
+    const int diff = dollX - cursorLogicalX;
+    if (diff > 8) {
+        dir = 1;
+        dollX -= 10;
+    } else if (diff < -8) {
+        dir = 2;
+        dollX += 10;
+    } else {
+        return dollX;  // 死区：dir 不清零、行走帧不推进（原版 quirk，勿"顺手修"）
+    }
+    if (walkHalf > 0) {
+        walk = (walk + 1) % walkHalf;
+    }
+    return dollX;
+}
 
 // [RE 0x415457] miniGameVisit：三种小游戏落地统一入口（case 6/7/8 =
 //   miniGameDig 0x415215 / miniGameBalloons 0x4154DC / miniGameMoneyRain 0x4155FC；

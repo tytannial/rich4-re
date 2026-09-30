@@ -17,4 +17,13 @@ class Application;
 // 差异: 四大恶人（事件槽 4..7）按项目决策直接忽略（原版 NPC 亦随机得分）。
 void miniGameVisit(Application& app, int cellType);
 
+// [RE 0x4135F4/0x41364D] 喜從天降（case 8）娃娃跟随鼠标的单步判定（纯函数，供 L0 单测锁定）。
+// 原版语义（moneyTick 0x413248）: diff = dollX - cursorX；
+//   |diff| <= 8 → 不动（**dir 不清零**、行走帧不推进 = 原版 quirk）；
+//   diff > 8 → dir=1 且 dollX -= 10；diff < -8 → dir=2 且 dollX += 10；移动时行走帧 +1 回绕。
+// 返回新的 dollX；dir/walk 就地更新。
+// [PORT Win32:GetCursorPos] 原版全屏 640x480 下光标坐标即游戏逻辑坐标；窗口化后调用方
+//   必须先把光标换算为逻辑坐标并夹取到 0..639（原版 SetCursorPos 使光标不可能越界）。
+int moneyDollFollowStep(int dollX, int cursorLogicalX, int& dir, int& walk, int walkHalf);
+
 } // namespace rich4
