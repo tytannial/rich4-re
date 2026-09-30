@@ -13,6 +13,7 @@
 #include "game/app/event_common.h"
 #include "game/app/event_stack.h"
 #include "game/app/facility_dialog.h"
+#include "game/app/game_loop.h"
 #include "game/app/item_bag_dialog.h"
 #include "game/app/map_objects.h"
 #include "game/app/map_render.h"
@@ -69,6 +70,9 @@ struct CardBagState {
 
 // [RE 0x441B0A] drawCardBag：帧0 背景 + 5×3 网格卡名（非空槽）
 void renderCardBag(CardBagState& s) {
+    // [RE 0x441C90 sub_451EDB(v3,0,0x8028)] 每次模态返回后恢复背景（原版 saveBackground/
+    //   restoreBackground 配对；重写等价 = 面板绘制前全屏重绘 → 抹掉上次卡片特写/面板残留）
+    renderGameFrame(*s.app);
     drawCardBagAt(*s.app, *s.sheet, s.cur, kPanelX, kPanelY);
     Surface& dst = s.app->surface();
     // [RE 0x44184A] 按住格 highlightRect 下沉浮雕（1px/kChannelHalf；原版无白框）
@@ -257,9 +261,14 @@ int cardRebuildEffect(Application& app) {
             return 0;
         }
         playCardLine(app, cur, 6, 3);  // [RE 0x4431AA 使用者台词 改建 expr3（弹设施面板前）]
-        const int r = selectFacilityDialog(app, 1);  // [RE 0x4431C4]
-        if (r < 0) {
-            return 0;
+        int r = 0;
+        if (st.players[cur].alive == 1) {
+            r = selectFacilityDialog(app, 1);  // [RE 0x4431C4] 人类：弹设施选择面板
+            if (r < 0) {
+                return 0;  // 取消 → 不消耗
+            }
+        } else {
+            r = st.aiCardTarget;  // [RE 0x4431D4..0x4431DC sub_41E6F2(0)] AI：预选设施类型
         }
         cp.type = static_cast<uint8_t>(r);
         if ((cp.type == 0 || cp.type == 3) && cp.sub > 1) {  // 公園/加油站 降级 [RE 0x4431FC]
@@ -343,7 +352,8 @@ void useCardDialog(Application& app) {
         if (cardEffect(app, id) != 0) {
             break;  // 效果非 0 → 结束
         }
-        // 效果返回 0 → 重弹面板再选
+        // [RE 0x441CD1/0x441CD9] 效果返回 0（无效/取消）→ g_uiSoundMusicTip 提示音 + 重弹面板再选
+        app.audio().playEffect(3);
     }
 }
 
@@ -507,8 +517,8 @@ int selectCardOrItemFromPlayerDialog(Application& app, int targetPlayer) {
     return runModal(app, &giftSelectHandler, &s, 0);
 }
 
-// [RE 0x44476A] 嫁祸卡目标选择（a2=0, a3=0：直接选目标，AI 自动）
-int passOnCardDialog(Application& app, int user) {
+// [RE 0x44476A] 嫁祸卡目标选择（mode=0 惩罚 / 1 收费 / 2 查税；fee = 收费金额）
+int passOnCardDialog(Application& app, int user, int mode, int32_t fee) {
     GameState& st = app.gameState();
     if (user < 0 || user >= 4) {
         return -1;
@@ -523,6 +533,21 @@ int passOnCardDialog(Application& app, int user) {
         }
         if (target == -1) {
             return -1;
+        }
+        // [RE 0x4448D4..0x44496F] AI 使用阈值（mode 1/2；不满足则不嫁祸）
+        if (mode == 1) {
+            // 费用 > 现金 或 (rand%4000+4000)×M < fee 才嫁祸（反之自己付）
+            const int32_t v9 =
+                (static_cast<int32_t>(rng::next() % 4000) + 4000) * st.moneyMul;  // [RE 0x444903]
+            if (!(fee > st.players[user].cash || v9 < fee)) {
+                return -1;
+            }
+        } else if (mode == 2) {
+            // 4000×M < 现金×0.2 才嫁祸（dbl_465380=0.2）[RE 0x444934..0x44496F]
+            const double v10 = static_cast<double>(st.players[user].cash) * 0.2;
+            if (!(static_cast<double>(4000 * st.moneyMul) < v10)) {
+                return -1;
+            }
         }
         std::snprintf(text, sizeof text, "%s\n\n嫁禍卡生效！", playerNameNoSpace(st, user).c_str());
         showCardGet(app, 19, text); // [RE 0x44476A sub_441F73(19,...)]

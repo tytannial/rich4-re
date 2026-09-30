@@ -789,7 +789,11 @@ int stockPickDialog(Application& app, int mode) {
     s.pressedBtn = -1;
     s.pickMode = mode;
     s.closed = false;  // 选股不受休市限制
-    return runModal(app, &stockPanelHandler, &s);
+    // [RE 0x444FF0/0x4450B4] 红/黑卡选股动画光标（索引 12、15 帧、10ms）；退出恢复箭头
+    app.cursor().select(12, 15, 10);
+    const int r = runModal(app, &stockPanelHandler, &s);
+    app.cursor().select(41, 1, 0);  // [RE 0x44500C/0x4450CE]
+    return r;
 }
 
 } // namespace rich4

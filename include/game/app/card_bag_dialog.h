@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 namespace rich4 {
 
 class Application;
@@ -26,10 +28,14 @@ int cardRebuildEffect(Application& app);
 //   返回 0=取消 / 卡 = 卡 id / 道具 = 0x8000|道具 id。
 int selectCardOrItemFromPlayerDialog(Application& app, int targetPlayer);
 
-// [RE 0x44476A] passOnCardDialog：嫁祸卡（19）目标选择（原版 sub_44476A(user,0,0)）。
+// [RE 0x44476A] passOnCardDialog：嫁祸卡（19）目标选择（sub_44476A(user, mode, fee)）。
 //   先显示卡图 "%s\n\n嫁禍卡生效！"；人类：1 候选 → askDialog「是否嫁禍給%s？」、
 //   多候选 → selectPlayerDialog「請選擇嫁禍對象...」；AI：findMaxCreditor（无则随机存活
 //   无状态玩家）→ showMessage「嫁禍給%s！」。选定消耗卡 19，返回目标；取消/无目标 -1。
-int passOnCardDialog(Application& app, int user);
+//   mode=0（命运/新闻惩罚/梦游/陷害）：AI 直接嫁祸；
+//   mode=1（住宅/商業/行業設施收费 0x419EB8/0x41A683/0x41AF75）：AI 仅当
+//     fee > 现金 或 (rand%4000+4000)×M < fee 时嫁祸；
+//   mode=2（查税 0x445360）：AI 仅当 4000×M < 现金×0.2 时嫁祸。
+int passOnCardDialog(Application& app, int user, int mode = 0, int32_t fee = 0);
 
 }  // namespace rich4

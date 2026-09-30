@@ -186,8 +186,10 @@ struct TargetSelCtx {
     uint16_t flags = 0;
     uint8_t filter = 0;  // [RE 0x445E4D BYTE1] 高字节 case 1..8 过滤（非 0 时取代 flags 判定）
     int cursorType = 0;
+    int cursorFrames = 1; // [RE 0x445E4D mode BYTE3+1] dword_48C58C：命中光标动画帧数
     int selected = 0;   // dword_48C584
     int curCursor = -1; // dword_48C580
+    int curFrames = -1; // 当前光标帧数（同 type 不同帧数也需重设）
     // [RE 0x445E4D flags&0x80] 地图滚动模式（飞弹/核弹选屏外目标）
     bool scrollMode = false;
     int edgeDir = 0;      // 0=视口内 1上 2左 3下 4右（dword_48C568）
@@ -206,8 +208,9 @@ struct TargetSelCtx {
 
 // 拾取 id 规范化函数定义见文件顶部（导出供 AI 预选使用）
 void setCursor(TargetSelCtx& c, int type, int frames, int delay) {
-    if (c.curCursor != type) {
+    if (c.curCursor != type || c.curFrames != frames) {
         c.curCursor = type;
+        c.curFrames = frames;
         c.app->cursor().select(type, frames, delay);
     }
 }
@@ -224,9 +227,10 @@ void updateTargetHover(TargetSelCtx& c, int mx, int my) {
         allowed = isEmptyLandObject(st, v);  // [USER] 无主空地（傳送機人物/神明/物品目的地）
     }
     if (allowed) {
-        // [RE 0x445E4D LABEL_140] 命中：记选中（规范化为原版编码）+ 光标换类型
+        // [RE 0x445E4D LABEL_140 → 0x4465DD] 命中：记选中 + 光标换类型（帧数 = mode BYTE3+1，
+        //   卡牌选目标 = 0x0E→15 帧动画光标、延时 10ms）
         c.selected = normalizeHitId(v);
-        setCursor(c, c.cursorType, 1, 10);
+        setCursor(c, c.cursorType, c.cursorFrames, 10);
     } else {
         c.selected = 0;
         setCursor(c, 5, 1, 0);  // 默认指针
@@ -360,6 +364,7 @@ int selectTargetDialog(Application& app, int mode, bool allowEmptyLand) {
         c.flags = static_cast<uint16_t>(0x80 | 0x37);
     }
     c.cursorType = (mode >> 16) & 0xFF;
+    c.cursorFrames = ((mode >> 24) & 0xFF) + 1;  // [RE 0x445EC1] dword_48C58C=(mode>>24)+1
     c.scrollMode = (c.flags & 0x80) != 0;
     // 保存进入前视口状态（退出恢复；滚动/非滚动统一）
     c.savedManualView = st.manualView;
