@@ -1093,10 +1093,15 @@ void playHighlightBlink(Application& app, bool preRedraw) {
     }
     RICH4_LOGI("route highlight: %zu estates + %zu corps -> %zu shapes (RE 0x451985)",
                st.highlightEstates.size(), st.highlightCorps.size(), st.highlightShapes.size());
-    auto waitAudio = [&app](int ms) {
-        for (int t = 0; t < ms; t += 5) {
+    // [NEW M4-A2] 帧节拍（绝对截止时刻；绘制耗时计入帧间隔）
+    uint64_t deadline = nowMs();
+    auto waitAudio = [&app, &deadline](int ms) {
+        deadline += static_cast<uint64_t>(ms);
+        for (;;) {
             app.audio().update();
-            delayMs(5);
+            if (!frameWaitStep(deadline)) {
+                break;
+            }
         }
     };
     auto presentFrame = [&](int f) {
@@ -1208,9 +1213,13 @@ void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, boo
     // [RE 0x45144F] g_flcInterruptible（flcOpen flags bit1）：原版延时循环内
     //   PeekMessage 检测 514/517/257 → v6=1 提前退出（停在当前帧、不重绘）
     //   光标隐藏由 Application::renderFrame 按 eventFlcActive 统一驱动
+    // [NEW M4-A2] 帧节拍 = 绝对截止时刻（绘制耗时计入帧间隔）——画布放大后每帧绘制
+    //   变慢不再拖慢动画总时长（原版绘制≈瞬时，此改动逼近原版观感）
+    uint64_t deadline = nowMs();
     bool aborted = false;
     while (!aborted && st.eventFlc.nextFrame()) {
         ++frameNo;
+        deadline += static_cast<uint64_t>(interval);
         if (preserve && rw > 0 && rh > 0) {
             if (!switched && frameNo >= switchFrame) {
                 // [RE 0x450F04] 切换帧 = sub_40829D(-1,0)：**以动画开始前的视口**全量重绘
@@ -1259,13 +1268,16 @@ void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, boo
         }
         // [RE 0x45144F] 打断检测（g_flcInterruptible=flags bit1）：原版在帧间延时循环内
         //   PeekMessage 检测 514/517/257 → v6=1 提前结束，表面停在当前帧（不重绘）
-        for (int t = 0; t < interval; t += 5) {
+        // [NEW M4-A2] 睡到帧截止（frameWaitStep 单次 ≤5ms，保持打断检查频率）
+        for (;;) {
             if (interruptible && app.consumeSkipInput()) {
                 aborted = true;
                 break;
             }
+            if (!frameWaitStep(deadline)) {
+                break;
+            }
             app.audio().update();
-            delayMs(5);
         }
         if (aborted) {
             trace::logf("flc skip idx=%d frame=%d (RE 0x45144F g_flcInterruptible)", mkfIndex,

@@ -691,6 +691,13 @@ H  追加四项（射程 → 预览高亮 → 小游戏插值/键盘 → 同格�
      （scale=1 时块=1px，与统一前完全一致）；**性能 free 17 → 9.8 ms/帧、wide 12 → 8.2 ms**
      （`--stats` 实测，headless 纯 CPU；native 5.5 ms）。实机验证命令：`--preset free --stats`。
    - `--stats` 新增（每 120 帧输出 FPS/帧耗时；性能诊断用）。
+4. **窗口放大后动画变慢**（实机反馈"动画效果还有点变慢"）：所有逐帧演出循环的帧间隔
+   原为"绘制完成后再等固定间隔"（绘制耗时**外加**在帧间隔上）——原版绘制≈瞬时无感，
+   放大后每帧多 5~10ms → 动画整体放慢。**修正为绝对节拍**（`frameWaitStep`，
+   `deadline += interval`，绘制耗时**计入**帧间隔）：`playEventFlc` / `playHighlightBlink`
+   / `playSettleFlc`（月结）/ `attachEnd`（飘走）/ `flyObjectSprite`（物件飞行）五处统一；
+   虚拟时钟下 delayMs 仅推进虚拟时间，测试语义与时长断言不变。静态停留
+   （`eventAudioWait`/`showGodNarration`/holdMs）与原版 `sub_45285E` 对齐，保持固定等待。
 
 ### 16.4 已知边界与遗留
 

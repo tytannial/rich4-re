@@ -561,21 +561,22 @@ void attachEnd(Application& app, int p) {
     int frame = (pl.dir + 8 - st.mapRotation) & 7;
     setClipRect(0, 40, 440, 480);
     Surface& dst = app.surface();
-    // [NEW M4-A2] 地图层演出：绘制随画布 scale（裁剪为设计逻辑坐标，blit 内设备化）
+    // [NEW M4-A2] 地图层演出：绘制随画布 scale（裁剪为设计逻辑坐标，blit 内设备化）；
+    //   帧节拍为绝对截止时刻（60ms/帧，绘制耗时计入——放大后不拖慢动画）
+    uint64_t deadline = nowMs();
     for (int i = 0; i < 24; ++i) {
         sy -= 10;
         frame = (frame + 1) & 7;
         if (sy < 40) {
             break;
         }
+        deadline += 60;
         renderGameFrame(app);
         blitSpriteFrameClipped(dst, img, frame, sx, sy, true);
         app.renderFrame();
         app.pumpEvents();
-        const uint64_t end = nowMs() + 60;
-        while (static_cast<int64_t>(nowMs() - end) < 0) {
+        while (frameWaitStep(deadline)) {
             app.audio().update();
-            delayMs(5);
         }
     }
     setClipRect(0, 0, Surface::kWidth, Surface::kHeight);
@@ -1058,10 +1059,12 @@ void flyObjectSprite(Application& app, int objId, int fromX, int fromY, int toX,
     double px = x0;
     double py = y0;
     setClipRect(kSnapX, kSnapY, kSnapX + kSnapW, kSnapY + kSnapH);
+    // [NEW M4-A2] 帧节拍 = 绝对截止时刻（24ms/帧，绘制耗时计入）
+    uint64_t deadline = nowMs();
     for (int i = 0; i < frames; ++i) {
         px += stepX;
         py += stepY;
-        const uint64_t end = nowMs() + 24;
+        deadline += 24;
         // [RE 0x456469] 恢复背景（整区；原版只恢复上一帧精灵矩形，背景不变故等价）
         for (int r = 0; r < kSnapHd; ++r) {
             std::memcpy(dst.pixels() + static_cast<size_t>(kSnapYd + r) * dst.width() + kSnapXd,
@@ -1070,9 +1073,8 @@ void flyObjectSprite(Application& app, int objId, int fromX, int fromY, int toX,
         }
         blitSpriteFrameClipped(dst, *img, dir, static_cast<int>(px), static_cast<int>(py), true);
         app.renderFrame();
-        while (static_cast<int64_t>(nowMs() - end) < 0) {
+        while (frameWaitStep(deadline)) {
             app.audio().update();
-            delayMs(2);
         }
     }
     setClipRect(0, 0, Surface::kWidth, Surface::kHeight);

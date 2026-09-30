@@ -17,4 +17,19 @@ bool virtualClock();
 // 外部驱动步进（供测试主循环/脚本 wait 使用）
 void clockAdvanceMs(uint64_t ms);
 
+// [NEW M4-A2] 帧节拍等待：睡到绝对截止时刻，单次最多 5ms（调用方逐轮喂音频/查打断）。
+//   帧截止时刻 = 帧起点累加帧间隔（**绘制耗时计入帧间隔**）→ 动画总时长与绘制快慢无关
+//   （画布放大后绘制变慢不再拖慢动画；native 行为变化仅在于绘制 ≥5ms 的帧）。
+//   返回 true = 尚未到截止（可继续等待）；false = 已到/超过（立即进入下一帧）。
+//   虚拟时钟下 delayMs 仅推进虚拟时间，行为与测试断言（时长/tick 数）保持不变。
+inline bool frameWaitStep(uint64_t deadline) {
+    const uint64_t now = nowMs();
+    if (now >= deadline) {
+        return false;
+    }
+    const uint64_t remain = deadline - now;
+    delayMs(remain < 5 ? static_cast<uint32_t>(remain) : 5u);
+    return true;
+}
+
 } // namespace rich4

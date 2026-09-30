@@ -409,7 +409,10 @@ void playSettleFlc(SettleCtx& ui, int mkfIndex, int x, int y) {
     ui.flcBg.assign(dst.pixels(), dst.pixels() + static_cast<size_t>(dst.width()) *
                                                        dst.height());
     const int interval = std::max(1, flc.speedMs());
+    // [NEW M4-A2] 帧节拍 = 绝对截止时刻（绘制耗时计入帧间隔）
+    uint64_t deadline = nowMs();
     while (flc.nextFrame()) {
+        deadline += static_cast<uint64_t>(interval);
         std::memcpy(dst.pixels(), ui.flcBg.data(),
                     sizeof(uint16_t) * dst.width() * dst.height());
         // [NEW M4-A2] FLC 当前帧按画布 scale 缩放叠加（色键透明；scale=1 逐像素等价）
@@ -422,13 +425,15 @@ void playSettleFlc(SettleCtx& ui, int mkfIndex, int x, int y) {
         // [RE 0x45144F] g_flcInterruptible（flags bit1，本处表值全含）：帧间延时循环检测
         //   打断输入提前结束（停在当前帧，调用方 drawAfterFlc* 照常重铺终态画面）
         bool skipHit = false;
-        for (int t = 0; t < interval; t += 5) {
+        for (;;) {
             if (app.consumeSkipInput()) {
                 skipHit = true;
                 break;
             }
+            if (!frameWaitStep(deadline)) {
+                break;
+            }
             app.audio().update();
-            delayMs(5);
         }
         if (skipHit) {
             trace::logf("flc skip idx=%d (monthSettle RE 0x45144F)", mkfIndex);
