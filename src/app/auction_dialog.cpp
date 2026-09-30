@@ -340,6 +340,21 @@ void afterRoll(AuctionCtx& ui) {
     ui.state = 2;
 }
 
+// [RE auctionWndProc BYTE1/BYTE2 段] 按 sprite 帧 bbox 擦除到背景：原版每帧
+//   Rect=(590-offX, y-offY, +w, +h) 从背景表面拷回——行头像翻滚必须逐帧擦除，
+//   否则帧间透明 blit 叠加 → 眼球动画重影/错位（0x43A7xx / 0x43ABxx）
+void eraseRowSpriteFrame(AuctionCtx& ui, const UiImage& spr, int frame, int y) {
+    if (frame < 0 || frame >= spr.frameCount()) {
+        return;
+    }
+    Surface& dst = ui.app->surface();
+    const UiFrameView& f = spr.frame(frame);
+    const int ex = kRowX - f.offsetX;
+    const int ey = y - f.offsetY;
+    blitElementRegionOpaque(dst, ui.sheet.frame(kFrameBg), ex, ey, ex, ey, f.width, f.height,
+                            false);
+}
+
 // [RE 0x43A702] BYTE1 出价翻滚动画（气泡 + 头像帧循环）
 void tickRoll(AuctionCtx& ui) {
     Application& app = *ui.app;
@@ -375,7 +390,10 @@ void tickRoll(AuctionCtx& ui) {
         break;
     }
     if (ui.rollCnt <= frameCount && ui.bubble == 0) {
-        const int fr = (ui.rollCnt == frameCount) ? 0 : ui.rollCnt - 1;
+        // [RE 0x43A7xx] 先擦 frame(rollCnt-1) 的 bbox，再画 frame(rollCnt==frameCount?0:rollCnt)
+        //   （原版 v45=rollCnt，末帧回 0；此前重写不擦除且帧号差 1 → 帧叠加错位）
+        eraseRowSpriteFrame(ui, ui.rows[slot].sprRoll, ui.rollCnt - 1, y);
+        const int fr = (ui.rollCnt == frameCount) ? 0 : ui.rollCnt;
         blitSpriteFrame(dst, ui.rows[slot].sprRoll, fr, kRowX, y);
     }
     if (ui.rollCnt <= frameCount || ui.rollCnt < 10) {
@@ -401,10 +419,12 @@ void tickWinRoll(AuctionCtx& ui) {
     const int v14 = ui.winRoll - 1;
     const int slot = ui.leader & 3;
     const int y = kRowY0 + 120 * slot;
-    const int frameCount = ui.rows[slot].sprFace.frameCount();
+    const UiImage& spr = ui.rows[slot].sprFace;
+    const int frameCount = spr.frameCount();
     if (v14 == 0) {
-        drawRow(ui, slot, nullptr, false);
-        blitSpriteFrame(dst, ui.rows[slot].sprFace, 0, kRowX, y);
+        // [RE 0x43ABxx BYTE2==1] 擦 frame0 bbox + 画 frame0
+        eraseRowSpriteFrame(ui, spr, 0, y);
+        blitSpriteFrame(dst, spr, 0, kRowX, y);
         ++ui.winRoll;
         return;
     }
@@ -412,12 +432,12 @@ void tickWinRoll(AuctionCtx& ui) {
         ui.winRoll = 0;
         return;
     }
-    int fr = v14 % frameCount;
-    if (fr == 0) {
-        fr = frameCount;
-    }
-    drawRow(ui, slot, nullptr, false);
-    blitSpriteFrame(dst, ui.rows[slot].sprFace, fr - 1, kRowX, y);
+    // [RE 0x43ABxx] v21 = v14 % frameCount（**含 0**）；擦除帧 = v21?（v21-1）:（frameCount-1）
+    //   （上一循环末帧）；画 frame v21。此前重写画 fr-1 且用表情帧 bbox 擦 → 眼部重影错位
+    const int v21 = v14 % frameCount;
+    const int eraseFr = (v21 != 0 ? v21 : frameCount) - 1;
+    eraseRowSpriteFrame(ui, spr, eraseFr, y);
+    blitSpriteFrame(dst, spr, v21, kRowX, y);
     ++ui.winRoll;
 }
 
