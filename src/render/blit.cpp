@@ -209,6 +209,49 @@ bool blitSpriteFrameClipped(Surface& dst, const UiImage& spr, int frame, int x, 
     return true;
 }
 
+bool blitSpriteFrameFreezeClipped(Surface& dst, const UiImage& spr, int frame, int x, int y,
+                                  bool useClipRect) {
+    // [RE 0x4555C5→funcs_4555DE[2]=0x45566E] 冬眠/梦游"冰冻蓝白"调色板变换：
+    //   原版按运行像素格式分派 4 变体（detectPixelFormat 0=RGB555 1=RGB565 2=BGR565 3=BGR555），
+    //   用户实机对照为蓝白 → dword_47637C=2（BGR565，R mask 0x1F / G 0x7E0 / B 0xF800）。
+    //   0x45566E：gray=(R5+(G6>>1)+B5+40)>>2，输出 565 = (R=gray, G=gray<<1, B=0x1F)
+    //   → 转 555 视觉等价 = (R/G = gray & 0x1F, B = 31)（gray 可到 33，原版未饱和、
+    //   按位域环绕，故此处同样 &=0x1F；此前误用纯灰 (gray,gray,gray) 且 gray>31 时
+    //   <<10 溢出 bit15 → 花屏）。
+    if (!spr.isSprite() || frame < 0 || frame >= spr.frameCount()) {
+        return false;
+    }
+    const uint16_t* palette = spr.palette();
+    const uint8_t* src = spr.frameBytes(frame);
+    if (!palette || !src) {
+        return false;
+    }
+    const UiFrameView& f = spr.frame(frame);
+    const ClipResult c = clipBlit(f, x, y, 0, 0, f.width, f.height, useClipRect, dst.width(),
+                                  dst.height());
+    if (!c.visible) {
+        return false;
+    }
+    const uint8_t* s = src + static_cast<size_t>(c.sy) * f.width + c.sx;
+    uint16_t* d = dst.pixels() + static_cast<size_t>(c.dy) * dst.width() + c.dx;
+    for (int row = 0; row < c.h; ++row) {
+        for (int col = 0; col < c.w; ++col) {
+            const uint8_t index = s[col];
+            if (index) {
+                const uint16_t p = palette[index];
+                const int r = (p >> 10) & 0x1F;
+                const int g = (p >> 5) & 0x1F;
+                const int b = p & 0x1F;
+                const int gray = ((r + g + b + 40) >> 2) & 0x1F;  // [RE 0x45566E] 位域环绕
+                d[col] = static_cast<uint16_t>((31 << 10) | (gray << 5) | gray);
+            }
+        }
+        s += f.width;
+        d += dst.width();
+    }
+    return true;
+}
+
 void convertImageChannels(uint16_t* dst, const uint16_t* src, size_t pixelCount,
                           const uint8_t table[32]) {
     // [RE 0x4552B7 → 0x455337] 依据: 每像素 R/G/B 各 5bit 查表后重组 RGB555

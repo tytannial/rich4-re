@@ -53,6 +53,15 @@ bool blitSpriteFrame(Surface& dst, const UiImage& spr, int frame, int x, int y);
 bool blitSpriteFrameClipped(Surface& dst, const UiImage& spr, int frame, int x, int y,
                             bool useClipRect);
 
+// [RE 0x4555C5 → funcs_4555DE[2]=0x45566E] 冬眠/梦游棋子"冰冻蓝白"帧绘制
+// 依据: 0x40829D 对 byte54(冬眠)/事件槽 timerA(0x4089C8) 的角色调 sub_4555C5 → 按运行像素格式
+//       分派 4 变体逐项变换调色板（detectPixelFormat: 0=RGB555 1=RGB565 2=BGR565 3=BGR555）。
+//       用户实机对照 = 蓝白（BGR565 分支 0x45566E: gray=(R+G+B+40)>>2，输出 (R=gray,G=2gray,
+//       B=31)）→ 重写 RGB555 视觉等价 = (R/G=gray&0x1F, B=31)（gray 可到 33，原版不饱和、
+//       位域环绕）。blit 按索引 0 透明（调色板项 0 不参与像素输出）
+bool blitSpriteFrameFreezeClipped(Surface& dst, const UiImage& spr, int frame, int x, int y,
+                                  bool useClipRect);
+
 // [RE 0x4552B7] convertImageChannels（经 0x455337 16bit 分支）
 // 依据: 0x455337 对每像素 R/G/B 各 5bit 查 32 字节表后重组 RGB555
 //       （表 = unk_485D68 + 32*a6，-16 = kChannelHalf，-20 = kChannelThird）

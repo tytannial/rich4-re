@@ -48,6 +48,7 @@ struct SpriteDraw {
     const UiImage* hitSpr = nullptr; // [RE 0x409B18] 拾取形状（null = 用 spr）
     int hitFrame = 0;
     bool objLife = false;  // [RE 0x4098BD] cellTable 炸弹挂身 → 头顶画寿命数字
+    bool gray = false;     // [RE 0x4087BE/0x4089C8] 冬眠（byte54/timerA）棋子灰化
 };
 
 // [RE 0x407A2C] 像素坐标 -> 等距屏幕偏移
@@ -296,7 +297,7 @@ void renderMap(Application& app, int centerX, int centerY) {
         return true;
     };
     auto addItem = [&](const UiImage* spr, int frame, int px, int py, int colorIdx, uint16_t id,
-                       const UiImage* hitSpr = nullptr, int hitFrame = 0) {
+                       const UiImage* hitSpr = nullptr, int hitFrame = 0, bool gray = false) {
         if (!spr || spr->frameCount() <= 0) {
             return;
         }
@@ -311,7 +312,7 @@ void renderMap(Application& app, int centerX, int centerY) {
         if (!projectItem(px, py, sx, sy)) {
             return;
         }
-        items.push_back({spr, frame, sx, sy, colorIdx, id, hitSpr, hitFrame});
+        items.push_back({spr, frame, sx, sy, colorIdx, id, hitSpr, hitFrame, false, gray});
     };
 
     // [RE 0x40829D estate/corp 循环 + 0x456C33] flag 蒙膜：estate(+23)/corp(+28) flag≠0
@@ -387,7 +388,16 @@ void renderMap(Application& app, int centerX, int centerY) {
         if (frame >= res->frameCount()) {
             frame = res->frameCount() - 1;
         }
-        addItem(res, frame, p.spriteX, p.spriteY, -1, static_cast<uint16_t>(0xF000u | j));
+        // [RE 0x4087BE] 玩家冬眠（byte54≠0）/ [RE 0x4089C8] 事件槽 NPC 冬眠（timerA≠0）
+        //   → 棋子"冰冻蓝白"变换（sub_4555C5 → funcs_4555DE[2] 蓝白分支等价）
+        bool gray = false;
+        if (j < 4) {
+            gray = state.players[j].byte54 != 0;
+        } else if (j >= 4 && j < 8) {
+            gray = state.npcSlots[j - 4].timerA != 0;
+        }
+        addItem(res, frame, p.spriteX, p.spriteY, -1, static_cast<uint16_t>(0xF000u | j), nullptr,
+                0, gray);
     };
     for (int j = 0; j < state.playerCount && j < 9; ++j) {
         drawPiece(j);
@@ -669,7 +679,11 @@ void renderMap(Application& app, int centerX, int centerY) {
             } else if (it.colorIdx <= state.playerCount) {
                 it.spr->setPaletteEntry(255, rgb888To555(state.players[it.colorIdx - 1].color));
             }
-            blitSpriteFrameClipped(dst, *it.spr, it.frame, it.x, it.y, true);
+            if (it.gray) {
+                blitSpriteFrameFreezeClipped(dst, *it.spr, it.frame, it.x, it.y, true);
+            } else {
+                blitSpriteFrameClipped(dst, *it.spr, it.frame, it.x, it.y, true);
+            }
         } else {
             blitElement(dst, it.spr->frame(it.frame), it.x, it.y, true);
         }
