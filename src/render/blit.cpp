@@ -79,26 +79,18 @@ ClipResult clipBlit(const UiFrameView& src, int x, int y, int srcX, int srcY, in
 
 } // namespace
 
-// [NEW M4-A2] 缩放 blit 核心（nearest 采样）：把源区域按画布 scale 采样到逻辑目标。
+// [NEW M4-A2] 缩放 blit 核心：源像素（逻辑像素）逐一展开为设备块。
 //   src = 源像素基址；srcPitchBytes = 源每行字节数；
 //   palette != nullptr → 8bit 索引 + 调色板（SPR，索引 0 透明）；
 //   palette == nullptr → RGB555（每像素 2B；opaque=false 时像素 == colorKey 透明）。
-//   逻辑目标左上 (logX, logY)（调用方已减去帧 offset）；源区域 (srcX, srcY, w, h)，
-//   逻辑尺寸 (w, h) 放大为设备 dw×dh；设备坐标 = round(逻辑 × scale)。
-//   公共导出：UI 层逐像素叠加（FLC/RAW 位图）复用，避免每处重复设备化+采样。
+//   逻辑目标左上 (logX, logY)（调用方已减去帧 offset）；源区域 (srcX, srcY, w, h) 与逻辑
+//   目标尺寸同为 (w, h)：每个源像素 (lx,ly) 填设备块
+//   [logicalToDevice(lx), logicalToDevice(lx+1)) × [..ly..)——**像素完美**（无逐设备像素
+//   反查的采样抖动），循环在逻辑粒度且 scale=1 时块=1 像素（与原逐像素路径等价）。
 bool blitScaled(Surface& dst, const uint8_t* src, int srcPitchBytes, const uint16_t* palette,
                 int logX, int logY, int srcX, int srcY, int w, int h, bool useClipRect,
                 bool opaque, uint16_t colorKey) {
     if (!src || w <= 0 || h <= 0) {
-        return false;
-    }
-    const int dx0 = dst.logicalToDevice(logX);
-    const int dy0 = dst.logicalToDevice(logY);
-    const int dx1 = dst.logicalToDevice(logX + w);
-    const int dy1 = dst.logicalToDevice(logY + h);
-    const int dw = dx1 - dx0;
-    const int dh = dy1 - dy0;
-    if (dw <= 0 || dh <= 0) {
         return false;
     }
     int clipL = 0;
@@ -106,43 +98,65 @@ bool blitScaled(Surface& dst, const uint8_t* src, int srcPitchBytes, const uint1
     int clipR = dst.width();
     int clipB = dst.height();
     if (useClipRect) {
-        // [NEW M4-A2] 全局裁剪为设计逻辑坐标 → 设备化（scale=1 恒等）
+        // 全局裁剪为设计逻辑坐标 → 设备化（scale=1 恒等）
         getClipRect(clipL, clipT, clipR, clipB);
         clipL = dst.logicalToDevice(clipL);
         clipT = dst.logicalToDevice(clipT);
         clipR = dst.logicalToDevice(clipR);
         clipB = dst.logicalToDevice(clipB);
     }
-    const int vx0 = dx0 < clipL ? clipL : dx0;
-    const int vy0 = dy0 < clipT ? clipT : dy0;
-    const int vx1 = dx1 < clipR ? dx1 : clipR;
-    const int vy1 = dy1 < clipB ? dy1 : clipB;
-    if (vx0 >= vx1 || vy0 >= vy1) {
-        return false;
-    }
     const bool sprite = palette != nullptr;
-    for (int vy = vy0; vy < vy1; ++vy) {
-        const int sy = srcY + (vy - dy0) * h / dh;
-        const uint8_t* srow = src + static_cast<size_t>(sy) * srcPitchBytes;
-        uint16_t* drow = dst.pixels() + static_cast<size_t>(vy) * dst.width();
-        for (int vx = vx0; vx < vx1; ++vx) {
-            const int sx = srcX + (vx - dx0) * w / dw;
+    uint16_t* base = dst.pixels();
+    const int dstW = dst.width();
+    bool any = false;
+    for (int ly = 0; ly < h; ++ly) {
+        const int y0 = dst.logicalToDevice(logY + ly);
+        const int y1 = dst.logicalToDevice(logY + ly + 1);
+        if (y1 <= y0) {
+            continue;
+        }
+        const int yc0 = y0 < clipT ? clipT : y0;
+        const int yc1 = y1 < clipB ? y1 : clipB;
+        if (yc0 >= yc1) {
+            continue;
+        }
+        const uint8_t* srow = src + static_cast<size_t>(srcY + ly) * srcPitchBytes;
+        for (int lx = 0; lx < w; ++lx) {
+            const int sx = srcX + lx;
+            uint16_t col = 0;
             if (sprite) {
                 const uint8_t idx = srow[sx];
                 if (!opaque && idx == 0) {
                     continue;
                 }
-                drow[vx] = palette[idx];
+                col = palette[idx];
             } else {
                 const uint16_t p = reinterpret_cast<const uint16_t*>(srow)[sx];
                 if (!opaque && p == colorKey) {
                     continue;
                 }
-                drow[vx] = p;
+                col = p;
             }
+            const int x0 = dst.logicalToDevice(logX + lx);
+            const int x1 = dst.logicalToDevice(logX + lx + 1);
+            if (x1 <= x0) {
+                continue;
+            }
+            const int xc0 = x0 < clipL ? clipL : x0;
+            const int xc1 = x1 < clipR ? x1 : clipR;
+            if (xc0 >= xc1) {
+                continue;
+            }
+            for (int yy = yc0; yy < yc1; ++yy) {
+                uint16_t* row = base + static_cast<size_t>(yy) * dstW;
+                for (int xx = xc0; xx < xc1; ++xx) {
+                    row[xx] = col;
+                }
+            }
+            any = true;
         }
     }
-    return true;
+    return any;
 }
 
 void setClipRect(int left, int top, int right, int bottom) {
@@ -378,25 +392,38 @@ void blitScrolledMap(Surface& dst, const uint8_t* src, int offset) {
     if (off < 0) {
         off += kSrcRowBytes;
     }
-    // [NEW M4-A2] scale != 1：逻辑 640x480 预览按画布缩放（nearest）+ 水平环绕采样；
-    //   scale == 1 走下方原逐行环绕路径（逐字节一致）
+    // [NEW M4-A2] scale != 1：每个逻辑像素展开为设备块（像素完美；scale=1 走下方原
+    //   逐行环绕路径，逐字节一致）
     if (dst.scale() != 1.0f) {
         const uint16_t* srcPx = reinterpret_cast<const uint16_t*>(src);
         const int offPix = off / 2; // 源 4 字节对齐 → 2 像素对齐
-        const int cw = dst.logicalToDevice(Surface::kWidth);
-        const int ch = dst.logicalToDevice(Surface::kHeight);
-        const int rows = ch < dst.height() ? ch : dst.height();
-        const int cols = cw < dst.width() ? cw : dst.width();
-        for (int vy = 0; vy < rows; ++vy) {
-            const int sy = vy * kSrcRows / ch;
-            if (sy >= kSrcRows) {
+        uint16_t* base = dst.pixels();
+        const int dstW = dst.width();
+        const int dstH = dst.height();
+        for (int ly = 0; ly < kSrcRows; ++ly) {
+            const int y0 = dst.logicalToDevice(ly);
+            const int y1 = dst.logicalToDevice(ly + 1);
+            const int yc0 = y0 < 0 ? 0 : y0;
+            const int yc1 = y1 < dstH ? y1 : dstH;
+            if (yc0 >= yc1) {
                 continue;
             }
-            const uint16_t* srow = srcPx + static_cast<size_t>(sy) * Surface::kWidth;
-            uint16_t* drow = dst.pixels() + static_cast<size_t>(vy) * dst.width();
-            for (int vx = 0; vx < cols; ++vx) {
-                const int sx = (vx * Surface::kWidth / cw + offPix) % Surface::kWidth;
-                drow[vx] = srow[sx];
+            const uint16_t* srow = srcPx + static_cast<size_t>(ly) * Surface::kWidth;
+            for (int lx = 0; lx < Surface::kWidth; ++lx) {
+                const uint16_t c = srow[(lx + offPix) % Surface::kWidth];
+                const int x0 = dst.logicalToDevice(lx);
+                const int x1 = dst.logicalToDevice(lx + 1);
+                const int xc0 = x0 < 0 ? 0 : x0;
+                const int xc1 = x1 < dstW ? x1 : dstW;
+                if (xc0 >= xc1) {
+                    continue;
+                }
+                for (int yy = yc0; yy < yc1; ++yy) {
+                    uint16_t* row = base + static_cast<size_t>(yy) * dstW;
+                    for (int xx = xc0; xx < xc1; ++xx) {
+                        row[xx] = c;
+                    }
+                }
             }
         }
         return;

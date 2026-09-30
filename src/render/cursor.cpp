@@ -77,36 +77,45 @@ void Cursor::blitFrameDevice(Surface& dst, const UiFrameView& frame, int devX, i
     if ((sprite && (!idx8 || !palette)) || (!sprite && !px16)) {
         return;
     }
-    const int dw = dst.logicalToDevice(frame.width);
-    const int dh = dst.logicalToDevice(frame.height);
-    if (dw <= 0 || dh <= 0) {
-        return;
-    }
-    for (int vy = 0; vy < dh; ++vy) {
-        const int py = devY + vy;
-        if (py < 0 || py >= dst.height()) {
+    // 每个帧像素（逻辑）展开为设备块（像素完美；scale=1 时块=1 像素）
+    const int dstW = dst.width();
+    const int dstH = dst.height();
+    uint16_t* base = dst.pixels();
+    for (int ly = 0; ly < frame.height; ++ly) {
+        const int y0 = devY + dst.logicalToDevice(ly);
+        const int y1 = devY + dst.logicalToDevice(ly + 1);
+        const int yc0 = y0 < 0 ? 0 : y0;
+        const int yc1 = y1 < dstH ? y1 : dstH;
+        if (yc0 >= yc1) {
             continue;
         }
-        const int sy = vy * frame.height / dh;
-        const uint8_t* srow8 = idx8 ? idx8 + static_cast<size_t>(sy) * frame.width : nullptr;
-        const uint16_t* srow16 =
-            px16 ? px16 + static_cast<size_t>(sy) * frame.width : nullptr;
-        uint16_t* drow = dst.pixels() + static_cast<size_t>(py) * dst.width();
-        for (int vx = 0; vx < dw; ++vx) {
-            const int px = devX + vx;
-            if (px < 0 || px >= dst.width()) {
+        const uint8_t* srow8 = idx8 ? idx8 + static_cast<size_t>(ly) * frame.width : nullptr;
+        const uint16_t* srow16 = px16 ? px16 + static_cast<size_t>(ly) * frame.width : nullptr;
+        for (int lx = 0; lx < frame.width; ++lx) {
+            uint16_t col = 0;
+            if (sprite) {
+                const uint8_t idx = srow8[lx];
+                if (idx == 0) {
+                    continue;
+                }
+                col = palette[idx];
+            } else {
+                col = srow16[lx];
+                if (col == 0) {
+                    continue;
+                }
+            }
+            const int x0 = devX + dst.logicalToDevice(lx);
+            const int x1 = devX + dst.logicalToDevice(lx + 1);
+            const int xc0 = x0 < 0 ? 0 : x0;
+            const int xc1 = x1 < dstW ? x1 : dstW;
+            if (xc0 >= xc1) {
                 continue;
             }
-            const int sx = vx * frame.width / dw;
-            if (sprite) {
-                const uint8_t idx = srow8[sx];
-                if (idx != 0) {
-                    drow[px] = palette[idx];
-                }
-            } else {
-                const uint16_t c = srow16[sx];
-                if (c != 0) {
-                    drow[px] = c;
+            for (int yy = yc0; yy < yc1; ++yy) {
+                uint16_t* row = base + static_cast<size_t>(yy) * dstW;
+                for (int xx = xc0; xx < xc1; ++xx) {
+                    row[xx] = col;
                 }
             }
         }

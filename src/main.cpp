@@ -90,6 +90,8 @@ std::vector<std::pair<std::string, int>> gameKeys; // [NEW] --game-key "ctrl+5,1
     float uiScale = 1.0f;
     // [NEW M4-A2] --preset native|wide|free（显示 preset；wide/free 自动缩放并允许 resize）
     std::string presetName = "native";
+    // [NEW M4-A2] --stats：每 120 帧输出 FPS/帧耗时（性能诊断）
+    bool statsOn = false;
     // [NEW] headless 测试钩子（docs/testing.md；无原版对应）
     int testSeed = -1;
     bool headless = false;
@@ -151,6 +153,8 @@ std::vector<std::pair<std::string, int>> gameKeys; // [NEW] --game-key "ctrl+5,1
             // [NEW M4-A2] 显示 preset：native（默认 640x480/1.0）/ wide（1280x720）/
             //   free（窗口 drawable，自动缩放 + resize）
             presetName = argv[++i];
+        } else if (arg == "--stats") {
+            statsOn = true;
         } else if (arg == "--shot" && i + 1 < argc) {
             shotPath = argv[++i];
         } else if (arg == "--shot-frame" && i + 1 < argc) {
@@ -368,6 +372,7 @@ std::vector<std::pair<std::string, int>> gameKeys; // [NEW] --game-key "ctrl+5,1
         RICH4_LOGE("Application init failed");
         return 1;
     }
+    app.setStats(statsOn);
     // [NEW] 调试模式（--debug）：启用 Ctrl+1..8 测试热键
     app.gameState().debugMode = debugMode;
     // [NEW] 装载 headless 测试脚本（docs/testing.md）

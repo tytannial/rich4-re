@@ -41,6 +41,9 @@ public:
     void run();
     void shutdown();
 
+    // [NEW M4-A2] --stats：每 120 帧输出 FPS/帧耗时（定位放大后的性能瓶颈；无原版对应）
+    void setStats(bool on) { m_stats = on; }
+
     // 对应原版 PeekMessageA 消息泵 + WndProc(0x4019DD) 分发
     void pumpEvents();
     // 对应原版 InvalidateRect/WM_PAINT 驱动的表面绘制
@@ -231,6 +234,9 @@ private:
     bool m_headless = false;
     bool m_autoScale = false;     // [NEW M4-A2] free/wide：画布跟随 drawable + resize
     bool m_resizePending = false; // [NEW M4-A2] 待重建画布
+    bool m_stats = false;         // [NEW M4-A2] --stats 性能统计
+    int m_statsFrames = 0;
+    uint64_t m_statsWindowUs = 0;
     Window m_window;
     Renderer m_renderer;
     Input m_input;

@@ -12,32 +12,22 @@ void isoBlitQuad(Surface& dst, const uint8_t* tile, const int16_t quad[4][2],
                  const uint16_t* palette, bool useClipRect) {
     // [RE 0x4557A1] 依据: 4 顶点四边形 + 32x32 8bit 纹理逐行扫描填充；
     // 顶点纹理坐标 (0,0)→(32,0)→(32,32)→(0,32)
+    // [NEW M4-A2] 逻辑域扫描：每个逻辑像素采纹理后展开为设备块
+    //   [logicalToDevice(lx), logicalToDevice(lx+1))——像素完美（无逐设备像素反查抖动），
+    //   且 scale=1 时块=1 像素、计算与原始逐像素路径完全一致（逐字节等价）。
     static constexpr float kTexU[4] = {0.0f, 32.0f, 32.0f, 0.0f};
     static constexpr float kTexV[4] = {0.0f, 0.0f, 32.0f, 32.0f};
-
-    // [NEW M4-A2] 顶点为设计逻辑坐标：scale != 1 时设备化（行扫描 + 纹理插值自动适应；
-    //   scale=1 时 quad 原样，逐字节一致）
-    int16_t scaled[4][2];
-    if (dst.scale() != 1.0f) {
-        for (int i = 0; i < 4; ++i) {
-            scaled[i][0] = static_cast<int16_t>(dst.logicalToDevice(quad[i][0]));
-            scaled[i][1] = static_cast<int16_t>(dst.logicalToDevice(quad[i][1]));
-        }
-        quad = scaled;
-    }
 
     int clipL = 0;
     int clipT = 0;
     int clipR = dst.width();
     int clipB = dst.height();
     if (useClipRect) {
-        getClipRect(clipL, clipT, clipR, clipB);
-        if (dst.scale() != 1.0f) {
-            clipL = dst.logicalToDevice(clipL);
-            clipT = dst.logicalToDevice(clipT);
-            clipR = dst.logicalToDevice(clipR);
-            clipB = dst.logicalToDevice(clipB);
-        }
+        getClipRect(clipL, clipT, clipR, clipB); // 逻辑
+        clipL = dst.logicalToDevice(clipL);
+        clipT = dst.logicalToDevice(clipT);
+        clipR = dst.logicalToDevice(clipR);
+        clipB = dst.logicalToDevice(clipB);
     }
 
     int yMin = quad[0][1];
@@ -46,12 +36,19 @@ void isoBlitQuad(Surface& dst, const uint8_t* tile, const int16_t quad[4][2],
         yMin = std::min(yMin, static_cast<int>(quad[i][1]));
         yMax = std::max(yMax, static_cast<int>(quad[i][1]));
     }
-    yMin = std::max(yMin, clipT);
-    yMax = std::min(yMax, clipB - 1);
+    // 行扫描按逻辑坐标裁剪（设备 clip → 逻辑）
+    const int logClipT = dst.deviceToLogical(clipT);
+    const int logClipB = dst.deviceToLogical(clipB);
+    const int logClipL = dst.deviceToLogical(clipL);
+    const int logClipR = dst.deviceToLogical(clipR);
+    yMin = std::max(yMin, logClipT);
+    yMax = std::min(yMax, logClipB);
     if (yMin > yMax) {
         return;
     }
 
+    uint16_t* base = dst.pixels();
+    const int dstW = dst.width();
     for (int y = yMin; y <= yMax; ++y) {
         float xL = 1e9f;
         float xR = -1e9f;
@@ -91,12 +88,17 @@ void isoBlitQuad(Surface& dst, const uint8_t* tile, const int16_t quad[4][2],
         if (xL > xR) {
             continue;
         }
-        const int xStart = std::max(static_cast<int>(std::ceil(xL)), clipL);
-        const int xEnd = std::min(static_cast<int>(std::floor(xR)), clipR - 1);
+        const int xStart = std::max(static_cast<int>(std::ceil(xL)), logClipL);
+        const int xEnd = std::min(static_cast<int>(std::floor(xR)), logClipR - 1);
         if (xStart > xEnd) {
             continue;
         }
-        uint16_t* row = dst.pixels() + static_cast<size_t>(y) * dst.width();
+        // 目标设备块行（逻辑 y → 设备 [y0, y1)）
+        const int dy0 = std::max(dst.logicalToDevice(y), clipT);
+        const int dy1 = std::min(dst.logicalToDevice(y + 1), clipB);
+        if (dy0 >= dy1) {
+            continue;
+        }
         const float dx = xR - xL;
         const float du = (dx > 1e-6f) ? (uR - uL) / dx : 0.0f;
         const float dv = (dx > 1e-6f) ? (vR - vL) / dx : 0.0f;
@@ -115,7 +117,18 @@ void isoBlitQuad(Surface& dst, const uint8_t* tile, const int16_t quad[4][2],
             } else if (iv > 31) {
                 iv = 31;
             }
-            row[x] = palette[tile[iv * 32 + iu]];
+            const uint16_t col = palette[tile[iv * 32 + iu]];
+            // 设备块填充（逻辑 x → 设备 [x0, x1)）
+            const int dxb0 = std::max(dst.logicalToDevice(x), clipL);
+            const int dxb1 = std::min(dst.logicalToDevice(x + 1), clipR);
+            if (dxb0 < dxb1) {
+                for (int yy = dy0; yy < dy1; ++yy) {
+                    uint16_t* row = base + static_cast<size_t>(yy) * dstW;
+                    for (int xx = dxb0; xx < dxb1; ++xx) {
+                        row[xx] = col;
+                    }
+                }
+            }
             tu += du;
             tv += dv;
         }

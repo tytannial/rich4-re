@@ -93,37 +93,41 @@ void orColorMask(Surface& dst, const UiImage& spr, int frame, int x, int y, uint
     int right = 0;
     int bottom = 0;
     getClipRect(left, top, right, bottom);
-    // [NEW M4-A2] 裁剪/目标全部设备化；逐设备像素采样掩膜（scale=1 时逐像素等价）
+    // [NEW M4-A2] 裁剪设备化；每个掩膜逻辑像素展开为设备块 OR（scale=1 时块=1 像素）
     left = dst.logicalToDevice(left);
     top = dst.logicalToDevice(top);
     right = dst.logicalToDevice(right);
     bottom = dst.logicalToDevice(bottom);
     const int dx = x - src.offsetX;
     const int dy = y - src.offsetY;
-    const int dxDev = dst.logicalToDevice(dx);
-    const int dyDev = dst.logicalToDevice(dy);
-    const int dw = dst.logicalToDevice(src.width);
-    const int dh = dst.logicalToDevice(src.height);
-    if (dw <= 0 || dh <= 0) {
-        return;
-    }
-    for (int vy = 0; vy < dh; ++vy) {
-        const int py = dyDev + vy;
-        if (py < top || py >= bottom) {
+    const int dstW = dst.width();
+    uint16_t* base = dst.pixels();
+    for (int ly = 0; ly < static_cast<int>(src.height); ++ly) {
+        const int y0 = dst.logicalToDevice(dy + ly);
+        const int y1 = dst.logicalToDevice(dy + ly + 1);
+        const int yc0 = y0 < top ? top : y0;
+        const int yc1 = y1 < bottom ? y1 : bottom;
+        if (yc0 >= yc1) {
             continue;
         }
-        const int sy = vy * src.height / dh;
-        const uint8_t* mrow = mask + static_cast<size_t>(sy) * src.width;
-        uint16_t* drow = dst.pixels() + static_cast<size_t>(py) * dst.width();
-        for (int vx = 0; vx < dw; ++vx) {
-            const int px = dxDev + vx;
-            if (px < left || px >= right) {
+        const uint8_t* mrow = mask + static_cast<size_t>(ly) * src.width;
+        for (int lx = 0; lx < static_cast<int>(src.width); ++lx) {
+            if (mrow[lx] == 0) {
                 continue;
             }
-            if (mrow[vx * src.width / dw] == 0) {
+            const int x0 = dst.logicalToDevice(dx + lx);
+            const int x1 = dst.logicalToDevice(dx + lx + 1);
+            const int xc0 = x0 < left ? left : x0;
+            const int xc1 = x1 < right ? x1 : right;
+            if (xc0 >= xc1) {
                 continue;
             }
-            drow[px] |= color;
+            for (int yy = yc0; yy < yc1; ++yy) {
+                uint16_t* row = base + static_cast<size_t>(yy) * dstW;
+                for (int xx = xc0; xx < xc1; ++xx) {
+                    row[xx] |= color;
+                }
+            }
         }
     }
 }
@@ -737,33 +741,41 @@ void renderMap(Application& app, int centerX, int centerY) {
                 const int w = state.diceAnim.width();
                 const int h = state.diceAnim.height();
                 const uint16_t* src = state.diceAnim.pixels();
-                // [NEW M4-A2] 逻辑目标 → 设备矩形 + nearest 采样（色键"亮绿范围"在采样后判断；
-                //   scale=1 时逐像素等价）
-                const int dxDev = dst.logicalToDevice(dx);
-                const int dyDev = dst.logicalToDevice(dy);
-                const int dw = dst.logicalToDevice(w);
-                const int dh = dst.logicalToDevice(h);
-                for (int vy = 0; vy < dh; ++vy) {
-                    const int py = dyDev + vy;
-                    if (py < 0 || py >= dst.height()) {
+                // [NEW M4-A2] 逻辑像素展开为设备块（色键"亮绿范围"按源像素判断；
+                //   scale=1 时块=1 像素，逐像素等价）
+                const int dstW = dst.width();
+                const int dstH = dst.height();
+                uint16_t* base = dst.pixels();
+                for (int ly = 0; ly < h; ++ly) {
+                    const int y0 = dst.logicalToDevice(dy + ly);
+                    const int y1 = dst.logicalToDevice(dy + ly + 1);
+                    const int yc0 = y0 < 0 ? 0 : y0;
+                    const int yc1 = y1 < dstH ? y1 : dstH;
+                    if (yc0 >= yc1) {
                         continue;
                     }
-                    const int sy = vy * h / dh;
-                    const uint16_t* srow = src + static_cast<size_t>(sy) * w;
-                    uint16_t* drow = dst.pixels() + static_cast<size_t>(py) * dst.width();
-                    for (int vx = 0; vx < dw; ++vx) {
-                        const int px = dxDev + vx;
-                        if (px < 0 || px >= dst.width()) {
-                            continue;
-                        }
-                        const uint16_t c = srow[static_cast<size_t>(vx) * w / dw];
+                    const uint16_t* srow = src + static_cast<size_t>(ly) * w;
+                    for (int lx = 0; lx < w; ++lx) {
+                        const uint16_t c = srow[lx];
                         const int cr = (c >> 10) & 0x1F;
                         const int cg = (c >> 5) & 0x1F;
                         const int cb = c & 0x1F;
                         if (cg >= 20 && cr <= 10 && cb <= 10) {
                             continue; // 色键：亮绿透明
                         }
-                        drow[px] = c;
+                        const int x0 = dst.logicalToDevice(dx + lx);
+                        const int x1 = dst.logicalToDevice(dx + lx + 1);
+                        const int xc0 = x0 < 0 ? 0 : x0;
+                        const int xc1 = x1 < dstW ? x1 : dstW;
+                        if (xc0 >= xc1) {
+                            continue;
+                        }
+                        for (int yy = yc0; yy < yc1; ++yy) {
+                            uint16_t* row = base + static_cast<size_t>(yy) * dstW;
+                            for (int xx = xc0; xx < xc1; ++xx) {
+                                row[xx] = c;
+                            }
+                        }
                     }
                 }
             } else if (state.showDice) {

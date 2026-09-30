@@ -9,6 +9,7 @@
 #include "game/app/victory.h"
 #include "game/core/log.h"
 
+#include <chrono>
 #include <cstring>
 #include <filesystem>
 
@@ -854,6 +855,26 @@ void Application::renderFrame() {
     m_cursor.uncompose(m_surface);
 
     m_renderer.present();
+
+    // [NEW M4-A2] --stats：每 120 帧输出 FPS / 平均帧耗时（定位放大后的性能瓶颈）
+    if (m_stats) {
+        const uint64_t now = static_cast<uint64_t>(
+            std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now().time_since_epoch())
+                .count());
+        if (m_statsWindowUs == 0) {
+            m_statsWindowUs = now;
+        }
+        if (++m_statsFrames >= 120) {
+            const double msPerFrame =
+                static_cast<double>(now - m_statsWindowUs) / 1000.0 / m_statsFrames;
+            RICH4_LOGI("perf: %.1f FPS (%.2f ms/frame) canvas=%dx%d scale=%.2f",
+                       msPerFrame > 0.0 ? 1000.0 / msPerFrame : 0.0, msPerFrame, m_surface.width(),
+                       m_surface.height(), static_cast<double>(m_surface.scale()));
+            m_statsFrames = 0;
+            m_statsWindowUs = now;
+        }
+    }
 
     // [NEW] headless 调试脚本执行器每帧步进（docs/testing.md；无脚本时仅一次入队检查）
     debug::tick(*this);

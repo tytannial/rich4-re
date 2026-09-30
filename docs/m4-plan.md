@@ -644,10 +644,10 @@ H  追加四项（射程 → 预览高亮 → 小游戏插值/键盘 → 同格�
 | # | 位置 | 改动 | 依据 |
 |---|------|------|------|
 | 1 | `surface.h/cpp` | `scale/loginToDevice/logicalSpanToDevice/deviceToLogical` + `SurfaceScaleGuard`；`fillRect` 逻辑矩形设备化 | — |
-| 2 | `blit.cpp/h` | **`blitScaled`**（nearest 采样；SPR/16bit/色键/不透明）导出供 UI 散点复用；四个 blit 入口 `scale != 1` 分支；`pressDown`/`scaleSurfaceChannels`/`saveRegion`/`restoreRegion` 设备化；`blitScrolledMap` 缩放 + 环绕采样；全局裁剪逻辑坐标 → 设备化 | 0x455C52/0x456180 等 |
+| 2 | `blit.cpp/h` | **`blitScaled`**（**逻辑像素→设备块展开**；SPR/16bit/色键/不透明）导出供 UI 散点复用；四个 blit 入口 `scale != 1` 分支；`pressDown`/`scaleSurfaceChannels`/`saveRegion`/`restoreRegion` 设备化；`blitScrolledMap` 缩放 + 环绕采样；全局裁剪逻辑坐标 → 设备化 | 0x455C52/0x456180 等 |
 | 3 | `text.cpp` | `px = 字号 × kFontSizeScale × scale`；缓冲按 scale 重建；折行/边距/字距/阴影/描边/落点全设备化；**blit 前 `SurfaceScaleGuard(1)` 1:1 写入**（无二次放大） | 0x44FABC |
 | 4 | `cursor.cpp` | 保存区域/偏移按 scale 设备化；`blitFrameDevice` 帧放大绘制（**SMP 16bit 与 SPR 8bit 双支持**） | 0x401E59 |
-| 5 | `iso_blit.cpp` | 等距四边形顶点设备化（行扫描 + 纹理插值自动适应） | 0x4557A1 |
+| 5 | `iso_blit.cpp` | 等距四边形**逻辑域行扫描 + 每个逻辑像素展开为设备块**（像素完美；scale=1 时块=1px 与原浮点路径逐字节一致） | 0x4557A1 |
 | 6 | `map_render.cpp` | `orColorMask`/`drawEstateHighlight` 逐逻辑像素 → 设备矩形；骰子 FLC 设备采样（色键范围在采样后判断）；`setClipRect` 恢复为设计逻辑坐标 | 0x456384/0x451985 |
 | 7 | `game_loop.cpp`/`map_objects.cpp`/`turn_system.cpp` | 跳伞/事件 FLC 叠加改 `blitScaled`；飞行动画/飘走快照区域设备化；`playEventFlc` 保帧回卷区域设备化 | 0x45144F/0x451A97 |
 | 8 | UI 散点（18 文件） | 区域快照统一走 `saveRegion/restoreRegion`（气泡/大图悬停/消息板）；FLC/RAW 叠加统一走 `blitScaled`（乐透/魔法屋/小游戏/月结/卡片获得/银行插画/大地图/小地图）；走势图逐点经 `plotLogical`；数字输入框 SPR 区域改 `blitScaled` | 各对应地址 |
@@ -681,6 +681,16 @@ H  追加四项（射程 → 预览高亮 → 小游戏插值/键盘 → 同格�
    native 的 2 倍（降采样 diff 0.8% 验证）。
 2. **主菜单/游戏内看不到鼠标**：`Cursor::blitFrameDevice` 初版假设 SPR（8bit+调色板），
    而光标资源是 **SMP（16bit 直取）** → 提前 return。修复为 SMP/SPR 双支持。
+3. **窗口放大后整体拖慢 + 放大画面有采样细纹**：
+   - 初版放大是"逐设备像素反查源像素"（nearest 采样）——非整数/大倍数下采样边界抖动
+     （实测 free 地图 2×2 块内部不一致率 **59%**，视觉细纹）；每设备像素一次除法/浮点
+     插值也慢（free 1280×960 纯 CPU 绘制 **17 ms/帧**）。
+   - **修正为"逻辑像素 → 设备块展开"**（每个源像素填 `[logicalToDevice(lx), logicalToDevice(lx+1))`
+     设备块）：`blitScaled`/`isoBlitQuad`/`blitScrolledMap`/光标/骰子/orColorMask 全部统一该模型。
+   - 结果：**free 地图块不一致率 59% → 0%（像素完美）**；**native 截图逐字节 diff=0**
+     （scale=1 时块=1px，与统一前完全一致）；**性能 free 17 → 9.8 ms/帧、wide 12 → 8.2 ms**
+     （`--stats` 实测，headless 纯 CPU；native 5.5 ms）。实机验证命令：`--preset free --stats`。
+   - `--stats` 新增（每 120 帧输出 FPS/帧耗时；性能诊断用）。
 
 ### 16.4 已知边界与遗留
 
