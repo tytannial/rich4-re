@@ -23,7 +23,10 @@ namespace rich4 {
 //       PeekMessageA 主循环 + sub_401815 清理
 class Application {
 public:
-    bool init(const std::string& gameDir, bool headless = false);
+    // [NEW M4-A1] canvasWidth/Height：运行期画布尺寸（0 = native 设计尺寸 640x480）；
+    //   渲染逻辑坐标/鼠标换算均以画布尺寸为准（与 SDL 逻辑呈现同尺寸）
+    bool init(const std::string& gameDir, bool headless = false, int canvasWidth = 0,
+              int canvasHeight = 0);
     void run();
     void shutdown();
 

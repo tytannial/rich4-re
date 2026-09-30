@@ -10,6 +10,7 @@ namespace rich4 {
 namespace {
 
 // [RE 0x4861B8] 全局裁剪窗口（left, top, right, bottom）
+// 初值 = 设计尺寸；Surface::create 成功后会重置为运行期画布全尺寸
 int g_clipLeft = 0;
 int g_clipTop = 0;
 int g_clipRight = Surface::kWidth;
@@ -165,8 +166,8 @@ void pressDown(Surface& dst, int x, int y, int w, int h, int shift, const uint8_
     }
     uint16_t* p = dst.pixels();
     for (int row = h - 1 - shift; row >= 0; --row) {
-        uint16_t* d = p + static_cast<size_t>(y + row + shift) * Surface::kWidth + (x + shift);
-        const uint16_t* s = p + static_cast<size_t>(y + row) * Surface::kWidth + x;
+        uint16_t* d = p + static_cast<size_t>(y + row + shift) * dst.width() + (x + shift);
+        const uint16_t* s = p + static_cast<size_t>(y + row) * dst.width() + x;
         std::memmove(d, s, static_cast<size_t>(w - shift) * sizeof(uint16_t));
     }
     scaleSurfaceChannels(dst, x, y, w, shift, table);          // 顶边
@@ -263,20 +264,27 @@ void grayscaleImage(uint16_t* pixels, size_t pixelCount) {
 
 void blitScrolledMap(Surface& dst, const uint8_t* src, int offset) {
     // [RE 0x456180] 依据: 每行 1280 字节按 offset(&~3) 环绕拷贝
-    constexpr int kRowBytes = Surface::kWidth * 2;
-    int off = (offset & ~3) % kRowBytes;
+    // 源 = 640×480 地图预览位图（行距固定 1280B，共 480 行）；目标行距按运行期画布宽度；
+    // 行数取源/画布较小者——画布高于 480 时下方不写（源没有对应行，越界读会崩溃）
+    constexpr int kSrcRowBytes = Surface::kWidth * 2;
+    constexpr int kSrcRows = Surface::kHeight;
+    const int dstRowBytes = dst.width() * static_cast<int>(sizeof(uint16_t));
+    int off = (offset & ~3) % kSrcRowBytes;
     if (off < 0) {
-        off += kRowBytes;
+        off += kSrcRowBytes;
     }
-    const int firstLen = kRowBytes - off;
+    const int firstLen = kSrcRowBytes - off;
+    const int copyLen = firstLen < dstRowBytes ? firstLen : dstRowBytes;
+    const int secondLen = (dstRowBytes - firstLen) < off ? dstRowBytes - firstLen : off;
+    const int rows = dst.height() < kSrcRows ? dst.height() : kSrcRows;
     uint8_t* d = reinterpret_cast<uint8_t*>(dst.pixels());
-    for (int row = 0; row < Surface::kHeight; ++row) {
-        std::memcpy(d, src + off, static_cast<size_t>(firstLen));
-        if (off > 0) {
-            std::memcpy(d + firstLen, src, static_cast<size_t>(off));
+    for (int row = 0; row < rows; ++row) {
+        std::memcpy(d, src + off, static_cast<size_t>(copyLen));
+        if (secondLen > 0) {
+            std::memcpy(d + firstLen, src, static_cast<size_t>(secondLen));
         }
-        d += kRowBytes;
-        src += kRowBytes;
+        d += dstRowBytes;
+        src += kSrcRowBytes;
     }
 }
 
@@ -288,16 +296,16 @@ bool saveRegion(std::vector<uint16_t>& out, const Surface& dst, int x, int y, in
     const uint16_t* src = dst.pixels();
     for (int row = 0; row < h; ++row) {
         const int py = y + row;
-        if (py < 0 || py >= Surface::kHeight) {
+        if (py < 0 || py >= dst.height()) {
             continue;
         }
         for (int col = 0; col < w; ++col) {
             const int px = x + col;
-            if (px < 0 || px >= Surface::kWidth) {
+            if (px < 0 || px >= dst.width()) {
                 continue;
             }
             out[static_cast<size_t>(row) * w + col] =
-                src[static_cast<size_t>(py) * Surface::kWidth + px];
+                src[static_cast<size_t>(py) * dst.width() + px];
         }
     }
     return true;
@@ -310,15 +318,15 @@ void restoreRegion(Surface& dst, const std::vector<uint16_t>& bg, int x, int y, 
     uint16_t* d = dst.pixels();
     for (int row = 0; row < h; ++row) {
         const int py = y + row;
-        if (py < 0 || py >= Surface::kHeight) {
+        if (py < 0 || py >= dst.height()) {
             continue;
         }
         for (int col = 0; col < w; ++col) {
             const int px = x + col;
-            if (px < 0 || px >= Surface::kWidth) {
+            if (px < 0 || px >= dst.width()) {
                 continue;
             }
-            d[static_cast<size_t>(py) * Surface::kWidth + px] =
+            d[static_cast<size_t>(py) * dst.width() + px] =
                 bg[static_cast<size_t>(row) * w + col];
         }
     }

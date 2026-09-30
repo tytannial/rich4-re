@@ -83,13 +83,13 @@ bool blitSprScaled(Surface& dst, const UiImage& spr, int frame, int x, int y, ui
     const int dy = y - f.offsetY;
     const int sw = static_cast<int>((scale * f.width) >> 16);
     const int sh = static_cast<int>((scale * f.height) >> 16);
-    if (dx >= Surface::kWidth || dy >= Surface::kHeight || sw <= 0 || sh <= 0) {
+    if (dx >= dst.width() || dy >= dst.height() || sw <= 0 || sh <= 0) {
         return false;
     }
     const uint32_t step = static_cast<uint32_t>(0x100000000ULL / scale);
     for (int row = 0; row < sh; ++row) {
         const int py = dy + row;
-        if (py < 0 || py >= Surface::kHeight) {
+        if (py < 0 || py >= dst.height()) {
             continue;
         }
         const int sy = static_cast<int>((static_cast<uint64_t>(row) * step) >> 16);
@@ -97,11 +97,11 @@ bool blitSprScaled(Surface& dst, const UiImage& spr, int frame, int x, int y, ui
             continue;
         }
         const uint8_t* srow = src + static_cast<size_t>(sy) * f.width;
-        uint16_t* d = dst.pixels() + static_cast<size_t>(py) * Surface::kWidth;
+        uint16_t* d = dst.pixels() + static_cast<size_t>(py) * dst.width();
         uint32_t sxAcc = 0;
         for (int col = 0; col < sw; ++col) {
             const int px = dx + col;
-            if (px >= 0 && px < Surface::kWidth) {
+            if (px >= 0 && px < dst.width()) {
                 const int sxi = static_cast<int>(sxAcc >> 16);
                 if (sxi < f.width) {
                     const uint8_t idx = srow[sxi];
@@ -149,19 +149,19 @@ void blitFlcFrame(Surface& dst, const FliDecoder& flc, int x, int y, bool transp
     const uint16_t* src = flc.pixels();
     for (int row = 0; row < flc.height(); ++row) {
         const int py = y + row;
-        if (py < 0 || py >= Surface::kHeight) {
+        if (py < 0 || py >= dst.height()) {
             continue;
         }
         for (int col = 0; col < flc.width(); ++col) {
             const int px = x + col;
-            if (px < 0 || px >= Surface::kWidth) {
+            if (px < 0 || px >= dst.width()) {
                 continue;
             }
             const uint16_t c = src[static_cast<size_t>(row) * flc.width() + col];
             if (transparent && c == key) {
                 continue;
             }
-            dst.pixels()[static_cast<size_t>(py) * Surface::kWidth + px] = c;
+            dst.pixels()[static_cast<size_t>(py) * dst.width() + px] = c;
         }
     }
 }

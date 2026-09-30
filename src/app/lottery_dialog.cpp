@@ -64,19 +64,19 @@ void blitFlcFrame(Surface& dst, const FliDecoder& flc, int x, int y, bool transp
     const uint16_t* src = flc.pixels();
     for (int row = 0; row < flc.height(); ++row) {
         const int py = y + row;
-        if (py < 0 || py >= Surface::kHeight) {
+        if (py < 0 || py >= dst.height()) {
             continue;
         }
         for (int col = 0; col < flc.width(); ++col) {
             const int px = x + col;
-            if (px < 0 || px >= Surface::kWidth) {
+            if (px < 0 || px >= dst.width()) {
                 continue;
             }
             const uint16_t c = src[static_cast<size_t>(row) * flc.width() + col];
             if (transparent && c == key) {
                 continue;
             }
-            dst.pixels()[static_cast<size_t>(py) * Surface::kWidth + px] = c;
+            dst.pixels()[static_cast<size_t>(py) * dst.width() + px] = c;
         }
     }
 }

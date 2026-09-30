@@ -333,11 +333,11 @@ void drawMiniMap(Application& app) {
     }
 #endif
     if (state.miniMapBuffer.size() == static_cast<size_t>(kMiniMapW) * kMiniMapH) {
-        uint16_t* d = dst.pixels() + static_cast<size_t>(v1) * Surface::kWidth + 440;
+        uint16_t* d = dst.pixels() + static_cast<size_t>(v1) * dst.width() + 440;
         for (int row = 0; row < kMiniMapH; ++row) {
             std::memcpy(d, &state.miniMapBuffer[static_cast<size_t>(row) * kMiniMapW],
                         kMiniMapW * sizeof(uint16_t));
-            d += Surface::kWidth;
+            d += dst.width();
         }
     } else if (state.miniMap.frameCount() > 0) {
         blitElementOpaque(dst, state.miniMap.frame(0), 440, v1);
@@ -482,15 +482,15 @@ void drawHolidayBackground(Application& app, int holiday) {
     uint16_t* d = dst.pixels();
     for (int row = 0; row < raw.height; ++row) {
         const int py = 280 + row;
-        if (py < 0 || py >= Surface::kHeight) {
+        if (py < 0 || py >= dst.height()) {
             continue;
         }
         for (int col = 0; col < raw.width; ++col) {
             const int px = 440 + col;
-            if (px < 0 || px >= Surface::kWidth) {
+            if (px < 0 || px >= dst.width()) {
                 continue;
             }
-            d[static_cast<size_t>(py) * Surface::kWidth + px] = raw.pixels[row * raw.width + col];
+            d[static_cast<size_t>(py) * dst.width() + px] = raw.pixels[row * raw.width + col];
         }
     }
 }

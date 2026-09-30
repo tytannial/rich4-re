@@ -67,19 +67,19 @@ void drawParachuteFrame(Application& app) {
     const int oy = 40 + (440 - h) / 2;
     for (int row = 0; row < h; ++row) {
         const int py = oy + row;
-        if (py < 0 || py >= Surface::kHeight) {
+        if (py < 0 || py >= dst.height()) {
             continue;
         }
         for (int col = 0; col < w; ++col) {
             const int px = ox + col;
-            if (px < 0 || px >= Surface::kWidth) {
+            if (px < 0 || px >= dst.width()) {
                 continue;
             }
             const uint16_t c = src[static_cast<size_t>(row) * w + col];
             if (c == 0) {
                 continue; // 色键 0 透明
             }
-            d[static_cast<size_t>(py) * Surface::kWidth + px] = c;
+            d[static_cast<size_t>(py) * dst.width() + px] = c;
         }
     }
 }
@@ -100,19 +100,19 @@ void drawEventFlcFrame(Application& app) {
     uint16_t* d = dst.pixels();
     for (int row = 0; row < h; ++row) {
         const int py = st.eventFlcY + row;
-        if (py < 0 || py >= Surface::kHeight) {
+        if (py < 0 || py >= dst.height()) {
             continue;
         }
         for (int col = 0; col < w; ++col) {
             const int px = st.eventFlcX + col;
-            if (px < 0 || px >= Surface::kWidth) {
+            if (px < 0 || px >= dst.width()) {
                 continue;
             }
             const uint16_t c = src[static_cast<size_t>(row) * w + col];
             if (c == key) {
                 continue; // 色键：调色板索引 0 透明
             }
-            d[static_cast<size_t>(py) * Surface::kWidth + px] = c;
+            d[static_cast<size_t>(py) * dst.width() + px] = c;
         }
     }
 }

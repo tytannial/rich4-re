@@ -14,7 +14,8 @@
 
 namespace rich4 {
 
-bool Application::init(const std::string& gameDir, bool headless) {
+bool Application::init(const std::string& gameDir, bool headless, int canvasWidth,
+                       int canvasHeight) {
     // [RE 0x401B9C] WinMain 初始化段
     // 依据: 0x401B9C 反编译; RegisterClassA("Rich4") + CreateWindowExA(0, "Rich4",
     //       "Rich4", 0x80000000=WS_POPUP, 屏幕宽高) + sub_4015D6() + ShowWindow(5)
@@ -39,15 +40,18 @@ bool Application::init(const std::string& gameDir, bool headless) {
         RICH4_LOGE("SDL_Init failed: %s", SDL_GetError());
         return false;
     }
+    // [NEW M4-A1] 运行期画布尺寸：默认 native 设计尺寸；SDL 逻辑呈现同步为画布尺寸
+    const int canvasW = canvasWidth > 0 ? canvasWidth : Surface::kWidth;
+    const int canvasH = canvasHeight > 0 ? canvasHeight : Surface::kHeight;
     // 窗口默认 2x 整数倍缩放（1280x960），避免非整数缩放的像素不均匀（贴图错位感）
     if (!m_window.create("Rich4", 1280, 960)) {
         return false;
     }
-    if (!m_renderer.create(m_window.handle(), 640, 480, !headless)) {
+    if (!m_renderer.create(m_window.handle(), canvasW, canvasH, !headless)) {
         return false;
     }
-    // [RE 0x48A08C] 后台绘制缓冲（640x480 RGB555）
-    if (!m_surface.create(m_renderer.handle())) {
+    // [RE 0x48A08C] 后台绘制缓冲（RGB555）
+    if (!m_surface.create(m_renderer.handle(), canvasW, canvasH)) {
         return false;
     }
     // [RE 0x44F935] 文本渲染表面（512x200，原版 dword_4762CC）

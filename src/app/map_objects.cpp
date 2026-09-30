@@ -577,7 +577,7 @@ void attachEnd(Application& app, int p) {
             delayMs(5);
         }
     }
-    setClipRect(0, 0, 640, 480);
+    setClipRect(0, 0, dst.width(), dst.height());
     app.audio().stopEffectSlot(19);
     st.cellTable[off + 2] = static_cast<uint8_t>(savedEnt & 0xFF);
     st.cellTable[off + 3] = static_cast<uint8_t>(savedEnt >> 8);
@@ -1045,7 +1045,7 @@ void flyObjectSprite(Application& app, int objId, int fromX, int fromY, int toX,
     std::vector<uint16_t> background(static_cast<size_t>(kSnapW) * kSnapH);
     for (int r = 0; r < kSnapH; ++r) {
         std::memcpy(background.data() + static_cast<size_t>(r) * kSnapW,
-                    dst.pixels() + static_cast<size_t>(kSnapY + r) * Surface::kWidth + kSnapX,
+                    dst.pixels() + static_cast<size_t>(kSnapY + r) * dst.width() + kSnapX,
                     static_cast<size_t>(kSnapW) * sizeof(uint16_t));
     }
     double px = x0;
@@ -1057,7 +1057,7 @@ void flyObjectSprite(Application& app, int objId, int fromX, int fromY, int toX,
         const uint64_t end = nowMs() + 24;
         // [RE 0x456469] 恢复背景（整区；原版只恢复上一帧精灵矩形，背景不变故等价）
         for (int r = 0; r < kSnapH; ++r) {
-            std::memcpy(dst.pixels() + static_cast<size_t>(kSnapY + r) * Surface::kWidth + kSnapX,
+            std::memcpy(dst.pixels() + static_cast<size_t>(kSnapY + r) * dst.width() + kSnapX,
                         background.data() + static_cast<size_t>(r) * kSnapW,
                         static_cast<size_t>(kSnapW) * sizeof(uint16_t));
         }
@@ -1068,7 +1068,7 @@ void flyObjectSprite(Application& app, int objId, int fromX, int fromY, int toX,
             delayMs(2);
         }
     }
-    setClipRect(0, 0, 640, 480);
+    setClipRect(0, 0, dst.width(), dst.height());
     // [RE 0x45285E] 末帧停留；末帧精灵保留屏上（原版 a1!=0 不清屏，等调用方全屏重绘
     //   才显示目标格物件）——屏幕即时模式必须显式冻结末帧
     for (int t = 0; t < holdMs; t += 5) {

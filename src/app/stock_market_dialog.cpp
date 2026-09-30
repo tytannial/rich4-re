@@ -336,8 +336,8 @@ void drawLine(Surface& dst, int x0, int y0, int x1, int y1, uint16_t color) {
     int dy = -std::abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
     int err = dx + dy;
     for (;;) {
-        if (x0 >= 0 && x0 < Surface::kWidth && y0 >= 0 && y0 < Surface::kHeight) {
-            px[y0 * Surface::kWidth + x0] = color;
+        if (x0 >= 0 && x0 < dst.width() && y0 >= 0 && y0 < dst.height()) {
+            px[y0 * dst.width() + x0] = color;
         }
         if (x0 == x1 && y0 == y1) break;
         const int e2 = 2 * err;
@@ -465,13 +465,15 @@ void renderChart(ChartState& c) {
     const uint16_t kBlack = 0x0000;
     const int cx = 502, cy = 365, rx = 88, ry = 29;
     uint16_t* px = dst.pixels();
+    const int dstW = dst.width();
+    const int dstH = dst.height();
     auto ellipseOutline = [&](int ecx, int ecy) {
         for (int i = 0; i <= 720; ++i) {
             const double a = i * (2 * kPi / 720.0);
             const int ex = ecx + static_cast<int>(std::lround(rx * std::cos(a)));
             const int ey = ecy + static_cast<int>(std::lround(ry * std::sin(a)));
-            if (ex >= 0 && ex < Surface::kWidth && ey >= 0 && ey < Surface::kHeight) {
-                px[ey * Surface::kWidth + ex] = kBlack;
+            if (ex >= 0 && ex < dstW && ey >= 0 && ey < dstH) {
+                px[ey * dstW + ex] = kBlack;
             }
         }
     };
@@ -481,9 +483,9 @@ void renderChart(ChartState& c) {
         for (int x = cx - rx; x <= cx + rx; ++x) {
             const double nx = (x - cx) / static_cast<double>(rx);
             const double ny = (ey - cy) / static_cast<double>(ry);
-            if (nx * nx + ny * ny <= 1.0 && y >= 0 && y < Surface::kHeight && x >= 0 &&
-                x < Surface::kWidth) {
-                px[y * Surface::kWidth + x] = cBlue;
+            if (nx * nx + ny * ny <= 1.0 && y >= 0 && y < dstH && x >= 0 &&
+                x < dstW) {
+                px[y * dstW + x] = cBlue;
             }
         }
     }
@@ -503,7 +505,7 @@ void renderChart(ChartState& c) {
             } else {
                 col = (ang < frac * 2 * kPi) ? cBlue : cRed;  // 持股扇=蓝，其余=红
             }
-            px[y * Surface::kWidth + x] = col;
+            px[y * dstW + x] = col;
         }
     }
     ellipseOutline(cx, cy);

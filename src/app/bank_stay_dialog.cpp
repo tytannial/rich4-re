@@ -220,23 +220,25 @@ struct StayCtx {
 
 // 捕获当前主画面为静态层快照（在 drawStayBase 之后调用）
 void captureStatic(StayCtx& ui) {
-    const uint16_t* src = ui.app->surface().pixels();
-    ui.staticBg.assign(src, src + static_cast<size_t>(Surface::kWidth) * Surface::kHeight);
+    const Surface& dst = ui.app->surface();
+    const uint16_t* src = dst.pixels();
+    ui.staticBg.assign(src, src + static_cast<size_t>(dst.width()) * dst.height());
 }
 
 // 用静态层快照恢复矩形（滑出回填；避免把帧 1/牌子文字擦成帧 0 原样）
 void restoreStaticRect(StayCtx& ui, int x, int y, int w, int h) {
-    if (ui.staticBg.empty() || w <= 0 || x < 0 || x + w > Surface::kWidth) {
+    Surface& dst = ui.app->surface();
+    if (ui.staticBg.empty() || w <= 0 || x < 0 || x + w > dst.width()) {
         return;
     }
-    uint16_t* d = ui.app->surface().pixels();
+    uint16_t* d = dst.pixels();
     for (int row = 0; row < h; ++row) {
         const int py = y + row;
-        if (py < 0 || py >= Surface::kHeight) {
+        if (py < 0 || py >= dst.height()) {
             continue;
         }
-        std::memcpy(d + static_cast<size_t>(py) * Surface::kWidth + x,
-                    ui.staticBg.data() + static_cast<size_t>(py) * Surface::kWidth + x,
+        std::memcpy(d + static_cast<size_t>(py) * dst.width() + x,
+                    ui.staticBg.data() + static_cast<size_t>(py) * dst.width() + x,
                     sizeof(uint16_t) * static_cast<size_t>(w));
     }
 }
@@ -313,15 +315,15 @@ void drawHolidayAt(Application& app, int holiday, int x, int y) {
     uint16_t* d = dst.pixels();
     for (int row = 0; row < raw.height; ++row) {
         const int py = y + row;
-        if (py < 0 || py >= Surface::kHeight) {
+        if (py < 0 || py >= dst.height()) {
             continue;
         }
         for (int col = 0; col < raw.width; ++col) {
             const int px = x + col;
-            if (px < 0 || px >= Surface::kWidth) {
+            if (px < 0 || px >= dst.width()) {
                 continue;
             }
-            d[static_cast<size_t>(py) * Surface::kWidth + px] = raw.pixels[row * raw.width + col];
+            d[static_cast<size_t>(py) * dst.width() + px] = raw.pixels[row * raw.width + col];
         }
     }
 }

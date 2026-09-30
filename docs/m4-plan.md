@@ -20,7 +20,11 @@
 > - **批次 B（GO 面板）✅ 已实施**：C1（窄谓词 `blockingPerf`）+ C2（4 个控制位入口）；C3 判定
 >   不需要。验收场景 `308_go_panel_surrender`——**修前 FAIL（窗口内 75 次 `cur=0` 面板绘制）、
 >   修后 PASS（0 次）**，判别力已实测。详见 §14。
-> - **下一步 = A1**（画布运行期尺寸；实测替换面仅 17 文件 95 处，见 §1.1 订正）。
+> - **批次 A1（画布运行期尺寸，scale 恒 1）✅ 已实施**：`Surface` 运行期宽高 + 95 处
+>   `Surface::kWidth/kHeight` 全量参数化（17 文件）+ blit 家族行距/裁剪取自画布 + 新增
+>   `--canvas WxH` 开发入口；L0 新增 4 用例；矩阵 94/94、save-selftest STABLE、re_map 通过，
+>   **800×600 画布与 native 左上 640×480 逐像素一致（A/B diff=0）**。详见 §15。
+> - **下一步 = A2**（引入 scale + 缩放 blit + 文本 scale + 阴影/描边乘 scale）。
 
 | 批次 | 内容 | 依赖 | 风险 | 建议顺序 |
 |------|------|------|------|----------|
@@ -426,8 +430,8 @@ WYSIWYG）；`drawRectBorder`/`scaleSurfaceChannels`/`drawEstateHighlight` **都
 ### 9.1 建议顺序
 
 ```
-A1 画布运行期尺寸（scale 恒 1）→ 全量矩阵回归   ← 下一批
-A2 引入 scale + 缩放 blit + 文本 scale + 阴影/描边乘 scale
+A1 画布运行期尺寸（scale 恒 1）→ 全量矩阵回归   ✅ 2026-09-30（见 §15）
+A2 引入 scale + 缩放 blit + 文本 scale + 阴影/描边乘 scale   ← 下一批
 B  GO 面板 C2+C1（+C3）                          ✅ 2026-09-30（C3 判定不需要，见 §14）
 C  脏区重绘还原 → UI 布局表 → 命中派生
 E  文本定点化/亚像素（可与 C 并行）
@@ -500,7 +504,7 @@ H  追加四项（射程 → 预览高亮 → 小游戏插值/键盘 → 同格�
 |---|---|
 | `308_go_panel_surrender` **✅** | 認輸 + 死神选人窗口无 `go panel draw cur=0`（修前 75 次 / 修后 0 次） |
 | `30x_go_panel_load_parachute` | 读档残留未落地玩家 → 跳伞期无 GO |
-| `31x_native_pixel_equal` | native preset 渲染与冻结基准逐字节一致 |
+| `31x_native_pixel_equal` | native preset 渲染与冻结基准逐字节一致（A1 已以一次性 A/B 脚本验证 800×600 左上区 diff=0，见 §15.2；常驻场景待 A2 preset 落地后建立） |
 | `31x_wide_layout_hit` | 宽屏下顶栏/右栏/GO 命中区正确（`clickr` named region） |
 | `32x_minigame_money_doll` | `move` 驱动娃娃 → 娃娃位置/判定按死区语义变化（需补 trace） |
 | `32x_overlap_multi_player` | 同格两玩家：默认取叠放上层；候选数=2（若做面板） |
@@ -584,3 +588,67 @@ H  追加四项（射程 → 预览高亮 → 小游戏插值/键盘 → 同格�
 **窗口构造关键**：`surrender; trace.clear` 写在同一脚本行——`execLine` 以 `;` 并列，两命令在
 **同一帧**生效（投降请求置位后立刻清 trace）。若分成两个 step，则"清 trace 与投降之间"那一帧的
 **合法**面板绘制会落进窗口造成误判（首版即如此误判）。
+
+---
+
+## 15. 批次 A1 实施记录（2026-09-30，✅ 已落地）
+
+### 15.1 改动清单
+
+| # | 位置 | 改动 | 依据 |
+|---|------|------|------|
+| 1 | `include/game/render/surface.h`、`src/render/surface.cpp` | `Surface` 宽高运行期化（`m_width/m_height`，默认 native 640×480）；`create(renderer, w, h)`；`present/fillRect/saveBmp` 全走运行期值；create 成功后把全局裁剪窗口重置为画布全尺寸 | 0x48A08C 后台缓冲 / 0x4861B8 全局裁剪 |
+| 2 | `src/render/blit.cpp` | `pressDown`/`saveRegion`/`restoreRegion` 步长与边界改画布 `width()/height()`；`blitScrolledMap` 源行距固定 640（地图预览位图）、目标行距按画布、**行数取 min(画布高, 480)**（见 §15.4）；全局 clip 初值标注为设计尺寸 | 0x455C52 / 0x456180 等 |
+| 3 | `include/game/render/cursor.h`、`src/render/cursor.cpp` | `Cursor::getRect` 增 `const Surface&` 参数，裁剪到运行期画布（无调用点，改签名安全） | 0x4024C0 |
+| 4 | `src/app/*.cpp`（15 文件）、`src/application.cpp`、`src/main.cpp` | 95 处 `Surface::kWidth/kHeight` → `dst.width()/height()`（像素步长/边界）；`Application::init` 增画布尺寸参数；新增 `--canvas WxH` 开发入口（默认 native） | — |
+| 5 | `tests/unit/test_surface.cpp`（新增） | L0 锁定：运行期宽高/默认 native、fillRect 越界裁剪、blit 按画布裁剪（<640 画布）、saveRegion/restoreRegion 越界语义、blitScrolledMap 源 640 行距 + 画布目标行距 | — |
+
+**范围外（按 §1.4 分两次提交约定）**：scale 缩放 blit、文本 scale、preset 表、窗口 resize 处理——
+均留待 A2；A1 只做运行期尺寸，且默认路径行为与 640×480 逐像素一致。
+
+### 15.2 验收结果（实测）
+
+| 项 | 结果 |
+|---|---|
+| L0 单测 | **121 checks / 0 fails PASS**（新增 4 用例：`surface_runtime_size_fill_clip` / `surface_blit_clips_to_runtime_canvas` / `surface_region_save_restore_uses_canvas` / `surface_scrolled_map_runtime_width`） |
+| L1 场景矩阵 | **94/94 PASS**（`python tools/run_tests.py --matrix`；本次含 `84_ai_marathon` 505s 亦 PASS） |
+| 存档往返 | `rich4 --save-selftest 0` → `STABLE(t1==t2)=YES` |
+| 逆向标注 | `python tools/re_map.py` 校验通过 |
+| **像素 A/B** | `--shot --shot-frame 300`（seed 42 quickstart）：native 640×480 与 `--canvas 800x600` 左上 640×480 区域**逐像素一致（diff=0）** |
+| 稳定性 | 00_smoke ×20 + `--canvas 800x600` ×5 全部 EXIT=0 |
+
+### 15.3 已知边界与遗留
+
+- `--canvas` 目前只服务开发验证：画布大于 640×480 时其余区域为黑（布局仍按 native 坐标，
+  宽屏布局属批次 C/D）；窗口仍固定 1280×960，逻辑呈现（LETTERBOX）随画布尺寸同步。
+- `Surface::kWidth/kHeight` 保留为**设计尺寸常量**：仅余 3 处引用（create 默认参数、
+  `blit.cpp` 全局 clip 初值、`blitScrolledMap` 的 640 宽预览源行距），均已注释语义。
+- 开发观察（未复现）：首次全量构建后的二进制曾出现启动即反复重开主菜单（同一命令 clean
+  重建后无法复现；后续 20+ 次运行全绿）。两轮均处于可能存在残留进程的窗口期，暂归因构建
+  产物/运行环境瞬态；若后续复现，从 `runModal` 退出条件（`running`/`exitRequested`）入手排查。
+
+### 15.4 实机问题修复：选人界面高画布崩溃（2026-09-30）
+
+**现象**：`--canvas 800x600` + 主菜单「新遊戲」进入选人界面 → **访问冲突崩溃**
+（0xC0000005，BMP 未生成）。
+
+**根因**：`blitScrolledMap` 的目标拷贝循环按 `dst.height()` 遍历，但源是 640×480 的
+地图预览位图（`jump.mkf`，固定 480 行 × 1280B）。画布高 > 480 时按目标高多遍历出 120 行
+（800×600/1024×768/1280×720 均触发），`src += 1280` 越界读源缓冲（15 万字节量级）→
+访问冲突。native 640×480 与画布高 ≤ 480 时不触发（故矩阵/截图 A/B 未暴露——矩阵全部
+quickstart 跳过选人界面，`blitScrolledMap` 仅用于选人界面与通关地图选择）。
+
+**修复**：行数取 `min(dst.height(), 480)`（源没有的行不写）；`blitScrolledMap` 的源语义
+注释明确（640×480、480 行）。L0 新增 `surface_scrolled_map_high_canvas_rows_clamped`
+（320×520 画布：前 480 行正确写入、480 行以下保持原值）。
+
+**验证**：
+- 选人界面 `--canvas 800x600` 崩溃消除、`--canvas 1024x768` / `1280x720` 完整开局流程
+  （选人→确定→补 AI→过渡→进入游戏）EXIT=0；
+- 选人界面 native vs `--canvas 800x600` 左上 640×480 **逐像素一致（diff=0）**；
+- L0 **126 checks / 0 fails**；全量矩阵 **94/94**；`--extra "--canvas 1024x768"` 全量
+  （94/94，含 84_ai_marathon）——大画布全路径无越界；
+- `--save-selftest 0` → STABLE=YES。
+
+**工具**：`tools/run_tests.py` 新增 `--extra "<rich4 参数>"`（透传给每个场景，
+宽屏/画布尺寸回归用）。

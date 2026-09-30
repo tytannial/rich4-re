@@ -40,8 +40,8 @@ public:
     // 迁移: GetCursorPos（屏幕坐标）→ 由调用方传入 640x480 逻辑坐标
     void update(Surface& dst, int mouseX, int mouseY);
 
-    // [RE 0x4024C0] sub_4024C0 光标包围矩形（裁剪到 640x480）
-    void getRect(int mouseX, int mouseY, int outRect[4]) const;
+    // [RE 0x4024C0] sub_4024C0 光标包围矩形（裁剪到运行期画布尺寸）
+    void getRect(const Surface& dst, int mouseX, int mouseY, int outRect[4]) const;
 
     // [NEW] 背景作废：调用方已/即将全量重绘整个表面，m_saved 陈旧——
     //   下一轮 update/compose 不做 uncompose 写回（防"旧背景脏块闪现"，

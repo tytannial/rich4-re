@@ -406,29 +406,29 @@ void playSettleFlc(SettleCtx& ui, int mkfIndex, int x, int y) {
     app.consumeSkipInput();
     app.cursor().setHidden(dst, true);
     app.audio().pushMusicPause();
-    ui.flcBg.assign(dst.pixels(), dst.pixels() + static_cast<size_t>(Surface::kWidth) *
-                                                       Surface::kHeight);
+    ui.flcBg.assign(dst.pixels(), dst.pixels() + static_cast<size_t>(dst.width()) *
+                                                       dst.height());
     const int interval = std::max(1, flc.speedMs());
     while (flc.nextFrame()) {
         std::memcpy(dst.pixels(), ui.flcBg.data(),
-                    sizeof(uint16_t) * Surface::kWidth * Surface::kHeight);
+                    sizeof(uint16_t) * dst.width() * dst.height());
         const uint16_t* src = flc.pixels();
         const uint16_t key = flc.colorKey();
         for (int row = 0; row < flc.height(); ++row) {
             const int py = y + row;
-            if (py < 0 || py >= Surface::kHeight) {
+            if (py < 0 || py >= dst.height()) {
                 continue;
             }
             for (int col = 0; col < flc.width(); ++col) {
                 const int px = x + col;
-                if (px < 0 || px >= Surface::kWidth) {
+                if (px < 0 || px >= dst.width()) {
                     continue;
                 }
                 const uint16_t c = src[static_cast<size_t>(row) * flc.width() + col];
                 if (c == key) {
                     continue; // 色键 0 = 调色板索引 0 透明
                 }
-                dst.pixels()[static_cast<size_t>(py) * Surface::kWidth + px] = c;
+                dst.pixels()[static_cast<size_t>(py) * dst.width() + px] = c;
             }
         }
         // [NEW] 全量回卷 + 叠加 = 本帧背景已重建，光标保存块作废（防陈旧 uncompose 写回闪块）

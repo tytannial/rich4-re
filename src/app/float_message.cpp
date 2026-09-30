@@ -40,16 +40,16 @@ void FloatMessage::show(Application& app, const char* text) {
     const uint16_t* src = dst.pixels();
     for (int row = 0; row < m_bgH; ++row) {
         const int py = m_bgY + row;
-        if (py < 0 || py >= Surface::kHeight) {
+        if (py < 0 || py >= dst.height()) {
             continue;
         }
         for (int col = 0; col < m_bgW; ++col) {
             const int px = m_bgX + col;
-            if (px < 0 || px >= Surface::kWidth) {
+            if (px < 0 || px >= dst.width()) {
                 continue;
             }
             m_bg[static_cast<size_t>(row) * m_bgW + col] =
-                src[static_cast<size_t>(py) * Surface::kWidth + px];
+                src[static_cast<size_t>(py) * dst.width() + px];
         }
     }
     blitElement(dst, fr, m_x, m_y, false);
@@ -106,18 +106,19 @@ void FloatMessage::restore(Application& app) {
     if (m_bg.empty()) {
         return;
     }
-    uint16_t* dst = app.surface().pixels();
+    Surface& dst = app.surface();
+    uint16_t* dp = dst.pixels();
     for (int row = 0; row < m_bgH; ++row) {
         const int py = m_bgY + row;
-        if (py < 0 || py >= Surface::kHeight) {
+        if (py < 0 || py >= dst.height()) {
             continue;
         }
         for (int col = 0; col < m_bgW; ++col) {
             const int px = m_bgX + col;
-            if (px < 0 || px >= Surface::kWidth) {
+            if (px < 0 || px >= dst.width()) {
                 continue;
             }
-            dst[static_cast<size_t>(py) * Surface::kWidth + px] =
+            dp[static_cast<size_t>(py) * dst.width() + px] =
                 m_bg[static_cast<size_t>(row) * m_bgW + col];
         }
     }

@@ -7,25 +7,27 @@
 
 namespace rich4 {
 
-// 640x480 RGB555 系统内存后台缓冲。
+// RGB555 系统内存后台缓冲。
 // [RE 0x48A08C] dword_48A08C
 // 依据: 0x401543 memcpy(dword_48A08C, data.mkf[601], 614400)（614400 = 640*480*2）;
 //       0x451B36 sub_456F60(dword_48A08C, 0, 614400); 0x456418/0x4563F5 等以其为绘制目标;
 //       0x40257A WM_PAINT 把绘制结果经 DDraw 后台表面 BltFast 到主表面
 // 迁移: DDraw 后台表面 Lock/Unlock + BltFast → SDL 纹理每帧上传（RGB555 与原版一致）
+// [NEW M4-A1] 画布尺寸运行期化：kWidth/kHeight 仅作设计尺寸（native 保真画布默认值），
+//   实际画布尺寸由 create 决定；所有像素步长/边界必须走 width()/height()
 class Surface {
 public:
     static constexpr int kWidth = 640;
     static constexpr int kHeight = 480;
 
-    bool create(SDL_Renderer* renderer);
+    bool create(SDL_Renderer* renderer, int width = kWidth, int height = kHeight);
     void destroy();
     void present(SDL_Renderer* renderer);
 
     uint16_t* pixels() { return m_pixels.data(); }
     const uint16_t* pixels() const { return m_pixels.data(); }
-    int width() const { return kWidth; }
-    int height() const { return kHeight; }
+    int width() const { return m_width; }
+    int height() const { return m_height; }
 
     void clear();
 
@@ -39,6 +41,8 @@ public:
 private:
     std::vector<uint16_t> m_pixels;
     SDL_Texture* m_texture = nullptr;
+    int m_width = kWidth;
+    int m_height = kHeight;
 };
 
 // [RE 0x45523E] sub_45523E（经 0x4551F0 funcs_455200[0] 分发）

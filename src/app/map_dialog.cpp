@@ -32,10 +32,10 @@ void redrawMap(MapDialogState& st) {
         const int w = bf.width;
         const int h = bf.height;
         if (w > 0 && h > 0 && state.bigMapBuffer.size() == static_cast<size_t>(w) * h) {
-            uint16_t* d = dst.pixels() + static_cast<size_t>(60) * Surface::kWidth + 20;
+            uint16_t* d = dst.pixels() + static_cast<size_t>(60) * dst.width() + 20;
             for (int y = 0; y < h; ++y) {
                 for (int x = 0; x < w; ++x) {
-                    d[static_cast<size_t>(y) * Surface::kWidth + x] =
+                    d[static_cast<size_t>(y) * dst.width() + x] =
                         state.bigMapBuffer[static_cast<size_t>(y) * w + x];
                 }
             }

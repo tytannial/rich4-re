@@ -100,7 +100,7 @@ void orColorMask(Surface& dst, const UiImage& spr, int frame, int x, int y, uint
         if (py < top || py >= bottom) {
             continue;
         }
-        uint16_t* drow = dst.pixels() + static_cast<size_t>(py) * Surface::kWidth;
+        uint16_t* drow = dst.pixels() + static_cast<size_t>(py) * dst.width();
         const uint8_t* mrow = mask + static_cast<size_t>(row) * src.width;
         for (int col = 0; col < src.width; ++col) {
             const int px = dx + col;
@@ -684,7 +684,7 @@ void renderMap(Application& app, int centerX, int centerY) {
         }
     }
 
-    setClipRect(0, 0, 640, 480);
+    setClipRect(0, 0, dst.width(), dst.height());
 
     // [RE 0x40829D] 移动计步器（剩余步数 dword_48BAF8；定义见 renderMap 头）
     // 说明: sprintf("%d", dword_48BAF8) → dword_48BAD8 帧 (ch-40)，y=400
@@ -723,12 +723,12 @@ void renderMap(Application& app, int centerX, int centerY) {
                 uint16_t* d = dst.pixels();
                 for (int row = 0; row < h; ++row) {
                     const int py = dy + row;
-                    if (py < 0 || py >= Surface::kHeight) {
+                    if (py < 0 || py >= dst.height()) {
                         continue;
                     }
                     for (int col = 0; col < w; ++col) {
                         const int px = dx + col;
-                        if (px < 0 || px >= Surface::kWidth) {
+                        if (px < 0 || px >= dst.width()) {
                             continue;
                         }
                         const uint16_t c = src[static_cast<size_t>(row) * w + col];
@@ -738,7 +738,7 @@ void renderMap(Application& app, int centerX, int centerY) {
                         if (cg >= 20 && cr <= 10 && cb <= 10) {
                             continue; // 色键：亮绿透明
                         }
-                        d[static_cast<size_t>(py) * Surface::kWidth + px] = c;
+                        d[static_cast<size_t>(py) * dst.width() + px] = c;
                     }
                 }
             } else if (state.showDice) {
@@ -1049,12 +1049,15 @@ void drawEstateHighlight(Application& app) {
         ++ti;
     }
     const uint8_t* lut = kHlTable[ti];
-    uint16_t* px = app.surface().pixels();
-    auto adjust = [px, lut](int x, int y) {
-        if (x < 0 || y < 0 || x >= Surface::kWidth || y >= Surface::kHeight) {
+    Surface& dst = app.surface();
+    uint16_t* px = dst.pixels();
+    const int dstW = dst.width();
+    const int dstH = dst.height();
+    auto adjust = [px, lut, dstW, dstH](int x, int y) {
+        if (x < 0 || y < 0 || x >= dstW || y >= dstH) {
             return;
         }
-        const size_t o = static_cast<size_t>(y) * Surface::kWidth + x;
+        const size_t o = static_cast<size_t>(y) * dstW + x;
         const uint16_t c = px[o];
         const uint16_t r = lut[(c >> 10) & 0x1F];
         const uint16_t g = lut[(c >> 5) & 0x1F];

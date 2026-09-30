@@ -543,7 +543,7 @@ int useItemRobotWorker(Application& app) {
     Surface& dst = app.surface();
     std::vector<uint16_t> preUpgrade(
         dst.pixels(),
-        dst.pixels() + static_cast<size_t>(Surface::kWidth) * Surface::kHeight);
+        dst.pixels() + static_cast<size_t>(dst.width()) * dst.height());
     const int flags = angelUpgrade(app, v);  // [RE 0x40B110]
     std::memcpy(dst.pixels(), preUpgrade.data(),
                 preUpgrade.size() * sizeof(uint16_t));

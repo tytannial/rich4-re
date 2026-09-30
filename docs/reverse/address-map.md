@@ -6,15 +6,15 @@
 
 | 地址 | 原符号 | 重写位置 | 依据 |
 |------|--------|----------|------|
-| `0x401010` | 全局键盘钩子 | `src/application.cpp:266` | fn(0x401010) 读 word_497168 键位表： word_497168/6A/6C/6E（游標上/右/下/左移）→ SetCursorPos(±10) word_497170（確定執行）→ PostMessageA(WM_LBUTTONDOWN/UP)（word_46CB09 去重） word_497172（取消指令）→ 抬起时 PostMessageA(WM_RBUTTONUP)（合成右键抬起，模态按右键机制处理）（迁移: SetCursorPos/PostMessageA → SDL_WarpMouseInWindow/SDL_PushEvent（逻辑像素 ±10）） |
+| `0x401010` | 全局键盘钩子 | `src/application.cpp:270` | fn(0x401010) 读 word_497168 键位表： word_497168/6A/6C/6E（游標上/右/下/左移）→ SetCursorPos(±10) word_497170（確定執行）→ PostMessageA(WM_LBUTTONDOWN/UP)（word_46CB09 去重） word_497172（取消指令）→ 抬起时 PostMessageA(WM_RBUTTONUP)（合成右键抬起，模态按右键机制处理）（迁移: SetCursorPos/PostMessageA → SDL_WarpMouseInWindow/SDL_PushEvent（逻辑像素 ±10）） |
 | `0x401543` | showLoading | `src/app/new_game.cpp:346` | 0x401543 反编译; sub_450441(dword_48A0E4, 601) 取 614400 字节全屏图, memcpy 到 dword_48A08C 后 BltFast 显示 |
 | `0x4015D6` | gameInit | `src/app/game_init.cpp:17` | 0x4015D6 反编译; 失败路径弹 "DirectDraw Initial Error!" / "DirectDraw SetMode Error!"; 由 WinMain(0x401B9C) 调用, 返回非 0 才进入主循环（迁移: DirectDrawCreate + SetCooperativeLevel(FULLSCREEN\|EXCLUSIVE) + SetDisplayMode(640,480,16) → SDL 窗口 + 逻辑分辨率（Application::init）） |
 | `0x401815` | gameShutdown | `src/app/game_shutdown.cpp:9` | 0x401815 反编译; if (!byte_46CB05) 保证幂等; 依次关闭音频/MKF/输入/调色板, 卸载键盘钩子, Release 主表面/后台表面/DirectDraw 接口 |
 | `0x4018E7` | runModal | `src/app/event_stack.cpp:55` | 0x4018E7 反编译; dword_48A010[++nIDEvent]=handler; PostMessage(0x401) 通知进入; 局部消息泵直到 WM_USER+2(0x402); 返回 Msg.lParam; --nIDEvent（迁移: Win32 局部消息泵 → SDL 事件循环（Application::pumpEvents/renderFrame）; 0x401/0x402 消息 → handler(nullptr) / EventStack::requestExit; SetTimer/WM_TIMER → 循环内按 tickMs 合成 SDL_EVENT_TIMER（选人界面动画用）） |
 | `0x401966` | postModalExit | `src/app/event_stack.cpp:43` | PostMessageA(hWnd, 0x402, 0, lParam) —— 请求退出当前模态并回传结果 |
 | `0x401981` | enterGameLoop | `include/game/app/game_loop.h:7` | 0x401981 压入 sub_417E26（游戏内事件处理器）并 PostMessage(0x401)； a1 != 0 时调 sub_454D91(0)（迁移: 模态栈 + 消息泵 → runModal（EventStack）） |
-| `0x4019DD` | wndProc | `src/application.cpp:204` | 0x4019DD 窗口过程; WM_DESTROY(2) 走 sub_401815+PostQuitMessage, 默认分支转发给 dword_48A010[nIDEvent]（模态栈顶），无处理器时 DefWindowProcA |
-| `0x401B9C` | WinMain | `src/application.cpp:18` | 0x401B9C 反编译; RegisterClassA("Rich4") + CreateWindowExA(0, "Rich4", "Rich4", 0x80000000=WS_POPUP, 屏幕宽高) + sub_4015D6() + ShowWindow(5)（迁移: Win32 窗口类/全屏窗口 → SDL_CreateWindow（窗口化，现代化目标）; 显示模式由 0x4015D6 的 SetDisplayMode(640,480,16) 决定 → 逻辑分辨率 640x480） |
+| `0x4019DD` | wndProc | `src/application.cpp:208` | 0x4019DD 窗口过程; WM_DESTROY(2) 走 sub_401815+PostQuitMessage, 默认分支转发给 dword_48A010[nIDEvent]（模态栈顶），无处理器时 DefWindowProcA |
+| `0x401B9C` | WinMain | `src/application.cpp:19` | 0x401B9C 反编译; RegisterClassA("Rich4") + CreateWindowExA(0, "Rich4", "Rich4", 0x80000000=WS_POPUP, 屏幕宽高) + sub_4015D6() + ShowWindow(5)（迁移: Win32 窗口类/全屏窗口 → SDL_CreateWindow（窗口化，现代化目标）; 显示模式由 0x4015D6 的 SetDisplayMode(640,480,16) 决定 → 逻辑分辨率 640x480） |
 | `0x401CEB` | stockInit | `src/app/new_game.cpp:562` | 0x401B9C case 0/4 调用序列（0x401CEB → 0x4291D6）；loadMapData 的 0x428CAF 已先建好 specPt 映射；读档链（case 1）不调用（行情由存档恢复，重写完整存档恢复待 P5） 差异: 开局若为休市日（周日/节日），stockTick 内部 stockIsClosed 判定后跳过——与原版一致 |
 | `0x401E59` | 保存背景并绘制当前光标帧 | `include/game/render/cursor.h:32` | 0x401E59 计算 (x-offsetX, y-offsetY)，裁剪到 640x480，先 sub_451A97 保存背景再 sub_4562A5 绘制光标; dword_48A168 记录绘制位置 |
 | `0x401F98` | fptc | `include/game/render/cursor.h:37` | 0x401F98 中 word_48A176/word_48A174 控制帧间隔, word_48A172 递增回绕; GetCursorPos 与 dword_48A168/164 比较，变化或换帧时重绘（迁移: GetCursorPos（屏幕坐标）→ 由调用方传入 640x480 逻辑坐标） |
@@ -201,7 +201,7 @@
 | `0x453544` | numberInputDialog | `src/app/number_input_dialog.cpp:349` | 0x453544 反编译（panel[21] 背景/滑块/按键 + panel[22] 索引图 + runModal(sub_452C02)）; 上限 clamp（超限 → 上限）、"最大"= 上限、"清除"归 0、退格、滑块按档位比例； 0x452C02: 按键/滑块音效（g_effectSlots[0]/dword_482352）、按下态画帧 keyId、 byte_48CAC2==1 拖动面板（word_48CAB8/CAB6）、byte_48CAC2==16 拖动滑块实时更新、 进入 cursorSelect(27)/退出 cursorSelect(41)（迁移: panel[21] 为 SPR（8bit 索引 + RGB555 调色板），按原版 sub_456512 实现 blitSprRegion 差异: 背景保存恢复（saveBackground/allocUiElement）改为逐帧全量重绘（等价）） |
 | `0x453A32` | confirmDialog（data.mkf[440]，YES/NO | `include/game/app/confirm_dialog.h:7` | 0x453A32 → sub_450441(data, 440) + 居中 (x,y) + runModal(sub_45367E); sub_45367E 鼠标 x 左/右半 → 帧 1/2 高亮; 左键抬起左半→1(YES)/右半→0(NO); 右键抬起或取消键 → 0 [RE 0x440BA8] askDialog 形式：text 非空时先在 (cx, 140) 居中绘制文本 （setTextFont(16, 0xF0F0F0, 0x101010, 3, 1)，原版另有 g_tipFrame+72 背景框待补） 返回: true = YES（确定）, false = NO（取消） |
 | `0x454FE1` | sub_454FE1 | `src/app/turn_system.cpp:113` | 0x454FE1 查表 word_48242C（atan(min/max)），0x454FB4 映射 8 方向 差异: 用标准 atan2 等价替代查表（结果一致，避免硬编码 2049 项表） |
-| `0x45523E` | sub_45523E（经 | `include/game/render/surface.h:44` | 0x45523E 返回 (c>>3)&0x1F \| (c>>6)&0x3E0 \| (c>>9)&0x7C00（RGB888→RGB555）（迁移: SDL 侧内部固定 RGB555，原版 dword_47637C 显示格式分支（sub_45175D 检测）不再需要） |
+| `0x45523E` | sub_45523E（经 | `include/game/render/surface.h:48` | 0x45523E 返回 (c>>3)&0x1F \| (c>>6)&0x3E0 \| (c>>9)&0x7C00（RGB888→RGB555）（迁移: SDL 侧内部固定 RGB555，原版 dword_47637C 显示格式分支（sub_45175D 检测）不再需要） |
 | `0x4552B7` | convertImageChannels（经 | `include/game/render/blit.h:56` | 0x455337 对每像素 R/G/B 各 5bit 查 32 字节表后重组 RGB555 （表 = unk_485D68 + 32*a6，-16 = kChannelHalf，-20 = kChannelThird） 用于地图预览暗化（选人界面滚动背景） |
 | `0x4552E7` | scaleElementChannels | `include/game/render/blit.h:63` | 0x4552E7 对元素内 (x, y, w, h) 区域逐像素做 convertImageChannels 变换 用于已选头像变暗（-16）与悬停名字条（-20） |
 | `0x4553DA` | grayscaleImage（经 | `include/game/render/blit.h:75` | 0x455442 反汇编; gray = (R + G + B + 16) >> 2, 重组 R=G=B=gray; 0 保持 用于 AI 玩家头像灰度化 |
@@ -211,7 +211,7 @@
 | `0x455E24` | sub_455E24 | `include/game/render/blit.h:29` | 不透明 blit + 源区域（qmemcpy 快速拷贝，无色键判断） |
 | `0x455FD9` | sub_455FD9 | `include/game/render/blit.h:24` | 色键 blit + 源区域 (srcX, srcY, w, h); 裁剪时同步调整源偏移 (a6/a7) |
 | `0x456180` | blitScrolledMap | `include/game/render/blit.h:80` | 0x456180 反编译; 每行 1280 字节按 offset(&~3) 环绕拷贝到 640x480 缓冲 （dst 行 = src[off..1280) + src[0..off)），实现地图预览水平无限滚动 |
-| `0x4561BE` | sub_4561BE | `include/game/render/surface.h:32` | 0x4561BE 以 memset32 按行填充 (x,y,w,h)，颜色由 sub_4551F0 转换 |
+| `0x4561BE` | sub_4561BE | `include/game/render/surface.h:34` | 0x4561BE 以 memset32 按行填充 (x,y,w,h)，颜色由 sub_4551F0 转换 |
 | `0x45620F` | sub_45620F | `include/game/render/blit.h:38` | 0x45620F 用 memset32 画上下边、循环画左右边的空心矩形（颜色经 convertColor） 用于存档槽悬停高亮（0xFFFF00）与地图选择框 |
 | `0x45663E` | blitSpriteFrame | `include/game/render/blit.h:43` | 0x45663E 反编译; 帧头 = 资源基址 + 12 + 12*帧号; 调色板 = 基址 + data_offset; 8bit 索引像素经调色板取色, 索引 0 透明; 目标 = (x - offsetX, y - offsetY) 裁剪 640x480 用于选人界面底部玩家角色动画（JUMP.MKF 角色 SPR） |
 | `0x456770` | sub_456770 | `include/game/render/blit.h:49` | 0x456770 反编译; 帧头 12 字节 {w,h,offX,offY,size}, 8bit 索引 + 调色板, 目标 = (x - offX, y - offY), 裁剪到 dword_4861B8/C0/BC/C4 用于游戏内地图精灵（棋子/住宅用地/商業用地/行業設施點/事件格） |
@@ -232,7 +232,7 @@
 | `0x48A054` | dword_48A054 | `include/game/game_state.h:267` | 0x4015D6 中 sub_4502FE("speaking.mkf") 的返回值 |
 | `0x48A058` | dword_48A058 | `include/game/game_state.h:275` | 0x4015D6 中 sub_4502FE("effect.mkf") 的返回值 |
 | `0x48A05C` | dword_48A05C | `include/game/game_state.h:271` | 0x4015D6 中 sub_4502FE("panel.mkf") 的返回值 |
-| `0x48A08C` | dword_48A08C | `include/game/render/surface.h:11` | 0x401543 memcpy(dword_48A08C, data.mkf[601], 614400)（614400 = 640*480*2）; 0x451B36 sub_456F60(dword_48A08C, 0, 614400); 0x456418/0x4563F5 等以其为绘制目标; 0x40257A WM_PAINT 把绘制结果经 DDraw 后台表面 BltFast 到主表面（迁移: DDraw 后台表面 Lock/Unlock + BltFast → SDL 纹理每帧上传（RGB555 与原版一致）） |
+| `0x48A08C` | dword_48A08C | `include/game/render/surface.h:11` | 0x401543 memcpy(dword_48A08C, data.mkf[601], 614400)（614400 = 640*480*2）; 0x451B36 sub_456F60(dword_48A08C, 0, 614400); 0x456418/0x4563F5 等以其为绘制目标; 0x40257A WM_PAINT 把绘制结果经 DDraw 后台表面 BltFast 到主表面（迁移: DDraw 后台表面 Lock/Unlock + BltFast → SDL 纹理每帧上传（RGB555 与原版一致） [NEW M4-A1] 画布尺寸运行期化：kWidth/kHeight 仅作设计尺寸（native 保真画布默认值）， 实际画布尺寸由 create 决定；所有像素步长/边界必须走 width()/height()） |
 | `0x48A0E4` | dword_48A0E4 | `include/game/game_state.h:263` | 0x4015D6 中 sub_4502FE("data.mkf") 的返回值; 0x450441 以其为资源库句柄 |
 | `0x48A184` | dword_48A184 | `src/app/main_menu.cpp:36` | 0x40257A 中鼠标移动时记录的悬停按钮索引，-1 表示无 |
 | `0x48A354` | dword_48A354 | `include/game/game_state.h:342` | 0x406DE7 分配 0x96000 字节并由 JUMP.MKF 地图图填充 |
@@ -259,9 +259,9 @@
 |--------------|----------|----------|
 | Win32:UnhookWindowsHookEx 键盘钩子卸载 | `src/app/game_shutdown.cpp:27` | 0x401815 UnhookWindowsHookEx(hhk)；SDL 侧无全局钩子，无需对应 |
 | DDraw:Release 主表面(0x48A0DC)/后台表面(0x48A0E0)/lpDD 释放 | `src/app/game_shutdown.cpp:30` | SDL3 纹理由 Renderer 析构统一释放（Application::shutdown） |
-| Win32:GetCursorPos | `src/application.cpp:234` | 原版全屏 640x480，鼠标屏幕坐标即游戏坐标； SDL 窗口可缩放 + letterbox 逻辑呈现，需把窗口坐标换算为 640x480 逻辑坐标 |
+| Win32:GetCursorPos | `src/application.cpp:238` | 原版全屏 640x480，鼠标屏幕坐标即游戏坐标； SDL 窗口可缩放 + letterbox 逻辑呈现，需把窗口坐标换算为 640x480 逻辑坐标 |
 | Win32:MultiByteToWideChar(950) + WideCharToMultiByte(CP_UTF8) | `src/core/encoding.cpp:33` | 原版（Windows 独占）经系统代码页 950 转换；非 Windows 无此 API，旧实现为 空桩 → 所有 BIG5 文本为空。改为内嵌 cp950 映射表（tools/gen_big5_tables.py 生成 src/core/big5_tables.cpp）查表 + 手工 UTF-8 编码：两平台行为完全一致，且消除对 系统代码页/语言包的依赖（docs/cross-platform.md）。 语义保持: length < 0 取 strlen；length 显式时按字节数转换（嵌入 0 字节照转， 与原 MultiByteToWideChar 一致）；非法序列 → U+FFFD（等价系统默认替换行为）。 |
-| DDraw:BltFast 后台表面 → 主表面 | `src/render/surface.cpp:14` | 0x401543 BltFast(dword_48A0DC, ..., dword_48A0E0) 把绘制结果送上屏幕 → SDL_UpdateTexture + SDL_RenderTexture；像素格式 RGB555 与原版资源一致 （SDL3 命名为 SDL_PIXELFORMAT_XRGB1555，bit10-14=R / bit5-9=G / bit0-4=B） |
+| DDraw:BltFast 后台表面 → 主表面 | `src/render/surface.cpp:17` | 0x401543 BltFast(dword_48A0DC, ..., dword_48A0E0) 把绘制结果送上屏幕 → SDL_UpdateTexture + SDL_RenderTexture；像素格式 RGB555 与原版资源一致 （SDL3 命名为 SDL_PIXELFORMAT_XRGB1555，bit10-14=R / bit5-9=G / bit0-4=B） |
 | Win32:CreateCompatibleDC/CreateDIBSection + GDI DrawTextW | `src/render/text.cpp:141` | GDI 为 Windows 独占 → FreeType（本地 third_party 优先构建，见 CMakeLists） 渲染到同一 512x200 RGB555 缓冲，后续 measure/blit/清零语义与原实现一致 （327 处 drawText 调用点零改动；docs/cross-platform.md 阶段4） |
 | WINMM:DirectSoundCreate/mciSendStringA 音频输出 | `include/game/platform/audio.h:13` | 0x4015D6 中 sub_453B55 初始化 DirectSound（22050Hz/8bit/mono 主缓冲）; 0x4540D8 音效播放（Effect.mkf WAV → DirectSound buffer）; 0x454D91/0x4549CF 音乐（MCI MIDI / CD 音轨）; 0x454F5B 当前曲目; byte_49715A=音乐音量, byte_49715B=音效音量 |
 | Win32:SetWindowsHookExA(WH_KEYBOARD) 键盘输入 | `include/game/platform/input.h:11` | 0x4015D6 安装全局键盘钩子 fn(0x401010)，读取 word_497168 键位表实现 快捷键（见 docs/formats/cfg.md）→ SDL_EVENT_KEY_DOWN 在事件循环中分发 对应 RICH4.CFG 的 28 个功能键位，索引语义见 docs/formats/cfg.md。 |

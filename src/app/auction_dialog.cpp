@@ -354,7 +354,7 @@ void tickRoll(AuctionCtx& ui) {
         ui.bubbleBg.resize(static_cast<size_t>(142) * 113);
         for (int r = 0; r < 113; ++r) {
             std::memcpy(ui.bubbleBg.data() + static_cast<size_t>(r) * 142,
-                        dst.pixels() + static_cast<size_t>(y - 74 + r) * Surface::kWidth + 406,
+                        dst.pixels() + static_cast<size_t>(y - 74 + r) * dst.width() + 406,
                         142 * sizeof(uint16_t));
         }
         ui.bubbleBgY = y;
@@ -383,7 +383,7 @@ void tickRoll(AuctionCtx& ui) {
         return;
     }
     for (int r = 0; r < 113; ++r) {
-        std::memcpy(dst.pixels() + static_cast<size_t>(ui.bubbleBgY - 74 + r) * Surface::kWidth +
+        std::memcpy(dst.pixels() + static_cast<size_t>(ui.bubbleBgY - 74 + r) * dst.width() +
                         406,
                     ui.bubbleBg.data() + static_cast<size_t>(r) * 142, 142 * sizeof(uint16_t));
     }

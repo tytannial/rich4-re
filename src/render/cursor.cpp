@@ -147,8 +147,8 @@ void Cursor::update(Surface& dst, int mouseX, int mouseY) {
     (void)dst;
 }
 
-void Cursor::getRect(int mouseX, int mouseY, int outRect[4]) const {
-    // [RE 0x4024C0] 依据: 光标位置 + 当前帧 offset 得到 32x32 包围盒，裁剪到 640x480
+void Cursor::getRect(const Surface& dst, int mouseX, int mouseY, int outRect[4]) const {
+    // [RE 0x4024C0] 依据: 光标位置 + 当前帧 offset 得到 32x32 包围盒，裁剪到画布
     const UiFrameView* frame = currentFrame();
     const int ox = frame ? frame->offsetX : 0;
     const int oy = frame ? frame->offsetY : 0;
@@ -162,11 +162,11 @@ void Cursor::getRect(int mouseX, int mouseY, int outRect[4]) const {
     if (outRect[1] < 0) {
         outRect[1] = 0;
     }
-    if (outRect[2] > Surface::kWidth) {
-        outRect[2] = Surface::kWidth;
+    if (outRect[2] > dst.width()) {
+        outRect[2] = dst.width();
     }
-    if (outRect[3] > Surface::kHeight) {
-        outRect[3] = Surface::kHeight;
+    if (outRect[3] > dst.height()) {
+        outRect[3] = dst.height();
     }
 }
 

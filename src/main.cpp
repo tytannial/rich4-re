@@ -83,6 +83,9 @@ std::vector<std::pair<std::string, int>> gameKeys; // [NEW] --game-key "ctrl+5,1
     bool debugMode = false;
     int selftestSlot = -1;
     int loadGameSlot = -1;
+    // [NEW M4-A1] --canvas WxH：运行期画布尺寸（默认 native 640x480）
+    int canvasW = 0;
+    int canvasH = 0;
     // [NEW] headless 测试钩子（docs/testing.md；无原版对应）
     int testSeed = -1;
     bool headless = false;
@@ -127,6 +130,13 @@ std::vector<std::pair<std::string, int>> gameKeys; // [NEW] --game-key "ctrl+5,1
             selftestSlot = std::atoi(argv[++i]);
         } else if (arg == "--load-game" && i + 1 < argc) {
             loadGameSlot = std::atoi(argv[++i]);
+        } else if (arg == "--canvas" && i + 1 < argc) {
+            // [NEW M4-A1] 画布尺寸 WxH（开发/验证用；默认 640x480 native）
+            if (std::sscanf(argv[++i], "%dx%d", &canvasW, &canvasH) != 2 || canvasW <= 0 ||
+                canvasH <= 0) {
+                canvasW = 0;
+                canvasH = 0;
+            }
         } else if (arg == "--shot" && i + 1 < argc) {
             shotPath = argv[++i];
         } else if (arg == "--shot-frame" && i + 1 < argc) {
@@ -234,7 +244,7 @@ std::vector<std::pair<std::string, int>> gameKeys; // [NEW] --game-key "ctrl+5,1
                         "[--game-click4 x,y,frame] [--game-click5 x,y,frame] [--game-drag x1,y1,x2,y2,frame]\n"
                         "  [NEW headless 测试钩子] --debug --seed <n> --headless --test-clock "
                         "--trace --trace-out <file.json> --quickstart <map[,players[,humans]]> "
-                        "--save-selftest <slot> --load-game <slot>\n");
+                        "--save-selftest <slot> --load-game <slot> --canvas <WxH>\n");
             return 0;
         }
     }
@@ -316,7 +326,7 @@ std::vector<std::pair<std::string, int>> gameKeys; // [NEW] --game-key "ctrl+5,1
     if (headless || traceOn) {
         rich4::trace::setEnabled(true);
     }
-    if (!app.init(gameDir, headless)) {
+    if (!app.init(gameDir, headless, canvasW, canvasH)) {
         RICH4_LOGE("Application init failed");
         return 1;
     }

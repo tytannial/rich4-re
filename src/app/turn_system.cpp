@@ -1088,8 +1088,8 @@ void playHighlightBlink(Application& app, bool preRedraw) {
         captureHighlightShapes(app);
     } else {
         captureHighlightShapes(app);  // 用调用方现有记录（修改前画面）
-        snap.assign(dst.pixels(), dst.pixels() + static_cast<size_t>(Surface::kWidth) *
-                                                        Surface::kHeight);
+        snap.assign(dst.pixels(), dst.pixels() + static_cast<size_t>(dst.width()) *
+                                                        dst.height());
     }
     RICH4_LOGI("route highlight: %zu estates + %zu corps -> %zu shapes (RE 0x451985)",
                st.highlightEstates.size(), st.highlightCorps.size(), st.highlightShapes.size());
@@ -1183,15 +1183,15 @@ void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, boo
         bg.resize(static_cast<size_t>(rw) * rh);
         for (int r = 0; r < rh; ++r) {
             std::memcpy(&bg[static_cast<size_t>(r) * rw],
-                        dst.pixels() + static_cast<size_t>(ry0 + r) * Surface::kWidth + rx0,
+                        dst.pixels() + static_cast<size_t>(ry0 + r) * dst.width() + rx0,
                         static_cast<size_t>(rw) * sizeof(uint16_t));
         }
     };
     if (preserve) {
         rx0 = std::max(0, x);
         ry0 = std::max(0, y);
-        rw = std::max(0, std::min(Surface::kWidth, x + st.eventFlc.width()) - rx0);
-        rh = std::max(0, std::min(Surface::kHeight, y + st.eventFlc.height()) - ry0);
+        rw = std::max(0, std::min(dst.width(), x + st.eventFlc.width()) - rx0);
+        rh = std::max(0, std::min(dst.height(), y + st.eventFlc.height()) - ry0);
         if (rw > 0 && rh > 0) {
             snapBg();
         }
@@ -1231,7 +1231,7 @@ void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, boo
             }
             // 回卷基准（切换前=开始前画面；切换后=切换帧纯净场景）+ 叠加当前动画帧
             for (int r = 0; r < rh; ++r) {
-                std::memcpy(dst.pixels() + static_cast<size_t>(ry0 + r) * Surface::kWidth + rx0,
+                std::memcpy(dst.pixels() + static_cast<size_t>(ry0 + r) * dst.width() + rx0,
                             &bg[static_cast<size_t>(r) * rw],
                             static_cast<size_t>(rw) * sizeof(uint16_t));
             }
@@ -1407,15 +1407,15 @@ void cardGetDraw(CardGetCtx& ctx) {
         uint16_t* d = dst.pixels();
         for (int row = 0; row < ctx.h; ++row) {
             const int py = 200 + row; // [RE 0x441F73] (138,200)（元素偏移 0）
-            if (py < 0 || py >= Surface::kHeight) {
+            if (py < 0 || py >= dst.height()) {
                 continue;
             }
             for (int col = 0; col < ctx.w; ++col) {
                 const int px = 138 + col;
-                if (px < 0 || px >= Surface::kWidth) {
+                if (px < 0 || px >= dst.width()) {
                     continue;
                 }
-                d[static_cast<size_t>(py) * Surface::kWidth + px] =
+                d[static_cast<size_t>(py) * dst.width() + px] =
                     ctx.pixels[static_cast<size_t>(row) * ctx.w + col];
             }
         }
@@ -1955,7 +1955,7 @@ int realtyPickUpgrade(Application& app, int sel, int times, bool ownerPath) {
     // 施工前场景快照（angelUpgrade 可能弹设施选择面板残留；FLC553 保帧基准 = 旧建筑）
     Surface& dst = app.surface();
     std::vector<uint16_t> preUpgrade(
-        dst.pixels(), dst.pixels() + static_cast<size_t>(Surface::kWidth) * Surface::kHeight);
+        dst.pixels(), dst.pixels() + static_cast<size_t>(dst.width()) * dst.height());
     int flags = angelUpgrade(app, sel);  // [RE 0x40B110]
     if ((flags & 0x80) == 0) {
         for (int i = 1; i < times; ++i) {

@@ -132,19 +132,19 @@ void blitFlcFrame(Surface& dst, const FliDecoder& flc, int x, int y, bool transp
     const uint16_t* src = flc.pixels();
     for (int row = 0; row < flc.height(); ++row) {
         const int py = y + row;
-        if (py < 0 || py >= Surface::kHeight) {
+        if (py < 0 || py >= dst.height()) {
             continue;
         }
         for (int col = 0; col < flc.width(); ++col) {
             const int px = x + col;
-            if (px < 0 || px >= Surface::kWidth) {
+            if (px < 0 || px >= dst.width()) {
                 continue;
             }
             const uint16_t c = src[static_cast<size_t>(row) * flc.width() + col];
             if (transparent && c == key) {
                 continue;
             }
-            dst.pixels()[static_cast<size_t>(py) * Surface::kWidth + px] = c;
+            dst.pixels()[static_cast<size_t>(py) * dst.width() + px] = c;
         }
     }
 }
@@ -316,8 +316,8 @@ void applyMagicPenalty(Application& app, int pen, const std::vector<int>& target
                 Surface& dst = app.surface();
                 std::vector<uint16_t> pre(dst.pixels(),
                                           dst.pixels() +
-                                              static_cast<size_t>(Surface::kWidth) *
-                                                  Surface::kHeight);
+                                              static_cast<size_t>(dst.width()) *
+                                                  dst.height());
                 const int flags = angelUpgrade(app, objId); // [RE 0x40B110]
                 std::memcpy(dst.pixels(), pre.data(), pre.size() * sizeof(uint16_t));
                 app.renderFrame();
@@ -425,7 +425,7 @@ void restoreBigBuf(MagicCtx& ui) {
     }
     Surface& dst = ui.app->surface();
     for (int r = 0; r < 128; ++r) {
-        std::memcpy(dst.pixels() + static_cast<size_t>(ui.hoverBufY + r) * Surface::kWidth +
+        std::memcpy(dst.pixels() + static_cast<size_t>(ui.hoverBufY + r) * dst.width() +
                         ui.hoverBufX,
                     ui.hoverBuf.data() + static_cast<size_t>(r) * 144, 144 * sizeof(uint16_t));
     }
@@ -563,7 +563,7 @@ bool magicHandler(const SDL_Event* event, void* user) {
             ui.hoverBuf.resize(static_cast<size_t>(144) * 128);
             for (int r = 0; r < 128; ++r) {
                 std::memcpy(ui.hoverBuf.data() + static_cast<size_t>(r) * 144,
-                            dst.pixels() + static_cast<size_t>(by + r) * Surface::kWidth + bx,
+                            dst.pixels() + static_cast<size_t>(by + r) * dst.width() + bx,
                             144 * sizeof(uint16_t));
             }
             ui.hoverBufX = bx;
