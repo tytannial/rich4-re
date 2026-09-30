@@ -137,11 +137,17 @@ std::vector<uint8_t> lzhufDecompress(const uint8_t* src, size_t srcSize, size_t 
         }
         const size_t pos = dec.bitpos;
         const size_t byteOff = pos >> 3;
-        uint32_t bits = 0;
-        for (int k = 0; k < 5 && byteOff + k < srcSize; ++k) {
-            bits |= static_cast<uint32_t>(src[byteOff + k]) << (8 * k);
+        // [BUGFIX] 原实现 uint32_t bits |= src[byteOff+k] << (8*k)：k=4 时 <<32 是 UB，
+        //   x86 移位计数按 mod 32 → 第 5 字节被 OR 进 bit0..7（而非移入高位），
+        //   使 bits 低字节被污染 → offset 解错、偶发 out 下标下溢（Debug 断言
+        //   vector subscript out of range，mkf_data_read_stable 首个暴露点）。
+        //   Python 参考实现 (tools/lzhuf.py) = 先拼 40 位再右移取低 32 位，此处对齐。
+        uint64_t wide = 0;
+        for (int k = 0; k < 5 && byteOff + static_cast<size_t>(k) < srcSize; ++k) {
+            wide |= static_cast<uint64_t>(src[byteOff + static_cast<size_t>(k)]) << (8 * k);
         }
-        bits >>= (pos & 7);
+        wide >>= (pos & 7);
+        const uint32_t bits = static_cast<uint32_t>(wide);
         const uint8_t b = static_cast<uint8_t>(bits & 0xFF);
         const uint8_t ln = kLzhufLenTable[b];
         const uint32_t offset = ((static_cast<uint32_t>(kLzhufHiTable[b]) << 6) |
