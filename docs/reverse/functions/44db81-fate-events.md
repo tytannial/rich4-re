@@ -8,7 +8,8 @@
 > 状态（2026-09-26）：✅ **已实现**（`src/app/fate_event.cpp` + `include/game/app/fate_event.h`；
 > `fateEvent`/`fateEventCheck` 37 项判定 + 49 效果全实现；调试 `Ctrl+Shift+z`）。
 > 公共辅助提取至 `event_common.{h,cpp}`（新闻/命运共用）；卡片联动见 §5。
-> 未做：语音 `sub_44EF41`/`sub_44F354`（`TODO(P4)`）；byte_497324/5 统计并入 `misc8A`。
+> 语音 ✅ P4-D（2026-09-30 列勘误：id9 賣股 = `off_48085E` 列5 expr2、逃过坐牢 = 列0 expr0、
+> 载具 id10 列3/4 随机（id11 列3 固定））；byte_497324/5 统计并入 `misc8A`。
 
 ## 0. 总览
 
@@ -143,7 +144,8 @@ g_pieceSprites[13*cur] + N, 390, 344)`（N=12×帧号：+24=帧2 / +36=帧3 / +4
 | 47 | map3 | 7 | #0232 獵捕保育動物坐牢%d天 |
 | 48 | map3 | 9 | #0233 盜賣國家機密坐牢%d天 |
 
-判定统一 (1,1)：code 1 免（消息+语音）；code 2 天数 ×2；`resolvePenaltyTarget` → `jailPlayer(days)`。
+判定统一 (1,1)：code 1 免（消息 + 台词 `off_48084A` 列0 expr0，0x44D873 共享块）；code 2 天数 ×2；
+`resolvePenaltyTarget` → `jailPlayer(days)`。
 
 ## 3. 幸运判定 sub_44B896（0x44B896）
 
@@ -277,7 +279,7 @@ passOnCardDialog(p)：
 | 高亮 | `markPickBuffer + highlightBlink` | `blinkSingleObj(objId)`（复用收租高亮管线）|
 | 出国/绑架 | `sub_40D375` | `fateStartTravelState`（状态设置）+ `updatePlayerStates` BYTE1（已有）|
 | 统计 | `byte_497324/5` | 并入 `misc8A[4]/[5]`（与 `damagePlayer` 同源）|
-| 语音 | `sub_44EF41`/`sub_44F354` | `TODO(P4)` |
+| 语音 | `sub_44EF41`/`sub_44F354` | ✅ P4-D（金钱档/列5 卖股/列3/4 坏运/列0 逃过；`play*Line` 家族） |
 | 生日逐人演出 | 顶部行「向%s收一張卡片」逐人刷新 | 简化为直接弹选卡面板 |
 
 ## 7. 实机反馈修复（2026-09-26）

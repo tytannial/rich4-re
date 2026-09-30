@@ -221,7 +221,12 @@ trace.clear` 同帧清窗，**修前 FAIL 75 次 cur=0 → 修后 0 次**）。�
   （灾害/拆屋/载具/没收 列3/4/5）+ 得點券（kValueLines）+ 卡片格 + 命运收付款 + 新闻业主 ×4 +
   淘汰/终局胜利；勘误：选卡·道具栏=空函数、请神符=卡片表槽22 已播；**修正 playStatusDaysLine
   列映射 bug**（原误用付款列9/10/11 → 倒霉列3/4/5）；checkVictory/defeatFlow 留 M3；
-  **注意 expr 不是表选择器**——详情见专项 §1）
+  **注意 expr 不是表选择器**——详情见专项 §1；
+  **2026-09-30 列勘误（实机反馈）**：`kMoneyLines` 位置7/8/9 ↔ 原版列16/17/18 被用反——
+  `playDebtorLine` 列16→**列18**（欠债不再播「我是個大地主」）、`playEstateChainSpeech`
+  买地→**列16**/升级→**列17**（加盖不再播「兄弟，我記住你了」）；同批补
+  `ownerCanCollectRent` 免收列13、`fateApplySellAllStock` 列5、载具 id10 列3/4 随机、
+  逃过坐牢列0、`jailPlayer`/`hospitalizePlayer` 列19/20（含累加路径），见专项 §5）
 - **角色名/公司名空格专项 ✅（2026-09-29）**：原版名字表带 `0x20` 排版空格（4 字宽），
   消息 sprintf 经 `copyNameNoSpaces`(0x452946) 去空格、drawText 直绘保留——重写逐点回验 44 调用点
   矩阵并订正 13 处消息漏去空格 / 6 处误去空格（魔法屋惩罚·復仇/免費/免罪卡·AI 銀行回退）、

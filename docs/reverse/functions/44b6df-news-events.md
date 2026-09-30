@@ -6,7 +6,7 @@
 >
 > 状态（2026-09-26）：✅ **已实现**（`src/app/news_dialog.cpp` + `include/game/app/news_dialog.h`；
 > `newsEvent`/`newsEventCheck` 36 条/`g_newsFuncs` 36 效果全实现；调试 `Ctrl+Shift+A`）。
-> 未做：语音 `sub_44EF41` / 浮动数字 `sub_44F354`（`TODO(P4)`）。
+> 语音 ✅ P4-D（业主倒霉台词列3/4、奖励入账金额档）；浮动数字 `sub_44F354` 仍 `TODO`。
 > **拍卖 idx 7 ✅ 2026-09-26**（`auction_dialog.cpp` `runAuction`，价款入公库）。
 > 高亮（estate+corp）已按原版 `g_pickMask` 形状修复（2026-09-26，见 §7）。
 
@@ -97,7 +97,7 @@ newsEvent:
 | 2 | 0151 | 住院中病患提前出院 | `sub_449006` | 文本；`g_hospitalFlags` → BYTE3=0x80 + 清标志 + 头像+60 | 无 |
 | 3 | 0152 | 住院中病患延長住院%d天（3）| `sub_449081` | 头像+48；BYTE3=(3+旧)&0x7F | 无 |
 | 4 | 0153 | 外星人攻打地球 | `sub_44913D` | 文本 | 收集有建筑地块 → 随机 → `getObjectPosition` + `refreshGameUi(x,y,2)` → `expireAssets(100, 38, 1, -1)` → FLC 531 音效 86 → 遍历 `(alive & 0x40)!=0` 玩家 `hospitalizePlayer(j, 3)` → `sub_41D546()` |
-| 5 | 0154 | 外星怪獸襲擊%s\n摧毀建築一棟 | `sub_4492A0` | 收集有建筑 → 随机 → `g_newsTarget=objId`、`g_newsParam=owner+1` → 文本(名称) | `getObjectPosition` + refresh → `demolishEstate(objId, 1)` → FLC 539 音效 84 → 业主台词 `sub_44EF41(owner-1, 2, off_480856[char*27+(rand&1)])` [TODO P4] |
+| 5 | 0154 | 外星怪獸襲擊%s\n摧毀建築一棟 | `sub_4492A0` | 收集有建筑 → 随机 → `g_newsTarget=objId`、`g_newsParam=owner+1` → 文本(名称) | `getObjectPosition` + refresh → `demolishEstate(objId, 1)` → FLC 539 音效 84 → 业主台词 `sub_44EF41(owner-1, 2, off_480856[char*27+(rand&1)])` ✅ P4-D（列3/4 随机） |
 
 ### 政府公告（titleClass 1）
 
@@ -222,7 +222,7 @@ newsEvent:
 | `stockNewsApply(a1)` | 股价新闻应用 | 重写 `stockNews` 字段 + 接入 `stockTick`（提交 5）|
 | `sub_41D433(玩家)` | 刷新右侧玩家信息面板 | `drawPlayerInfoPanel` 等价 ✅ |
 | `sub_41D546()` | 面板/视口复位 | `TODO`（提交 3 核对）|
-| `sub_44EF41` / `sub_44F354` | 角色台词语音 / 浮动数字 | `TODO(P4)` |
+| `sub_44EF41` / `sub_44F354` | 角色台词语音 / 浮动数字 | 语音 ✅ P4-D；浮动数字 `TODO` |
 | `sub_441210` | 坐牢目标判定（免罪卡/嫁祸卡）| 本轮简化为返回原玩家，卡片分支 `TODO(P4)` |
 
 `g_newsFuncs` 共享尾部：`0x44970E`（corp 价格调整 + highlight）、`0x449725`（highlightBlink）、
@@ -245,7 +245,7 @@ newsEvent:
   `landingEvent` case 2 → `newsEvent(app); return 0x80;`
 - `stockNewsApply`（0x429040）实现于 `stock_system.cpp`：`stockNews` 高 4 位 = 涨（+10）、
   否则跌（-10）→ `stockPriceUpdate(昨收, 动量)` → 现价 + 历史（`turnCounter-1` 环形槽）。
-- 差异：语音/浮动数字 TODO(P4)；idx 7 拍卖桩；`sub_41D433` 面板刷新省略
+- 差异：语音 ✅ P4-D、浮动数字 TODO；idx 7 拍卖桩；`sub_41D433` 面板刷新省略
   （重写每帧全量重绘）。
 - **实机修正（2026-09-26）**：
   ① 高亮恢复原版形状/落点——原版 `rebuildPickBuffer` 0x409B18 用 `g_pickMask`（=map.mkf[26]）
@@ -277,4 +277,4 @@ newsEvent:
       （`newsEvt26 → st.stockMarketClosed = 10`；`advanceDay` 递减/bit7：`turn_system.cpp`；
       `stockTick`/面板判定消费）
 - [x] `stockNewsApply` 与重写 `stockTick` 的精确对齐 —— 已实现（`st.stocks[i][7]` 动量字段）
-- [ ] 角色台词表 `off_480856`（业主倒霉台词，idx 5/15/19/21）→ P4 语音专项（`p4-voice-batch.md`）
+- [x] 角色台词表 `off_480856`（业主倒霉台词，idx 5/15/19/21）✅ P4-D（`playUnluckyLine` 列3/4 随机）

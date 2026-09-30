@@ -1485,7 +1485,8 @@ void showCardGet(Application& app, int cardId, const char* text) {
 // 依据: 0x41D559 反编译; 依次判断（命中即 showMessage(文本, 1500) 并返回 false）：
 //   flag(+23) 高/低半字节均非 0 = 房屋查封中; 地主 +65 同盟对象 == 付款人+1 = 與%s同盟中;
 //   地主携带死神（cellTableIdx==15）= 死神顯靈; stateFlags BYTE0/1/2/3 = 住宿/消失/坐牢/住院中;
-//   byte54 = 冬眠中; state37 = 夢遊中
+//   byte54 = 冬眠中; state37 = 夢遊中；
+//   随后 [RE 0x41D6DD] 付款人台词 off_48087E（列13、expr3，无条件）
 bool ownerCanCollectRent(Application& app, int ownerIdx, uint8_t flag, const char* feeName) {
     GameState& st = app.gameState();
     const Player& owner = st.players[ownerIdx];
@@ -1514,6 +1515,14 @@ bool ownerCanCollectRent(Application& app, int ownerIdx, uint8_t flag, const cha
         return true;
     }
     showMessage(app, text, 1500);
+    // [RE 0x41D6DD] 免收租金台词 off_48087E（列13、expr3；说话者 = 当前玩家/付款人）
+    const int cur = st.currentPlayer;
+    if (cur >= 0 && cur < 4) {
+        const int ci = st.players[cur].charIndex;
+        if (ci >= 0 && ci < 12) {
+            playLine(app, cur, kMoneyLines[ci][11], 3);  // 位置11 = 原版列13
+        }
+    }
     return false;
 }
 
@@ -3445,6 +3454,11 @@ void jailPlayer(Application& app, int player, int days) {
     if (cur != 0) {
         const int total = ((cur & 0x7F) + days) & 0x7F; // [RE 0x43D6C5]
         pl.stateFlags = (pl.stateFlags & 0xFF00FFFFu) | (static_cast<uint32_t>(total) << 16);
+        // [RE 0x43D71C] 入狱台词（累加路径同样无条件播，列19 expr2）
+        const int ci = st.players[player].charIndex;
+        if (ci >= 0 && ci < 12) {
+            playLine(app, player, kMoneyLines[ci][13], 2);
+        }
         RICH4_LOGI("jailPlayer: p=%d days 累加 -> %d (RE 0x43D593)", player, total);
         return;
     }
@@ -3472,6 +3486,13 @@ void jailPlayer(Application& app, int player, int days) {
         // [RE 0x450F04] 帧 18（flags 0x120001）切换：押解警车到画面中间时全量重绘 →
         //   角色经棋子守卫（BYTE2 入狱≠0）消失 → 后续帧基于监狱场景
         playEventFlc(app, 538, 0, 40, 94, /*freeze=*/false, /*switchFrame=*/18);
+    }
+    // [RE 0x43D71C] 入狱台词 off_480896（列19、expr2；原版在 FLC 之后无条件，累加天数时也播）
+    {
+        const int ci = st.players[player].charIndex;
+        if (ci >= 0 && ci < 12) {
+            playLine(app, player, kMoneyLines[ci][13], 2);
+        }
     }
     insurancePayout(app, player, 2000 * days * st.moneyMul); // [RE 0x43D749]
     pl.byte66 = static_cast<uint8_t>(pl.byte66 + days);      // [RE 0x43D755] byte_496BAA 累计
@@ -3510,6 +3531,11 @@ void hospitalizePlayer(Application& app, int player, int days) {
     if (cur != 0) {
         const int total = ((cur & 0x7F) + days) & 0x7F; // [RE 0x43ED74]
         pl.stateFlags = (pl.stateFlags & 0x00FFFFFFu) | (static_cast<uint32_t>(total) << 24);
+        // [RE 0x43EDCB] 住院台词（累加路径同样无条件播，列20 expr2）
+        const int ci = st.players[player].charIndex;
+        if (ci >= 0 && ci < 12) {
+            playLine(app, player, kMoneyLines[ci][14], 2);
+        }
         RICH4_LOGI("hospitalizePlayer: p=%d days 累加 -> %d (RE 0x43EC3F)", player, total);
         return;
     }
@@ -3537,6 +3563,13 @@ void hospitalizePlayer(Application& app, int player, int days) {
         //   [RE 0x450F04] 帧 30（flags 0x1E0001）切换：全量重绘 → 角色经 0x4086A1 守卫
         //   （BYTE3 住院≠0）消失（抬进医院）→ 后续帧基于医院场景
         playEventFlc(app, 524, 0, 210, 92, /*freeze=*/false, /*switchFrame=*/30);
+    }
+    // [RE 0x43EDCB] 住院台词 off_48089A（列20、expr2；原版在 FLC 之后无条件，累加天数时也播）
+    {
+        const int ci = st.players[player].charIndex;
+        if (ci >= 0 && ci < 12) {
+            playLine(app, player, kMoneyLines[ci][14], 2);
+        }
     }
     insurancePayout(app, player, 2000 * days * st.moneyMul); // [RE 0x43EDF8]
     pl.byte66 = static_cast<uint8_t>(pl.byte66 + days);      // [RE 0x43EE04]

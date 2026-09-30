@@ -26,15 +26,16 @@
 
 | 重写位置 | 原版 | 状态 |
 |---|---|---|
-| 住宅收租（付款/收款） | 0x419F59/0x419F67（`sub_44F4ED`/`sub_44F42D`）、0x419FA1/0x419FF0（`sub_44F354`） | ✅ `playDebtorLine`/`playPayerLine`/`playCollectorLine`；同盟分账**地主份额**收款档、同盟无收款台词（对齐原版） |
+| 住宅收租（付款/收款） | 0x419F59/0x419F67（`sub_44F4ED` **列18**/`sub_44F42D`）、0x419FA1/0x419FF0（`sub_44F354`） | ✅ `playDebtorLine`/`playPayerLine`/`playCollectorLine`；同盟分账**地主份额**收款档、同盟无收款台词（对齐原版） |
 | corp 收费 | 0x41A710/0x41A71E/0x41A735 | ✅ 嫁祸反弹（payer==owner）不播（原版 0x41A709） |
 | 升级封顶 | 0x4199F1 `off_480886`（列15、expr0） | ✅ + FLC523 |
-| 同路段≥3 吐槽 | 0x41A13E（必播列16）/0x419A2B（1/3 列17） | ✅ `playEstateChainSpeech` |
-| 住宿/入狱/住院 | 0x41A7E0/0x43D5F9/0x43ECA5 `sub_44F2C2`（天数档、expr2） | ✅ `playStatusDaysLine`；住宿仅付款人==本人时播 |
-| 买地/升级询问语音 | 0x4198xx（`sub_44EF41` 索引 0） | ⬜ 待核（未必存在独立调用） |
+| 同路段≥3 吐槽 | 0x41A13E 买地必播**列16**（`off_48088A`）/0x419A2B 升级 1/3 **列17**（`off_48088E`） | ✅ `playEstateChainSpeech`（列16/17） |
+| 住宿/入狱/住院 | 0x41A7E0/0x43D5F9/0x43ECA5 `sub_44F2C2`（列3/4/5 天数档、expr2）；入狱/住院 FLC 后另有**列19/20** expr2（0x43D71C/0x43EDCB，无条件含累加路径） | ✅ `playStatusDaysLine` + `jailPlayer`/`hospitalizePlayer` 收尾；住宿仅付款人==本人时播 |
+| 买地/升级询问语音 | 0x4198xx（`sub_44EF41` 索引 0） | ✅ 审计确认无独立调用（landingEvent 4 处调用 = 封顶 0x419A19/0x41AB5B、航空公司免出国 0x41AC1F、得點券 0x41B211） |
 | 出国/绑架 `startTravelState` | 0x40D3F8 `sub_44F2C2` | ✅ 天数档 expr2 |
 | 大財神超额收款 | 0x40ED85 `sub_44F354`（attachObject） | ✅ `v>=5000×M` 才播（`playCollectorLine`） |
 | 神明租金免付 | 0x41D7C1 `sub_44F567`（列12/13/14 意外之财） | ✅ `playWindfallLine`；大財神 `v==0` 时在 showMessage 后播（原金额档） |
+| 地主状态免收租 | 0x41D6DD `off_48087E`（列13、expr3，说话者=当前玩家/付款人） | ✅ `ownerCanCollectRent` 末尾（查封/同盟/死神/状态/冬眠/梦游均播） |
 | 新闻/命运收款付款 | 0x449A80 等 / `sub_44CD99`/`sub_44CF1E` / fate 438/459 | ⬜ 归 P4-D |
 
 ### D2 移动落地 / 物件 / 神明 —— **P4-C ✅ 2026-09-27**
@@ -61,8 +62,10 @@
 | 请神符 | 0x444E7A = `off_481292 + 360*char` = **卡片表槽 22** | ✅ `playCardLine(22)`（"另表未接"系误判） |
 | 命运 逃过罚款 | 0x44CE7E `sub_44F567`（原额档） | ✅ `playWindfallLine` |
 | 命运 加倍付款 | 0x44CEF9 `sub_44F42D` | ✅ `playPayerLine` |
-| 命运 收款/卖股 | 0x44D334 `sub_44F354`、0x44D028 `sub_44F567` | ✅ `playCollectorLine`/`playWindfallLine` |
-| 命运 拆屋/载具/没收 | 0x44BF9F 列3/4、0x44CB30/CC36 列3、0x44D777 列3（expr2） | ✅ `playUnluckyLine` |
+| 命运 收款/逃过收款 | 0x44D334 `sub_44F354`（金额档）、0x44D028 `sub_44F567` | ✅ `playCollectorLine`/`playWindfallLine` |
+| 命运 id9 變賣股票 | 0x44C91F `off_48085E`（**列5**、expr2，非金额档） | ✅ `fateApplySellAllStock` |
+| 命运 拆屋/载具/没收 | 0x44BF9F 列3/4 随机、0x44CA46 id10 列3/4 随机 / 0x44CB53 id11 列3 固定、0x44D777 列3（expr2） | ✅ `playUnluckyLine`（`random` 参数区分 id10/11） |
+| 命运 逃过坐牢（33..48） | 0x44D873 `off_48084A` 列0 expr0（4 张地图共享 phase1 块） | ✅ `fateApplyJail` 幸运分支 |
 | 命运 偷卡/面板 | 无 `sub_44EF41` xref | ✅ 勘误（原版无台词） |
 | 新闻业主 ×4（怪獸/瓦斯/洪水/龍捲風） | 0x4494CD/44A5C3/44AB0F/44AE7F 列3/4 expr2 | ✅ 有主才播 |
 | 新闻奖励入账 idx8/9/10 | 0x449A80 `sub_44F354` | ✅ |
@@ -97,6 +100,12 @@
    勘误：选卡·道具栏（sub_4420D5 空函数）、请神符（= 卡片表槽22 已播）、命运偷卡无台词；
    **修正 P4-C bug**：`playStatusDaysLine` 原误用付款列9/10/11 → 倒霉列3/4/5。
    checkVictory/defeatFlow 台词留 M3。**P4 专项至此全部完成。**
+5. **2026-09-30 语音列勘误（实机反馈：「坏神倒霉语用了幸运语 / 加盖高兴语用了被收租语」）**：
+   `kMoneyLines` 位置 7/8/9 ↔ 原版列 16/17/18 对应关系修正——`playDebtorLine` 列16→**列18**
+   （欠债者不再播「我是個大地主」）、`playEstateChainSpeech` 买地 列17→**列16**、升级/加盖
+   列18→**列17**（加盖不再播「兄弟，我記住你了」）；同批补正：`ownerCanCollectRent` 免收列13、
+   `fateApplySellAllStock` 列5、载具 id10 列3/4 随机、逃过坐牢列0、
+   `jailPlayer`/`hospitalizePlayer` 列19/20（含累加天数路径）。
 
 每批：Python 提取表（cp950 → UTF-8）→ 落在 `item_lines.cpp`/`card_lines.cpp` 同款表文件 →
 调用点接入（补 expr 参数）→ 实机核对（气泡头像表情 + 语音编号）。

@@ -319,7 +319,8 @@ void fateStartTravelStateLocal(Application& app, Player& pl, int player, int day
 }
 
 // [RE 0x44CA46/0x44CB53] 载具损毁（命运 10/11）：travel=0 + 回收礼物流通池 + 重载行走
-void fateLoseVehicle(Application& app, int player) {
+//   random=true（id10 机车被偷，0x44CA46）→ 列3/4 随机；false（id11 汽车撞毁，0x44CB53）→ 列3 固定
+void fateLoseVehicle(Application& app, int player, bool random) {
     GameState& st = app.gameState();
     Player& pl = st.players[player];
     const int t = pl.travel & 3;
@@ -329,7 +330,7 @@ void fateLoseVehicle(Application& app, int player) {
     pl.travel = 0;
     pl.diceCount = 1;
     loadWalkResources(st, player);
-    playUnluckyLine(app, player, false);  // [RE 0x44CB30/0x44CC36] 载具损毁倒霉台词（列3 固定）
+    playUnluckyLine(app, player, random); // [RE 0x44CB30/0x44CC36] 载具损毁倒霉台词（列3 或 3/4 随机）
     RICH4_LOGI("fate: p=%d vehicle lost (RE 0x44CA46)", player);
 }
 
@@ -641,7 +642,7 @@ void fateApplyVehicleLost(FateCtx& ctx, int idx) {
     if (lr.code == 2) {
         showMessage(app, lr.text, 1500);
     }
-    fateLoseVehicle(app, cur); // [RE 0x44CA46/0x44CB53]
+    fateLoseVehicle(app, cur, idx == 10); // [RE 0x44CA46 id10 列3/4 随机 / 0x44CB53 id11 列3 固定]
     RICH4_LOGI("fate: vehicle lost idx=%d (RE 0x44C%s)", idx, idx == 10 ? "A46" : "B53");
 }
 
@@ -676,16 +677,18 @@ void fateApplySellAllStock(FateCtx& ctx) {
         showMessage(app, lr.text, 1500);
         return;
     }
-    int32_t sold = 0;
     for (int i = 0; i < 12; ++i) {
         const int32_t shares = st.playerShares[cur][i];
         if (shares > 0) {
-            sold += sellStock(app, cur, i, shares, true); // [RE sellStock(cur,i,shares,1)]
+            sellStock(app, cur, i, shares, true); // [RE sellStock(cur,i,shares,1)]
         }
     }
     // [RE sub_41D433(cur)] 面板刷新由每帧重绘替代
-    // [RE 0x44D334] 卖股求现收款台词（sub_44F354，expr3）
-    playCollectorLine(app, cur, sold);
+    // [RE 0x44C91F] 变卖股票台词 off_48085E（列5、expr2）——非收款金额档
+    const int ci = st.players[cur].charIndex;
+    if (ci >= 0 && ci < 12) {
+        playLine(app, cur, kMoneyLines[ci][20], 2);
+    }
 }
 
 void fateApplyConfiscate(FateCtx& ctx) {
@@ -734,6 +737,11 @@ void fateApplyJail(FateCtx& ctx, const FateDef& def) {
     const FateLuckResult lr = fateLuckRoll(st, cur, kLuckHeavy);
     if (lr.code == 1) {
         showMessage(app, lr.text, 1500);
+        // [RE 0x44D873] 逃過坐牢台词 off_48084A 列0、expr0（4 张地图 Jail 共享 phase1 块）
+        const int ci = st.players[cur].charIndex;
+        if (ci >= 0 && ci < 12) {
+            playLine(app, cur, kValueLines[ci][0], 0);
+        }
         return;
     }
     int days = def.amount;

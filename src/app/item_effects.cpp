@@ -260,7 +260,7 @@ void playPayerLine(Application& app, int player, int32_t amount) {
     }
 }
 
-// [RE 0x44F4ED] playDebtorLine：欠债者面对最大债主（50%）——返回 true 时调用方不再播付款台词
+// [RE 0x44F4ED] playDebtorLine：欠债者面对最大债主（50%，off_480892 列18）——返回 true 时调用方不再播付款台词
 bool playDebtorLine(Application& app, int player, int creditor, int32_t amount) {
     GameState& st = app.gameState();
     if (player < 0 || player >= 4 || creditor < 0) {
@@ -272,7 +272,7 @@ bool playDebtorLine(Application& app, int player, int creditor, int32_t amount) 
     }
     if (findMaxCreditor(st, player) == creditor && amount >= 5000 * st.moneyMul &&
         (rng::next() & 1)) {
-        playLine(app, player, kMoneyLines[ci][7], 1);  // [RE 0x44EF41] expr 1（欠债怨念）
+        playLine(app, player, kMoneyLines[ci][9], 1);  // [RE 0x44EF41 off_480892 列18] expr 1（欠债怨念）
         return true;
     }
     return false;
@@ -361,12 +361,12 @@ void playEstateChainSpeech(Application& app, const char* name, int flag) {
         return;
     }
     if (flag != 0) {
-        // [RE 0x44F627] 1/3 概率（升级路径）
+        // [RE 0x44F627 off_48088E 列17] 1/3 概率（升级/加盖路径）
         if ((rng::next() % 3) == 0) {
-            playLine(app, p, kMoneyLines[ci][9], 0);
+            playLine(app, p, kMoneyLines[ci][8], 0);
         }
     } else {
-        playLine(app, p, kMoneyLines[ci][8], 0);  // 买地路径必播
+        playLine(app, p, kMoneyLines[ci][7], 0);  // [RE 0x44F627 off_48088A 列16] 买地路径必播
     }
 }
 
