@@ -212,6 +212,8 @@ for (each corp) {
 ## 差异 / 待深入
 
 - 原版每次停留研究所（含已在研 `researchLeft>0`）都重开选择覆盖 `researchItem`——照抄。
+  （2026-09-30 曾按实机反馈加 `researchLeft==0` 守卫，**随后用户裁定恢复 IDA 逻辑**：
+  触发点条件仅 `owner/type4/sub!=0/(flag&0x0F)==0`；查封卡置 `flag` 低半字节=1 时才禁研究。）
 - `0x41B0FC` 触发前置无"满 9 道具"守卫；产出 `givePlayerItem` 内部上限 9 自处理。
 - 升级询问的封顶（`off_480886` 列15 expr0）与非封顶（0x40ECDE 列8 expr3）台词 ✅ P4-C 已接入。
 - AI 研究所是否会主动升级 `sub`：AI 升级走通用设施升级分支（自动，无询问），与研发独立。

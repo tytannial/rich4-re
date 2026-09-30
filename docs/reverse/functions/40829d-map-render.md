@@ -56,6 +56,13 @@ cellEnts 物件、玩家棋子，以及住宅用地/商業用地/行業設施點
 - 事件槽（玩家 4-8）NPC 绘制 **✅ 2026-09-26**：循环 `ebx 0..4`（edi=ebx*16），`busy(0x498E32)==0`
   才画（在押/未释放跳过）；g_miscTable80 坐标 + `drawPiece` state×group 资源回退；见
   `498df0-event-slot-npc.md` §1.4/§3。
+- **冬眠棋子"冰冻蓝白" ✅ 2026-09-30（勘误：非灰化）**：0x4087BE（玩家 `byte54(496B9E)≠0`）/
+  0x4089C8（事件槽 `timerA(498E34)≠0`）→ `sub_4555C5(绘制项)` 经 `funcs_4555DE[像素格式]`
+  调色板逐项变换。格式变体：0=RGB555(0x4555EB 红白 `(31,gray,gray)`)、1=RGB565、
+  **2=BGR565(0x45566E 蓝白 `(gray,2gray,31)`)——实机对照观感**、3=BGR555。重写 RGB555 等价 =
+  `blitSpriteFrameFreezeClipped`：`gray=(R+G+B+40)>>2 & 0x1F`、输出 `(B=31, G=gray, R=gray)`
+  （gray>31 位域环绕照抄；此前纯灰 + 溢出 bit15 = 花屏）。梦游 `state37` 的 0x408870 段
+  （`[48A44C]|=0x0F/0x0E` 绘制类型）待后续。
 - 骰子滚动/点数绘制见 `game_panel.cpp`/`turn_system.cpp`（屏幕固定落点，见 `audio-system.md` 同段）。
 
 ## 验证方式

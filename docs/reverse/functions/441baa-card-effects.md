@@ -260,6 +260,85 @@ if 非人类: flyObjectSprite; highlightBlink(); refreshGameUi(0,0,1); return v
     受害者 1、陷害 3/1、同盟 3/0、復仇 0/2、嫁禍 0/2、改建 3、请神 0；原主类（购地62/怪兽70/拆除71/拍賣67）expr1。
   - 验证：`--trace-out` 抽查＝乌龟 使用者(expr3)→目标(expr2)、红卡 槽23 先于选股面板、
     拍卖 使用者(expr3)在原主前、抢夺 使用者在选卡前(消耗→目标 expr1)；卡片场景 23/23 PASS。
+- **2026-09-30 二轮实机反馈修复（光标/音效/特写/冬眠，IDA 逐点核验）**：
+  - **选目标动画光标**：`selectTargetDialog` mode 编码 = flags(低16) | BYTE1=过滤 | BYTE2=光标索引 |
+    **BYTE3=帧数−1**（0x445EC1：dword_48C588=mode BYTE2、dword_48C58C=(BYTE3)+1，命中时
+    `cursorSelect(type, frames, 10)`）。卡牌 mode 全部 `0x0E0Cxxxx` → 光标 12、**15 帧**；重写此前
+    硬编码 frames=1（无动画）。已按 BYTE3+1 解析（`TargetSelCtx::cursorFrames`）。
+  - **红/黑卡选股光标**：0x444FF0/0x4450B4 `cursorSelect(12,15,10)`、0x44500C/0x4450CE 恢复 41；
+    `stockPickDialog` 进入/退出已接。
+  - **无效使用错误音效**：0x441CD1 `if(!v4) audioPlayEffect(g_uiSoundMusicTip)`=UI 音效 3；
+    人类分支 cardEffect 返回 0 时补播（AI 分支原版无）。
+  - **卡片特写绘制顺序**：0x441F73 = tip 框(0x442023) → 文本(0x44203E) → **卡片 blitElementFullscreen
+    (0x44205C) 最后贴**（165×256@(138,200) 覆盖 tip 框左下）；重写此前顺序颠倒（tip 压卡片）。
+  - **特写残影**：0x441C90 `sub_451EDB(v3,0,0x8028)` 每次选卡返回后**恢复背景**（save/restoreBackground
+    配对）；重写等价 = 卡牌栏绘制前 `renderGameFrame` 全屏重绘（`renderCardBag` 已加）。
+  - **冬眠/梦游 128 天不醒根因**：0x41CB04 递减 `n==0 → 0x80`（到期标记），**醒来在下一回合的
+    0x41C96B/0x41C9A7**：`bit7 → 清 0 + 释放动画组能力(sub_40B8D8) + loadWalkResources`（梦游另按
+    礼物流通池计数恢复暂存载具 0x41CA04..）。重写缺 bit7 清 0 段 → `0x80↔0x7F` 死循环（128 天）；
+    已在 `updatePlayerStates` 补全两段（含载具恢复/池扣减）。
+  - **冬眠棋子特效**：0x4087BE（玩家 byte54≠0）/0x4089C8（事件槽 timerA≠0）→ 棋子**灰化**
+    （sub_4555C5 调色板逐项 sub_4555EB：`gray=(R+G+B+40)>>2`）；重写新增
+    `blitSpriteFrameGrayClipped` + SpriteDraw.gray（索引 0 仍透明）。
+  - 系数复核（get_bytes）：dbl_4653D8=**0.2**（查税）、flt_4653BC=**200.0**（黑卡）、
+    flt_46531C/324=**2.0**、flt_465320/328=**5.0**（购地/拍卖补偿）——与实现一致。
+  - 验证：冬眠 byte54 3→2→1→128→**醒来清 0**（`wake: ... hibernate end` 日志断言 PASS）；
+    卡片场景 23/23、128_card_hibernate/54_jail/66_hospital/248_panel_smoke 全绿。
+- **2026-09-30 三轮：30 卡逐一 IDA 核对（进行中，已核 17/30）与修复**：
+  - **冬眠特效勘误（实机反馈"应蓝白、显示灰白且花屏"）**：原版 `sub_4555C5` 按运行像素格式
+    分派 4 变体（`detectPixelFormat` 0=RGB555/1=RGB565/**2=BGR565(R mask 0x1F)**/3=BGR555）。
+    实机对照观感为蓝白 → 走 **0x45566E**：`gray=(R5+(G6>>1)+B5+40)>>2`、
+    输出 565 = (R=gray, G=2gray, B=31) → RGB555 等价 **(R/G=gray&0x1F, B=31)**。
+    此前误用纯灰且 `gray>31`（白/亮像素 gray 可达 33）时 `gray<<10` 溢出 bit15 → **花屏**。
+    `blitSpriteFrameGrayClipped` 更名 `blitSpriteFrameFreezeClipped`（位域环绕照抄）。
+  - **NPC 目标分支系统性缺失（6 卡）**——原版以玩家为目标的卡对 `bitScan >= 4`（事件槽 NPC）
+    有专门分支，重写全部漏掉（多为"吞卡后 return 0 无效果"）：
+    - 停留 0x443FE2 → `npcSlots[].timerC=1`；乌龟 0x4459D2 → `timerD=3`；
+    - 梦游 0x44449E → `timerB=5`（仅 `timerA==0`）；陷害 0x44467D → `jailPlayer(cur, npc, 5)`；
+    - 转向 0x44303A → 仅 `turnToAdjacentCell`（无台词）。
+  - **梦游卡字段错写**：`byte58 += 5` → `byte66`（0x444372 `unk_496BAA`，同冬眠卡 0x4441A1）。
+  - **`sub_41D546` 语义统一**：= `manualView=false` + 全屏重绘（原来部分卡只 renderGameFrame、
+    部分卡完全没有）；停留/乌龟/转向他人分支已补。
+  - 核对通过（与原版一致）：均富 0x4420D8、均贫 0x4421B5（NPC 原版无分支，保守 return 0）、
+    购地 0x442325（金额/补偿 M×priceAdd×(lv+2)/5/现金不足不吞卡）、换地 0x442622、
+    换屋 0x442B02、转向、拍卖 0x443225、抢夺 0x443E3D（吞卡仅在成功抢到后）、停留、冬眠、
+    梦游、陷害、查税 0x4451F0（20%+免费/嫁祸链+重算转账）、涨价 0x44542D、查封 0x445593、
+    同盟 0x445710、乌龟 0x4458DF。
+  - **已知差异（待办）**：①AI/托管用卡 `flyObjectSprite` 飞行演出全部未接（原版 objId=0
+    语义待查，人类不播）；②换地/换屋 `sub_45285E(500)` 交换后停留未接；③`passOnCardDialog`
+    原版第二参（查税=2、梦游/陷害=0）未区分，重写统一 (app,user) 待核差异；④抢夺对 NPC
+    （原版走 selectCardOrItemDialog 无专门分支）重写保守拒绝；⑤均贫/查税 NPC 同理。
+  - 剩余核对：重建 0x44309B、天使 0x4434C0、恶魔 0x4436E0、拆除 0x443917、怪兽 0x443B0F、
+    红/黑卡 0x444F25/0x44503F、被动 18/19/20/21（0x444691/0x44476A/0x444A60/0x444BB2）。
+- **2026-09-30 四轮：剩余 13 卡核验完成（30/30 全卡核对完毕）与修复**：
+  - **红/黑卡停牌天数**：原版 `unk_496987[36*股] = 32(0x20)`（红）/`2(0x02)`（黑）——高/低半字节各=2；
+    advanceDay 每日对高半字节 −16、低半字节 −1 → 当天 + 后续 2 天。重写曾写 0x30/0x03（多 1 天）。
+    已改 0x20/0x02（帮助"漲停板三天/跌停板三天" = 当天计入）。
+  - **查税消息文案**：原版 `"抽取%s\n\n%d元稅金！"`（0x4653C0）；重写曾用 `"%s被課稅%d元"`。已改。
+  - **嫁祸 AI 阈值（passOnCardDialog mode 参数）**：原版 `(user, a2, a3)`——a2=0（命运/新闻/梦游/
+    陷害/resolvePenaltyTarget）AI 直接嫁祸；**a2=1（住宅/商業/行業設施收费 0x419EB8/0x41A683/0x41AF75，
+    a3=费用）**：AI 仅当 `fee > 现金 或 (rand%4000+4000)×M < fee` 才嫁祸；**a2=2（查税 0x445360）**：
+    AI 仅当 `4000×M < 现金×0.2`（dbl_465380）才嫁祸。重写补 mode/fee 参数并在 `resolveFeePayer`
+    （mode=1）与查税（mode=2）接线（此前重写对所有场景无条件嫁祸）。
+  - **改建卡 AI 分支**：原版 corp 分支人类弹 `selectFacilityDialog(1)`、AI 用 `sub_41E6F2(0)`
+    预选类型（ai_card `tgtRebuild` 写 `aiCardTarget=roll(4)+1`）；重写此前对 AI 也弹人类面板
+    （AI 回合阻塞风险）。已补 AI 分支。
+  - 核对通过：改建 0x44309B（estate type^=1/连锁降 level；corp 公園/加油站降 sub；取消不吞卡）、
+    天使 0x4434C0（同路段 level<5 +1、连锁 0→1；corp angelUpgrade<0→FLC523；人类也 fly）、
+    恶魔 0x4436E0（同路段清 level/type + 债务 30×M×level；corp 债务 30×M×sub +
+    forceHotelCheckout）、**怪獸 0x443917**（id11=怪獸卡：整块 demolishEstate mode2 + 债务
+    30×M×level + FLC557；与 id 表 0x475D88/卡名 kCardNames[11]/卡价 60 点/帮助 idx65 四方吻合）、
+    **拆除 0x443B0F**（id12=拆除卡：路面道具 deleteMapObject / 降一级 / 连锁变平地 /
+    corp sub-1 归零清 type+forceHotelCheckout + 债务 30×M + FLC529）、復仇 0x444691、
+    免罪 0x444BB2（"免罪卡生效！"+吞卡+台词）、免費 0x444A60（AI 阈值 `(rand%3000+3000)×M` ✓）、
+    送神 0x444C45（挂身道具 deleteMapObject + 负面神 {5,6,7,8,10,15} attachEndAnim；正面神/
+    无对象静默失败不丢卡）、请神 0x444E1A（pickNearestAttachable / AI 预选、神明 sprite 飞行、
+    cellEnt 暂摘/还原）。
+  - 已知差异（演出类，汇总）：AI/托管用卡 `flyObjectSprite`（objId=0 卡牌飞行）未接；
+    换地/换屋 `sub_45285E(500)` 交换后停留未接；天使/恶魔/怪兽/拆除/停留/梦游/陷害/均贫/转向
+    人类 fly 未接；`focusView` 若带重绘与原版 `refreshGameUi(x,y,0)`（不重绘）语义差异待实机核。
+  - 研究所：**按用户裁定恢复 IDA 原逻辑**（研究中仍可重选覆盖 researchItem，触发点仅
+    owner/type4/sub!=0/(flag&0x0F)==0；查封卡置 flag 低半字节才禁研究）。
 
 ## 6. 每卡实现前待细化清单
 
