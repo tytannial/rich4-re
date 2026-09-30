@@ -34,6 +34,17 @@ namespace rich4 {
 // [RE 0x417E26] 游戏内整帧绘制（定义见本文件末尾；匿名空间内多处调用，需前置声明）
 void renderGameFrame(Application& app);
 
+// [NEW] blockingPerf：阻塞演出谓词（声明见 include/game/app/game_loop.h；M4-B 批次 B）
+// 依据: 原版 0x45144F 事件 FLC / 0x418C55 跳伞入场期间 PeekMessage 只取消息不派发
+//   （窗口过程不处理）→ WM_TIMER/WM_PAINT 被丢弃，0x417191 前进面板这类"增量层"
+//   在此期间既不会被重画、也不可能留在画面上。
+// 差异(重写): 每 16ms 无条件全量重绘，必须显式屏蔽，否则事件 FLC 的透明区/横带
+//   （如 524 住院 440x74 @(0,210)）会露出 GO 面板 @(180,120)。
+bool blockingPerf(Application& app) {
+    const GameState& st = app.gameState();
+    return st.eventFlcActive || st.parachuteActive || st.pendingSpawnPlayer != 0;
+}
+
 namespace {
 
 constexpr int kTopBarH = 40;   // 顶部工具条高度
@@ -229,7 +240,11 @@ void handleTopBarButton(Application& app, int index) {
         canResume = false;
         RICH4_LOGI("topBar finish: player %d has state -> skip turn (RE 0x40DEFE)", cur);
     } else {
-        canResume = state.playerActionState[cur] == 0 && state.sceneRequest == 0;
+        // [M4-B C2] 演出未收尾不得抢控制权：原版 enablePlayerControl（0x4196F1）只在
+        //   "纯等输入"窗口被调用（跳伞/事件 FLC 之后，0x418C55 末尾动作）；重写只看
+        //   actionState==0 会把 GO 面板带上演出画面（工具条-設定→認輸投降 = 最小复现）
+        canResume = state.playerActionState[cur] == 0 && state.sceneRequest == 0 &&
+                    !blockingPerf(app);
     }
     if (canResume) {
         state.gamePlayerControl = true;
@@ -243,8 +258,7 @@ void handleTopBarButton(Application& app, int index) {
 //   （gameEventHandler 512 守卫吞掉 WM_LBUTTONUP，objectTipText 无人清理）
 bool tipPerfBlocked(Application& app) {
     GameState& st = app.gameState();
-    if (st.eventFlcActive || st.parachuteActive || st.pendingSpawnPlayer ||
-        st.viewScrolling) {
+    if (blockingPerf(app) || st.viewScrolling) {
         return true;
     }
     // [RE 0x498EA2] 任一玩家行动状态非 0：1=移动中 2=掷骰 3=特殊移动（别的棋子移动同样屏蔽）

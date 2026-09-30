@@ -3095,6 +3095,10 @@ void beginPlayerTurn(Application& app) {
     if (p < 0 || p >= 9) {
         return;
     }
+    // [M4-B C2] 进入回合即关控制（原版 0x418C55 起手即保证 byte_46CAFD=0；等待输入的人类
+    //   玩家由 case 1 → enablePlayerControl 0x4196F1 重新置位）；否则上一人类玩家的 GO
+    //   状态会被 AI 回合/事件演出沿用
+    disablePlayerControl(app);
     // sub_40C912(0)
     const int v5 = checkPlayerAction(app, 0);
     switch (v5) {
@@ -4028,6 +4032,8 @@ static void landingSpecialMove(Application& app, int p) {
 // 差异: 自动存档（saveGameToSlot）待接入
 void nextPlayer(Application& app) {
     GameState& st = app.gameState();
+    // [M4-B C2] 交棒即关控制（0x418EBD 起手；新回合由 beginPlayerTurn → case 1 重新置位）
+    disablePlayerControl(app);
     st.manualView = false;
     int cur = st.currentPlayer;
 

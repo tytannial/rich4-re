@@ -149,7 +149,7 @@ magicHouse 惩罚/结息分红/小游戏 phase/…）随测试用例铺开。
 | 玩家 | `player.cash\|bank\|points <p> <v>` · `player.state <p> <0..6>` · `player.god <p> <slot>` · `player.vehicle <p> <0..2>` · `player.teleport <p> <cell>` · `give.card\|item <p> <id> [n]` |
 | 事件 | `land [cell]`（默认 select 目标；teleport+landingEvent 同步） · `day [n]` · `news` · `fate` · `magic` · `lottery.draw` · `settle` · `dividend` · `shop` · `bank` · `jail <p> [d]` · `hosp <p> [d]` · `open.stock` · `open.query` |
 | 注入 | `rng <slot> <v>`（one-shot，见 §1.2 槽表）· `rng clear` · `seed <n>` · `settings.anim <0|1>` |
-| 断言 | `assert state <path> <==\|!=\|>=\|<=\|>\|<\> <v>` · `assert log\|trace <substr...>` · `assert no log\|trace <substr>` |
+| 断言 | `assert state <path> <==\|!=\|>=\|<=\|>\|<\> <v>` · `assert log\|trace <substr...>` · `assert no log\|trace <substr>` · `trace.clear`（清 trace 环形缓冲，"某段之后不再发生 X"负向断言的前置；与业务命令用 `;` 并列可**同帧**生效，见 308 场景） |
 | 等待 | `wait frames <n>` · `wait log\|trace <pat> [max]` · `wait idle [max]`（等 gamePlayerControl） |
 | 交互 | `click <x> <y>` · `rclick` · `move` · `key <spec>`（ctrl+/shift+）· `confirm yes\|no`（栈顶模态直接应答，免脆坐标） |
 | 观察 | `dump state\|player <p>\|estate <i>\|corp <i>`（走 log，配 assert log） · `shot <path>` · `quit [code]` |
@@ -176,7 +176,7 @@ roulette_dialog 0x43F7C6 处 [NEW] 注释）；`roulette theme=<t> cell=<c>` tra
 
 | 脚本 | 覆盖 | 验证点 |
 |------|------|--------|
-| `84_ai_marathon` | L2 全 AI 长跑 | `wait log aiItemSelect` 链路实际执行 + 120k 帧自然回合不崩（errors==0；实测触发 道具312/卡73/骰调29/买股16/卖股5） |
+| `84_ai_marathon` | L2 全 AI 长跑 | `wait log aiItemSelect` 链路实际执行 + 120k 帧自然回合不崩（errors==0；实测触发 道具312/卡73/骰调29/买股16/卖股5）。**常规矩阵不纳入**（2026-09-30 用户约定：非主动要求不跑），按需单跑 |
 | `260_ai_items` | 道具 AI 候选域 | aiItemSelect 命中/`rejected` 日志；target 在前方/回溯路径∩视口（0x40B221/0x40B343） |
 | `262_ai_turn_guard` | 0x418E31 状态守卫 | AI 置态后全程 `assert no trace " p=1"`（不掷骰不移动） |
 | `264_ai_dice_adjust` | 0x4221C0 骰子调整 | 汽车 AI → `aiDiceAdjust: ... ownFree=4 other=0` → diceCount 1..3 |
@@ -236,4 +236,6 @@ python tools/run_tests.py --filter rent --repeat 3
 - 断言优先级：`assert state` > `assert trace` > `assert log`。
 - 覆盖矩阵未覆盖项即待办；help-checklist 状态列不因「有脚本」自动改 ✅（实机验收仍是关卡）。
 | 50_god_free_rent.txt | [HELP 42] | 大財神免付所有租金（assert no trace xfer + cash 不变） |
+| 300_skip_msg / 302_tip_perf / 304_music_resume / 306_music_rotate | M3-B | 演出可打断（msg/line/flc skip）/物件提示演出期屏蔽（press·release）/场景音乐栈续播/曲目游标换曲 |
+| 308_go_panel_surrender | M4-B | 前进面板演出期可见（0x417191）：`surrender; trace.clear` 同帧清窗 → 認輸 + 死神选人窗口内 `go panel draw cur=0` 必须为 0（**修前 75 次 → 修后 0 次**） |
 | 52/54/62/64/66/68/70/72/74/82/84/90/94/96/100/102/103 | 见 run_tests --matrix | 得點券/監獄/卡片格/小衰神流标/醫院/新聞命運/NPC释放/连锁收费/改建卡/公園/行業設施點缴费/查询面板clickr/请神符+老虎机tap/漲價flag/樂透投注grid/監獄保释grid/醫院出院grid |

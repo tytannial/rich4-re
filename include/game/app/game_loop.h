@@ -18,4 +18,11 @@ void renderGameFrame(Application& app);
 //   住院 524/入狱 538 过渡动画期间保持动画开始前的场景表面，对齐原版 saveBackground）
 void overlayEventFlcFrame(Application& app);
 
+// [NEW] 阻塞演出谓词：事件 FLC（含 preserveScene 冻结）/ 跳伞入场 / 待入场串行闸。
+// 依据: 原版这类窗口内 PeekMessage 只取消息不派发（0x45144F/0x4528B9/0x4544F6）→
+//   WM_TIMER/WM_PAINT 被丢弃，任何增量绘制都不可能在此期间发生/保留。
+// 用途: ① 演出期禁止"需要控制权的增量层"（前进面板 0x417191）绘制；
+//       ② enablePlayerControl（0x4196F1）不得在演出未收尾时抢跑（GO 面板演出期可见根因）。
+bool blockingPerf(Application& app);
+
 } // namespace rich4

@@ -14,10 +14,18 @@
 
 ## 0. 总览与优先级
 
+> **进度（2026-09-30）**
+> - **批次 0 已入库**：`b3f2622`（喜從天降娃娃跟随判定 0x4135F4 + L0）、`1dc28a3`（单测 stdout
+>   关缓冲）、`94ca907`（本档）。
+> - **批次 B（GO 面板）✅ 已实施**：C1（窄谓词 `blockingPerf`）+ C2（4 个控制位入口）；C3 判定
+>   不需要。验收场景 `308_go_panel_surrender`——**修前 FAIL（窗口内 75 次 `cur=0` 面板绘制）、
+>   修后 PASS（0 次）**，判别力已实测。详见 §14。
+> - **下一步 = A1**（画布运行期尺寸；实测替换面仅 17 文件 95 处，见 §1.1 订正）。
+
 | 批次 | 内容 | 依赖 | 风险 | 建议顺序 |
 |------|------|------|------|----------|
 | **A** | 渲染核心：画布参数化（"渲染即输出"）| — | 中（触及所有 blit/文本调用点） | 1 |
-| **B** | GO 面板层级 + 控制位语义（C1/C2/C3） | — | 低（局部） | 2 |
+| **B** | GO 面板层级 + 控制位语义（C1/C2；C3 判定不需要） **✅ 2026-09-30** | — | 低（局部） | 2 |
 | **C** | 脏区重绘还原 + UI 布局表 + 命中派生 | A | 中 | 3 |
 | **D** | 宽屏视口（等距表扩展 / 光栅化 / FLC 锚定） | A、C | 中高 | 4 |
 | **E** | 文本高分渲染 | A | 低 | 5 |
@@ -49,8 +57,11 @@
 | 文本 | FreeType → **512×200 RGB555 临时缓冲** → blit 进画布；字号 = 设计字号 × `kFontSizeScale(1.09)` | `src/render/text.cpp:22-33,278` |
 | 光标 | 软件光标，保存/恢复 32×32 背景，画在画布内 | `src/render/cursor.cpp` |
 
-调用面：`app.surface()` 出现在 **100 个文件**，`Surface::kWidth` **70 个文件**，
-`drawText` **365 处**，`setFont` 数字字面量 **149 处**（16 号 59、20 号 31、12 号 15…）。
+调用面（**2026-09-30 实测订正**）：`app.surface()` **100 处调用**、
+`Surface::kWidth/kHeight` **95 处 / 17 个文件**（最多：`render/blit.cpp` 12、`app/turn_system.cpp` 10、
+`app/bank_stay_dialog.cpp` 8、`app/stock_market_dialog.cpp` 8）——原文"100 个文件 / 70 个文件"
+是**把调用次数当成了文件数**，A1 的机械替换面比原估小得多；`drawText` **336 处**，
+`setFont` 数字字面量 **149 处**（16 号 59、20 号 31、12 号 15…）。
 
 原版侧对应：`SetDisplayMode(640,480,16)` @0x401643；primary `ddsCaps=0x200`
 （`DDSCAPS_PRIMARYSURFACE`，**不是 512×512 表面**）；backbuffer 640×480 @0x4016DC/E6；
@@ -132,15 +143,20 @@
 | 方案 | 内容 | 代价 |
 |------|------|------|
 | **C2（治本，先做）** | 收尾 enable 增加条件 `pendingSpawnPlayer==0 && !eventFlcActive && !surrenderRequest && playerActionWait[cur]==0`；`beginPlayerTurn` case2/5、`surrenderPlayer`/`nextPlayer` 入口显式 `disablePlayerControl`（对齐 0x417D65/0x4182E6/0x418C55 均保证 `byte_46CAFD=0`） | 小 |
-| **C1（同时做，止血）** | `drawAdvancePanel` 守卫复用 `tipPerfBlocked`（演出/模态期不画） | 1 行 |
-| **C3（防御）** | `disablePlayerControl` 后补一次表面恢复（等价原版 `sub_415D31(1)`），或仅恢复面板矩形 | 每次多一次重绘 |
+| **C1（同时做，止血）** | `drawAdvancePanel` 守卫用**窄谓词** `blockingPerf`（仅事件 FLC/跳伞/待入场；**不含**视口滚动与模态——原版这两类窗口面板本来就在画面上，直接复用 `tipPerfBlocked` 会误伤） | 1 行 |
+| **C3（防御）——判定不需要** | `disablePlayerControl` 后补表面恢复（等价 `sub_415D31(1)`）：C1+C2 已覆盖全部入口——控制位为 0 后 `drawAdvancePanel` 首个守卫即返回；快照型演出（`snapBg`/`flyObjectSprite`/`highlightBlink(preRedraw=false)`）都发生在控制位已为 0 的移动/结算段 | — |
 | **C4（可选）** | 面板改为"一次性增量层 + 有效标记"，实现 `sub_4174CD` 语义（矩形相交且 control 才补画） | 视实机验收决定 |
 
-### 2.4 验收
+### 2.4 验收（✅ 2026-09-30 实施）
 
-- 新增场景：设置→認輸 → 断言演出期与后续 AI 回合无 `drawAdvancePanel`（建议给该函数加 trace 事件）；
-- 读档残留未落地玩家 → 跳伞期间无 GO；
-- 人工：默认开局全流程无"动画上出现 GO"。
+- ✅ `tests/scenarios/308_go_panel_surrender`：`surrender; trace.clear` **同帧并列**（`execLine`
+  分号）——投降请求置位后立刻清零，此后任何 `go panel draw cur=0` 都属演出期
+  （p0 淘汰后回合只会交给 1 号人类 = `cur=1`）。实测**修前 FAIL（75 次）/修后 PASS（0 次）**。
+  配套：`drawAdvancePanel` 加 `trace go panel draw cur=%d`；新增调试命令 `trace.clear`
+  （脚本断言"某段之后不再发生 X"的必要前置）。
+- ⬜ 读档残留未落地玩家 → 跳伞期间无 GO（`canResume` 已加 `!blockingPerf`，场景待补：需先造出
+  "档内当前玩家未落地"的档）。
+- ⬜ 人工：默认开局全流程无"动画上出现 GO"（已知三入口已消除，待实机复核）。
 
 ---
 
@@ -410,9 +426,9 @@ WYSIWYG）；`drawRectBorder`/`scaleSurfaceChannels`/`drawEstateHighlight` **都
 ### 9.1 建议顺序
 
 ```
-A1 画布运行期尺寸（scale 恒 1）→ 全量矩阵回归
+A1 画布运行期尺寸（scale 恒 1）→ 全量矩阵回归   ← 下一批
 A2 引入 scale + 缩放 blit + 文本 scale + 阴影/描边乘 scale
-B  GO 面板 C2+C1（+C3）
+B  GO 面板 C2+C1（+C3）                          ✅ 2026-09-30（C3 判定不需要，见 §14）
 C  脏区重绘还原 → UI 布局表 → 命中派生
 E  文本定点化/亚像素（可与 C 并行）
 F  配置系统（rich4.ini）
@@ -425,11 +441,14 @@ H  追加四项（射程 → 预览高亮 → 小游戏插值/键盘 → 同格�
 
 | 门禁 | 命令/判据 |
 |---|---|
-| L0 单测 | `ctest`（`rich4_tests`） |
-| L1 场景矩阵 | `python tools/run_tests.py --matrix` → 期望全绿（当前 93 场景） |
+| L0 单测 | `ctest`（`rich4_tests`）——**需可写游戏目录**（存档往返用例写 SAVE900/901） |
+| L1 场景矩阵 | 全场景 headless（当前 **94 个**）→ 期望全绿；**`84_ai_marathon` 不纳入常规矩阵**（120k 帧全 AI 长跑，按用户约定 2026-09-30 仅主动要求时单跑） |
 | 存档往返 | `rich4 --save-selftest 0` → `STABLE(t1==t2)=YES` |
 | native 画面 | `--shot` + `tools/frame_align.py`（新增/preset 切换后重点核对） |
 | 逆向标注 | `python tools/re_map.py` |
+
+> ⚠️ 跑场景会在**游戏目录**写 `SAVE0.DAT`(AUTO)/`SAVE*.DAT` 与 `rich4.log`（原版语义），
+> 会覆盖该目录已有存档；沙箱下 `build/`、`tests/`、`src/`、`resources/` 子目录写入需放行。
 
 ### 9.3 已落地：喜從天降判定修正（本批）
 
@@ -462,9 +481,9 @@ H  追加四项（射程 → 预览高亮 → 小游戏插值/键盘 → 同格�
 - 新增 3 个 L0 用例（`money_doll_deadzone_keeps_dir_and_walk` / `money_doll_step_left_and_right` /
   `money_doll_walk_wraps_and_converges`）**全部 PASS**；
 - `rich4 --save-selftest 0` → `STABLE(t1==t2)=YES`（二进制/存档链正常）；
-- ⚠️ **未能完成**交互小游戏端到端验证：本会话沙箱把 `build/`、`resources/` 设为只读，
-  且游戏本体在受限环境下于 SDL/`gameInit` 早期被终止（`writableDataDir: no writable location`），
-  无法在本会话内跑 `--headless --exec "find.evtcell 8; land"`。请在非沙箱环境复核。
+- ⚠️（**2026-09-30 订正**）沙箱限制已定位：本会话可正常跑 `--headless --script`（含交互小游戏
+  之外的端到端场景），但 `build/`、`tests/`、`src/`、`resources/` **子目录在受限沙箱下拒绝写入**
+  （只有工作区根可写）→ 编译/矩阵/提交需单命令放行 `danger-full-access`。
 - ✅ **既有问题已修复（2026-09-30）**：干净重建后 `mkf_data_read_stable`
   （`tests/unit/test_mkf.cpp`）在提供真实 `Data.mkf` 时**确定性 abort（exit 3）**——
   根因 = LZHUF 位流读取 UB：`uint32_t bits |= src[byteOff+k] << (8*k)` 中 k=4 的 `<<32`
@@ -479,7 +498,7 @@ H  追加四项（射程 → 预览高亮 → 小游戏插值/键盘 → 同格�
 
 | 场景 | 断言 |
 |---|---|
-| `30x_go_panel_surrender` | 認輸演出期 + 后续 AI 回合无 `drawAdvancePanel` |
+| `308_go_panel_surrender` **✅** | 認輸 + 死神选人窗口无 `go panel draw cur=0`（修前 75 次 / 修后 0 次） |
 | `30x_go_panel_load_parachute` | 读档残留未落地玩家 → 跳伞期无 GO |
 | `31x_native_pixel_equal` | native preset 渲染与冻结基准逐字节一致 |
 | `31x_wide_layout_hit` | 宽屏下顶栏/右栏/GO 命中区正确（`clickr` named region） |
@@ -526,3 +545,42 @@ H  追加四项（射程 → 预览高亮 → 小游戏插值/键盘 → 同格�
   `420e9a-item-ai.md`（AI 候选域）、`441baa-card-effects.md`、`item-effects.md`、
   `41982d-p2-events.md` §6（小游戏）、`498df0-event-slot-npc.md`（事件槽 NPC）
 - `docs/reverse/ui-controls.md`（控件沉淀；**发现新控件必须更新**）、`frame-anchor.md`（落点对齐）
+
+---
+
+## 14. 批次 B 实施记录（2026-09-30，✅ 已落地）
+
+### 14.1 改动清单
+
+| # | 位置 | 改动 | 依据 |
+|---|------|------|------|
+| 1 | `include/game/app/game_loop.h`、`src/app/game_loop.cpp` | 新增 **`blockingPerf(app)`** = `eventFlcActive \|\| parachuteActive \|\| pendingSpawnPlayer`（定义在**匿名命名空间之外**，供 `game_panel` 调用）；`tipPerfBlocked` 改为 `blockingPerf \|\| viewScrolling \|\| 棋子行动态 \|\| depth>1` | 0x45144F / 0x418C55：演出期消息泵只取不派发 |
+| 2 | `game_panel.cpp:drawAdvancePanel` | 守卫加 `\|\| blockingPerf(app)`；通过后 `trace go panel draw cur=%d` | 0x417191 增量层 |
+| 3 | `game_loop.cpp:topBarFinish` | `canResume` 加 `&& !blockingPerf(app)` | 0x4196F1 enable 只在纯等输入窗口（B2） |
+| 4 | `turn_system.cpp:beginPlayerTurn` | 入口 `disablePlayerControl(app)` | 0x418C55 起手保证 `byte_46CAFD=0`（case 1 再 0x4196F1 置位） |
+| 5 | `turn_system.cpp:nextPlayer` | 入口 `disablePlayerControl(app)` | 0x418EBD 交棒 |
+| 6 | `economy.cpp:surrenderPlayer` | 入口 `disablePlayerControl(app)` | 0x411AE0 認輸演出（本批测试的判别点） |
+| 7 | `debug/debug.cpp` | 新增命令 `trace.clear` | 测试辅助，无原版对应 |
+
+**C1 采用窄谓词的实测理由**：原版**视口滚动**（`sub_415D31(1)` 之后 `sub_4174CD` 会按矩形相交
+补画面板）与**任意模态**（面板画在模态之下）都**仍然画前进面板**；若直接复用 `tipPerfBlocked`
+（含 `viewScrolling`、`playerActionState!=0`、`depth>1`）会新增两类偏差——"小地图滚动期 GO 闪烁
+消失""工具条对话框后面板缺一块"。故拆出窄谓词，只屏蔽原版消息泵真正吞掉重绘的三类窗口。
+
+**C3 不做的实测理由**：控制位为 0 后 `drawAdvancePanel` 首个守卫即返回；快照型演出
+（`snapBg`/`flyObjectSprite`/`playHighlightBlink(preRedraw=false)`）全部发生在控制位已为 0 的
+移动/结算段 → 不存在"把面板烘进背景"的路径，不需要额外表面恢复。
+
+### 14.2 验收结果（实测）
+
+| 项 | 结果 |
+|---|---|
+| `308_go_panel_surrender`（修后） | `asserts=3 failures=0` **PASS**；`--trace-out` 显示投降后至 p1 回合之间 `go panel draw cur=0` = **0 次**（合法的 `cur=1` 自 p1 回合开始） |
+| 同场景**修前基线**（临时回退 C1+C2 后重建） | `asserts=2 failures=1` **FAIL**，窗口内 `cur=0` = **75 次** → 场景确有判别力 |
+| L0 单测 | **86/86 PASS**（`rich4_tests.exe resources/MultiverseJourney`；存档往返用例需可写游戏目录） |
+| L1 场景矩阵 | **93/93 PASS**——94 个场景中 `84_ai_marathon` 按用户约定不跑（120k 帧长跑）；逐个 headless 单跑（`--seed 42` + 各场景 `# quickstart:`） |
+| `re_map` | **校验通过**（RE 246 / PORT 10 / NEW 176；`address-map.md` 仅行号位移 + `0x417191` 备注自动收录本批注释） |
+
+**窗口构造关键**：`surrender; trace.clear` 写在同一脚本行——`execLine` 以 `;` 并列，两命令在
+**同一帧**生效（投降请求置位后立刻清 trace）。若分成两个 step，则"清 trace 与投降之间"那一帧的
+**合法**面板绘制会落进窗口造成误判（首版即如此误判）。

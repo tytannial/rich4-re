@@ -961,6 +961,19 @@ UI 音效与游戏音效槽**是两套**，勿混：
   入口显式清（这些不走带谓词的 renderGameFrame 或先快照背景）。纯静止停顿（AI 等待、
   倒计时、非控制无演出）**仍可按住查看** = 保留原版 0x4186BE 语义。trace `tip show`；
   场景 `302_tip_perf`（presssel/release 按住调试命令见 debug.cpp）
+  ⑤ **前进 GO 面板在演出期的可见性（M4-B，2026-09-30）**：③ 只解决"层级"（动画末层盖 GO），
+  盖不住"大面积透明 / 窄带素材"——524 住院是 **440×74 横带 @(0,210)**，GO@(180,120) 在其上方必然可见。
+  根因在**控制位**：原版 `enablePlayerControl`(0x4196F1) 只在"纯等输入"窗口被调用（跳伞/事件 FLC
+  之后，0x418C55 末尾动作），重写只看 `playerActionState==0` 就把控制位置回 true（**工具条-設定→
+  認輸投降** = 最小复现）。收口三件：
+  ① 新增**窄谓词** `blockingPerf(app)`（`src/app/game_loop.cpp`：`eventFlcActive ||
+  parachuteActive || pendingSpawnPlayer`；**不含** `viewScrolling`/模态——原版这两类窗口面板
+  本来就在画面上，直接复用 `tipPerfBlocked` 会误伤"滚动期 GO 消失""对话框后面板缺块"）；
+  ② `drawAdvancePanel` 守卫加 `blockingPerf(app)` + trace `go panel draw cur=%d`；
+  ③ 四个控制位入口显式 `disablePlayerControl`：`beginPlayerTurn` 起手 / `nextPlayer` 起手 /
+  `surrenderPlayer` 起手 / `topBarFinish` 的 `canResume` 追加 `!blockingPerf(app)`。
+  场景 `308_go_panel_surrender`（`surrender; trace.clear` 同帧清窗；**修前 75 次 cur=0 / 修后 0 次**）；
+  新增命令 `trace.clear`（负向断言窗口前置）。`m4-plan.md` §14 有完整实测记录。
 
 ## 新增控件模板（发现新控件时复制填写）
 

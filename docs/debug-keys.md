@@ -78,6 +78,10 @@
   `player.teleport`/`sel.goto` 命令同用合一 helper `teleportPlayerToCell`。
 - `jail`/`hosp`/`news`/`fate` 直调后若当前玩家失能（stateFlags≠0）自动补回合推进
   （[RE 0x40DEFE]，`debugAdvanceIfIncapacitated` 仅热键路径；脚本用 `wait idle`）。
+- **`trace.clear`**（**非热键**，仅命令/脚本）：清空 trace 环形缓冲，供"某一段之后不再发生 X"
+  的负向断言；与业务命令用 `;` 并列可在**同一帧**生效（`execLine` 分号语义）。
+  M4-B 场景 `tests/scenarios/308_go_panel_surrender` 用 `surrender; trace.clear` 卡窗口，
+  见 `docs/m4-plan.md` §14。
 
 ## 典型测试流程
 

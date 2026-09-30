@@ -1,0 +1,31 @@
+# id: 308_go_panel_surrender
+# covers: [M4-B 批次 B] 前进面板 0x417191 演出期可见缺陷——工具条-設定→認輸投降 最小复现。
+#         原版：認輸演出（0x411AE0 淘汰/清算/死神选人）期间 PeekMessage 只取消息不派发
+#         （0x45144F）→ 增量层的 GO 面板不可能出现在演出画面上。
+#         重写：状态式逐帧全量重绘 + enablePlayerControl（0x4196F1）抢跑 → GO 盖在演出上。
+#         窗口：`surrender; trace.clear` 同帧并列（execLine 分号）——投降请求置位后立刻清零，
+#         此后所有 cur=0 面板绘制都属演出期（p0 淘汰后回合只会交给 1 号人类 = cur=1）。
+#         修前预期 FAIL（認輸处理帧的 renderGameFrame + 死神模态入口各画一次 cur=0），修后 PASS。
+# quickstart: 0,4,2
+# timeout: 60000
+settings.anim 0
+wait idle 1000
+# 全員進場：認輸后 1 号人类存活 → 不走单人类失败界面（0x40CFB0），改走死神选人（0x4339D9）
+player.spawn 1
+player.spawn 2
+player.spawn 3
+player.alive 1 1
+player.alive 2 1
+player.alive 3 1
+wait frames 60
+assert trace "go panel draw cur=0"
+surrender; trace.clear
+wait log "dialog open name=death_god_summon" 20000
+wait log "deathgod state4 choose" 20000
+# 候选 = 已入场的 1/2/3（0/1 号人类 + 2/3 号 AI）→ dg.face.1 = 2 号 AI
+clickr dg.face.1
+wait log "death god attached to p" 20000
+wait frames 120
+assert no trace "go panel draw cur=0"
+assert state errors == 0
+quit

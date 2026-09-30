@@ -1,3 +1,4 @@
+#include "game/app/game_loop.h"   // blockingPerf [M4-B C1]
 #include "game/app/game_panel.h"
 
 #include <cstdio>
@@ -586,9 +587,11 @@ void drawCalendar(Application& app) {
 //     travel 1: 2 个骰子（帧 2i+6 未选 / 2i+7 选中），(x+8/y+19i+16) / (x+7/y+19i+16)
 //     travel 2: 3 个骰子，(x+8/y+16j+9) / (x+7/y+16j+9)
 // 差异: 位置 qword_475284 原版动态确定，当前用 advancePanelX/Y
+// [M4-B C1] 阻塞演出期禁止绘制（原版前进面板是一次性增量层 0x417191，演出期消息泵
+//   不派发 → 既不会重画也不会残留；重写逐帧全量重绘必须显式收口，见 blockingPerf）
 void drawAdvancePanel(Application& app) {
     GameState& state = app.gameState();
-    if (!state.gamePlayerControl || state.panelFrame7.frameCount() <= 0) {
+    if (!state.gamePlayerControl || state.panelFrame7.frameCount() <= 0 || blockingPerf(app)) {
         return;
     }
     // [RE 0x417191] 状态效果中（住宿/出國/監獄/醫院/冬眠/夢遊）不显示前进面板：
@@ -599,6 +602,7 @@ void drawAdvancePanel(Application& app) {
             return;
         }
     }
+    trace::logf("go panel draw cur=%d", state.currentPlayer);
     Surface& dst = app.surface();
     const Player& p = state.players[state.currentPlayer];
     const int x = state.advancePanelX;

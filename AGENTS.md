@@ -146,6 +146,20 @@ trace `msg/line/flc skip` + 场景 `300_skip_msg`；详见 `ui-controls.md` §39
 
 **M2 执行计划**：见 `docs/m2-plan.md`
 
+**M4 执行计划**：见 `docs/m4-plan.md`（渲染/UI 现代化 + 追加体验：A 画布参数化 / B GO 面板 /
+C 脏区+布局表+命中派生 / D 宽屏视口 / E 文本高分 / F `rich4.ini` / G 结构重组 / H 追加体验）。
+**批次 B ✅ 2026-09-30（GO 面板演出期可见缺陷）**：原版 `byte_46CAFD` 生命周期 = 「进回合即 0
+（0x418C55）→ 人类等输入才 1（0x4196F1）→ 按 GO/交棒回 0」，重写只看 `playerActionState==0`
+就置 true 且 `beginPlayerTurn`/`nextPlayer` 从不置 0 → 控制位跨回合/跨演出保持 = GO 盖在
+認輸演出/事件动画上。收口：新增窄谓词 **`blockingPerf`**（`eventFlcActive||parachuteActive||
+pendingSpawnPlayer`，不含视口滚动/模态——原版这两类窗口面板仍在画面上）、
+`drawAdvancePanel` 守卫 + trace `go panel draw cur=%d`、四入口显式 `disablePlayerControl`
+（`beginPlayerTurn`/`nextPlayer`/`surrenderPlayer` 起手 + `topBarFinish` 的 `canResume` 加
+`!blockingPerf`）；新命令 `trace.clear`、新场景 **`308_go_panel_surrender`**（`surrender;
+trace.clear` 同帧清窗，**修前 FAIL 75 次 cur=0 → 修后 0 次**）。详见 `m4-plan.md` §14、
+`ui-controls.md` §39 ⑤。验证：L0 **86/86**、L1 **93/93**（94 场景中 `84_ai_marathon` 按约定
+不跑，见 `m4-plan.md` §9.2）、`re_map` 通过。**下一步 = A1 画布运行期尺寸**。
+
 **跨平台 ✅ 2026-09-30**（原 M3-C，Windows x64 + Linux x86-64）：GDI → **FreeType 统一文本渲染**
 （删 366 行 GDI、字体 `resources/Fonts/` 不入库/缺失降级、`kFontSizeScale` 可调）、
 **cp950 内嵌映射表**（`tools/gen_big5_tables.py` 生成，13752 项，替代 `MultiByteToWideChar(950)`）、

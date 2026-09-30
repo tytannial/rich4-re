@@ -742,6 +742,9 @@ void surrenderPlayer(Application& app) {
     if (cur < 0 || cur >= 4) {
         return;
     }
+    // [M4-B C2] 認輸演出起手即关控制：淘汰/资产清算/死神选人演出期间原版消息泵不派发
+    //   （0x45144F）→ GO 面板不可能出现在演出画面上；重写状态式重绘必须显式收口
+    disablePlayerControl(app);
     eliminatePlayer(app, cur); // [RE 0x411AE9 sub_40CD87]
     st.playerActionState[cur] = 0; // [迁移] 清回合状态机残留（重写原投降分支行为）
     if (st.sceneRequest != 0) {

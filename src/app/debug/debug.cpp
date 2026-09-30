@@ -1495,6 +1495,14 @@ bool cmdAssert(Application& app, const std::vector<std::string>& a, std::string&
 }
 
 // ---- 流程 ----
+// [NEW] trace.clear：清空 trace 环形缓冲（脚本断言"某一段之后不再发生 X"的必要前置；
+//   无原版对应，测试辅助。L1 场景 308_go_panel_surrender 使用）
+bool cmdTraceClear(Application&, const std::vector<std::string>&, std::string&) {
+    trace::clear();
+    RICH4_LOGI("debug: trace cleared");
+    return true;
+}
+
 bool cmdQuit(Application& app, const std::vector<std::string>& a, std::string&) {
     const int code = a.size() > 1 ? parseInt(a[1]) : 0;
     RICH4_LOGI("debug: quit code=%d asserts=%d failures=%d", code, g_asserts, g_failures);
@@ -2347,6 +2355,7 @@ const Cmd kCmds[] = {
     {"settings.anim", cmdSettingsAnim},
     {"seed", cmdSeed},
     {"assert", cmdAssert},
+    {"trace.clear", cmdTraceClear},
     {"quit", cmdQuit},
     {"shot", cmdShot},
     {"dump", cmdDump},

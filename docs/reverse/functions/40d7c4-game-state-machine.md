@@ -99,6 +99,14 @@ while (!PeekMessageA(...)) {
 重写：`gameEventHandler` 在 `!gamePlayerControl` 期间消费鼠标移动/抬起/右键
 （左键按下仅保留地图区物件提示）；跳伞期间（`pendingSpawnPlayer/parachuteActive`）全屏蔽。
 
+**重写差异（M4-B 2026-09-30 收口）**：原版 `byte_46CAFD` 的生命周期 =「进入 `beginPlayerTurn`
+即 0（0x418C55）→ 人类等待输入才 1（0x4196F1）→ 按 GO/交棒回 0」；重写此前只在工具条收尾按
+「`playerActionState==0 && sceneRequest==0`」置 true，且 `beginPlayerTurn`/`nextPlayer` 从不置 0
+→ **一旦置 true 就跨回合、跨演出保持**，表现为「GO 面板出现在認輸演出/事件动画上」。
+现补：`beginPlayerTurn` 起手、`nextPlayer` 起手、`surrenderPlayer` 起手显式
+`disablePlayerControl(app)`，`topBarFinish` 的 `canResume` 追加 `!blockingPerf(app)`。
+详见 `docs/reverse/ui-controls.md` §39 ⑤ 与 `docs/m4-plan.md` §14（含修前/修后实测）。
+
 ## 开始移动 `sub_40DD1F`（0x40DD1F）
 
 - 人类（<4）无状态效果 → `byte_498EA2 = 2`（进入掷骰）
