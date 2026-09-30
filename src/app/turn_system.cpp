@@ -1711,7 +1711,9 @@ int findDeathGodCarrier(const GameState& st, int payer) {
 //   resolveFeePayer：收费金额定案（>0）后、转账前的三步：**免費卡(20) 抵用 → 嫁祸卡(19) 转嫁
 //   → 死神/寶箱代付**（三处收费管线：住宅過路費/商業收費/行業設施收費）。
 //   返回 -1 = 免費卡已抵用（调用方免付）；否则返回实际付款玩家。
-int resolveFeePayer(Application& app, int payer, int32_t fee, const char* feeName) {
+//   feeOwner = 收费方（免費卡 a2 实参：住宅 0x419E51=owner-1 / corp 0x41A62B=owner-1 /
+//   specPt 0x41AF1D=-1 公库无玩家 / 查税 0x44532D=cur），供 0x444B98 收费方台词。
+int resolveFeePayer(Application& app, int payer, int32_t fee, const char* feeName, int feeOwner) {
     if (fee == 0) {
         return payer;
     }
@@ -1721,7 +1723,7 @@ int resolveFeePayer(Application& app, int payer, int32_t fee, const char* feeNam
     const bool cardGate = (fee >= 2000 * st.moneyMul) ||
                           (fee > st.players[payer].cash + st.players[payer].bank);
     // [RE 0x419E58] 免費卡(20)：抵用成功 → 免付
-    if (cardGate && cardBagHas(st, payer, 20) && applyFreeCard(app, payer, fee) == 1) {
+    if (cardGate && cardBagHas(st, payer, 20) && applyFreeCard(app, payer, fee, feeOwner) == 1) {
         RICH4_LOGI("resolveFeePayer: p%d free card covers fee %d (RE 0x444A60)", payer, fee);
         return -1;
     }
@@ -2356,7 +2358,7 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                         addPlayerDebt(st, p, es.owner - 1, fee / 100);
                     }
                     // [RE 0x419E58/0x419EB8/0x419ECC] 免费卡/嫁祸卡/死神代付（见 resolveFeePayer）
-                    const int payer = resolveFeePayer(app, p, fee, kFeeName);
+                    const int payer = resolveFeePayer(app, p, fee, kFeeName, es.owner - 1);
                     // [RE 0x419F42] 付款人 = 地主/同盟（嫁祸卡转嫁收款人）→ 不转账、不更新租金
                     if (payer >= 0 && payer != es.owner - 1 &&
                         (ally == 0 || payer != ally - 1)) { // -1 = 免費卡抵用免付
@@ -2586,7 +2588,7 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                     // [RE 0x41A5C0] 记账（欠款矩阵）：付款人 → 地主 金额/100
                     addPlayerDebt(st, p, cp.owner - 1, rent / 100);
                     // [RE 0x41A62E/0x41A683/0x41A6A4] 免费卡/嫁祸卡/死神代付
-                    payer = resolveFeePayer(app, p, rent, feeName);
+                    payer = resolveFeePayer(app, p, rent, feeName, cp.owner - 1);
                     if (payer >= 0) {  // -1 = 免費卡抵用免付
                         // [RE 0x41A710/0x41A71E/0x41A735] 付款/收款台词（嫁祸反弹付款人=地主
                         //   时原版 0x41A709 跳过台词）
@@ -2732,7 +2734,7 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                     fee = applyGodRentModifier(app, p, fee, feeName);
                     if (fee > 0) {
                         // [RE 0x41AF20/0x41AF75/0x41AF99] 免费卡/嫁祸卡/死神代付
-                        const int payer = resolveFeePayer(app, p, fee, feeName);
+                        const int payer = resolveFeePayer(app, p, fee, feeName, -1);  // [RE 0x41AF1D] 公库无收费方台词
                         if (payer >= 0) {  // -1 = 免費卡抵用免付
                             // [RE 0x41B006] 付款人=本人 → 付款台词（金额档 expr2；公库无收款台词）
                             if (payer == p) {

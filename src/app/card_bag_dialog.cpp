@@ -236,7 +236,7 @@ int cardRebuildEffect(Application& app) {
             return 0;
         }
         const bool wasChain = (es.type == 1);
-        playCardLine(app, cur, 6);  // [RE 0x4430xx 使用者台词 改建]
+        playCardLine(app, cur, 6, 3);  // [RE 0x443120 使用者台词 改建 expr3]
         es.type ^= 1;
         if (!wasChain && es.level > 1) {
             es.level = 1;
@@ -256,7 +256,7 @@ int cardRebuildEffect(Application& app) {
         if (cp.sub == 0) {
             return 0;
         }
-        playCardLine(app, cur, 6);  // [RE 使用者台词 改建]
+        playCardLine(app, cur, 6, 3);  // [RE 0x4431AA 使用者台词 改建 expr3（弹设施面板前）]
         const int r = selectFacilityDialog(app, 1);  // [RE 0x4431C4]
         if (r < 0) {
             return 0;
@@ -555,9 +555,9 @@ int passOnCardDialog(Application& app, int user) {
             }
         }
     }
-    cardBagRemove(st, user, 19); // [RE 0x44476A sub_441343(a1,19)]
-    playCardLine(app, user, 18); // [RE 0x4447xx 使用者台词 嫁禍]
-    playCardLine(app, target, kSpeechPassOnTarget);  // [RE 0x4447xx 被嫁祸者台词]
+    cardBagRemove(st, user, 19); // [RE 0x4449EF sub_441343(a1,19)]
+    playCardLine(app, user, 18, 0); // [RE 0x444A1D 使用者台词 嫁禍 expr0]
+    playCardLine(app, target, kSpeechPassOnTarget, 2);  // [RE 0x444A4B 被嫁祸者台词 expr2]
     RICH4_LOGI("passOnCard: user=%d -> target=%d (RE 0x44476A)", user, target);
     return target;
 }

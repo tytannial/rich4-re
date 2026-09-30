@@ -66,6 +66,6 @@ int cardEffectBlackStock(Application& app);
 // id18 復仇卡 [RE 0x444691]：受害者显示/消耗復仇卡(18) + 台词；实际反伤由调用方执行
 void triggerRevengeCard(Application& app, int victim);
 // id20 免費卡 [RE 0x444A60]：受罚者 target 费用 fee 时询问/判定用卡抵用；返回 1 = 已抵用
-int applyFreeCard(Application& app, int target, int32_t fee);
+int applyFreeCard(Application& app, int target, int32_t fee, int feeOwner = -1);
 
 } // namespace rich4
