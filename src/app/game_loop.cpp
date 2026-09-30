@@ -27,6 +27,7 @@
 #include "game/application.h"
 #include "game/core/log.h"
 #include "game/core/trace.h"
+#include "game/render/blit.h"
 #include "game/render/surface.h"
 
 namespace rich4 {
@@ -56,32 +57,16 @@ constexpr int kMiniMapH = 200;
 void drawParachuteFrame(Application& app) {
     GameState& st = app.gameState();
     Surface& dst = app.surface();
+    // [NEW M4-A2] 跳伞 FLC 按画布 scale 缩放叠加于地图区（色键 0 透明；scale=1 逐像素等价）
     const int w = st.parachute.width();
     const int h = st.parachute.height();
     if (w <= 0 || h <= 0) {
         return;
     }
-    const uint16_t* src = st.parachute.pixels();
-    uint16_t* d = dst.pixels();
     const int ox = (440 - w) / 2;
     const int oy = 40 + (440 - h) / 2;
-    for (int row = 0; row < h; ++row) {
-        const int py = oy + row;
-        if (py < 0 || py >= dst.height()) {
-            continue;
-        }
-        for (int col = 0; col < w; ++col) {
-            const int px = ox + col;
-            if (px < 0 || px >= dst.width()) {
-                continue;
-            }
-            const uint16_t c = src[static_cast<size_t>(row) * w + col];
-            if (c == 0) {
-                continue; // 色键 0 透明
-            }
-            d[static_cast<size_t>(py) * dst.width() + px] = c;
-        }
-    }
+    blitScaled(dst, reinterpret_cast<const uint8_t*>(st.parachute.pixels()), w * 2, nullptr, ox,
+               oy, 0, 0, w, h, false, false, 0);
 }
 
 // [RE 0x45144F / 0x4506C7] 事件 FLC 帧叠加到场景（得點券等；透明模式色键 = 调色板索引 0）
@@ -90,31 +75,14 @@ void drawParachuteFrame(Application& app) {
 void drawEventFlcFrame(Application& app) {
     GameState& st = app.gameState();
     Surface& dst = app.surface();
+    // [NEW M4-A2] 事件 FLC 按画布 scale 缩放叠加（色键由 FLC 提供；scale=1 逐像素等价）
     const int w = st.eventFlc.width();
     const int h = st.eventFlc.height();
     if (w <= 0 || h <= 0) {
         return;
     }
-    const uint16_t* src = st.eventFlc.pixels();
-    const uint16_t key = st.eventFlc.colorKey();
-    uint16_t* d = dst.pixels();
-    for (int row = 0; row < h; ++row) {
-        const int py = st.eventFlcY + row;
-        if (py < 0 || py >= dst.height()) {
-            continue;
-        }
-        for (int col = 0; col < w; ++col) {
-            const int px = st.eventFlcX + col;
-            if (px < 0 || px >= dst.width()) {
-                continue;
-            }
-            const uint16_t c = src[static_cast<size_t>(row) * w + col];
-            if (c == key) {
-                continue; // 色键：调色板索引 0 透明
-            }
-            d[static_cast<size_t>(py) * dst.width() + px] = c;
-        }
-    }
+    blitScaled(dst, reinterpret_cast<const uint8_t*>(st.eventFlc.pixels()), w * 2, nullptr,
+               st.eventFlcX, st.eventFlcY, 0, 0, w, h, false, false, st.eventFlc.colorKey());
 }
 
 // [NEW] 小地图点击平滑跳转：每 tick 向目标视口中心插值（原版直接跳转）

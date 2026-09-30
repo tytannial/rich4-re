@@ -158,7 +158,20 @@ pendingSpawnPlayer`，不含视口滚动/模态——原版这两类窗口面板
 `!blockingPerf`）；新命令 `trace.clear`、新场景 **`308_go_panel_surrender`**（`surrender;
 trace.clear` 同帧清窗，**修前 FAIL 75 次 cur=0 → 修后 0 次**）。详见 `m4-plan.md` §14、
 `ui-controls.md` §39 ⑤。验证：L0 **86/86**、L1 **93/93**（94 场景中 `84_ai_marathon` 按约定
-不跑，见 `m4-plan.md` §9.2）、`re_map` 通过。**下一步 = A1 画布运行期尺寸**。
+不跑，见 `m4-plan.md` §9.2）、`re_map` 通过。
+**批次 A1 ✅ 2026-09-30（画布运行期尺寸，scale 恒 1）**：`Surface` 宽高运行期化
+（`create(renderer, w, h)`，默认 native 640×480）、95 处 `Surface::kWidth/kHeight` 全量
+参数化（17 文件）、blit 家族行距/裁剪取自画布、全局裁剪窗口随画布初始化；新增 `--canvas WxH`
+开发入口；L0 新增 4 用例。**修复 blitScrolledMap 高画布越界读**（行数 `min(画布高,480)`——
+`--canvas 800x600` 选人界面崩溃根因）。详见 `m4-plan.md` §15。
+**批次 A2 ✅ 2026-09-30（scale + 缩放 blit + 文本 1:1 光栅化 + preset/resize）**：
+`Surface::scale/logicalToDevice/deviceToLogical` + `SurfaceScaleGuard`；blit 家族 nearest 缩放
+（`blitScaled` 导出供 UI 散点叠加）+ 全部散点设备化；文本按 `设计字号×scale` 1:1 光栅化
+（阴影/描边/字距/边距乘 scale）；光标按 scale 放大；**鼠标双坐标**（UI 逻辑 / 地图设备）；
+**地图层固定 worldScale=1**（`renderMap`/高亮/演出叠加 guard）；新增 `--scale <f>` 与
+`--preset native|wide|free`（wide=1280×720 auto；free=drawable + `SDL_EVENT_WINDOW_RESIZED`
+重建画布）；`run_tests.py` 新增 `--extra`。详见 `m4-plan.md` §16。**下一步 = C 脏区重绘 +
+UI 布局表 + 命中派生**（D 宽屏视口的地图区扩展依赖 C 的布局表）。
 
 **跨平台 ✅ 2026-09-30**（原 M3-C，Windows x64 + Linux x86-64）：GDI → **FreeType 统一文本渲染**
 （删 366 行 GDI、字体 `resources/Fonts/` 不入库/缺失降级、`kFontSizeScale` 可调）、

@@ -561,6 +561,7 @@ void attachEnd(Application& app, int p) {
     int frame = (pl.dir + 8 - st.mapRotation) & 7;
     setClipRect(0, 40, 440, 480);
     Surface& dst = app.surface();
+    // [NEW M4-A2] 地图层演出：绘制随画布 scale（裁剪为设计逻辑坐标，blit 内设备化）
     for (int i = 0; i < 24; ++i) {
         sy -= 10;
         frame = (frame + 1) & 7;
@@ -577,7 +578,7 @@ void attachEnd(Application& app, int p) {
             delayMs(5);
         }
     }
-    setClipRect(0, 0, dst.width(), dst.height());
+    setClipRect(0, 0, Surface::kWidth, Surface::kHeight);
     app.audio().stopEffectSlot(19);
     st.cellTable[off + 2] = static_cast<uint8_t>(savedEnt & 0xFF);
     st.cellTable[off + 3] = static_cast<uint8_t>(savedEnt >> 8);
@@ -1001,6 +1002,7 @@ void flyObjectSprite(Application& app, int objId, int fromX, int fromY, int toX,
     trace::logf("fly obj=%d from=(%d,%d) to=(%d,%d) hold=%d", objId, fromX, fromY, toX, toY,
                 holdMs);
     Surface& dst = app.surface();
+    // [NEW M4-A2] 地图层演出：绘制随画布 scale（快照区域在下方设备化）
     int dir = 0;
     UiImage* img = nullptr;
     if (objId != 0) {
@@ -1042,11 +1044,16 @@ void flyObjectSprite(Application& app, int objId, int fromX, int fromY, int toX,
     constexpr int kSnapY = 40;
     constexpr int kSnapW = 440;
     constexpr int kSnapH = 440;
-    std::vector<uint16_t> background(static_cast<size_t>(kSnapW) * kSnapH);
-    for (int r = 0; r < kSnapH; ++r) {
-        std::memcpy(background.data() + static_cast<size_t>(r) * kSnapW,
-                    dst.pixels() + static_cast<size_t>(kSnapY + r) * dst.width() + kSnapX,
-                    static_cast<size_t>(kSnapW) * sizeof(uint16_t));
+    // [NEW M4-A2] 逻辑区域 → 设备区域快照（scale=1 恒等）
+    const int kSnapXd = dst.logicalToDevice(kSnapX);
+    const int kSnapYd = dst.logicalToDevice(kSnapY);
+    const int kSnapWd = dst.logicalSpanToDevice(kSnapX, kSnapW);
+    const int kSnapHd = dst.logicalSpanToDevice(kSnapY, kSnapH);
+    std::vector<uint16_t> background(static_cast<size_t>(kSnapWd) * kSnapHd);
+    for (int r = 0; r < kSnapHd; ++r) {
+        std::memcpy(background.data() + static_cast<size_t>(r) * kSnapWd,
+                    dst.pixels() + static_cast<size_t>(kSnapYd + r) * dst.width() + kSnapXd,
+                    static_cast<size_t>(kSnapWd) * sizeof(uint16_t));
     }
     double px = x0;
     double py = y0;
@@ -1056,10 +1063,10 @@ void flyObjectSprite(Application& app, int objId, int fromX, int fromY, int toX,
         py += stepY;
         const uint64_t end = nowMs() + 24;
         // [RE 0x456469] 恢复背景（整区；原版只恢复上一帧精灵矩形，背景不变故等价）
-        for (int r = 0; r < kSnapH; ++r) {
-            std::memcpy(dst.pixels() + static_cast<size_t>(kSnapY + r) * dst.width() + kSnapX,
-                        background.data() + static_cast<size_t>(r) * kSnapW,
-                        static_cast<size_t>(kSnapW) * sizeof(uint16_t));
+        for (int r = 0; r < kSnapHd; ++r) {
+            std::memcpy(dst.pixels() + static_cast<size_t>(kSnapYd + r) * dst.width() + kSnapXd,
+                        background.data() + static_cast<size_t>(r) * kSnapWd,
+                        static_cast<size_t>(kSnapWd) * sizeof(uint16_t));
         }
         blitSpriteFrameClipped(dst, *img, dir, static_cast<int>(px), static_cast<int>(py), true);
         app.renderFrame();
@@ -1068,7 +1075,7 @@ void flyObjectSprite(Application& app, int objId, int fromX, int fromY, int toX,
             delayMs(2);
         }
     }
-    setClipRect(0, 0, dst.width(), dst.height());
+    setClipRect(0, 0, Surface::kWidth, Surface::kHeight);
     // [RE 0x45285E] 末帧停留；末帧精灵保留屏上（原版 a1!=0 不清屏，等调用方全屏重绘
     //   才显示目标格物件）——屏幕即时模式必须显式冻结末帧
     for (int t = 0; t < holdMs; t += 5) {

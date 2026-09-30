@@ -228,18 +228,22 @@ void captureStatic(StayCtx& ui) {
 // 用静态层快照恢复矩形（滑出回填；避免把帧 1/牌子文字擦成帧 0 原样）
 void restoreStaticRect(StayCtx& ui, int x, int y, int w, int h) {
     Surface& dst = ui.app->surface();
-    if (ui.staticBg.empty() || w <= 0 || x < 0 || x + w > dst.width()) {
+    if (ui.staticBg.empty() || w <= 0 || h <= 0) {
+        return;
+    }
+    // [NEW M4-A2] 逻辑区域 → 设备区域（staticBg 为全画布设备快照，行距设备宽）
+    const int x0 = dst.logicalToDevice(x);
+    const int y0 = dst.logicalToDevice(y);
+    const int x1 = dst.logicalToDevice(x + w);
+    const int y1 = dst.logicalToDevice(y + h);
+    if (x0 < 0 || y0 < 0 || x1 > dst.width() || y1 > dst.height() || x1 <= x0 || y1 <= y0) {
         return;
     }
     uint16_t* d = dst.pixels();
-    for (int row = 0; row < h; ++row) {
-        const int py = y + row;
-        if (py < 0 || py >= dst.height()) {
-            continue;
-        }
-        std::memcpy(d + static_cast<size_t>(py) * dst.width() + x,
-                    ui.staticBg.data() + static_cast<size_t>(py) * dst.width() + x,
-                    sizeof(uint16_t) * static_cast<size_t>(w));
+    for (int row = y0; row < y1; ++row) {
+        std::memcpy(d + static_cast<size_t>(row) * dst.width() + x0,
+                    ui.staticBg.data() + static_cast<size_t>(row) * dst.width() + x0,
+                    sizeof(uint16_t) * static_cast<size_t>(x1 - x0));
     }
 }
 
@@ -312,20 +316,9 @@ void drawHolidayAt(Application& app, int holiday, int x, int y) {
         return;
     }
     Surface& dst = app.surface();
-    uint16_t* d = dst.pixels();
-    for (int row = 0; row < raw.height; ++row) {
-        const int py = y + row;
-        if (py < 0 || py >= dst.height()) {
-            continue;
-        }
-        for (int col = 0; col < raw.width; ++col) {
-            const int px = x + col;
-            if (px < 0 || px >= dst.width()) {
-                continue;
-            }
-            d[static_cast<size_t>(py) * dst.width() + px] = raw.pixels[row * raw.width + col];
-        }
-    }
+    // [NEW M4-A2] RAW 插画按画布 scale 缩放绘制（不透明；scale=1 时逐像素等价）
+    blitScaled(dst, reinterpret_cast<const uint8_t*>(raw.pixels), raw.width * 2, nullptr, x, y, 0,
+               0, raw.width, raw.height, false, true);
 }
 
 // [RE 0x433F24] 右下 200x200 日历面板 @(x,280)（大数字模式 + 距還款日）

@@ -60,25 +60,9 @@ void blitFlcFrame(Surface& dst, const FliDecoder& flc, int x, int y, bool transp
     if (!flc.valid()) {
         return;
     }
-    const uint16_t key = flc.colorKey();
-    const uint16_t* src = flc.pixels();
-    for (int row = 0; row < flc.height(); ++row) {
-        const int py = y + row;
-        if (py < 0 || py >= dst.height()) {
-            continue;
-        }
-        for (int col = 0; col < flc.width(); ++col) {
-            const int px = x + col;
-            if (px < 0 || px >= dst.width()) {
-                continue;
-            }
-            const uint16_t c = src[static_cast<size_t>(row) * flc.width() + col];
-            if (transparent && c == key) {
-                continue;
-            }
-            dst.pixels()[static_cast<size_t>(py) * dst.width() + px] = c;
-        }
-    }
+    // [NEW M4-A2] FLC 当前帧按画布 scale 缩放叠加（色键透明；scale=1 逐像素等价）
+    blitScaled(dst, reinterpret_cast<const uint8_t*>(flc.pixels()), flc.width() * 2, nullptr, x,
+               y, 0, 0, flc.width(), flc.height(), false, !transparent, flc.colorKey());
 }
 
 // 解码一帧；本次解码后到达末帧返回 true（原版 sub_450F04 帧计数 == 总数时返回 0 = 播完）

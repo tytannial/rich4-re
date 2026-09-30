@@ -53,18 +53,64 @@ const UiFrameView* Cursor::currentFrame() const {
 
 void Cursor::uncompose(Surface& dst) {
     // [RE 0x401F5E] 依据: sub_456280(word_46CB14, dword_48A0E8, dword_48A0EC, dword_48A0F0)
-    // 把保存的背景区域写回表面
+    // 把保存的背景区域写回表面（设备域；行距 = m_saveStride）
     if (!m_visible) {
         return;
     }
     for (int row = 0; row < m_saveH; ++row) {
         uint16_t* d = dst.pixels() + static_cast<size_t>(m_saveY + row) * dst.width() + m_saveX;
-        const uint16_t* s = m_saved.data() + static_cast<size_t>(row) * kSize;
+        const uint16_t* s = m_saved.data() + static_cast<size_t>(row) * m_saveStride;
         for (int col = 0; col < m_saveW; ++col) {
             d[col] = s[col];
         }
     }
     m_visible = false;
+}
+
+void Cursor::blitFrameDevice(Surface& dst, const UiFrameView& frame, int devX, int devY) const {
+    // [NEW M4-A2] 帧按画布 scale 放大（设备尺寸 nearest 采样；0 透明）。
+    //   光标资源为 SMP（16bit 像素直取）或 SPR（8bit 索引 + 调色板）——两种都支持
+    const bool sprite = m_image.isSprite();
+    const uint8_t* idx8 = sprite ? m_image.frameBytes(m_cursorIndex + m_frame) : nullptr;
+    const uint16_t* palette = m_image.palette();
+    const uint16_t* px16 = sprite ? nullptr : frame.pixels;
+    if ((sprite && (!idx8 || !palette)) || (!sprite && !px16)) {
+        return;
+    }
+    const int dw = dst.logicalToDevice(frame.width);
+    const int dh = dst.logicalToDevice(frame.height);
+    if (dw <= 0 || dh <= 0) {
+        return;
+    }
+    for (int vy = 0; vy < dh; ++vy) {
+        const int py = devY + vy;
+        if (py < 0 || py >= dst.height()) {
+            continue;
+        }
+        const int sy = vy * frame.height / dh;
+        const uint8_t* srow8 = idx8 ? idx8 + static_cast<size_t>(sy) * frame.width : nullptr;
+        const uint16_t* srow16 =
+            px16 ? px16 + static_cast<size_t>(sy) * frame.width : nullptr;
+        uint16_t* drow = dst.pixels() + static_cast<size_t>(py) * dst.width();
+        for (int vx = 0; vx < dw; ++vx) {
+            const int px = devX + vx;
+            if (px < 0 || px >= dst.width()) {
+                continue;
+            }
+            const int sx = vx * frame.width / dw;
+            if (sprite) {
+                const uint8_t idx = srow8[sx];
+                if (idx != 0) {
+                    drow[px] = palette[idx];
+                }
+            } else {
+                const uint16_t c = srow16[sx];
+                if (c != 0) {
+                    drow[px] = c;
+                }
+            }
+        }
+    }
 }
 
 void Cursor::compose(Surface& dst, int x, int y) {
@@ -83,10 +129,13 @@ void Cursor::compose(Surface& dst, int x, int y) {
     // [RE 0x401E59] 依据: 光标位置 = (x - offsetX, y - offsetY);
     // 背景保存区域固定 32x32（原版 v2=v3=32），裁剪到屏幕;
     // 光标帧由 sub_4562A5→sub_455C52 按帧自身尺寸（如 23x23）blit
-    int saveX = x - frame->offsetX;
-    int saveY = y - frame->offsetY;
-    int saveW = kSize;
-    int saveH = kSize;
+    // [NEW M4-A2] 鼠标坐标 x/y 为设备坐标：offset 与包围盒按画布 scale 设备化
+    const int saveXDev = dst.logicalToDevice(frame->offsetX);
+    const int saveYDev = dst.logicalToDevice(frame->offsetY);
+    int saveX = x - saveXDev;
+    int saveY = y - saveYDev;
+    int saveW = dst.logicalToDevice(kSize);
+    int saveH = saveW;
     if (saveX < 0) {
         saveW += saveX;
         saveX = 0;
@@ -110,15 +159,19 @@ void Cursor::compose(Surface& dst, int x, int y) {
     m_saveY = saveY;
     m_saveW = saveW;
     m_saveH = saveH;
+    m_saveStride = saveW;
+    if (m_saved.size() < static_cast<size_t>(saveW) * saveH) {
+        m_saved.assign(static_cast<size_t>(saveW) * saveH, 0);
+    }
     for (int row = 0; row < saveH; ++row) {
         const uint16_t* s = dst.pixels() + static_cast<size_t>(saveY + row) * dst.width() + saveX;
-        uint16_t* d = m_saved.data() + static_cast<size_t>(row) * kSize;
+        uint16_t* d = m_saved.data() + static_cast<size_t>(row) * m_saveStride;
         for (int col = 0; col < saveW; ++col) {
             d[col] = s[col];
         }
     }
 
-    blitElement(dst, *frame, x, y, false);
+    blitFrameDevice(dst, *frame, saveX, saveY);
     m_visible = true;
     m_posX = x;
     m_posY = y;

@@ -1179,19 +1179,24 @@ void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, boo
     int rw = 0;
     int rh = 0;
     Surface& dst = app.surface();
+    // [NEW M4-A2] 回卷区域以设计逻辑坐标计算（rx0/ry0/rw/rh），快照/写回时设备化
     auto snapBg = [&]() {
-        bg.resize(static_cast<size_t>(rw) * rh);
-        for (int r = 0; r < rh; ++r) {
-            std::memcpy(&bg[static_cast<size_t>(r) * rw],
-                        dst.pixels() + static_cast<size_t>(ry0 + r) * dst.width() + rx0,
-                        static_cast<size_t>(rw) * sizeof(uint16_t));
+        const int rxd = dst.logicalToDevice(rx0);
+        const int ryd = dst.logicalToDevice(ry0);
+        const int rwd = dst.logicalSpanToDevice(rx0, rw);
+        const int rhd = dst.logicalSpanToDevice(ry0, rh);
+        bg.resize(static_cast<size_t>(rwd) * rhd);
+        for (int r = 0; r < rhd; ++r) {
+            std::memcpy(&bg[static_cast<size_t>(r) * rwd],
+                        dst.pixels() + static_cast<size_t>(ryd + r) * dst.width() + rxd,
+                        static_cast<size_t>(rwd) * sizeof(uint16_t));
         }
     };
     if (preserve) {
         rx0 = std::max(0, x);
         ry0 = std::max(0, y);
-        rw = std::max(0, std::min(dst.width(), x + st.eventFlc.width()) - rx0);
-        rh = std::max(0, std::min(dst.height(), y + st.eventFlc.height()) - ry0);
+        rw = std::max(0, std::min(Surface::kWidth, x + st.eventFlc.width()) - rx0);
+        rh = std::max(0, std::min(Surface::kHeight, y + st.eventFlc.height()) - ry0);
         if (rw > 0 && rh > 0) {
             snapBg();
         }
@@ -1230,10 +1235,16 @@ void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, boo
                 switched = true;
             }
             // 回卷基准（切换前=开始前画面；切换后=切换帧纯净场景）+ 叠加当前动画帧
-            for (int r = 0; r < rh; ++r) {
-                std::memcpy(dst.pixels() + static_cast<size_t>(ry0 + r) * dst.width() + rx0,
-                            &bg[static_cast<size_t>(r) * rw],
-                            static_cast<size_t>(rw) * sizeof(uint16_t));
+            {
+                const int rxd = dst.logicalToDevice(rx0);
+                const int ryd = dst.logicalToDevice(ry0);
+                const int rwd = dst.logicalSpanToDevice(rx0, rw);
+                const int rhd = dst.logicalSpanToDevice(ry0, rh);
+                for (int r = 0; r < rhd; ++r) {
+                    std::memcpy(dst.pixels() + static_cast<size_t>(ryd + r) * dst.width() + rxd,
+                                &bg[static_cast<size_t>(r) * rwd],
+                                static_cast<size_t>(rwd) * sizeof(uint16_t));
+                }
             }
             overlayEventFlcFrame(app);
         } else {
@@ -1404,21 +1415,9 @@ void cardGetDraw(CardGetCtx& ctx) {
     Surface& dst = app.surface();
     renderGameFrame(app); // 地图背景
     if (ctx.w > 0 && ctx.h > 0) {
-        uint16_t* d = dst.pixels();
-        for (int row = 0; row < ctx.h; ++row) {
-            const int py = 200 + row; // [RE 0x441F73] (138,200)（元素偏移 0）
-            if (py < 0 || py >= dst.height()) {
-                continue;
-            }
-            for (int col = 0; col < ctx.w; ++col) {
-                const int px = 138 + col;
-                if (px < 0 || px >= dst.width()) {
-                    continue;
-                }
-                d[static_cast<size_t>(py) * dst.width() + px] =
-                    ctx.pixels[static_cast<size_t>(row) * ctx.w + col];
-            }
-        }
+        // [NEW M4-A2] 卡片图 (138,200) 按画布 scale 缩放叠加（不透明；scale=1 逐像素等价）
+        blitScaled(dst, reinterpret_cast<const uint8_t*>(ctx.pixels.data()), ctx.w * 2, nullptr,
+                   138, 200, 0, 0, ctx.w, ctx.h, false, true);
     }
     const UiImage& tip = app.gameState().estateTiles; // [RE 0x48BAD8] g_tipFrame
     if (tip.frameCount() > 5) {

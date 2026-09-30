@@ -93,18 +93,34 @@ void orColorMask(Surface& dst, const UiImage& spr, int frame, int x, int y, uint
     int right = 0;
     int bottom = 0;
     getClipRect(left, top, right, bottom);
+    // [NEW M4-A2] 裁剪/目标全部设备化；逐设备像素采样掩膜（scale=1 时逐像素等价）
+    left = dst.logicalToDevice(left);
+    top = dst.logicalToDevice(top);
+    right = dst.logicalToDevice(right);
+    bottom = dst.logicalToDevice(bottom);
     const int dx = x - src.offsetX;
     const int dy = y - src.offsetY;
-    for (int row = 0; row < src.height; ++row) {
-        const int py = dy + row;
+    const int dxDev = dst.logicalToDevice(dx);
+    const int dyDev = dst.logicalToDevice(dy);
+    const int dw = dst.logicalToDevice(src.width);
+    const int dh = dst.logicalToDevice(src.height);
+    if (dw <= 0 || dh <= 0) {
+        return;
+    }
+    for (int vy = 0; vy < dh; ++vy) {
+        const int py = dyDev + vy;
         if (py < top || py >= bottom) {
             continue;
         }
+        const int sy = vy * src.height / dh;
+        const uint8_t* mrow = mask + static_cast<size_t>(sy) * src.width;
         uint16_t* drow = dst.pixels() + static_cast<size_t>(py) * dst.width();
-        const uint8_t* mrow = mask + static_cast<size_t>(row) * src.width;
-        for (int col = 0; col < src.width; ++col) {
-            const int px = dx + col;
-            if (px < left || px >= right || mrow[col] == 0) {
+        for (int vx = 0; vx < dw; ++vx) {
+            const int px = dxDev + vx;
+            if (px < left || px >= right) {
+                continue;
+            }
+            if (mrow[vx * src.width / dw] == 0) {
                 continue;
             }
             drow[px] |= color;
@@ -157,6 +173,7 @@ void renderMap(Application& app, int centerX, int centerY) {
     // [RE 0x40829D] 依据: 视口中心 = 当前玩家像素坐标; 首次时随机出生点并占用
     GameState& state = app.gameState();
     Surface& dst = app.surface();
+    // [NEW M4-A2] 地图层跟随画布 scale（整体画面放大；宽屏视野扩展属批次 D）
 
     if (centerX == -1) {
         // 非手动视角：以当前玩家位置为中心（原版 sub_415E70 非 dword_48BE18 分支）
@@ -684,7 +701,7 @@ void renderMap(Application& app, int centerX, int centerY) {
         }
     }
 
-    setClipRect(0, 0, dst.width(), dst.height());
+    setClipRect(0, 0, Surface::kWidth, Surface::kHeight); // [NEW M4-A2] 裁剪为设计逻辑坐标
 
     // [RE 0x40829D] 移动计步器（剩余步数 dword_48BAF8；定义见 renderMap 头）
     // 说明: sprintf("%d", dword_48BAF8) → dword_48BAD8 帧 (ch-40)，y=400
@@ -720,25 +737,33 @@ void renderMap(Application& app, int centerX, int centerY) {
                 const int w = state.diceAnim.width();
                 const int h = state.diceAnim.height();
                 const uint16_t* src = state.diceAnim.pixels();
-                uint16_t* d = dst.pixels();
-                for (int row = 0; row < h; ++row) {
-                    const int py = dy + row;
+                // [NEW M4-A2] 逻辑目标 → 设备矩形 + nearest 采样（色键"亮绿范围"在采样后判断；
+                //   scale=1 时逐像素等价）
+                const int dxDev = dst.logicalToDevice(dx);
+                const int dyDev = dst.logicalToDevice(dy);
+                const int dw = dst.logicalToDevice(w);
+                const int dh = dst.logicalToDevice(h);
+                for (int vy = 0; vy < dh; ++vy) {
+                    const int py = dyDev + vy;
                     if (py < 0 || py >= dst.height()) {
                         continue;
                     }
-                    for (int col = 0; col < w; ++col) {
-                        const int px = dx + col;
+                    const int sy = vy * h / dh;
+                    const uint16_t* srow = src + static_cast<size_t>(sy) * w;
+                    uint16_t* drow = dst.pixels() + static_cast<size_t>(py) * dst.width();
+                    for (int vx = 0; vx < dw; ++vx) {
+                        const int px = dxDev + vx;
                         if (px < 0 || px >= dst.width()) {
                             continue;
                         }
-                        const uint16_t c = src[static_cast<size_t>(row) * w + col];
+                        const uint16_t c = srow[static_cast<size_t>(vx) * w / dw];
                         const int cr = (c >> 10) & 0x1F;
                         const int cg = (c >> 5) & 0x1F;
                         const int cb = c & 0x1F;
                         if (cg >= 20 && cr <= 10 && cb <= 10) {
                             continue; // 色键：亮绿透明
                         }
-                        d[static_cast<size_t>(py) * dst.width() + px] = c;
+                        drow[px] = c;
                     }
                 }
             } else if (state.showDice) {
@@ -1050,19 +1075,31 @@ void drawEstateHighlight(Application& app) {
     }
     const uint8_t* lut = kHlTable[ti];
     Surface& dst = app.surface();
+    // [NEW M4-A2] 逐逻辑像素映射设备矩形变换（scale=1 时单像素等价；地图随画布放大）
     uint16_t* px = dst.pixels();
     const int dstW = dst.width();
     const int dstH = dst.height();
-    auto adjust = [px, lut, dstW, dstH](int x, int y) {
-        if (x < 0 || y < 0 || x >= dstW || y >= dstH) {
-            return;
+    auto adjust = [px, lut, dstW, dstH, &dst](int x, int y) {
+        const int x0 = dst.logicalToDevice(x);
+        const int x1 = dst.logicalToDevice(x + 1);
+        const int y0 = dst.logicalToDevice(y);
+        const int y1 = dst.logicalToDevice(y + 1);
+        for (int yy = y0; yy < y1; ++yy) {
+            if (yy < 0 || yy >= dstH) {
+                continue;
+            }
+            uint16_t* row = px + static_cast<size_t>(yy) * dstW;
+            for (int xx = x0; xx < x1; ++xx) {
+                if (xx < 0 || xx >= dstW) {
+                    continue;
+                }
+                const uint16_t c = row[xx];
+                const uint16_t r = lut[(c >> 10) & 0x1F];
+                const uint16_t g = lut[(c >> 5) & 0x1F];
+                const uint16_t b = lut[c & 0x1F];
+                row[xx] = static_cast<uint16_t>((r << 10) | (g << 5) | b);
+            }
         }
-        const size_t o = static_cast<size_t>(y) * dstW + x;
-        const uint16_t c = px[o];
-        const uint16_t r = lut[(c >> 10) & 0x1F];
-        const uint16_t g = lut[(c >> 5) & 0x1F];
-        const uint16_t b = lut[c & 0x1F];
-        px[o] = static_cast<uint16_t>((r << 10) | (g << 5) | b);
     };
     for (const auto& hs : state.highlightShapes) {
         const UiFrameView& sf = hs.shape->frame(hs.frame);

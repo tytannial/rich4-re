@@ -36,22 +36,8 @@ void FloatMessage::show(Application& app, const char* text) {
     m_bgY = m_y - fr.offsetY;
     m_bgW = fr.width;
     m_bgH = fr.height;
-    m_bg.assign(static_cast<size_t>(m_bgW) * m_bgH, 0);
-    const uint16_t* src = dst.pixels();
-    for (int row = 0; row < m_bgH; ++row) {
-        const int py = m_bgY + row;
-        if (py < 0 || py >= dst.height()) {
-            continue;
-        }
-        for (int col = 0; col < m_bgW; ++col) {
-            const int px = m_bgX + col;
-            if (px < 0 || px >= dst.width()) {
-                continue;
-            }
-            m_bg[static_cast<size_t>(row) * m_bgW + col] =
-                src[static_cast<size_t>(py) * dst.width() + px];
-        }
-    }
+    // [NEW M4-A2] 区域快照走公共 API（逻辑区域按画布 scale 设备化；缩放后恢复一致）
+    saveRegion(m_bg, dst, m_bgX, m_bgY, m_bgW, m_bgH);
     blitElement(dst, fr, m_x, m_y, false);
     app.text().setFont(20, m_color, m_shadow, m_shadow != 0 ? 3 : 2, 1);
     // 原版文字位置 = (dword_48C618 + left + w/2, dword_48C62C + top + h/2)，align 4 居中
@@ -106,22 +92,8 @@ void FloatMessage::restore(Application& app) {
     if (m_bg.empty()) {
         return;
     }
-    Surface& dst = app.surface();
-    uint16_t* dp = dst.pixels();
-    for (int row = 0; row < m_bgH; ++row) {
-        const int py = m_bgY + row;
-        if (py < 0 || py >= dst.height()) {
-            continue;
-        }
-        for (int col = 0; col < m_bgW; ++col) {
-            const int px = m_bgX + col;
-            if (px < 0 || px >= dst.width()) {
-                continue;
-            }
-            dp[static_cast<size_t>(py) * dst.width() + px] =
-                m_bg[static_cast<size_t>(row) * m_bgW + col];
-        }
-    }
+    // [NEW M4-A2] 与 show 的 saveRegion 对应（同一 scale 下区域一致）
+    restoreRegion(app.surface(), m_bg, m_bgX, m_bgY, m_bgW, m_bgH);
     m_bg.clear();
 }
 

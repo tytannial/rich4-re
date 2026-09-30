@@ -67,6 +67,9 @@ public:
 private:
     const UiFrameView* currentFrame() const;
 
+    // [NEW M4-A2] 光标帧按画布 scale 放大后的设备化绘制（目标设备坐标；索引 0 透明）
+    void blitFrameDevice(Surface& dst, const UiFrameView& frame, int devX, int devY) const;
+
     UiImage m_image;
     bool m_initialized = false;
     int m_cursorIndex = 0;  // dword_48A0F4 对应组索引（41 = 默认箭头）
@@ -83,6 +86,7 @@ private:
     int m_saveW = 0;
     int m_saveH = 0;
     std::vector<uint16_t> m_saved; // dword_48A0E8 背景元素像素
+    int m_saveStride = kSize;      // [NEW M4-A2] 保存缓冲设备行距（= 设备保存宽）
 };
 
 } // namespace rich4

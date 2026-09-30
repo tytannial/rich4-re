@@ -28,6 +28,16 @@ void Renderer::destroy() {
     }
 }
 
+void Renderer::setLogicalSize(int width, int height) {
+    // [NEW M4-A2] 逻辑呈现随画布尺寸（free preset resize）
+    if (width <= 0 || height <= 0) {
+        return;
+    }
+    m_logicalWidth = width;
+    m_logicalHeight = height;
+    setWidescreen(true);
+}
+
 void Renderer::setWidescreen(bool enabled) {
     // LETTERBOX 保持 4:3 比例并留黑边；如需填满宽屏可换 SDL_LOGICAL_PRESENTATION_STRETCH。
     SDL_SetRenderLogicalPresentation(

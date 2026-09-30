@@ -55,6 +55,20 @@ void Surface::fillRect(int x, int y, int w, int h, uint16_t color) {
     if (w <= 0 || h <= 0) {
         return;
     }
+    // [NEW M4-A2] 逻辑矩形 → 设备矩形（scale=1 恒等；相邻区间首尾一致取整）
+    if (m_scale != 1.0f) {
+        const int x0 = logicalToDevice(x);
+        const int y0 = logicalToDevice(y);
+        const int x1 = logicalToDevice(x + w);
+        const int y1 = logicalToDevice(y + h);
+        x = x0;
+        y = y0;
+        w = x1 - x0;
+        h = y1 - y0;
+        if (w <= 0 || h <= 0) {
+            return;
+        }
+    }
     if (x < 0) {
         w += x;
         x = 0;

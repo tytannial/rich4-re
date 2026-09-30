@@ -68,6 +68,7 @@ struct NumberInputCtx {
 };
 
 // [RE 0x456512] SPR 索引+调色板绘制（不透明，含索引 0；对齐原版 sub_456512）
+// [NEW M4-A2] 走 blitScaled：scale=1 时逐像素等价，scale>1 时按画布缩放（源区域语义一致）
 void blitSprRegion(Surface& dst, const UiImage& spr, int frame, int dstX, int dstY, int srcX,
                    int srcY, int w, int h) {
     const uint8_t* bytes = spr.frameBytes(frame);
@@ -76,22 +77,7 @@ void blitSprRegion(Surface& dst, const UiImage& spr, int frame, int dstX, int ds
         return;
     }
     const UiFrameView& view = spr.frame(frame);
-    for (int row = 0; row < h; ++row) {
-        const int sy = srcY + row;
-        const int dy = dstY + row;
-        if (sy < 0 || sy >= view.height || dy < 0 || dy >= dst.height()) {
-            continue;
-        }
-        for (int col = 0; col < w; ++col) {
-            const int sx = srcX + col;
-            const int dx = dstX + col;
-            if (sx < 0 || sx >= view.width || dx < 0 || dx >= dst.width()) {
-                continue;
-            }
-            dst.pixels()[static_cast<size_t>(dy) * dst.width() + dx] =
-                pal[bytes[static_cast<size_t>(sy) * view.width + sx]];
-        }
-    }
+    blitScaled(dst, bytes, view.width, pal, dstX, dstY, srcX, srcY, w, h, false, true);
 }
 
 // [RE 0x45297E] 数字显示 + 滑块 + 按下态

@@ -412,25 +412,9 @@ void playSettleFlc(SettleCtx& ui, int mkfIndex, int x, int y) {
     while (flc.nextFrame()) {
         std::memcpy(dst.pixels(), ui.flcBg.data(),
                     sizeof(uint16_t) * dst.width() * dst.height());
-        const uint16_t* src = flc.pixels();
-        const uint16_t key = flc.colorKey();
-        for (int row = 0; row < flc.height(); ++row) {
-            const int py = y + row;
-            if (py < 0 || py >= dst.height()) {
-                continue;
-            }
-            for (int col = 0; col < flc.width(); ++col) {
-                const int px = x + col;
-                if (px < 0 || px >= dst.width()) {
-                    continue;
-                }
-                const uint16_t c = src[static_cast<size_t>(row) * flc.width() + col];
-                if (c == key) {
-                    continue; // 色键 0 = 调色板索引 0 透明
-                }
-                dst.pixels()[static_cast<size_t>(py) * dst.width() + px] = c;
-            }
-        }
+        // [NEW M4-A2] FLC 当前帧按画布 scale 缩放叠加（色键透明；scale=1 逐像素等价）
+        blitScaled(dst, reinterpret_cast<const uint8_t*>(flc.pixels()), flc.width() * 2, nullptr,
+                   x, y, 0, 0, flc.width(), flc.height(), false, false, flc.colorKey());
         // [NEW] 全量回卷 + 叠加 = 本帧背景已重建，光标保存块作废（防陈旧 uncompose 写回闪块）
         app.cursor().invalidate();
         app.renderFrame();

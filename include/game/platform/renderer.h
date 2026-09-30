@@ -28,6 +28,8 @@ public:
     int logicalHeight() const { return m_logicalHeight; }
 
     void setWidescreen(bool enabled);
+    // [NEW M4-A2] 重设逻辑呈现尺寸（free preset 窗口 resize 时与画布同步）
+    void setLogicalSize(int width, int height);
 
 private:
     SDL_Renderer* m_renderer = nullptr;

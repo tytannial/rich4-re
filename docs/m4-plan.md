@@ -24,7 +24,13 @@
 >   `Surface::kWidth/kHeight` 全量参数化（17 文件）+ blit 家族行距/裁剪取自画布 + 新增
 >   `--canvas WxH` 开发入口；L0 新增 4 用例；矩阵 94/94、save-selftest STABLE、re_map 通过，
 >   **800×600 画布与 native 左上 640×480 逐像素一致（A/B diff=0）**。详见 §15。
-> - **下一步 = A2**（引入 scale + 缩放 blit + 文本 scale + 阴影/描边乘 scale）。
+> - **批次 A2（scale + 缩放 blit + 文本 1:1 光栅化 + preset/resize）✅ 已实施**：
+>   `Surface::scale/logicalToDevice/deviceToLogical` + `SurfaceScaleGuard`；blit 家族 nearest
+>   缩放 + `blitScaled` 导出（UI 散点叠加全设备化：区域快照走 `saveRegion/restoreRegion`、
+>   FLC/RAW 叠加走 `blitScaled`）；文本 `设计字号×scale` 1:1 光栅化（阴影/描边/字距/边距乘
+>   scale）；光标按 scale 放大；**鼠标双坐标**（UI 逻辑 / 地图设备）；**地图层固定
+>   worldScale=1**；`--scale <f>` / `--preset native|wide|free`（free 处理窗口 resize）；
+>   `run_tests.py --extra`。详见 §16。**下一步 = C 脏区重绘 + UI 布局表 + 命中派生**。
 
 | 批次 | 内容 | 依赖 | 风险 | 建议顺序 |
 |------|------|------|------|----------|
@@ -431,7 +437,7 @@ WYSIWYG）；`drawRectBorder`/`scaleSurfaceChannels`/`drawEstateHighlight` **都
 
 ```
 A1 画布运行期尺寸（scale 恒 1）→ 全量矩阵回归   ✅ 2026-09-30（见 §15）
-A2 引入 scale + 缩放 blit + 文本 scale + 阴影/描边乘 scale   ← 下一批
+A2 引入 scale + 缩放 blit + 文本 scale + 阴影/描边乘 scale   ✅ 2026-09-30（见 §16）
 B  GO 面板 C2+C1（+C3）                          ✅ 2026-09-30（C3 判定不需要，见 §14）
 C  脏区重绘还原 → UI 布局表 → 命中派生
 E  文本定点化/亚像素（可与 C 并行）
@@ -626,6 +632,65 @@ H  追加四项（射程 → 预览高亮 → 小游戏插值/键盘 → 同格�
 - 开发观察（未复现）：首次全量构建后的二进制曾出现启动即反复重开主菜单（同一命令 clean
   重建后无法复现；后续 20+ 次运行全绿）。两轮均处于可能存在残留进程的窗口期，暂归因构建
   产物/运行环境瞬态；若后续复现，从 `runModal` 退出条件（`running`/`exitRequested`）入手排查。
+
+---
+
+## 16. 批次 A2 实施记录（2026-09-30，✅ 已落地）
+
+**目标**：`scale` 机制 + 缩放 blit + 文本 1:1 光栅化 + preset/窗口 resize（scale=1 恒等）。
+
+### 16.1 改动清单
+
+| # | 位置 | 改动 | 依据 |
+|---|------|------|------|
+| 1 | `surface.h/cpp` | `scale/loginToDevice/logicalSpanToDevice/deviceToLogical` + `SurfaceScaleGuard`；`fillRect` 逻辑矩形设备化 | — |
+| 2 | `blit.cpp/h` | **`blitScaled`**（nearest 采样；SPR/16bit/色键/不透明）导出供 UI 散点复用；四个 blit 入口 `scale != 1` 分支；`pressDown`/`scaleSurfaceChannels`/`saveRegion`/`restoreRegion` 设备化；`blitScrolledMap` 缩放 + 环绕采样；全局裁剪逻辑坐标 → 设备化 | 0x455C52/0x456180 等 |
+| 3 | `text.cpp` | `px = 字号 × kFontSizeScale × scale`；缓冲按 scale 重建；折行/边距/字距/阴影/描边/落点全设备化；**blit 前 `SurfaceScaleGuard(1)` 1:1 写入**（无二次放大） | 0x44FABC |
+| 4 | `cursor.cpp` | 保存区域/偏移按 scale 设备化；`blitFrameDevice` 帧放大绘制（**SMP 16bit 与 SPR 8bit 双支持**） | 0x401E59 |
+| 5 | `iso_blit.cpp` | 等距四边形顶点设备化（行扫描 + 纹理插值自动适应） | 0x4557A1 |
+| 6 | `map_render.cpp` | `orColorMask`/`drawEstateHighlight` 逐逻辑像素 → 设备矩形；骰子 FLC 设备采样（色键范围在采样后判断）；`setClipRect` 恢复为设计逻辑坐标 | 0x456384/0x451985 |
+| 7 | `game_loop.cpp`/`map_objects.cpp`/`turn_system.cpp` | 跳伞/事件 FLC 叠加改 `blitScaled`；飞行动画/飘走快照区域设备化；`playEventFlc` 保帧回卷区域设备化 | 0x45144F/0x451A97 |
+| 8 | UI 散点（18 文件） | 区域快照统一走 `saveRegion/restoreRegion`（气泡/大图悬停/消息板）；FLC/RAW 叠加统一走 `blitScaled`（乐透/魔法屋/小游戏/月结/卡片获得/银行插画/大地图/小地图）；走势图逐点经 `plotLogical`；数字输入框 SPR 区域改 `blitScaled` | 各对应地址 |
+| 9 | `application.h/cpp` | `DisplayConfig`（窗口/画布/uiScale/autoScale）；`--preset native|wide|free`；`SDL_EVENT_WINDOW_RESIZED → applyWindowResize`（free：画布=drawable、uiScale=高/480、逻辑呈现同步）；**鼠标双坐标**（`mouseLogicalPos`=设计逻辑、`mouseDevicePos`=设备；事件坐标统一逻辑）；方向键步长 ×scale | 0x401B9C |
+| 10 | `tools/run_tests.py` | `--extra "<参数>"` 透传（`--preset`/`--scale` 回归） | — |
+| 11 | `tests/unit/test_surface.cpp` | +1 用例（高画布行数钳制） | — |
+
+### 16.2 关键语义（与 §1.2/§6 的差异说明）
+
+- **free/wide preset 下 `worldScale = uiScale`（整幅画面放大，nearest）**：免费/宽屏 preset 的
+  直觉行为即"把 640×480 画面放大 N 倍"（free 1280×960 → 恰好铺满；像素放大保锐利）。
+  §1.2 的"worldScale 默认 1:1"实为 **D 阶段"宽屏视野扩展"**（地图区变大而非放大 UI）的语义；
+  当前地图层无独立 scale，与 UI 同倍率（`renderMap` 去 guard 后全链路跟随）。
+- **鼠标双坐标**：事件/命中统一设计逻辑坐标（`transformMouseEvent` ÷scale；合成输入本为逻辑）；
+  光标/地图 `mapHitRegions` 用设备坐标（A2 后 mapHitRegions 回**逻辑**，与 A1 前语义一致）。
+- **`--canvas` 任意尺寸**仍为开发入口（scale 恒 1；`--preset` 与之互斥时告警忽略）。
+
+### 16.3 验收与实机修复
+
+| 项 | 结果 |
+|---|---|
+| 编译 | 干净重建零错误（MSVC Debug） |
+| scale=1 恒等 | native 截图与 A2 中途基线 **diff=343px，bbox (0,0)-(22,22)**——恰为光标帧回归（见下） |
+| **free 整幅放大** | free(1280×960, scale=2) 截图**降采样 2× 与 native diff=0.8%**（文本 1:1 光栅化/图标边缘），画面即 native 的 2 倍放大 |
+| preset 冒烟 | native/wide/free 完整「主菜单→选人→确定→进入游戏」×各 1 + native smoke 全 EXIT=0 |
+| 选人界面 A/B | 见 §15.4（native vs 800×600 逐像素 diff=0） |
+
+**实机问题修复（2026-09-30 用户反馈，本批内）**：
+1. **free 模式界面错乱**：初版把 free 做成"UI 放大 + 地图 1:1"，两层坐标错位（顶栏盖地图、
+   中部残 Loading 画面）。**修正为 worldScale=uiScale 整幅放大**（§16.2），free 画面即
+   native 的 2 倍（降采样 diff 0.8% 验证）。
+2. **主菜单/游戏内看不到鼠标**：`Cursor::blitFrameDevice` 初版假设 SPR（8bit+调色板），
+   而光标资源是 **SMP（16bit 直取）** → 提前 return。修复为 SMP/SPR 双支持。
+
+### 16.4 已知边界与遗留
+
+- **wide(1280×720) 右侧黑边**（内容 960×720）：宽屏视野扩展（地图区铺满）属批次 D
+  （等距表 R=32 + 地面去表化）。
+- linear 滤镜与 UI 位图缩放缓存未做（实时 nearest 采样，UI 位图量小已够用）。
+- 调试注入（`--shot-cursor`/`--game-click` 的窗口坐标换算）在 scale>1 下按设备近似
+  （native 不受影响；正式交互不受影响）。
+- 命中派生/布局表仍按计划在批次 C 收口（当前为"逻辑坐标统一"的最小方案，`--canvas`
+  任意尺寸的布局错位仍在）。
 
 ### 15.4 实机问题修复：选人界面高画布崩溃（2026-09-30）
 

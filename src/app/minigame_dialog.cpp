@@ -83,6 +83,47 @@ bool blitSprScaled(Surface& dst, const UiImage& spr, int frame, int x, int y, ui
     const int dy = y - f.offsetY;
     const int sw = static_cast<int>((scale * f.width) >> 16);
     const int sh = static_cast<int>((scale * f.height) >> 16);
+    if (sw <= 0 || sh <= 0) {
+        return false;
+    }
+    // [NEW M4-A2] 画布 scale != 1：逻辑目标设备化 + SPR 16.16 与画布缩放复合为一次
+    //   nearest 采样（scale == 1 走下方原定点路径，逐字节一致）
+    if (dst.scale() != 1.0f) {
+        const int dxDev = dst.logicalToDevice(dx);
+        const int dyDev = dst.logicalToDevice(dy);
+        const int dw = dst.logicalToDevice(sw);
+        const int dh = dst.logicalToDevice(sh);
+        if (dw <= 0 || dh <= 0) {
+            return false;
+        }
+        for (int vy = 0; vy < dh; ++vy) {
+            const int py = dyDev + vy;
+            if (py < 0 || py >= dst.height()) {
+                continue;
+            }
+            const int sy = vy * f.height / dh;
+            if (sy >= f.height) {
+                continue;
+            }
+            const uint8_t* srow = src + static_cast<size_t>(sy) * f.width;
+            uint16_t* d = dst.pixels() + static_cast<size_t>(py) * dst.width();
+            for (int vx = 0; vx < dw; ++vx) {
+                const int px = dxDev + vx;
+                if (px < 0 || px >= dst.width()) {
+                    continue;
+                }
+                const int sxi = vx * f.width / dw;
+                if (sxi >= f.width) {
+                    continue;
+                }
+                const uint8_t idx = srow[sxi];
+                if (idx != 0) {
+                    d[px] = palette[idx];
+                }
+            }
+        }
+        return true;
+    }
     if (dx >= dst.width() || dy >= dst.height() || sw <= 0 || sh <= 0) {
         return false;
     }
@@ -145,25 +186,9 @@ void blitFlcFrame(Surface& dst, const FliDecoder& flc, int x, int y, bool transp
     if (!flc.valid()) {
         return;
     }
-    const uint16_t key = flc.colorKey();
-    const uint16_t* src = flc.pixels();
-    for (int row = 0; row < flc.height(); ++row) {
-        const int py = y + row;
-        if (py < 0 || py >= dst.height()) {
-            continue;
-        }
-        for (int col = 0; col < flc.width(); ++col) {
-            const int px = x + col;
-            if (px < 0 || px >= dst.width()) {
-                continue;
-            }
-            const uint16_t c = src[static_cast<size_t>(row) * flc.width() + col];
-            if (transparent && c == key) {
-                continue;
-            }
-            dst.pixels()[static_cast<size_t>(py) * dst.width() + px] = c;
-        }
-    }
+    // [NEW M4-A2] FLC 当前帧按画布 scale 缩放叠加（色键透明；scale=1 逐像素等价）
+    blitScaled(dst, reinterpret_cast<const uint8_t*>(flc.pixels()), flc.width() * 2, nullptr, x,
+               y, 0, 0, flc.width(), flc.height(), false, !transparent, flc.colorKey());
 }
 
 // HUD 小数字（panel[79] 帧 0..9）：原版 blitElementFullscreen(0x4563F5) = **不透明**
@@ -933,7 +958,8 @@ int moneyScore(const MoneyCtx& ui) {
 void drawMoney(MoneyCtx& ui, bool runLogic) {
     Surface& dst = ui.app->surface();
     if (ui.bgRaw.size() >= 640u * 480u * 2u) {  // [RE 0x4132A1] RAW 背景
-        std::memcpy(dst.pixels(), ui.bgRaw.data(), 640u * 480u * 2u);
+        // [NEW M4-A2] 全屏 RAW 背景按画布 scale 缩放绘制（scale=1 逐像素等价）
+        blitScaled(dst, ui.bgRaw.data(), 640 * 2, nullptr, 0, 0, 0, 0, 640, 480, false, true);
     }
     moneyTick(ui, runLogic);
     char buf[8];

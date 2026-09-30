@@ -79,6 +79,72 @@ ClipResult clipBlit(const UiFrameView& src, int x, int y, int srcX, int srcY, in
 
 } // namespace
 
+// [NEW M4-A2] 缩放 blit 核心（nearest 采样）：把源区域按画布 scale 采样到逻辑目标。
+//   src = 源像素基址；srcPitchBytes = 源每行字节数；
+//   palette != nullptr → 8bit 索引 + 调色板（SPR，索引 0 透明）；
+//   palette == nullptr → RGB555（每像素 2B；opaque=false 时像素 == colorKey 透明）。
+//   逻辑目标左上 (logX, logY)（调用方已减去帧 offset）；源区域 (srcX, srcY, w, h)，
+//   逻辑尺寸 (w, h) 放大为设备 dw×dh；设备坐标 = round(逻辑 × scale)。
+//   公共导出：UI 层逐像素叠加（FLC/RAW 位图）复用，避免每处重复设备化+采样。
+bool blitScaled(Surface& dst, const uint8_t* src, int srcPitchBytes, const uint16_t* palette,
+                int logX, int logY, int srcX, int srcY, int w, int h, bool useClipRect,
+                bool opaque, uint16_t colorKey) {
+    if (!src || w <= 0 || h <= 0) {
+        return false;
+    }
+    const int dx0 = dst.logicalToDevice(logX);
+    const int dy0 = dst.logicalToDevice(logY);
+    const int dx1 = dst.logicalToDevice(logX + w);
+    const int dy1 = dst.logicalToDevice(logY + h);
+    const int dw = dx1 - dx0;
+    const int dh = dy1 - dy0;
+    if (dw <= 0 || dh <= 0) {
+        return false;
+    }
+    int clipL = 0;
+    int clipT = 0;
+    int clipR = dst.width();
+    int clipB = dst.height();
+    if (useClipRect) {
+        // [NEW M4-A2] 全局裁剪为设计逻辑坐标 → 设备化（scale=1 恒等）
+        getClipRect(clipL, clipT, clipR, clipB);
+        clipL = dst.logicalToDevice(clipL);
+        clipT = dst.logicalToDevice(clipT);
+        clipR = dst.logicalToDevice(clipR);
+        clipB = dst.logicalToDevice(clipB);
+    }
+    const int vx0 = dx0 < clipL ? clipL : dx0;
+    const int vy0 = dy0 < clipT ? clipT : dy0;
+    const int vx1 = dx1 < clipR ? dx1 : clipR;
+    const int vy1 = dy1 < clipB ? dy1 : clipB;
+    if (vx0 >= vx1 || vy0 >= vy1) {
+        return false;
+    }
+    const bool sprite = palette != nullptr;
+    for (int vy = vy0; vy < vy1; ++vy) {
+        const int sy = srcY + (vy - dy0) * h / dh;
+        const uint8_t* srow = src + static_cast<size_t>(sy) * srcPitchBytes;
+        uint16_t* drow = dst.pixels() + static_cast<size_t>(vy) * dst.width();
+        for (int vx = vx0; vx < vx1; ++vx) {
+            const int sx = srcX + (vx - dx0) * w / dw;
+            if (sprite) {
+                const uint8_t idx = srow[sx];
+                if (!opaque && idx == 0) {
+                    continue;
+                }
+                drow[vx] = palette[idx];
+            } else {
+                const uint16_t p = reinterpret_cast<const uint16_t*>(srow)[sx];
+                if (!opaque && p == colorKey) {
+                    continue;
+                }
+                drow[vx] = p;
+            }
+        }
+    }
+    return true;
+}
+
 void setClipRect(int left, int top, int right, int bottom) {
     g_clipLeft = left;
     g_clipTop = top;
@@ -99,6 +165,12 @@ bool blitElement(Surface& dst, const UiFrameView& src, int x, int y, bool useCli
 
 bool blitElementRegion(Surface& dst, const UiFrameView& src, int x, int y, int srcX, int srcY,
                        int w, int h, bool useClipRect) {
+    // [NEW M4-A2] scale != 1：逻辑目标缩放 + nearest 采样（scale == 1 走原路径，逐字节一致）
+    if (dst.scale() != 1.0f) {
+        return blitScaled(dst, reinterpret_cast<const uint8_t*>(src.pixels), src.width * 2,
+                          nullptr, x - src.offsetX, y - src.offsetY, srcX, srcY, w, h, useClipRect,
+                          false);
+    }
     const ClipResult c =
         clipBlit(src, x, y, srcX, srcY, w, h, useClipRect, dst.width(), dst.height());
     if (!c.visible) {
@@ -121,6 +193,12 @@ bool blitElementRegion(Surface& dst, const UiFrameView& src, int x, int y, int s
 
 bool blitElementRegionOpaque(Surface& dst, const UiFrameView& src, int x, int y, int srcX,
                              int srcY, int w, int h, bool useClipRect) {
+    // [NEW M4-A2] scale != 1：逻辑目标缩放 + nearest 采样（scale == 1 走原路径，逐字节一致）
+    if (dst.scale() != 1.0f) {
+        return blitScaled(dst, reinterpret_cast<const uint8_t*>(src.pixels), src.width * 2,
+                          nullptr, x - src.offsetX, y - src.offsetY, srcX, srcY, w, h, useClipRect,
+                          true);
+    }
     const ClipResult c =
         clipBlit(src, x, y, srcX, srcY, w, h, useClipRect, dst.width(), dst.height());
     if (!c.visible) {
@@ -161,14 +239,25 @@ void pressDown(Surface& dst, int x, int y, int w, int h, int shift, const uint8_
     if (shift <= 0 || w <= shift || h <= shift) {
         return;
     }
-    if (x < 0 || y < 0 || x + w > dst.width() || y + h > dst.height()) {
+    // [NEW M4-A2] 越界检查按逻辑画布（scale != 1 时设备宽高 != 640x480）
+    if (x < 0 || y < 0 || dst.logicalToDevice(x + w) > dst.width() ||
+        dst.logicalToDevice(y + h) > dst.height()) {
+        return;
+    }
+    // [NEW M4-A2] 位移与搬运在设备域（scale=1 恒等）
+    const int dx = dst.logicalToDevice(x);
+    const int dy = dst.logicalToDevice(y);
+    const int dw = dst.logicalToDevice(x + w) - dx;
+    const int dh = dst.logicalToDevice(y + h) - dy;
+    const int dshift = dst.logicalToDevice(shift);
+    if (dshift <= 0 || dw <= dshift || dh <= dshift) {
         return;
     }
     uint16_t* p = dst.pixels();
-    for (int row = h - 1 - shift; row >= 0; --row) {
-        uint16_t* d = p + static_cast<size_t>(y + row + shift) * dst.width() + (x + shift);
-        const uint16_t* s = p + static_cast<size_t>(y + row) * dst.width() + x;
-        std::memmove(d, s, static_cast<size_t>(w - shift) * sizeof(uint16_t));
+    for (int row = dh - 1 - dshift; row >= 0; --row) {
+        uint16_t* d = p + static_cast<size_t>(dy + row + dshift) * dst.width() + (dx + dshift);
+        const uint16_t* s = p + static_cast<size_t>(dy + row) * dst.width() + dx;
+        std::memmove(d, s, static_cast<size_t>(dw - dshift) * sizeof(uint16_t));
     }
     scaleSurfaceChannels(dst, x, y, w, shift, table);          // 顶边
     scaleSurfaceChannels(dst, x, y + shift, shift, h - shift, table);  // 左边
@@ -190,6 +279,11 @@ bool blitSpriteFrameClipped(Surface& dst, const UiImage& spr, int frame, int x, 
         return false;
     }
     const UiFrameView& f = spr.frame(frame);
+    // [NEW M4-A2] scale != 1：逻辑目标缩放 + nearest 采样（scale == 1 走原路径，逐字节一致）
+    if (dst.scale() != 1.0f) {
+        return blitScaled(dst, src, f.width, palette, x - f.offsetX, y - f.offsetY, 0, 0, f.width,
+                          f.height, useClipRect, false);
+    }
     const ClipResult c = clipBlit(f, x, y, 0, 0, f.width, f.height, useClipRect, dst.width(),
                                   dst.height());
     if (!c.visible) {
@@ -224,6 +318,17 @@ void convertImageChannels(uint16_t* dst, const uint16_t* src, size_t pixelCount,
 
 void scaleSurfaceChannels(Surface& dst, int x, int y, int w, int h, const uint8_t table[32]) {
     // [RE 0x4552E7] 依据: 对元素区域逐像素做分量缩放（调用方保证区域合法）
+    // [NEW M4-A2] 逻辑区域 → 设备区域（scale=1 恒等）
+    if (dst.scale() != 1.0f) {
+        const int x0 = dst.logicalToDevice(x);
+        const int y0 = dst.logicalToDevice(y);
+        const int x1 = dst.logicalToDevice(x + w);
+        const int y1 = dst.logicalToDevice(y + h);
+        x = x0;
+        y = y0;
+        w = x1 - x0;
+        h = y1 - y0;
+    }
     if (x < 0) {
         w += x;
         x = 0;
@@ -273,6 +378,29 @@ void blitScrolledMap(Surface& dst, const uint8_t* src, int offset) {
     if (off < 0) {
         off += kSrcRowBytes;
     }
+    // [NEW M4-A2] scale != 1：逻辑 640x480 预览按画布缩放（nearest）+ 水平环绕采样；
+    //   scale == 1 走下方原逐行环绕路径（逐字节一致）
+    if (dst.scale() != 1.0f) {
+        const uint16_t* srcPx = reinterpret_cast<const uint16_t*>(src);
+        const int offPix = off / 2; // 源 4 字节对齐 → 2 像素对齐
+        const int cw = dst.logicalToDevice(Surface::kWidth);
+        const int ch = dst.logicalToDevice(Surface::kHeight);
+        const int rows = ch < dst.height() ? ch : dst.height();
+        const int cols = cw < dst.width() ? cw : dst.width();
+        for (int vy = 0; vy < rows; ++vy) {
+            const int sy = vy * kSrcRows / ch;
+            if (sy >= kSrcRows) {
+                continue;
+            }
+            const uint16_t* srow = srcPx + static_cast<size_t>(sy) * Surface::kWidth;
+            uint16_t* drow = dst.pixels() + static_cast<size_t>(vy) * dst.width();
+            for (int vx = 0; vx < cols; ++vx) {
+                const int sx = (vx * Surface::kWidth / cw + offPix) % Surface::kWidth;
+                drow[vx] = srow[sx];
+            }
+        }
+        return;
+    }
     const int firstLen = kSrcRowBytes - off;
     const int copyLen = firstLen < dstRowBytes ? firstLen : dstRowBytes;
     const int secondLen = (dstRowBytes - firstLen) < off ? dstRowBytes - firstLen : off;
@@ -291,6 +419,20 @@ void blitScrolledMap(Surface& dst, const uint8_t* src, int offset) {
 bool saveRegion(std::vector<uint16_t>& out, const Surface& dst, int x, int y, int w, int h) {
     if (w <= 0 || h <= 0) {
         return false;
+    }
+    // [NEW M4-A2] 逻辑区域 → 设备区域（save/restore 同一 scale 下自洽；scale=1 恒等）
+    if (dst.scale() != 1.0f) {
+        const int x0 = dst.logicalToDevice(x);
+        const int y0 = dst.logicalToDevice(y);
+        const int x1 = dst.logicalToDevice(x + w);
+        const int y1 = dst.logicalToDevice(y + h);
+        x = x0;
+        y = y0;
+        w = x1 - x0;
+        h = y1 - y0;
+        if (w <= 0 || h <= 0) {
+            return false;
+        }
     }
     out.assign(static_cast<size_t>(w) * h, 0);
     const uint16_t* src = dst.pixels();
@@ -312,6 +454,20 @@ bool saveRegion(std::vector<uint16_t>& out, const Surface& dst, int x, int y, in
 }
 
 void restoreRegion(Surface& dst, const std::vector<uint16_t>& bg, int x, int y, int w, int h) {
+    if (w <= 0 || h <= 0) {
+        return;
+    }
+    // [NEW M4-A2] 逻辑区域 → 设备区域（与 saveRegion 同一 scale 下自洽；scale=1 恒等）
+    if (dst.scale() != 1.0f) {
+        const int x0 = dst.logicalToDevice(x);
+        const int y0 = dst.logicalToDevice(y);
+        const int x1 = dst.logicalToDevice(x + w);
+        const int y1 = dst.logicalToDevice(y + h);
+        x = x0;
+        y = y0;
+        w = x1 - x0;
+        h = y1 - y0;
+    }
     if (w <= 0 || h <= 0 || bg.size() < static_cast<size_t>(w) * h) {
         return;
     }

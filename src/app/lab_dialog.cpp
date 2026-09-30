@@ -81,9 +81,23 @@ void redrawLab(LabState& st) {
         for (int i = st.sub; i < kLabIconCount; ++i) {
             const int gx = kLabBorderX0 + 3 + kLabIconStep * i;  // = 35+76i
             const int gy = kLabBorderY + 3;                     // = 297
-            for (int row = 0; row < kLabGrayH; ++row) {
-                uint16_t* line = dst.pixels() + static_cast<size_t>(gy + row) * dst.width() + gx;
-                grayscaleImage(line, kLabGrayW);  // [RE 0x455442] 0 像素保持（透明）
+            // [NEW M4-A2] 逻辑区域 → 设备区域（scale=1 恒等）
+            const int gxDev = dst.logicalToDevice(gx);
+            const int gyDev = dst.logicalToDevice(gy);
+            const int gw = dst.logicalSpanToDevice(gx, kLabGrayW);
+            const int gh = dst.logicalSpanToDevice(gy, kLabGrayH);
+            const int avail = dst.width() - gxDev;
+            const int n = gw < avail ? gw : avail;
+            if (gxDev < 0 || n <= 0) {
+                continue;
+            }
+            for (int row = 0; row < gh; ++row) {
+                if (gyDev + row < 0 || gyDev + row >= dst.height()) {
+                    continue;
+                }
+                uint16_t* line = dst.pixels() + static_cast<size_t>(gyDev + row) * dst.width() +
+                                 gxDev;
+                grayscaleImage(line, static_cast<size_t>(n));  // [RE 0x455442] 0 像素保持（透明）
             }
         }
     }

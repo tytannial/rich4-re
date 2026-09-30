@@ -14,8 +14,7 @@
 
 namespace rich4 {
 
-bool Application::init(const std::string& gameDir, bool headless, int canvasWidth,
-                       int canvasHeight) {
+bool Application::init(const std::string& gameDir, bool headless, const DisplayConfig& display) {
     // [RE 0x401B9C] WinMain 初始化段
     // 依据: 0x401B9C 反编译; RegisterClassA("Rich4") + CreateWindowExA(0, "Rich4",
     //       "Rich4", 0x80000000=WS_POPUP, 屏幕宽高) + sub_4015D6() + ShowWindow(5)
@@ -40,12 +39,31 @@ bool Application::init(const std::string& gameDir, bool headless, int canvasWidt
         RICH4_LOGE("SDL_Init failed: %s", SDL_GetError());
         return false;
     }
-    // [NEW M4-A1] 运行期画布尺寸：默认 native 设计尺寸；SDL 逻辑呈现同步为画布尺寸
-    const int canvasW = canvasWidth > 0 ? canvasWidth : Surface::kWidth;
-    const int canvasH = canvasHeight > 0 ? canvasHeight : Surface::kHeight;
     // 窗口默认 2x 整数倍缩放（1280x960），避免非整数缩放的像素不均匀（贴图错位感）
-    if (!m_window.create("Rich4", 1280, 960)) {
+    if (!m_window.create("Rich4", display.windowWidth, display.windowHeight)) {
         return false;
+    }
+    // [NEW M4-A1] 运行期画布尺寸：默认 native 设计尺寸；SDL 逻辑呈现同步为画布尺寸
+    // [NEW M4-A2] uiScale != 1 时画布 = 设计尺寸 × uiScale（canvas 显式指定优先）；
+    //   autoScale（wide/free preset）画布 = 窗口 drawable，uiScale = 画布高/480
+    float drawScale = display.uiScale > 0.0f ? display.uiScale : 1.0f;
+    int canvasW = display.canvasWidth;
+    int canvasH = display.canvasHeight;
+    m_autoScale = display.autoScale;
+    if (m_autoScale) {
+        int dw = 0;
+        int dh = 0;
+        SDL_GetWindowSizeInPixels(m_window.handle(), &dw, &dh);
+        canvasW = dw > 0 ? dw : display.windowWidth;
+        canvasH = dh > 0 ? dh : display.windowHeight;
+        drawScale = static_cast<float>(canvasH) / Surface::kHeight;
+    } else {
+        if (canvasW <= 0) {
+            canvasW = static_cast<int>(Surface::kWidth * drawScale + 0.5f);
+        }
+        if (canvasH <= 0) {
+            canvasH = static_cast<int>(Surface::kHeight * drawScale + 0.5f);
+        }
     }
     if (!m_renderer.create(m_window.handle(), canvasW, canvasH, !headless)) {
         return false;
@@ -54,6 +72,8 @@ bool Application::init(const std::string& gameDir, bool headless, int canvasWidt
     if (!m_surface.create(m_renderer.handle(), canvasW, canvasH)) {
         return false;
     }
+    // [NEW M4-A2] 绘制缩放：逻辑 640x480 坐标 → 设备像素（画布）
+    m_surface.setScale(drawScale);
     // [RE 0x44F935] 文本渲染表面（512x200，原版 dword_4762CC）
     m_text.init();
 
@@ -172,6 +192,12 @@ void Application::pumpEvents() {
             m_running = false;
             continue;
         }
+        // [NEW M4-A2] free/wide：窗口尺寸变化 → 延迟到 renderFrame 重建画布与逻辑呈现
+        if (m_autoScale && (event.type == SDL_EVENT_WINDOW_RESIZED ||
+                            event.type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED)) {
+            m_resizePending = true;
+            continue;
+        }
         // [RE 0x4019DD WM_ACTIVATEAPP] 窗口失焦暂停音乐、回焦恢复（对等原版 pause mid/resume）
         if (event.type == SDL_EVENT_WINDOW_FOCUS_LOST) {
             m_audio.setMusicPaused(true);
@@ -217,11 +243,35 @@ void Application::pumpEvents() {
     }
 }
 
-void Application::mouseLogicalPos(int& x, int& y) const {
+// [NEW M4-A2] free/wide：按窗口 drawable 重建画布与逻辑呈现（uiScale = 画布高/480）
+void Application::applyWindowResize() {
+    m_resizePending = false;
+    int w = 0;
+    int h = 0;
+    SDL_GetWindowSizeInPixels(m_window.handle(), &w, &h);
+    if (w <= 0 || h <= 0 || (w == m_surface.width() && h == m_surface.height())) {
+        return;
+    }
+    // 旧画布上的光标保存块作废（按旧区域写回新画布可能越界）；区域快照的恢复有大小
+    // 校验兜底（restoreRegion 尺寸不匹配直接返回）
+    m_cursor.invalidate();
+    m_surface.destroy();
+    if (!m_surface.create(m_renderer.handle(), w, h)) {
+        RICH4_LOGE("applyWindowResize: surface recreate failed (%dx%d)", w, h);
+        return;
+    }
+    m_surface.setScale(static_cast<float>(h) / Surface::kHeight);
+    m_renderer.setLogicalSize(w, h);
+    RICH4_LOGI("window resize: canvas %dx%d scale=%.3f (M4-A2 free/wide)", w, h,
+               static_cast<double>(m_surface.scale()));
+}
+
+void Application::mouseDevicePos(int& x, int& y) const {
+    // [NEW M4-A2] 设备像素坐标（SDL 逻辑呈现 = 画布尺寸）
     if (m_mouseOv) {
-        // [NEW] headless 合成输入覆盖（debug::move/click 直投）
-        x = m_mouseOvX;
-        y = m_mouseOvY;
+        // [NEW] headless 合成输入覆盖（debug::move/click 直投；输入的为设计逻辑坐标）
+        x = m_surface.logicalToDevice(m_mouseOvX);
+        y = m_surface.logicalToDevice(m_mouseOvY);
         return;
     }
     float wx = 0.0f;
@@ -234,25 +284,37 @@ void Application::mouseLogicalPos(int& x, int& y) const {
     y = static_cast<int>(ly);
 }
 
+void Application::mouseLogicalPos(int& x, int& y) const {
+    // [NEW M4-A2] 设计逻辑坐标（UI 层坐标：设备 / scale；scale=1 恒等）
+    int dx = 0;
+    int dy = 0;
+    mouseDevicePos(dx, dy);
+    x = m_surface.deviceToLogical(dx);
+    y = m_surface.deviceToLogical(dy);
+}
+
 void Application::transformMouseEvent(SDL_Event& event) {
     // [PORT Win32:GetCursorPos] 替换依据: 原版全屏 640x480，鼠标屏幕坐标即游戏坐标；
     // SDL 窗口可缩放 + letterbox 逻辑呈现，需把窗口坐标换算为 640x480 逻辑坐标
     float lx = 0.0f;
     float ly = 0.0f;
+    // [NEW M4-A2] 输出设计逻辑坐标（SDL 逻辑呈现 = 设备；再 /scale → 逻辑）
+    const float s = m_surface.scale();
+    const float inv = s > 0.0f ? 1.0f / s : 1.0f;
     switch (event.type) {
         case SDL_EVENT_MOUSE_MOTION:
             if (SDL_RenderCoordinatesFromWindow(m_renderer.handle(), event.motion.x, event.motion.y,
                                                 &lx, &ly)) {
-                event.motion.x = lx;
-                event.motion.y = ly;
+                event.motion.x = lx * inv;
+                event.motion.y = ly * inv;
             }
             break;
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
         case SDL_EVENT_MOUSE_BUTTON_UP:
             if (SDL_RenderCoordinatesFromWindow(m_renderer.handle(), event.button.x, event.button.y,
                                                 &lx, &ly)) {
-                event.button.x = lx;
-                event.button.y = ly;
+                event.button.x = lx * inv;
+                event.button.y = ly * inv;
             }
             break;
         default:
@@ -304,8 +366,11 @@ void Application::handleKeyboardHook(const SDL_Event& event) {
             float lx = wx;
             float ly = wy;
             SDL_RenderCoordinatesFromWindow(m_renderer.handle(), wx, wy, &lx, &ly);
-            lx += static_cast<float>(dx);
-            ly += static_cast<float>(dy);
+            // [NEW M4-A2] dx/dy 为设计逻辑像素 → 设备步长 × scale（scale=1 恒等）
+            const float s = m_surface.scale();
+            const float k = s > 0.0f ? s : 1.0f;
+            lx += static_cast<float>(dx) * k;
+            ly += static_cast<float>(dy) * k;
             if (SDL_RenderCoordinatesToWindow(m_renderer.handle(), lx, ly, &wx, &wy)) {
                 SDL_WarpMouseInWindow(m_window.handle(), wx, wy);
             }
@@ -350,6 +415,10 @@ void Application::renderFrame() {
     // [RE 0x401B9C] 原版无主动渲染：由 InvalidateRect + WM_PAINT 驱动
     // 0x40257A WM_PAINT: sub_40235D(移除光标) + BltFast(后台→主表面) + sub_402250(重绘光标)
     // 迁移: 每帧上传 Surface 纹理; 光标按原版语义在绘制前移除、上传前重绘
+    // [NEW M4-A2] free/wide：resize 后重建画布（须在 beginFrame 前）
+    if (m_resizePending) {
+        applyWindowResize();
+    }
     m_renderer.beginFrame();
 
     // [PORT WINMM:DirectSound] 音频混音喂流（每帧混合活动音效/音乐）
@@ -755,9 +824,10 @@ void Application::renderFrame() {
     }
 
     // [RE 0x401F98] 光标定时器（原版 fptc 20ms）：动画推进 + 位置跟踪
+    // [NEW M4-A2] 光标按设备像素定位（A2 光标按 scale 放大绘制）
     int mx = 0;
     int my = 0;
-    mouseLogicalPos(mx, my);
+    mouseDevicePos(mx, my);
     // [NEW] 演出段隐藏软件光标（现代化增强，原版全程自绘）：事件 FLC 阻塞播放/冻结
     //   （eventFlcActive）与跳伞入场（parachuteActive）期间不显示；此处统一驱动，
     //   与 Cursor::setHidden 的模态界面级用法（乐透开奖/月结全身像）并存

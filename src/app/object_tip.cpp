@@ -173,6 +173,7 @@ uint16_t pickMapObject(const GameState& state, int x, int y) {
 //       cellTable 类型名/玩家名; 框 = data.mkf[517] 帧 0..3（四方向）
 void showObjectTip(Application& app, int x, int y) {
     GameState& state = app.gameState();
+    // [NEW M4-A2] 入参/命中/存点统一为设计逻辑坐标（绘制随画布 scale）
     for (auto it = state.mapHitRegions.rbegin(); it != state.mapHitRegions.rend(); ++it) {
         if (it->shape) {
             // [RE 0x409B18] 像素级命中：形状 SPR 非零像素处才算命中（避免矩形误盖道路格）
@@ -234,6 +235,7 @@ void drawObjectTip(Application& app) {
         v5 += 2;
     }
     Surface& dst = app.surface();
+    // [NEW M4-A2] 物件提示随画布 scale（objectTipX/Y 与文本均为逻辑坐标）
     blitElement(dst, ui.frame(v5 < ui.frameCount() ? v5 : 0), state.objectTipX, state.objectTipY,
                 false);
     const int a2 = (v5 & 2) ? -(base.width / 2 + 9) : (base.width / 2 + 9);

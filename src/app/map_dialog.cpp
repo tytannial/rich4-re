@@ -32,13 +32,9 @@ void redrawMap(MapDialogState& st) {
         const int w = bf.width;
         const int h = bf.height;
         if (w > 0 && h > 0 && state.bigMapBuffer.size() == static_cast<size_t>(w) * h) {
-            uint16_t* d = dst.pixels() + static_cast<size_t>(60) * dst.width() + 20;
-            for (int y = 0; y < h; ++y) {
-                for (int x = 0; x < w; ++x) {
-                    d[static_cast<size_t>(y) * dst.width() + x] =
-                        state.bigMapBuffer[static_cast<size_t>(y) * w + x];
-                }
-            }
+            // [NEW M4-A2] 大地图工作副本按画布 scale 缩放绘制（scale=1 逐像素等价）
+            blitScaled(dst, reinterpret_cast<const uint8_t*>(state.bigMapBuffer.data()), w * 2,
+                       nullptr, 20, 60, 0, 0, w, h, false, true);
         }
     } else if (state.miniMapRaw.frameCount() > 1) {
         blitElementOpaque(dst, state.miniMapRaw.frame(1), 20, 60);

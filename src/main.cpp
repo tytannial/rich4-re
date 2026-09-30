@@ -86,6 +86,10 @@ std::vector<std::pair<std::string, int>> gameKeys; // [NEW] --game-key "ctrl+5,1
     // [NEW M4-A1] --canvas WxH：运行期画布尺寸（默认 native 640x480）
     int canvasW = 0;
     int canvasH = 0;
+    // [NEW M4-A2] --scale <f>：绘制缩放（逻辑 640x480 → 设备；1.0 = native）
+    float uiScale = 1.0f;
+    // [NEW M4-A2] --preset native|wide|free（显示 preset；wide/free 自动缩放并允许 resize）
+    std::string presetName = "native";
     // [NEW] headless 测试钩子（docs/testing.md；无原版对应）
     int testSeed = -1;
     bool headless = false;
@@ -137,6 +141,16 @@ std::vector<std::pair<std::string, int>> gameKeys; // [NEW] --game-key "ctrl+5,1
                 canvasW = 0;
                 canvasH = 0;
             }
+        } else if (arg == "--scale" && i + 1 < argc) {
+            // [NEW M4-A2] 绘制缩放（开发/验证用；默认 1.0 native）
+            uiScale = static_cast<float>(std::atof(argv[++i]));
+            if (!(uiScale > 0.0f)) {
+                uiScale = 1.0f;
+            }
+        } else if (arg == "--preset" && i + 1 < argc) {
+            // [NEW M4-A2] 显示 preset：native（默认 640x480/1.0）/ wide（1280x720）/
+            //   free（窗口 drawable，自动缩放 + resize）
+            presetName = argv[++i];
         } else if (arg == "--shot" && i + 1 < argc) {
             shotPath = argv[++i];
         } else if (arg == "--shot-frame" && i + 1 < argc) {
@@ -244,7 +258,8 @@ std::vector<std::pair<std::string, int>> gameKeys; // [NEW] --game-key "ctrl+5,1
                         "[--game-click4 x,y,frame] [--game-click5 x,y,frame] [--game-drag x1,y1,x2,y2,frame]\n"
                         "  [NEW headless 测试钩子] --debug --seed <n> --headless --test-clock "
                         "--trace --trace-out <file.json> --quickstart <map[,players[,humans]]> "
-                        "--save-selftest <slot> --load-game <slot> --canvas <WxH>\n");
+                        "--save-selftest <slot> --load-game <slot> --canvas <WxH> "
+                        "--scale <f> --preset native|wide|free\n");
             return 0;
         }
     }
@@ -326,7 +341,30 @@ std::vector<std::pair<std::string, int>> gameKeys; // [NEW] --game-key "ctrl+5,1
     if (headless || traceOn) {
         rich4::trace::setEnabled(true);
     }
-    if (!app.init(gameDir, headless, canvasW, canvasH)) {
+    // [NEW M4-A2] 显示 preset 组装：原生/宽屏/自由缩放
+    rich4::Application::DisplayConfig displayCfg;
+    if (presetName == "wide") {
+        displayCfg.windowWidth = 1280;
+        displayCfg.windowHeight = 720;
+        displayCfg.autoScale = true;
+        RICH4_LOGI("display preset: wide (1280x720, uiScale=1.5 auto)");
+    } else if (presetName == "free") {
+        displayCfg.windowWidth = 1280;
+        displayCfg.windowHeight = 960;
+        displayCfg.autoScale = true;
+        RICH4_LOGI("display preset: free (drawable auto-scale)");
+    } else {
+        if (presetName != "native") {
+            RICH4_LOGW("unknown --preset '%s'; using native", presetName.c_str());
+        }
+        displayCfg.canvasWidth = canvasW;
+        displayCfg.canvasHeight = canvasH;
+        displayCfg.uiScale = uiScale;
+    }
+    if (displayCfg.autoScale && (canvasW > 0 || uiScale != 1.0f)) {
+        RICH4_LOGW("--canvas/--scale ignored with --preset wide|free");
+    }
+    if (!app.init(gameDir, headless, displayCfg)) {
         RICH4_LOGE("Application init failed");
         return 1;
     }

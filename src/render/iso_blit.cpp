@@ -15,12 +15,29 @@ void isoBlitQuad(Surface& dst, const uint8_t* tile, const int16_t quad[4][2],
     static constexpr float kTexU[4] = {0.0f, 32.0f, 32.0f, 0.0f};
     static constexpr float kTexV[4] = {0.0f, 0.0f, 32.0f, 32.0f};
 
+    // [NEW M4-A2] 顶点为设计逻辑坐标：scale != 1 时设备化（行扫描 + 纹理插值自动适应；
+    //   scale=1 时 quad 原样，逐字节一致）
+    int16_t scaled[4][2];
+    if (dst.scale() != 1.0f) {
+        for (int i = 0; i < 4; ++i) {
+            scaled[i][0] = static_cast<int16_t>(dst.logicalToDevice(quad[i][0]));
+            scaled[i][1] = static_cast<int16_t>(dst.logicalToDevice(quad[i][1]));
+        }
+        quad = scaled;
+    }
+
     int clipL = 0;
     int clipT = 0;
     int clipR = dst.width();
     int clipB = dst.height();
     if (useClipRect) {
         getClipRect(clipL, clipT, clipR, clipB);
+        if (dst.scale() != 1.0f) {
+            clipL = dst.logicalToDevice(clipL);
+            clipT = dst.logicalToDevice(clipT);
+            clipR = dst.logicalToDevice(clipR);
+            clipB = dst.logicalToDevice(clipB);
+        }
     }
 
     int yMin = quad[0][1];

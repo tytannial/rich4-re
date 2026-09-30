@@ -24,6 +24,7 @@ uint16_t pointedObject(Application& app) {
     int x = 0;
     int y = 0;
     app.mouseLogicalPos(x, y);
+    // [NEW M4-A2] pickMapObject / mapHitRegions 统一为设计逻辑坐标
     return pickMapObject(app.gameState(), x, y);
 }
 

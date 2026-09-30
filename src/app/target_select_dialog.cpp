@@ -216,6 +216,7 @@ void setCursor(TargetSelCtx& c, int type, int frames, int delay) {
 // （模态进入初始判定与 WM_MOUSEMOVE 共用；原版 WM_USER+1 用 PostMessage(0x200) 触发一次）
 void updateTargetHover(TargetSelCtx& c, int mx, int my) {
     GameState& st = c.app->gameState();
+    // [NEW M4-A2] 入参/命中统一为设计逻辑坐标（mapHitRegions 逻辑；绘制随画布 scale）
     const uint16_t v = pickMapObject(st, mx, my);  // [RE 0x40A9D7]
     // [RE 0x445E4D] BYTE1 非 0 → 高字节过滤**取代**低 flags 判定（原版 v14 被清 0）
     bool allowed = (c.filter != 0) ? byte1FilterPass(st, v, c.filter)

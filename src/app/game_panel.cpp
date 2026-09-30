@@ -333,12 +333,9 @@ void drawMiniMap(Application& app) {
     }
 #endif
     if (state.miniMapBuffer.size() == static_cast<size_t>(kMiniMapW) * kMiniMapH) {
-        uint16_t* d = dst.pixels() + static_cast<size_t>(v1) * dst.width() + 440;
-        for (int row = 0; row < kMiniMapH; ++row) {
-            std::memcpy(d, &state.miniMapBuffer[static_cast<size_t>(row) * kMiniMapW],
-                        kMiniMapW * sizeof(uint16_t));
-            d += dst.width();
-        }
+        // [NEW M4-A2] 小地图工作副本按画布 scale 缩放绘制（scale=1 逐像素等价）
+        blitScaled(dst, reinterpret_cast<const uint8_t*>(state.miniMapBuffer.data()),
+                   kMiniMapW * 2, nullptr, 440, v1, 0, 0, kMiniMapW, kMiniMapH, false, true);
     } else if (state.miniMap.frameCount() > 0) {
         blitElementOpaque(dst, state.miniMap.frame(0), 440, v1);
     }
@@ -479,20 +476,9 @@ void drawHolidayBackground(Application& app, int holiday) {
         return;
     }
     Surface& dst = app.surface();
-    uint16_t* d = dst.pixels();
-    for (int row = 0; row < raw.height; ++row) {
-        const int py = 280 + row;
-        if (py < 0 || py >= dst.height()) {
-            continue;
-        }
-        for (int col = 0; col < raw.width; ++col) {
-            const int px = 440 + col;
-            if (px < 0 || px >= dst.width()) {
-                continue;
-            }
-            d[static_cast<size_t>(py) * dst.width() + px] = raw.pixels[row * raw.width + col];
-        }
-    }
+    // [NEW M4-A2] 节日插画按画布 scale 缩放绘制（不透明；scale=1 时逐像素等价）
+    blitScaled(dst, reinterpret_cast<const uint8_t*>(raw.pixels), raw.width * 2, nullptr, 440,
+               280, 0, 0, raw.width, raw.height, false, true);
 }
 
 // [RE 0x4169BC] 日历（440,280-640,480；panel.mkf[2]）
