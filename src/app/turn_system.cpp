@@ -71,6 +71,8 @@ constexpr int kMoveSpeed[4] = {8, 12, 16, 8};
 constexpr float kMoveScale = 0.125f;
 // [RE 0x498EC4] 骰子/掷骰动画帧数（原版取资源头 >>3；B4 接入资源前用固定值）
 constexpr int kDiceAnimFrames = 12;
+// [RE 0x475264] dword_475264 骰子 FLC 帧延时档（settings[0] → ×10ms：慢 50/默认 30/快 20）
+constexpr int kDiceFlcSpeed[4] = {5, 3, 2, 0};
 // [RE 0x419572] 掷骰后停留帧数（原版 sub_45285E(500) 约 500ms 显示点数）
 constexpr int kDiceHoldFrames = 30;
 // [RE 0x482414] byte_482414 方向映射表
@@ -4267,6 +4269,9 @@ void updateGameState(Application& app) {
                     st.diceAnimActive = blob && st.diceAnim.open(std::move(*blob));
                     if (st.diceAnimActive) {
                         st.diceAnim.nextFrame();
+                        // [NEW M4-C2/RE 0x419572/0x451387] 帧节拍起点：帧延时 =
+                        //   10*dword_475264[settings[0]] = 50/30/20ms（游戏速度档）
+                        st.diceAnimLastMs = nowMs();
                     } else {
                         st.remainingSteps = rollDice(app);
                         st.diceHoldStartMs = nowMs();
@@ -4274,18 +4279,25 @@ void updateGameState(Application& app) {
                     }
                 }
                 if (st.diceAnimActive) {
-                    if (!st.diceAnim.nextFrame()) {
-                        st.diceAnimActive = false;
-                        // [RE 0x41962F] FLC 结束 → 第二次落地音效槽 2（dword_48235A）
-                        app.audio().playEffectSlot(2);
-                        st.remainingSteps = rollDice(app); // 滚动结束 → 最终点数
-                        st.diceHoldStartMs = nowMs();
-                        st.dicePhase = 2;
-                    } else if (!st.diceLandPlayed && st.diceAnim.frameIndex() == 30) {
-                        // [RE 0x451387] FLC 第30帧（落地瞬间）→ 第一次落地音效槽 2
-                        //   （sub_450F04 用 dword_48C850=0x1E 触发帧 + dword_48C840=槽2）
-                        app.audio().playEffectSlot(2);
-                        st.diceLandPlayed = true;
+                    // [NEW M4-C2/RE 0x419572/0x451387] 帧延时 = 10×dword_475264[settings[0]]
+                    //   （游戏速度档：慢 50 / 默认 30 / 快 20 ms；原版 flcPlay unk_48C870）
+                    const uint32_t frameMs =
+                        10u * static_cast<uint32_t>(kDiceFlcSpeed[st.settings[0] & 3]);
+                    if (nowMs() - st.diceAnimLastMs >= frameMs) {
+                        st.diceAnimLastMs = nowMs();
+                        if (!st.diceAnim.nextFrame()) {
+                            st.diceAnimActive = false;
+                            // [RE 0x41962F] FLC 结束 → 第二次落地音效槽 2（dword_48235A）
+                            app.audio().playEffectSlot(2);
+                            st.remainingSteps = rollDice(app); // 滚动结束 → 最终点数
+                            st.diceHoldStartMs = nowMs();
+                            st.dicePhase = 2;
+                        } else if (!st.diceLandPlayed && st.diceAnim.frameIndex() == 30) {
+                            // [RE 0x451387] FLC 第30帧（落地瞬间）→ 第一次落地音效槽 2
+                            //   （sub_450F04 用 dword_48C850=0x1E 触发帧 + dword_48C840=槽2）
+                            app.audio().playEffectSlot(2);
+                            st.diceLandPlayed = true;
+                        }
                     }
                     break;
                 }
