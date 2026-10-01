@@ -35,6 +35,8 @@ public:
         int canvasHeight = 0;
         float uiScale = 1.0f;
         bool autoScale = false;
+        // [NEW M4-D 实机] 呈现放大过滤（默认线性；1:1 时无差别）
+        bool linearFilter = true;
     };
     bool init(const std::string& gameDir, bool headless = false,
               const DisplayConfig& display = DisplayConfig{});

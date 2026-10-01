@@ -92,6 +92,8 @@ std::vector<std::pair<std::string, int>> gameKeys; // [NEW] --game-key "ctrl+5,1
     std::string presetName = "native";
     // [NEW M4-A2] --stats：每 120 帧输出 FPS/帧耗时（性能诊断）
     bool statsOn = false;
+    // [NEW M4-D 实机] --filter nearest|linear：呈现放大过滤（默认 linear 平滑少马赛克）
+    bool linearFilter = true;
     // [NEW] headless 测试钩子（docs/testing.md；无原版对应）
     int testSeed = -1;
     bool headless = false;
@@ -155,6 +157,15 @@ std::vector<std::pair<std::string, int>> gameKeys; // [NEW] --game-key "ctrl+5,1
             presetName = argv[++i];
         } else if (arg == "--stats") {
             statsOn = true;
+        } else if (arg == "--filter" && i + 1 < argc) {
+            const std::string f = argv[++i];
+            if (f == "nearest") {
+                linearFilter = false;
+            } else if (f == "linear") {
+                linearFilter = true;
+            } else {
+                RICH4_LOGW("--filter '%s' unknown (nearest|linear); using linear", f.c_str());
+            }
         } else if (arg == "--shot" && i + 1 < argc) {
             shotPath = argv[++i];
         } else if (arg == "--shot-frame" && i + 1 < argc) {
@@ -368,6 +379,7 @@ std::vector<std::pair<std::string, int>> gameKeys; // [NEW] --game-key "ctrl+5,1
     if (displayCfg.autoScale && (canvasW > 0 || uiScale != 1.0f)) {
         RICH4_LOGW("--canvas/--scale ignored with --preset wide|free");
     }
+    displayCfg.linearFilter = linearFilter;
     if (!app.init(gameDir, headless, displayCfg)) {
         RICH4_LOGE("Application init failed");
         return 1;

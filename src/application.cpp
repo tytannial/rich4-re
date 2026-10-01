@@ -91,6 +91,8 @@ bool Application::init(const std::string& gameDir, bool headless, const DisplayC
     }
     // [NEW M4-A2] 绘制缩放：逻辑 640x480 坐标 → 设备像素（画布）
     m_surface.setScale(drawScale);
+    // [NEW M4-D 实机] 呈现放大过滤（逻辑画布 → 窗口；默认线性平滑）
+    m_surface.setLinearFilter(display.linearFilter);
     // [RE 0x44F935] 文本渲染表面（512x200，原版 dword_4762CC）
     m_text.init();
 

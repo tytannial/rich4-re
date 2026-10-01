@@ -61,6 +61,14 @@ public:
     int originX() const { return m_originX; }
     int originY() const { return m_originY; }
 
+    // [NEW M4-D 实机] 呈现放大过滤：true = 线性（平滑，减少马赛克；逻辑画布→窗口放大用），
+    //   false = 最近邻（像素完美）。1:1 呈现时两者等价（native 不受影响）。
+    void setLinearFilter(bool on) {
+        m_linearFilter = on;
+        applyFilter();
+    }
+    bool linearFilter() const { return m_linearFilter; }
+
     // [NEW M4-D 实机] 模态绘制边界（画布逻辑坐标；x0<0 = 禁用）：640 基准模态的绘制
     //   限制在基准区内（模拟原版 640×480 屏幕边界），防止"移出屏幕"的过场动画
     //   （选人界面确认后玩家槽/面板滑出）画进宽画布两侧黑边（观测为黑边残影）。
@@ -91,11 +99,14 @@ public:
     bool saveBmp(const char* path) const;
 
 private:
+    void applyFilter();
+
     std::vector<uint16_t> m_pixels;
     SDL_Texture* m_texture = nullptr;
     int m_width = kWidth;
     int m_height = kHeight;
     float m_scale = 1.0f;
+    bool m_linearFilter = true; // [NEW M4-D 实机] 呈现放大过滤（默认线性）
     int m_originX = 0; // [NEW M4-D] 绘制原点（逻辑）
     int m_originY = 0;
     int m_paintClipX0 = -1; // [NEW M4-D 实机] 模态绘制边界（画布逻辑；-1 禁用）

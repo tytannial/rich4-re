@@ -24,10 +24,18 @@ bool Surface::create(SDL_Renderer* renderer, int width, int height) {
         RICH4_LOGE("Surface: SDL_CreateTexture failed: %s", SDL_GetError());
         return false;
     }
-    SDL_SetTextureScaleMode(m_texture, SDL_SCALEMODE_NEAREST);
+    // [NEW M4-D 实机] 呈现放大过滤（默认线性；1:1 时等价）
+    applyFilter();
     // [RE 0x4861B8] 全局裁剪窗口初始化 = 画布全尺寸（原版 640x480 常量）
     setClipRect(0, 0, m_width, m_height);
     return true;
+}
+
+void Surface::applyFilter() {
+    if (m_texture) {
+        SDL_SetTextureScaleMode(m_texture,
+                                m_linearFilter ? SDL_SCALEMODE_LINEAR : SDL_SCALEMODE_NEAREST);
+    }
 }
 
 void Surface::destroy() {
