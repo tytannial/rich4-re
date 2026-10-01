@@ -1,4 +1,5 @@
 #include "game/app/help_dialog.h"
+#include "game/app/ui_layout.h"
 
 #include "game/app/event_stack.h"
 #include "game/application.h"
@@ -460,7 +461,7 @@ void helpDialog(Application& app) {
         return;
     }
     state.ui = &uiImage;
-    state.originX = 320 - uiImage.frame(0).width / 2;
+    state.originX = uiScreenCenterX(app.surface()) - uiImage.frame(0).width / 2;
     state.originY = 240 - uiImage.frame(0).height / 2;
 
     RICH4_LOGI("help dialog at (%d,%d) (RE 0x44EB39)", state.originX, state.originY);

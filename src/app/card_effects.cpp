@@ -1,4 +1,5 @@
 #include "game/app/card_effects.h"
+#include "game/app/ui_layout.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -1119,7 +1120,7 @@ int applyFreeCard(Application& app, int target, int32_t fee) {
         char text[160];
         std::snprintf(text, sizeof text, "%s\n\n是否使用免費卡？",
                       st.players[target].name ? st.players[target].name : ""); // [RE 0x444AE9 sprintf aS_42 直引不去空格]
-        use = confirmDialog(app, text, 220, 320);  // [RE askDialog]
+        use = confirmDialog(app, text, uiMapCenterX(app.surface()), 320);  // [RE askDialog]
     } else {
         // [RE AI 分支] 阈值 (rand%3000+3000)×M；费用 ≤ 现金且阈值 ≥ 费用 → 不用
         const int32_t threshold = (dbg::roll(dbg::SlotJackpot, 3000) + 3000) * st.moneyMul;

@@ -1,4 +1,5 @@
 #include "game/app/jail_dialog.h"
+#include "game/app/ui_layout.h"
 
 #include <SDL3/SDL.h>
 
@@ -258,7 +259,7 @@ bool bailHandler(const SDL_Event* event, void* user) {
                 showNotEnough(ui);
                 return true;
             }
-            if (confirmDialog(app, nullptr, 320, 240)) { // [RE 0x453A32] yesNoDialog(320,240)
+            if (confirmDialog(app, nullptr, uiScreenCenterX(app.surface()), 240)) { // [RE 0x453A32] yesNoDialog(320,240)
                 clearHover(ui);
                 Surface& dst = app.surface();
                 const int gx = kBailCellX[hit];
@@ -296,7 +297,7 @@ bool bailHandler(const SDL_Event* event, void* user) {
             showNotEnough(ui); // [RE 0x43D0DA] 人类检查 >= 费用
             return true;
         }
-        if (confirmDialog(app, nullptr, 320, 240)) { // [RE 0x453A32] yesNoDialog(320,240)
+        if (confirmDialog(app, nullptr, uiScreenCenterX(app.surface()), 240)) { // [RE 0x453A32] yesNoDialog(320,240)
             clearHover(ui);
             releasePrisoner(ui, hit);
             app.events().requestExit(0); // [RE 0x43CF5F] PostMessage(0x205)
@@ -734,7 +735,7 @@ bool hospHandler(const SDL_Event* event, void* user) {
             ui.msg.show(app, kHospNotEnough);
             return true;
         }
-        if (confirmDialog(app, nullptr, 320, 240)) { // [RE 0x453A32] yesNoDialog(320,240)
+        if (confirmDialog(app, nullptr, uiScreenCenterX(app.surface()), 240)) { // [RE 0x453A32] yesNoDialog(320,240)
             ui.target = hit;      // [RE 0x48C4F5]
             ui.phase = kHPDischarge;
             ui.msg.show(app, kHospOk); // [RE 0x43E7AB off_475CCC] 消息播完 → doDischarge

@@ -1,4 +1,5 @@
 #include "game/app/hotkey_dialog.h"
+#include "game/app/ui_layout.h"
 
 #include "game/app/event_stack.h"
 #include "game/app/new_game_tables.h"
@@ -366,7 +367,7 @@ void hotkeyDialog(Application& app) {
         return;
     }
     state.ui = &uiImage;
-    state.originX = 320 - uiImage.frame(1).width / 2;
+    state.originX = uiScreenCenterX(app.surface()) - uiImage.frame(1).width / 2;
     state.originY = 240 - uiImage.frame(1).height / 2;
 
     RICH4_LOGI("hotkey dialog at (%d,%d) (RE 0x411A86)", state.originX, state.originY);

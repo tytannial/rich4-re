@@ -1,4 +1,5 @@
 #include "game/app/date_dialog.h"
+#include "game/app/ui_layout.h"
 
 #include "game/app/event_stack.h"
 #include "game/application.h"
@@ -341,7 +342,8 @@ uint32_t dateDialog(Application& app, uint32_t currentDate) {
     }
 
     // 对话框居中（原版 v11 = 320 - 帧2宽/2, v12 = 240 - 帧2高/2）
-    state.originX = 320 - uiImage.frame(kFrameBg).width / 2;
+    // [NEW M4-D] 居中派生（宽屏=逻辑画布中心；native 320/240）
+    state.originX = uiScreenCenterX(app.surface()) - uiImage.frame(kFrameBg).width / 2;
     state.originY = 240 - uiImage.frame(kFrameBg).height / 2;
 
     redrawDateDialog(state);

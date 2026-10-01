@@ -21,5 +21,9 @@ int uiMapLogicalWidth(const Surface& surface);
 inline int uiPanelLogicalX(const Surface& surface) { return uiMapLogicalWidth(surface); }
 // 右栏绘制原点偏移（= 右栏右移量；右栏函数内坐标保持 440 基准，经 SurfaceOriginGuard 平移）
 inline int uiPanelOffsetX(const Surface& surface) { return uiMapLogicalWidth(surface) - 440; }
+// 全屏居中锚点（主对话框居中；native 320 = 640/2）
+inline int uiScreenCenterX(const Surface& surface) { return uiLogicalWidth(surface) / 2; }
+// 地图区居中锚点（地图内询问框/元素；native 220 = 440/2；宽屏随地图区中心）
+inline int uiMapCenterX(const Surface& surface) { return uiMapLogicalWidth(surface) / 2; }
 
 } // namespace rich4

@@ -1,4 +1,5 @@
 #include "game/app/turn_system.h"
+#include "game/app/ui_layout.h"
 
 #include <algorithm>
 #include <cmath>
@@ -2210,7 +2211,7 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                 buy = aiBuyDecision(st, pl, price); // [RE 0x41D7D4] AI 买地决策
             } else if (pl.alive == 1) {
                 // [RE 0x440BA8] askDialog：文本居中 (220,140) + YES/NO 框 (220,320)
-                buy = confirmDialog(app, text, 220, 320);
+                buy = confirmDialog(app, text, uiMapCenterX(app.surface()), 320);
             }
             if (!buy) {
                 goto landingTail;
@@ -2271,7 +2272,7 @@ int landingEvent(Application& app, uint16_t cellEntId) {
             if ((pl.alive & 6) != 0) {
                 upgrade = true; // [RE 0x41997D] AI 直接升级
             } else if (pl.alive == 1) {
-                upgrade = confirmDialog(app, text, 220, 320); // [RE 0x419996] askDialog
+                upgrade = confirmDialog(app, text, uiMapCenterX(app.surface()), 320); // [RE 0x419996] askDialog
             }
             if (!upgrade) {
                 goto landingTail;
@@ -2420,7 +2421,7 @@ int landingEvent(Application& app, uint16_t cellEntId) {
             if ((pl.alive & 6) != 0) {
                 buy = aiBuyDecision(st, pl, price); // [RE 0x41D7D4] AI 买地决策（与 estate 共用）
             } else if (pl.alive == 1) {
-                buy = confirmDialog(app, text, 220, 320);
+                buy = confirmDialog(app, text, uiMapCenterX(app.surface()), 320);
             }
             if (!buy) {
                 goto landingTail;
@@ -2510,7 +2511,7 @@ int landingEvent(Application& app, uint16_t cellEntId) {
                 if ((pl.alive & 6) != 0) {
                     up = true; // [RE 0x41A310] AI 直接升级
                 } else if (pl.alive == 1) {
-                    up = confirmDialog(app, text, 220, 320); // [RE 0x41A31E]
+                    up = confirmDialog(app, text, uiMapCenterX(app.surface()), 320); // [RE 0x41A31E]
                 }
                 if (!up) {
                     goto landingTail;

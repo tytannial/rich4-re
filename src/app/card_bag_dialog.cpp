@@ -1,4 +1,5 @@
 #include "game/app/card_bag_dialog.h"
+#include "game/app/ui_layout.h"
 
 #include <SDL3/SDL.h>
 
@@ -544,7 +545,7 @@ int passOnCardDialog(Application& app, int user) {
         if (n == 1) {
             std::snprintf(text, sizeof text, "是否嫁禍給%s？", // [RE 0x46534E]
                           playerNameNoSpace(st, ids[0]).c_str());
-            if (!confirmDialog(app, text, 220, 320)) { // [RE 0x44476A askDialog]
+            if (!confirmDialog(app, text, uiMapCenterX(app.surface()), 320)) { // [RE 0x44476A askDialog]
                 return -1;
             }
             target = ids[0];

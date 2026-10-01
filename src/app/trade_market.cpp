@@ -1,4 +1,5 @@
 #include "game/app/trade_market.h"
+#include "game/app/ui_layout.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -941,8 +942,8 @@ void drawTradeDetail(TradeDetailUi& s) {
     const int frame = detailFrameFor(t.type);
     if (frame >= sh.frameCount()) return;
     const UiFrameView& bg = sh.frame(frame);
-    const int c4 = (640 - bg.width) / 2;
-    const int c6 = (480 - bg.height) / 2;
+    const int c4 = uiScreenCenterX(dst) - bg.width / 2; // [NEW M4-D] 宽屏居中派生
+    const int c6 = 240 - bg.height / 2;
     blitElementOpaque(dst, bg, c4, c6);
     // 物品图标（帧 = 4*颜色 + type + 8 @ (c4+112, c6+6)；原版 blitElementFullscreen 不透明）
     const int iconFrame = 4 * st.players[s.seller].byte20 + t.type + 8;
@@ -1065,8 +1066,8 @@ bool tradeDetailEvent(const SDL_Event* event, void* user) {
         return true;
     }
     const UiFrameView& bg = s.sheet->frame(frame);
-    const int c4 = (640 - bg.width) / 2;
-    const int c6 = (480 - bg.height) / 2;
+    const int c4 = uiScreenCenterX(s.app->surface()) - bg.width / 2; // [NEW M4-D] 宽屏居中
+    const int c6 = 240 - bg.height / 2;
     const int btnY = (t.type == kTradeStock) ? 236 : (t.type == kTradeLand) ? 265 : 203;
     if (event->type == SDL_EVENT_KEY_DOWN) {
         if (event->key.key == SDLK_ESCAPE) {
@@ -1115,7 +1116,7 @@ bool tradeDetailEvent(const SDL_Event* event, void* user) {
                 s.app->events().requestExit(0);
                 return true;
             }
-            if (confirmDialog(*s.app)) {
+            if (confirmDialog(*s.app, nullptr, uiScreenCenterX(s.app->surface()), 200)) {
                 if (executeTrade(*s.app, s.seller, s.slot, s.sheet) == 1) {
                     removeTradeOrder(st, s.seller, s.slot);
                     s.app->events().requestExit(0);
