@@ -737,3 +737,51 @@ quickstart 跳过选人界面，`blitScrolledMap` 仅用于选人界面与通关
 
 **工具**：`tools/run_tests.py` 新增 `--extra "<rich4 参数>"`（透传给每个场景，
 宽屏/画布尺寸回归用）。
+
+
+---
+
+## 17. 批次 C1 + D1 实施记录（2026-09-30，✅ 已落地）
+
+### 17.1 C1 静止帧跳过（脏区重绘第一部分）
+
+| # | 位置 | 改动 | 依据 |
+|---|------|------|------|
+| 1 | `game_loop.cpp` | `idleFrame(app)`：`gamePlayerControl && !viewScrolling && !blockingPerf && !diceAnimActive && !showDice && remainingSteps==0 && 全部 playerActionState==0`；timer 分支 `if (goBlinkTurn || !idleFrame(app)) renderGameFrame(app);` | 原版该窗口只按 `dword_475110` 脏位补画增量层，重写全量重绘的保守等价 |
+
+- **语义**：空闲期场景不变（光标由 renderFrame 独立合成/恢复；GO 闪烁翻转点仍重绘）。
+- **性能**（`--stats`，headless，等待输入期）：native 5.5→**1.5ms**、free 9.8→**3.5ms**。
+- **验证**：free 空闲截图与全量重绘版**逐字节 diff=0**（无残影）；00_smoke/20_rent_route/52_event_dianquan 全 PASS。
+
+### 17.2 D1 宽地图区
+
+| # | 位置 | 改动 | 依据 |
+|---|------|------|------|
+| 1 | `tools/gen_map_tables.py`、`map_tables.h/cpp` | 等距投影表 **29×29 → 65×65**（半窗口 14→32）：表内原表**逐项保真**、外圈用边界步长线性外推；索引 `16900*dir + 260*(row+32) + 4*(col+32)`；生成器补 idx12 无效名称指针特判 | §4.2 R=32 建议；表内回归 6728 项 0 差异 |
+| 2 | `ui_layout.h/cpp`（新） | 逻辑画布宽 = 设备宽/scale；地图区宽 = 逻辑画布宽 − 右栏 200；右栏 x/偏移派生；`kTopBarH=40`/`kPanelW=200` | §3.2 布局表第一批 |
+| 3 | `map_render.cpp` | 视口中心 x = mapW/2；裁剪 `(0,mapTop)-(mapW,480)`（宽屏 mapTop=0 / native 40）；**宽屏去表化**：与视口相交格点双循环（地面互不重叠 → 顺序无关；格点左上角粗筛 + 表 ±32 上限），native 保留原 296 项遍历序 | §4.2"宽屏可完全去表化" |
+| 4 | `surface.h`、`blit/surface/text/iso` 等 | **绘制原点** `origin/deviceX/deviceY/spanX/spanY` + `SurfaceOriginGuard`；全部坐标变换点统一 deviceX/Y（native origin=0 恒等） | 右栏整体平移 |
+| 5 | `game_panel.cpp` | 右栏 5 函数（玩家条/信息面板/小地图/节日/日历）加 origin guard（坐标保持 440 基准不动） | 同上 |
+| 6 | `game_loop.cpp`、`object_tip.cpp` | 命中派生：小地图/箭头（panelX+3..+53）/页签（+176..+200）/日历（+8..+34、+38..+64）/地图区（x<mapW，顶栏仅 x<440 段）；物件提示方向判定按 mapW；`miniMapHitRegion` 增 Surface 参数 | §3.2"命中必须从同一张表派生" |
+| 7 | `game_loop.cpp` | FLC/跳伞素材在宽地图区水平居中（`(mapW-440)/2`；native 偏移 0） | §4.1 |
+
+### 17.3 验收（实测）
+
+| 项 | 结果 |
+|---|---|
+| native 逐字节 | 截图与基线 **diff=0**（含投影表扩展 + mapTop 裁剪 + origin 机制） |
+| free | 降采样 2× 与 native **diff 0.7%**（= native 干净 2 倍） |
+| wide | 非黑像素 **74% → 97%**（右侧 320px 黑边被地图视野填满） |
+| 冒烟 | 00_smoke / 20_rent_route / 52_event_dianquan（FLC 演出）/ 114_magic_smoke + wide 冒烟 全 PASS |
+| 性能（静止期） | native **1.47ms** / free **3.52ms** / wide **2.68ms**（`--stats`） |
+
+### 17.4 已知边界与遗留
+
+- **宽屏顶栏右侧**：顶栏素材 440 宽，`(440,mapW)×(0,40)` 区域露出地图（观感增强而非缺陷）；
+  顶栏宽屏装饰/拉伸未做（D 收尾）。
+- **区域级脏区（5 位 dword_475110）未做**：当前只有"全量/跳过"两档；计划中的按区补画
+  （GO 只重绘地图区等）留 C2。
+- **布局表收口未完成**：`advancePanelX/Y`、对话框居中（`320-w/2`）、`kMiniMapY` 等仍是
+  散落常量；`settings[6..8]`（日曆/縮小地圖/組合畫面）未接布局。**C2**。
+- `--canvas WxH` 任意尺寸（scale=1）下地图区按 440（布局派生只认 scale 推导的画布），
+  命中仍按左上 640×480；正式 preset（native/wide/free）不受影响。

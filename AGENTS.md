@@ -176,6 +176,24 @@ free 1280×960 = native 干净 2 倍）；**演出帧节拍改绝对截止时刻
 放大拖慢→块展开（free 17→9.8ms / wide 12→8.2ms）+ 动画绝对节拍。详见 `m4-plan.md` §16。
 **下一步 = C 脏区重绘 + UI 布局表 + 命中派生**（D 宽屏视口依赖 C 的布局表）。
 
+**批次 C1 ✅ 2026-09-30（静止帧跳过）**：`game_loop.idleFrame`——纯等待输入且无演出/
+动画/滚动/模态时场景不变，timer 分支跳过每 tick 全量重绘（GO 闪烁翻转点仍重绘；
+光标由 renderFrame 独立合成，不受影响）。性能（`--stats`，headless 静止期）：
+native 5.5→1.5ms、free 9.8→3.5ms；free 空闲截图与全量重绘逐字节 diff=0（无残影）。
+详见 `m4-plan.md` §17。
+
+**批次 D1 ✅ 2026-09-30（宽地图区）**：等距投影表扩 **65×65**（表内原 29×29 逐项保真、
+外圈边界步长外推；`tools/gen_map_tables.py` 生成）；`ui_layout` 布局派生（地图区宽 =
+逻辑画布宽 − 右栏 200；宽屏右栏右移贴右缘）；宽屏走"与视口相交格点双循环"**去表化**
+（地面菱形互不重叠 → 顺序无关），native 保留原 296 项遍历序逐字节保真；
+`Surface` **绘制原点**（`deviceX/deviceY/spanX/spanY` + `SurfaceOriginGuard`）实现右栏
+半径整体平移（右栏函数坐标保持 440 基准）；命中（小地图/箭头/页签/日历/地图区）全部
+布局派生；FLC/跳伞素材在宽地图区水平居中。验证：native 逐字节 diff=0、free 降采样
+2× diff 0.7%、wide 非黑 74%→97%（黑边填满）、冒烟全 PASS、性能 native 1.47 /
+free 3.52 / wide 2.68 ms。详见 `m4-plan.md` §17。
+**下一步 = C2 布局表收口（`settings[6..8]` 面板显示配置、对话框居中派生）+
+区域级脏区 + D 收尾（顶栏宽屏装饰/FLC 锚定细化）**。
+
 **跨平台 ✅ 2026-09-30**（原 M3-C，Windows x64 + Linux x86-64）：GDI → **FreeType 统一文本渲染**
 （删 366 行 GDI、字体 `resources/Fonts/` 不入库/缺失降级、`kFontSizeScale` 可调）、
 **cp950 内嵌映射表**（`tools/gen_big5_tables.py` 生成，13752 项，替代 `MultiByteToWideChar(950)`）、
