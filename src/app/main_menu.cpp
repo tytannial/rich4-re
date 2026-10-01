@@ -1,5 +1,7 @@
 #include "game/app/main_menu.h"
+#include "game/app/ui_layout.h"
 
+#include "game/app/debug/debug.h"
 #include "game/app/event_stack.h"
 #include "game/app/load_dialog.h"
 #include "game/app/settings_dialog.h"
@@ -158,7 +160,13 @@ int mainMenuScene(Application& app) {
         if (menuImage.load(std::move(*blob))) {
             state.image = &menuImage;
             // [RE 0x4563F5] sub_4563F5(dword_48A08C, 画布, 0, 0)：画布 blit 到后台缓冲
-            redrawMenu(state);
+            // [NEW M4-D 实机] 预绘制包 640 基准 origin：非首次进入主菜单时（如
+            //   "主菜单→选人→取消→主菜单"）m_modalBaseFilled 已为 true（active 从未中断，
+            //   不再填黑两侧），无 origin 的预绘制会在宽画布左侧留残影（实机"双 NEW STAGE"）
+            {
+                SurfaceOriginGuard og(app.surface(), uiModalBaseX(app.surface()), 0);
+                redrawMenu(state);
+            }
         } else {
             RICH4_LOGE("main menu: Data.mkf[1] is not SMP/SPR");
         }
@@ -169,6 +177,17 @@ int mainMenuScene(Application& app) {
     // TODO(RE 0x44F9D8/0x44FABC): "V3.11" 版本号（638, 470, 样式 6）——阶段 2 文本渲染
 
     RICH4_LOGI("main menu: 5 buttons (RE 0x4029FD)");
+    // [NEW] named region 一次性登记（hitTest 同源矩形；脚本 clickr menu.<i>：0新游戏/1读档/
+    //   2设置/3退出/4新游戏模式1——640 基准坐标，合成输入经模态框架自动 +base）
+    if (state.image) {
+        for (int i = 0; i < kMenuButtonCount; ++i) {
+            const UiFrameView& f = state.image->frame(kMenuFrameHover + 2 * i);
+            char nm[16];
+            std::snprintf(nm, sizeof(nm), "menu.%d", i);
+            debug::registerRegion(nm, kMenuButtonX[i] - static_cast<int>(f.offsetX),
+                                  kMenuButtonY[i] - static_cast<int>(f.offsetY), f.width, f.height);
+        }
+    }
     // [RE 0x4018E7] sub_4018E7(sub_40257A, 0)：进入主菜单模态循环
     const int result = runModal(app, &mainMenuEventHandler, &state);
     // [RE 0x454ACB] sub_454ACB()：关闭主菜单音乐

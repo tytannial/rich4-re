@@ -335,7 +335,8 @@ void handleLeftButtonDown(Application& app, int x, int y) {
     // [RE 0x417E26] 前进面板命中：panel[8] 字节控件图，ctrl = 像素值 + 10
     //   （13=GO、11=骰子数、12=拖动）；面板矩形 advancePanelX/Y/W/H
     if (state.gamePlayerControl && !state.panel8Mask.empty()) {
-        const int lx = x - state.advancePanelX;
+        // [NEW M4-D 实机] 与 drawAdvancePanel 同源：宽屏下随地图区中心平移
+        const int lx = x - (state.advancePanelX + uiMapCenterShiftX(app.surface()));
         const int ly = y - state.advancePanelY;
         if (lx >= 0 && ly >= 0 && lx < state.advancePanelW && ly < state.advancePanelH) {
             const int ctrl = static_cast<int>(
@@ -690,6 +691,9 @@ void renderGameFrameWith(Application& app, uint8_t dirty) {
     //   模态 handler 内调用本函数重绘游戏画面时（选骰框/交易市场/台词气泡等），
     //   模态自身绘制经 dispatchModalAware +base 居中，而游戏画面保持宽屏布局。
     SurfaceOriginGuard ogWorld(app.surface(), 0, 0);
+    // [NEW M4-D 实机] 游戏世界重绘不受"模态绘制边界"约束（宽屏游戏画面保持铺满；
+    //   模态内的面板/过场元素由 dispatchModalAware 的边界裁剪）
+    SurfacePaintClipGuard pcgWorld(app.surface(), -1, -1);
     // [NEW] 本函数重绘区域内像素全变——光标保存背景作废，跳过陈旧 uncompose 写回
     //   （防演出/移动期间光标处旧背景脏块闪现；见 Cursor::invalidate）
     app.cursor().invalidate();

@@ -87,6 +87,18 @@ void Surface::fillRect(int x, int y, int w, int h, uint16_t color) {
     if (y + h > m_height) {
         h = m_height - y;
     }
+    // [NEW M4-D 实机] 模态绘制边界（画布逻辑 → 设备；当前 x/w 已是设备坐标）
+    if (m_paintClipX0 >= 0) {
+        const int cx0 = logicalToDevice(m_paintClipX0);
+        const int cx1 = logicalToDevice(m_paintClipX1);
+        if (x < cx0) {
+            w -= (cx0 - x);
+            x = cx0;
+        }
+        if (x + w > cx1) {
+            w = cx1 - x;
+        }
+    }
     if (w <= 0 || h <= 0) {
         return;
     }

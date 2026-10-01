@@ -27,5 +27,10 @@ inline int uiModalBaseX(const Surface& surface) {
     const int w = (uiLogicalWidth(surface) - 640) / 2;
     return w > 0 ? w : 0;
 }
+// [NEW M4-D 实机] 屏幕锚点游戏 UI（前进面板/骰子动画，原版以 440 地图区中心 220 为基准）
+//   在地图区加宽后的水平平移量：native 0；宽屏 = 视口中心 - 220（跟随角色所在视口中心）
+inline int uiMapCenterShiftX(const Surface& surface) {
+    return uiMapLogicalWidth(surface) / 2 - 220;
+}
 
 } // namespace rich4

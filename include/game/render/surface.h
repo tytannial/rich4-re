@@ -60,6 +60,18 @@ public:
     }
     int originX() const { return m_originX; }
     int originY() const { return m_originY; }
+
+    // [NEW M4-D 实机] 模态绘制边界（画布逻辑坐标；x0<0 = 禁用）：640 基准模态的绘制
+    //   限制在基准区内（模拟原版 640×480 屏幕边界），防止"移出屏幕"的过场动画
+    //   （选人界面确认后玩家槽/面板滑出）画进宽画布两侧黑边（观测为黑边残影）。
+    //   由 Application::dispatchModalAware 在 centerBase 模态 dispatch 期间设置。
+    void setPaintClip(int x0, int x1) {
+        m_paintClipX0 = x0;
+        m_paintClipX1 = x1;
+    }
+    bool paintClipEnabled() const { return m_paintClipX0 >= 0; }
+    int paintClipX0() const { return m_paintClipX0; }
+    int paintClipX1() const { return m_paintClipX1; }
     int deviceX(int v) const { return logicalToDevice(m_originX + v); }
     int deviceY(int v) const { return logicalToDevice(m_originY + v); }
     int spanX(int v, int len) const {
@@ -86,6 +98,8 @@ private:
     float m_scale = 1.0f;
     int m_originX = 0; // [NEW M4-D] 绘制原点（逻辑）
     int m_originY = 0;
+    int m_paintClipX0 = -1; // [NEW M4-D 实机] 模态绘制边界（画布逻辑；-1 禁用）
+    int m_paintClipX1 = -1;
 };
 
 // [NEW M4-D] 临时设置绘制原点的 RAII guard（右栏宽屏平移）。
@@ -103,6 +117,24 @@ private:
     Surface& m_surface;
     int m_oldX;
     int m_oldY;
+};
+
+// [NEW M4-D 实机] 临时设置/恢复模态绘制边界（renderGameFrame 重绘游戏画面时关闭，
+//   避免宽屏游戏画面被 640 基准边界裁掉）。
+class SurfacePaintClipGuard {
+public:
+    SurfacePaintClipGuard(Surface& surface, int x0, int x1)
+        : m_surface(surface), m_old0(surface.paintClipX0()), m_old1(surface.paintClipX1()) {
+        surface.setPaintClip(x0, x1);
+    }
+    ~SurfacePaintClipGuard() { m_surface.setPaintClip(m_old0, m_old1); }
+    SurfacePaintClipGuard(const SurfacePaintClipGuard&) = delete;
+    SurfacePaintClipGuard& operator=(const SurfacePaintClipGuard&) = delete;
+
+private:
+    Surface& m_surface;
+    int m_old0;
+    int m_old1;
 };
 
 // [NEW M4-A2] 临时切换绘制缩放的 RAII guard（地图层 worldScale=1；A2 用）。

@@ -605,7 +605,8 @@ void drawAdvancePanel(Application& app) {
     trace::logf("go panel draw cur=%d", state.currentPlayer);
     Surface& dst = app.surface();
     const Player& p = state.players[state.currentPlayer];
-    const int x = state.advancePanelX;
+    // [NEW M4-D 实机] 宽屏下前进面板随地图区中心平移（native shift=0；用户要求居中）
+    const int x = state.advancePanelX + uiMapCenterShiftX(dst);
     const int y = state.advancePanelY;
     int v1 = 0;
     if (p.skipMove) {

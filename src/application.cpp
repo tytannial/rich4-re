@@ -3,6 +3,7 @@
 #include "game/app/debug/debug.h"
 #include "game/app/game_init.h"
 #include "game/app/ui_layout.h"
+#include "game/render/blit.h"
 #include "game/app/game_shutdown.h"
 #include "game/app/main_menu.h"
 #include "game/app/load_dialog.h"
@@ -296,14 +297,27 @@ bool Application::dispatchModalAware(const SDL_Event* event) {
                 break;
         }
     }
+    // [NEW M4-D 实机] 640 基准区裁剪：模态绘制限制在基准区（模拟原版 640×480 屏幕边界），
+    //   防止"移出屏幕"的过场动画（选人界面选完角色后玩家槽滑出等）画进宽画布两侧黑边
+    //   （观测为"黑边残影"）。产品代码在绘制中途的 setClipRect 由本处在 dispatch 后恢复。
+    int savedClip[4] = {0, 0, 0, 0};
+    getClipRect(savedClip[0], savedClip[1], savedClip[2], savedClip[3]);
+    setClipRect(base, 0, base + 640, uiLogicalHeight(m_surface));
+    const int savedPc0 = m_surface.paintClipX0();
+    const int savedPc1 = m_surface.paintClipX1();
+    m_surface.setPaintClip(base, base + 640); // [NEW M4-D 实机] 模态绘制边界
     SurfaceOriginGuard og(m_surface, base, 0);
+    bool handled = false;
     if (!ev) {
         if (EventStack::Handler h = m_events.top()) {
-            return h(nullptr, m_events.topUser());
+            handled = h(nullptr, m_events.topUser());
         }
-        return false;
+    } else {
+        handled = m_events.dispatch(*ev);
     }
-    return m_events.dispatch(*ev);
+    setClipRect(savedClip[0], savedClip[1], savedClip[2], savedClip[3]);
+    m_surface.setPaintClip(savedPc0, savedPc1);
+    return handled;
 }
 
 // [NEW M4-A2] free/wide：按窗口 drawable 重建画布与逻辑呈现（uiScale = 画布高/480）

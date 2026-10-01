@@ -773,7 +773,8 @@ void renderMap(Application& app, int centerX, int centerY) {
             const int n =
                 std::max(1, std::min(3, static_cast<int>(state.diceShowCount)));
             const int v6 = (state.players[p].dir + 8 - state.mapRotation) & 7;
-            const int dx = 136 + kDicePosX[v6];
+            // [NEW M4-D 实机] 骰子动画跟随视口中心：宽屏下随地图区中心平移（native shift=0）
+            const int dx = 136 + kDicePosX[v6] + uiMapCenterShiftX(dst);
             const int dy = 48 + kDicePosY[v6];
             if (state.diceAnimActive && state.diceAnim.valid()) {
                 const int w = state.diceAnim.width();

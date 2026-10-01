@@ -7,6 +7,23 @@
 
 namespace rich4 {
 
+// [NEW M4-D 实机] 合并"模态绘制边界"（画布逻辑坐标）到设备化裁剪边界（x 方向）。
+//   由 dispatchModalAware 在 centerBase 模态期间设置；游戏画面重绘（renderGameFrame）
+//   会临时关闭（SurfacePaintClipGuard），保证宽屏游戏画面不被 640 基准边界裁掉。
+static void mergePaintClipX(const Surface& dst, int& clipL, int& clipR) {
+    if (dst.paintClipEnabled()) {
+        const int px0 = dst.logicalToDevice(dst.paintClipX0());
+        const int px1 = dst.logicalToDevice(dst.paintClipX1());
+        if (px0 > clipL) {
+            clipL = px0;
+        }
+        if (px1 < clipR) {
+            clipR = px1;
+        }
+    }
+}
+
+
 namespace {
 
 // [RE 0x4861B8] 全局裁剪窗口（left, top, right, bottom）
@@ -105,6 +122,7 @@ bool blitScaled(Surface& dst, const uint8_t* src, int srcPitchBytes, const uint1
         clipR = dst.logicalToDevice(clipR);
         clipB = dst.logicalToDevice(clipB);
     }
+    mergePaintClipX(dst, clipL, clipR); // [NEW M4-D 实机] 模态绘制边界
     const bool sprite = palette != nullptr;
     uint16_t* base = dst.pixels();
     const int dstW = dst.width();
@@ -182,7 +200,9 @@ bool blitElementRegion(Surface& dst, const UiFrameView& src, int x, int y, int s
     // [NEW M4-A2] scale != 1：逻辑目标缩放 + nearest 采样（scale == 1 走原路径，逐字节一致）
     // [NEW M4-D] scale == 1 但绘制原点非 0（宽画布模态框架）同样委托 blitScaled——
     //   块=1px 与原路径逐字节等价，且落点经 deviceX/deviceY 应用 origin
-    if (dst.scale() != 1.0f || dst.originX() != 0 || dst.originY() != 0) {
+    // [NEW M4-D 实机] 模态绘制边界启用时同样走该路径（原路径不查边界）
+    if (dst.scale() != 1.0f || dst.originX() != 0 || dst.originY() != 0 ||
+        dst.paintClipEnabled()) {
         return blitScaled(dst, reinterpret_cast<const uint8_t*>(src.pixels), src.width * 2,
                           nullptr, x - src.offsetX, y - src.offsetY, srcX, srcY, w, h, useClipRect,
                           false);
@@ -211,7 +231,9 @@ bool blitElementRegionOpaque(Surface& dst, const UiFrameView& src, int x, int y,
                              int srcY, int w, int h, bool useClipRect) {
     // [NEW M4-A2] scale != 1：逻辑目标缩放 + nearest 采样（scale == 1 走原路径，逐字节一致）
     // [NEW M4-D] scale == 1 但绘制原点非 0（宽画布模态框架）同样委托 blitScaled（同上）
-    if (dst.scale() != 1.0f || dst.originX() != 0 || dst.originY() != 0) {
+    // [NEW M4-D 实机] 模态绘制边界启用时同样走该路径
+    if (dst.scale() != 1.0f || dst.originX() != 0 || dst.originY() != 0 ||
+        dst.paintClipEnabled()) {
         return blitScaled(dst, reinterpret_cast<const uint8_t*>(src.pixels), src.width * 2,
                           nullptr, x - src.offsetX, y - src.offsetY, srcX, srcY, w, h, useClipRect,
                           true);
@@ -298,7 +320,9 @@ bool blitSpriteFrameClipped(Surface& dst, const UiImage& spr, int frame, int x, 
     const UiFrameView& f = spr.frame(frame);
     // [NEW M4-A2] scale != 1：逻辑目标缩放 + nearest 采样（scale == 1 走原路径，逐字节一致）
     // [NEW M4-D] scale==1 且原点非 0（宽画布模态）同样委托 blitScaled
-    if (dst.scale() != 1.0f || dst.originX() != 0 || dst.originY() != 0) {
+    // [NEW M4-D 实机] 模态绘制边界启用时同样委托 blitScaled
+    if (dst.scale() != 1.0f || dst.originX() != 0 || dst.originY() != 0 ||
+        dst.paintClipEnabled()) {
         return blitScaled(dst, src, f.width, palette, x - f.offsetX, y - f.offsetY, 0, 0, f.width,
                           f.height, useClipRect, false);
     }
@@ -400,12 +424,17 @@ void blitScrolledMap(Surface& dst, const uint8_t* src, int offset) {
     // [NEW M4-A2] scale != 1：每个逻辑像素展开为设备块（像素完美；scale=1 走下方原
     //   逐行环绕路径，逐字节一致）
     // [NEW M4-D] scale == 1 但绘制原点非 0（宽画布模态框架）同样走展开路径（deviceX 含 origin）
-    if (dst.scale() != 1.0f || dst.originX() != 0 || dst.originY() != 0) {
+    // [NEW M4-D 实机] 模态绘制边界启用时同样走展开路径（原逐行路径不查边界）
+    if (dst.scale() != 1.0f || dst.originX() != 0 || dst.originY() != 0 ||
+        dst.paintClipEnabled()) {
         const uint16_t* srcPx = reinterpret_cast<const uint16_t*>(src);
         const int offPix = off / 2; // 源 4 字节对齐 → 2 像素对齐
         uint16_t* base = dst.pixels();
         const int dstW = dst.width();
         const int dstH = dst.height();
+        int pcL = 0; // [NEW M4-D 实机] 模态绘制边界（设备）
+        int pcR = dstW;
+        mergePaintClipX(dst, pcL, pcR);
         for (int ly = 0; ly < kSrcRows; ++ly) {
             const int y0 = dst.deviceY(ly);
             const int y1 = dst.deviceY(ly + 1);
@@ -419,8 +448,8 @@ void blitScrolledMap(Surface& dst, const uint8_t* src, int offset) {
                 const uint16_t c = srow[(lx + offPix) % Surface::kWidth];
                 const int x0 = dst.deviceX(lx);
                 const int x1 = dst.deviceX(lx + 1);
-                const int xc0 = x0 < 0 ? 0 : x0;
-                const int xc1 = x1 < dstW ? x1 : dstW;
+                const int xc0 = x0 < pcL ? pcL : x0;
+                const int xc1 = x1 < pcR ? x1 : pcR;
                 if (xc0 >= xc1) {
                     continue;
                 }
