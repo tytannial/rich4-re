@@ -891,3 +891,18 @@ quickstart 跳过选人界面，`blitScrolledMap` 仅用于选人界面与通关
 - **main_menu named region** `menu.0..4`（脚本 clickr menu.0 进选人）。
 - 验证：native SHA 全等；wide 选人过场（帧 700..730）两侧采样全黑、取消回退单份按钮、
   GO 面板 286 逻辑 ≈ 地图区中心；17 场景全 PASS。
+
+### 18.8 实机三轮修复（2026-10-01，提交 `bc23a19`）
+
+- **文字被裁根因（选人配置项/系统设置/买地提示没字）**：paintClip 存"画布逻辑值"，
+  但 text 落点经 `SurfaceScaleGuard(1)` 后是"设备像素"（×真实 scale）→ clip 与文本落点
+  不同域（宽屏右侧文本全被裁）。改为**设置时以真实画布 scale 一次设备化**（存设备坐标，
+  `logicalToDevice(base)`），blit/fillRect 侧直接用值；native 下等价不变。
+- **存/读档保画面**：`saveDialog`/`loadDialog` → `fillBars=false`（宽画布两侧保留游戏
+  画面，与大地图一致）。
+- **掷骰提速**：帧速 `10×档位值`（50/30/20ms）→ `8×档位值`（40/24/16ms，×0.8 略微
+  加速）；节拍改追帧累加（`last += frameMs`）保证绘制偏慢时节奏精确。
+- **小地图视野框**：白/红方框由固定 30×30 改为**游戏内视野尺寸**（5696/65536 尺度；
+  native 38×38、宽屏随地图区宽 56×38）。
+- 验证：18 场景全 PASS；wide 选人/设置文字恢复、存档两侧游戏画面、native 小地图
+  视野框生效。
