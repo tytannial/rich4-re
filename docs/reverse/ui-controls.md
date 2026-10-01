@@ -372,6 +372,13 @@ void pressDown(Surface& dst, int x, int y, int w, int h, int shift, const uint8_
 **大地图叠加**（`map_dialog` 0x40A801）：不清屏、直接画工作副本 + 玩家标记**帧 5**（与小地图帧 6 不同）。
 **节日**：`findHoliday 0x4521F0`（type0 固定 / type2 第 N 个星期X；type1 浮动未实现）、`isSpecialDate 0x4523D5`（周日或命中即红字，股市休市复用）。
 
+**托管解除入口（[NEW]，非原版）**：原版工具条在非控制期整条锁死（0x418158
+`if (!g_playerControl) return 0`）——单人局托管（`alive|=4`）后再无窗口打开「託管AI」面板解除。
+重写放行 AI/托管回合的工具条第 3 按钮（case 2，x∈[80,120), y<40）：`handleLeftButtonDown`
+在 `tipPerfBlocked` 之前（AI 回合多在移动中，`playerActionState!=0` 会吞点击）置
+`pendingAction=102`；事件层放行对应 UP；`handleTopBarButton(idleOpen=true)` 跳过 0x40DEFE
+收尾（不置 0x80、不抢控制），面板关闭后 AI 回合状态机原样继续。场景 `310_host_release`。
+
 ## 17. 头像 / 精灵选择网格（`new_game_dialog`，0x40423C/0x404E44）
 
 12 格 6×2 头像网格（`Data.mkf[2]`）多选：

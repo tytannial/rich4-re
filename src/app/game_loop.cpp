@@ -168,7 +168,11 @@ bool miniMapHitRegion(const GameState& state, int x, int y, int& mx, int& my) {
 }
 
 // [RE 0x417D65] sub_417D65 工具条按钮分发（入口 disablePlayerControl + 收尾 sub_40DEFE）
-void handleTopBarButton(Application& app, int index) {
+// [NEW] idleOpen：非控制期（AI/托管回合）放行的托管面板——原版工具条整条要求
+//   byte_46CAFD==1（0x418158），托管玩家回合结束后回到自己回合时永远没有
+//   enablePlayerControl 窗口，单人局无法再打开面板解除托管。idleOpen 仅跳过
+//   0x40DEFE 收尾（不置 0x80 跳过 AI 回合、不抢控制），面板交互本身与原版一致。
+void handleTopBarButton(Application& app, int index, bool idleOpen = false) {
     GameState& state = app.gameState();
     // [RE 0x417D65] 入口: setPauseDraw(0); disablePlayerControl();
     disablePlayerControl(app);
@@ -227,6 +231,12 @@ void handleTopBarButton(Application& app, int index) {
             // 其余按钮（11+）无功能
             RICH4_LOGI("top bar button %d not implemented (RE 0x417D65)", index);
             break;
+    }
+    if (idleOpen) {
+        // [NEW] AI/托管回合打开的面板：关闭后当前回合状态机原样继续，不收尾
+        trace::logf("topbar idle open case=%d done", index);
+        RICH4_LOGI("topBar idle open: dialog closed, AI turn untouched (RE 0x417D65)");
+        return;
     }
     // [RE 0x40DEFE] sub_40DEFE 收尾：当前玩家有状态（住院/入狱/托管/托管等）→
     //   playerActionFlags |= 0x80 触发 beginPlayerTurn 自动跳过回合（道具把自己炸住院
@@ -314,6 +324,16 @@ void handleMouseMove(Application& app, int x, int y) {
 // [RE 0x417E26] WM_LBUTTONDOWN
 void handleLeftButtonDown(Application& app, int x, int y) {
     GameState& state = app.gameState();
+    // [NEW] 托管解除入口：AI/托管回合放行工具条「託管AI」按钮（case 2，x∈[80,120), y<40）。
+    //   必须放在 tipPerfBlocked 之前——AI 回合多数时间在棋子移动（playerActionState!=0），
+    //   否则被"演出期点击屏蔽"吞掉。事件层已在跳伞/事件 FLC 期间拦截，模态叠加时也轮不到本层。
+    //   原版此处整条工具条锁死 → 单人局托管后无法再打开面板解除（见 handleTopBarButton）。
+    if (!state.gamePlayerControl && y < kTopBarH && x >= 80 && x < 120) {
+        state.pendingAction = 102; // x/40+100，与 handleTopBarButton 同编码
+        app.audio().playEffect(1);
+        trace::logf("topbar idle host button down");
+        return;
+    }
     // [NEW] 演出/棋子移动/掷骰/模态期间点地图不弹物件提示
     //   （原版此类场景必有全量重绘即时抹掉增量提示像素，等价屏蔽；见 tipPerfBlocked）
     if (tipPerfBlocked(app)) {
@@ -451,7 +471,10 @@ void handleLeftButtonUp(Application& app, int x, int y) {
         state.mapRotation = (state.mapRotation + 1) & 7;
         renderGameFrame(app);
     } else if (state.pendingAction >= 100) {
-        handleTopBarButton(app, state.pendingAction - 100);
+        // [NEW] idleOpen：按下发生在非控制期（AI/托管回合放行的工具条 case 2）——
+        //   收尾时不能按 0x40DEFE 置 0x80 / 抢控制（见 handleTopBarButton）
+        const bool idleOpen = !state.gamePlayerControl;
+        handleTopBarButton(app, state.pendingAction - 100, idleOpen);
         renderGameFrame(app);
     }
     state.pendingAction = 0;
@@ -561,7 +584,10 @@ bool gameEventHandler(const SDL_Event* event, void* user) {
     //   左键按下保留（地图区物件提示 0x4186BE 在 byte_46CAFD 检查之前）；键盘由各分支自检
     {
         GameState& st = app.gameState();
-        if (!st.gamePlayerControl && event->type != SDL_EVENT_QUIT &&
+        // [NEW] idle 托管按钮的抬起要放行（按下已在非控制期记录 pendingAction=102）
+        const bool idleHostUp = !st.gamePlayerControl && st.pendingAction == 102 &&
+                                event->type == SDL_EVENT_MOUSE_BUTTON_UP;
+        if (!st.gamePlayerControl && !idleHostUp && event->type != SDL_EVENT_QUIT &&
             event->type != SDL_EVENT_KEY_DOWN && event->type != SDL_EVENT_MOUSE_BUTTON_DOWN) {
             return true;
         }

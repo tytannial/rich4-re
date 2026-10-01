@@ -238,4 +238,5 @@ python tools/run_tests.py --filter rent --repeat 3
 | 50_god_free_rent.txt | [HELP 42] | 大財神免付所有租金（assert no trace xfer + cash 不变） |
 | 300_skip_msg / 302_tip_perf / 304_music_resume / 306_music_rotate | M3-B | 演出可打断（msg/line/flc skip）/物件提示演出期屏蔽（press·release）/场景音乐栈续播/曲目游标换曲 |
 | 308_go_panel_surrender | M4-B | 前进面板演出期可见（0x417191）：`surrender; trace.clear` 同帧清窗 → 認輸 + 死神选人窗口内 `go panel draw cur=0` 必须为 0（**修前 75 次 → 修后 0 次**） |
+| 310_host_release | 托管 | 面板 toggle 托管（`config applied`）→ 当前回合起自动行动（`type=5` + `landmove p=0`）；AI 回合放行工具条第 3 按钮（`topbar idle host button down`）→ toggle 解除 → 下回合 `type=1` 恢复输入 |
 | 52/54/62/64/66/68/70/72/74/82/84/90/94/96/100/102/103 | 见 run_tests --matrix | 得點券/監獄/卡片格/小衰神流标/醫院/新聞命運/NPC释放/连锁收费/改建卡/公園/行業設施點缴费/查询面板clickr/请神符+老虎机tap/漲價flag/樂透投注grid/監獄保释grid/醫院出院grid |

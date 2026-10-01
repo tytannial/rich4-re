@@ -60,7 +60,7 @@
 | 14 | 股市 | 股票买卖 | ✅ | `stock_market_dialog.cpp`（0x42B58F/0x42AAFF 行情/持股切换·買/賣·走勢圖饼+折线·休市·浮雕按钮）+ `stock_system.cpp`（stockTick/buyStock/sellStock/refreshBankStockShares 交易量）+ `spec_pt_dialog.cpp`（一级市场认购 + 数字输入框）+ 控股/经营権；`advanceDay` 每日维护；详见 `42b58f-stock-panel.md` |
 | 15 | 前進 | 依载具选择骰子数（步行 1 / 机车 2 / 轿车 3） | ✅ | 前进面板 GO + 骰子选择（`game_loop.cpp` + `drawAdvancePanel`） |
 | 16 | 查詢 | 資產清單 / 地產清單 / 股票清單 | ✅ | **查詢面板 ✅ 2026-09-25**（工具条 case 6 `sub_424492`→`runModal(sub_423CF3)`：`query_dialog.cpp`；3 页签 + 地產 5 子页签/翻页 + 玩家条；資產清單 12 字段/道具 13 格/卡片 15 槽；地產清單 5 列（地點/開發狀況/價格/收費/租期）；股票清單 12 行；控件见 `ui-controls.md` §27） |
-| 17 | 託管 | 交给电脑托管（个性/资金运用比例/使用卡片道具开关） | ✅ | `ai_dialog.cpp`（`[RE 0x41E345]`，配置写回 `aiCardItem/aiPersonality/aiCashPct/aiStockPct`） |
+| 17 | 託管 | 交给电脑托管（个性/资金运用比例/使用卡片道具开关） | ✅ | `ai_dialog.cpp`（`[RE 0x41E345]`，配置写回 `aiCardItem/aiPersonality/aiCashPct/aiStockPct`）；托管后回合走 AI 全链（`beginPlayerTurn` case 5）；**解除入口 ✅ 2026-10-01**——原版工具条非控制期锁死（单人局无法解除），重写放行 AI/托管回合工具条第 3 按钮（idleOpen 跳过 0x40DEFE），场景 `310_host_release` |
 | 18 | 道具 | 使用道具（上限 9 个） | ✅ | 道具栏 UI ✅（case7 `itemBagDialog` 0x447D97：图标帧 id+1 + ×N 数量）；**13 道具效果全部实现 ✅**（2026-09-25，`item_effects.cpp`：气泡台词/目标选择模态/expireAssets/遥控骰子/娃娃槽8/时光机快照，见 §7 与 `item-effects.md`）；**AI/托管自动用道具链 ✅ 2026-09-26**（`ai_item.cpp` 0x420E9A + `funcs_420EE6` 13 目标函数；`aiCardItem&2`；`420e9a-item-ai.md`） |
 | 19 | 說明 | 帮助文档（8 分类 99 页） | ✅ | `help_dialog.cpp`（目录/翻页/继续阅读/滚动） |
 

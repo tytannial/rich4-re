@@ -1,0 +1,21 @@
+# id: 310_host_release
+# covers: [HELP 17] 托管自动行动 + AI/托管回合放行工具条「託管AI」解除入口
+# quickstart: 0,4,1
+# timeout: 300000
+wait idle 120000
+click 100 20
+wait log "ai dialog" 10000
+click 168 110
+click 499 187
+wait log "ai dialog: config applied" 10000
+wait trace "landmove p=0" 60000
+wait log "begin player 0 turn: type=5" 240000
+click 100 20
+wait log "topbar idle host button down" 10000
+wait log "ai dialog" 10000
+click 168 110
+click 499 187
+wait log "ai dialog: config applied" 10000
+wait idle 240000
+assert state errors == 0
+quit

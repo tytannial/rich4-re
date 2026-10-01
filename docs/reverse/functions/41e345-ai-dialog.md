@@ -93,7 +93,18 @@ word_4752B8[3]    个性勾选框 y = {195, 227, 259}
 - 槽数组/控件表按原版常量照搬（`kControls` 13 项屏幕坐标）
 - 滑块拖动 `10 * ((x-311)/8)`，重写 clamp 0..100（原版字节回绕）
 - 確定写回 `players[id].alive / aiCardItem / aiPersonality / aiCashPct / aiStockPct`
-- **托管效果**（AI 自动行动，`alive & 6`）依赖 M2 的 `onPlayerActionPhase`，本轮仅写回字段
+- **托管效果**（AI 自动行动，`alive & 6`）：`確定` 写回后，关闭面板触发 0x40DEFE
+  （`alive != 1` → `playerActionFlags |= 0x80`）→ 当前回合立即由 AI 接管；其后每回合
+  `beginPlayerTurn` case 5 走完整 AI 链（买股/週轉/交易/卡·道具/状态守卫/骰调/移动，
+  `418c55-ai-turn-actions.md`）。headless 实测：面板 toggle→`config applied`→
+  `begin player 0 turn: type=5`→自动掷骰/移动/买地
+- **解除托管入口（[NEW]，非原版）**：原版工具条在 `byte_46CAFD==0`（AI/托管回合）整条锁死
+  （0x418158 `if (!g_playerControl) return 0`）→ 单人局 `alive|=4` 后再无窗口打开本面板解除。
+  重写放行 AI/托管回合的工具条第 3 按钮（case 2，x∈[80,120)）：`game_loop.cpp`
+  `handleLeftButtonDown` 非控制期分支置 `pendingAction=102`、事件层放行对应 UP、
+  `handleTopBarButton(idleOpen=true)` 跳过 0x40DEFE 收尾（不置 0x80、不抢控制，AI 回合
+  状态机原样继续）；面板默认选中当前（托管）玩家槽，再点一次即 toggle 解除。
+  场景 `tests/scenarios/310_host_release.txt`
 - 原版关闭后 `sub_41906A(1)` 仅重绘游戏画面 → 重写侧下一帧自动重绘，无需调用
 - 取消（ctrl 12/右键/ESC）不写回；无音效
 
@@ -101,3 +112,5 @@ word_4752B8[3]    个性勾选框 y = {195, 227, 259}
 
 游戏内工具条第 3 按钮打开：切换选中玩家、再次点击切托管（勾选框出现）、调卡片/道具/个性/比例
 （比例条实时变化）、確定后面板关闭；重开面板与存档读档确认字段写回；取消不改变配置。
+托管自动行动：確定后当前回合即 `type=5` 自动推进；**解除**：AI/托管回合点击工具条第 3 按钮
+（新增放行入口）→ 点当前托管玩家槽 toggle → 確定 → 下回合恢复 `type=1` 等待输入。
