@@ -68,6 +68,10 @@ void Surface::fillRect(int x, int y, int w, int h, uint16_t color) {
         if (w <= 0 || h <= 0) {
             return;
         }
+    } else if (m_originX != 0 || m_originY != 0) {
+        // [NEW M4-D] scale == 1 但绘制原点非 0（宽画布模态框架）也需平移
+        x += m_originX;
+        y += m_originY;
     }
     if (x < 0) {
         w += x;

@@ -541,6 +541,8 @@ void TextRenderer::drawText(Surface& dst, const char* text, int x, int y, int al
     view.offsetY = 0;
     view.pixels = impl->buffer.data();
     SurfaceScaleGuard devGuard(dst, 1.0f);
+    // [NEW M4-D] sx/sy 已经 deviceX/deviceY（含 origin）→ blit 侧置 origin=0 防二次应用
+    SurfaceOriginGuard originGuard(dst, 0, 0);
     blitElementRegion(dst, view, sx, sy, box[0], box[1], boxW, boxH, false);
 
     // 清零已用文本区域（原版 sub_4561BE(&unk_4762E8, left, top, w, h, 0)）

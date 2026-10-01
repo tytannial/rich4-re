@@ -180,7 +180,9 @@ bool blitElement(Surface& dst, const UiFrameView& src, int x, int y, bool useCli
 bool blitElementRegion(Surface& dst, const UiFrameView& src, int x, int y, int srcX, int srcY,
                        int w, int h, bool useClipRect) {
     // [NEW M4-A2] scale != 1：逻辑目标缩放 + nearest 采样（scale == 1 走原路径，逐字节一致）
-    if (dst.scale() != 1.0f) {
+    // [NEW M4-D] scale == 1 但绘制原点非 0（宽画布模态框架）同样委托 blitScaled——
+    //   块=1px 与原路径逐字节等价，且落点经 deviceX/deviceY 应用 origin
+    if (dst.scale() != 1.0f || dst.originX() != 0 || dst.originY() != 0) {
         return blitScaled(dst, reinterpret_cast<const uint8_t*>(src.pixels), src.width * 2,
                           nullptr, x - src.offsetX, y - src.offsetY, srcX, srcY, w, h, useClipRect,
                           false);
@@ -208,7 +210,8 @@ bool blitElementRegion(Surface& dst, const UiFrameView& src, int x, int y, int s
 bool blitElementRegionOpaque(Surface& dst, const UiFrameView& src, int x, int y, int srcX,
                              int srcY, int w, int h, bool useClipRect) {
     // [NEW M4-A2] scale != 1：逻辑目标缩放 + nearest 采样（scale == 1 走原路径，逐字节一致）
-    if (dst.scale() != 1.0f) {
+    // [NEW M4-D] scale == 1 但绘制原点非 0（宽画布模态框架）同样委托 blitScaled（同上）
+    if (dst.scale() != 1.0f || dst.originX() != 0 || dst.originY() != 0) {
         return blitScaled(dst, reinterpret_cast<const uint8_t*>(src.pixels), src.width * 2,
                           nullptr, x - src.offsetX, y - src.offsetY, srcX, srcY, w, h, useClipRect,
                           true);
@@ -294,7 +297,8 @@ bool blitSpriteFrameClipped(Surface& dst, const UiImage& spr, int frame, int x, 
     }
     const UiFrameView& f = spr.frame(frame);
     // [NEW M4-A2] scale != 1：逻辑目标缩放 + nearest 采样（scale == 1 走原路径，逐字节一致）
-    if (dst.scale() != 1.0f) {
+    // [NEW M4-D] scale==1 且原点非 0（宽画布模态）同样委托 blitScaled
+    if (dst.scale() != 1.0f || dst.originX() != 0 || dst.originY() != 0) {
         return blitScaled(dst, src, f.width, palette, x - f.offsetX, y - f.offsetY, 0, 0, f.width,
                           f.height, useClipRect, false);
     }
@@ -333,7 +337,8 @@ void convertImageChannels(uint16_t* dst, const uint16_t* src, size_t pixelCount,
 void scaleSurfaceChannels(Surface& dst, int x, int y, int w, int h, const uint8_t table[32]) {
     // [RE 0x4552E7] 依据: 对元素区域逐像素做分量缩放（调用方保证区域合法）
     // [NEW M4-A2] 逻辑区域 → 设备区域（scale=1 恒等）
-    if (dst.scale() != 1.0f) {
+    // [NEW M4-D] scale==1 且原点非 0（宽画布模态）同样设备化
+    if (dst.scale() != 1.0f || dst.originX() != 0 || dst.originY() != 0) {
         const int x0 = dst.deviceX(x);
         const int y0 = dst.deviceY(y);
         const int x1 = dst.deviceX(x + w);
@@ -394,7 +399,8 @@ void blitScrolledMap(Surface& dst, const uint8_t* src, int offset) {
     }
     // [NEW M4-A2] scale != 1：每个逻辑像素展开为设备块（像素完美；scale=1 走下方原
     //   逐行环绕路径，逐字节一致）
-    if (dst.scale() != 1.0f) {
+    // [NEW M4-D] scale == 1 但绘制原点非 0（宽画布模态框架）同样走展开路径（deviceX 含 origin）
+    if (dst.scale() != 1.0f || dst.originX() != 0 || dst.originY() != 0) {
         const uint16_t* srcPx = reinterpret_cast<const uint16_t*>(src);
         const int offPix = off / 2; // 源 4 字节对齐 → 2 像素对齐
         uint16_t* base = dst.pixels();
@@ -448,7 +454,8 @@ bool saveRegion(std::vector<uint16_t>& out, const Surface& dst, int x, int y, in
         return false;
     }
     // [NEW M4-A2] 逻辑区域 → 设备区域（save/restore 同一 scale 下自洽；scale=1 恒等）
-    if (dst.scale() != 1.0f) {
+    // [NEW M4-D] scale==1 且原点非 0（宽画布模态）同样设备化
+    if (dst.scale() != 1.0f || dst.originX() != 0 || dst.originY() != 0) {
         const int x0 = dst.deviceX(x);
         const int y0 = dst.deviceY(y);
         const int x1 = dst.deviceX(x + w);
@@ -485,7 +492,8 @@ void restoreRegion(Surface& dst, const std::vector<uint16_t>& bg, int x, int y, 
         return;
     }
     // [NEW M4-A2] 逻辑区域 → 设备区域（与 saveRegion 同一 scale 下自洽；scale=1 恒等）
-    if (dst.scale() != 1.0f) {
+    // [NEW M4-D] scale==1 且原点非 0（宽画布模态）同样设备化
+    if (dst.scale() != 1.0f || dst.originX() != 0 || dst.originY() != 0) {
         const int x0 = dst.deviceX(x);
         const int y0 = dst.deviceY(y);
         const int x1 = dst.deviceX(x + w);

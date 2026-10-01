@@ -472,7 +472,9 @@ int settingsDialog(Application& app, int page) {
     state.musicSceneBefore = app.audio().currentSceneIndex();
     state.musicVolumeBefore = app.audio().musicVolume();
 
-    redrawSettings(state);
+    // [NEW M4-D] 此处原版先绘制一遍再 runModal；重写下模态进入（handler(nullptr) 0x401）
+    //   会在 dispatchModalAware 的 640 基准 origin 内重绘同一内容——提前的无 origin 绘制
+    //   会在宽画布左侧留下未平移残影（面板左缘错位观感）→ 删除，仅由模态内重绘负责
     RICH4_LOGI("settings dialog: page=%d at (%d,%d) (RE 0x411B53)", page, state.originX,
                state.originY);
     const int result = runModal(app, &settingsEventHandler, &state, 0, true, false);

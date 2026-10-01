@@ -1,4 +1,5 @@
 #include "game/app/map_objects.h"
+#include "game/app/ui_layout.h"
 
 #include <SDL3/SDL.h>
 
@@ -506,7 +507,8 @@ void showGodNarration(Application& app, const char* text) {
     clearObjectTipForPerf(app);
     Surface& dst = app.surface();
     app.text().setFont(28, 0xFFFFFF, 0x101010, kTextStyleShadow, 0);
-    app.text().drawText(dst, text, 220, 460, 7);
+    // [NEW M4-D] 旁白居中于地图区（native 220 = 440/2；宽屏随地图区中心）
+    app.text().drawText(dst, text, uiMapLogicalWidth(dst) / 2, 460, 7);
     app.renderFrame();
     // [RE 0x4528B9] 清进入前残留的打断输入（上一次按钮点击不应秒跳过旁白）
     app.consumeSkipInput();
@@ -553,13 +555,15 @@ void attachEnd(Application& app, int p) {
     int sx = 0;
     int sy = 0;
     if (!projectMapPoint(st, pl.spriteX, pl.spriteY, sx, sy, app.surface())) {
-        sx = 220;
+        // [NEW M4-D] 兜底=地图区中心（native 220 = 440/2；宽屏随地图区中心）
+        sx = uiMapLogicalWidth(app.surface()) / 2;
         sy = 260;
     }
     UiImage& img = (type >= 1 && type <= 20) ? st.cellTypeSprites[type] : st.cellTypeSprites[0];
     app.audio().playEffectSlot(19);  // [RE dword_4823E2]
     int frame = (pl.dir + 8 - st.mapRotation) & 7;
-    setClipRect(0, 40, 440, 480);
+    // [NEW M4-D] 裁剪=地图区全宽（native 440 恒等；宽屏动画不被右缘截断）
+    setClipRect(0, kTopBarH, uiMapLogicalWidth(app.surface()), 480);
     Surface& dst = app.surface();
     // [NEW M4-A2] 地图层演出：绘制随画布 scale（裁剪为设计逻辑坐标，blit 内设备化）；
     //   帧节拍为绝对截止时刻（60ms/帧，绘制耗时计入——放大后不拖慢动画）
@@ -579,7 +583,8 @@ void attachEnd(Application& app, int p) {
             app.audio().update();
         }
     }
-    setClipRect(0, 0, Surface::kWidth, Surface::kHeight);
+    // [NEW M4-D] 恢复全逻辑画布裁剪（宽画布下原 640 会截断右栏/宽地图区）
+    setClipRect(0, 0, uiLogicalWidth(dst), uiLogicalHeight(dst));
     app.audio().stopEffectSlot(19);
     st.cellTable[off + 2] = static_cast<uint8_t>(savedEnt & 0xFF);
     st.cellTable[off + 3] = static_cast<uint8_t>(savedEnt >> 8);
@@ -1043,7 +1048,9 @@ void flyObjectSprite(Application& app, int objId, int fromX, int fromY, int toX,
     // [RE 0x451A97 saveBackground] 地图区 (0,40)-(440,480) 像素快照
     constexpr int kSnapX = 0;
     constexpr int kSnapY = 40;
-    constexpr int kSnapW = 440;
+    // [NEW M4-D] 快照宽取地图区全宽（native 440 恒等；宽屏覆盖扩充后的地图区，
+    //   否则精灵飞经 x>440 段会被裁剪丢失）
+    const int kSnapW = uiMapLogicalWidth(dst);
     constexpr int kSnapH = 440;
     // [NEW M4-A2] 逻辑区域 → 设备区域快照（scale=1 恒等）
     const int kSnapXd = dst.deviceX(kSnapX);
@@ -1077,7 +1084,8 @@ void flyObjectSprite(Application& app, int objId, int fromX, int fromY, int toX,
             app.audio().update();
         }
     }
-    setClipRect(0, 0, Surface::kWidth, Surface::kHeight);
+    // [NEW M4-D] 恢复全逻辑画布裁剪
+    setClipRect(0, 0, uiLogicalWidth(dst), uiLogicalHeight(dst));
     // [RE 0x45285E] 末帧停留；末帧精灵保留屏上（原版 a1!=0 不清屏，等调用方全屏重绘
     //   才显示目标格物件）——屏幕即时模式必须显式冻结末帧
     for (int t = 0; t < holdMs; t += 5) {

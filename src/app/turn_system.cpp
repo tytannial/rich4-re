@@ -1203,8 +1203,11 @@ void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, boo
     if (preserve) {
         rx0 = std::max(0, x);
         ry0 = std::max(0, y);
-        rw = std::max(0, std::min(Surface::kWidth, x + st.eventFlc.width()) - rx0);
-        rh = std::max(0, std::min(Surface::kHeight, y + st.eventFlc.height()) - ry0);
+        // [NEW M4-D] 画布逻辑尺寸派生（宽画布下原 640 常量会截断回卷区域右侧）
+        const int lwFrame = uiLogicalWidth(app.surface());
+        const int lhFrame = uiLogicalHeight(app.surface());
+        rw = std::max(0, std::min(lwFrame, x + st.eventFlc.width()) - rx0);
+        rh = std::max(0, std::min(lhFrame, y + st.eventFlc.height()) - ry0);
         if (rw > 0 && rh > 0) {
             snapBg();
         }

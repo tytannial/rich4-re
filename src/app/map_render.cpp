@@ -742,7 +742,8 @@ void renderMap(Application& app, int centerX, int centerY) {
         }
     }
 
-    setClipRect(0, 0, Surface::kWidth, Surface::kHeight); // [NEW M4-A2] 裁剪为设计逻辑坐标
+    // [NEW M4-A2/M4-D] 恢复全逻辑画布裁剪（宽画布下原 640 常量会截断右栏/宽地图区）
+    setClipRect(0, 0, uiLogicalWidth(dst), uiLogicalHeight(dst));
 
     // [RE 0x40829D] 移动计步器（剩余步数 dword_48BAF8；定义见 renderMap 头）
     // 说明: sprintf("%d", dword_48BAF8) → dword_48BAD8 帧 (ch-40)，y=400
