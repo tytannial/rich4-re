@@ -872,3 +872,22 @@ quickstart 跳过选人界面，`blitScrolledMap` 仅用于选人界面与通关
 
 附带：debug 新命令 `settings.layout <0|1|2>`（运行期切右栏布局）；`player.cash/bank` 改值后
 `refreshPlayerPanelFor` 立即刷新右栏（脚本测试避免旧值残留）。
+
+### 18.7 实机二轮修复（2026-10-01，提交 `9d00d9f`）
+
+- **掷骰面板（GO）与骰子动画居中**：新增 `uiMapCenterShiftX`（= 地图区宽/2 − 220；
+  native 0）= 宽屏视口中心相对原版 220 的位移；`drawAdvancePanel`/命中（同源）与骰子
+  FLC 落点统一 +shift（骰子跟随视口中心）。
+- **模态绘制边界 `paintClip`（选人界面过场残影根因）**：确认→补 AI 后角色右移/面板
+  收起，元素"经过"左右黑边时残留（`blitElementOpaque`/`blitSpriteFrame`/`blitScrolledMap`/
+  `fillRect` 的 `useClipRect=false` 路径不查任何边界）。新增 `Surface::paintClip`
+  （画布逻辑边界）+ `SurfacePaintClipGuard`：`dispatchModalAware` 在 centerBase 模态
+  期间设 `(base, base+640)`，所有 UI 绘制统一与边界取交（原快速路径在边界启用时转
+  设备化路径）；`renderGameFrameWith` 重绘游戏画面时关闭（宽屏游戏画面不被裁）。
+  native 下 base=0 → 等价原版 640 屏幕边界，SHA 全等。
+- **主菜单预绘制残影**：`mainMenuScene` 进入前 `redrawMenu` 无 origin；非首次进入
+  （主菜单→选人→取消→回主菜单，`m_modalBaseFilled` 已 true 不再填黑）时左侧残留
+  无偏移按钮。预绘制包 `SurfaceOriginGuard`。
+- **main_menu named region** `menu.0..4`（脚本 clickr menu.0 进选人）。
+- 验证：native SHA 全等；wide 选人过场（帧 700..730）两侧采样全黑、取消回退单份按钮、
+  GO 面板 286 逻辑 ≈ 地图区中心；17 场景全 PASS。
