@@ -658,6 +658,10 @@ void overlayEventFlcFrame(Application& app) {
 // 顶部工具条 + 地图区 + 按 byte_49715D 布局的右侧面板；每 tick 全量重绘
 // 公开供阻塞动画流程（收租联动闪烁 0x451985）主动重绘
 void renderGameFrame(Application& app) {
+    // [NEW M4-D] 游戏世界重绘永远按画布逻辑坐标（不受 640 基准模态 origin 影响）——
+    //   模态 handler 内调用本函数重绘游戏画面时（选骰框/交易市场/台词气泡等），
+    //   模态自身绘制经 dispatchModalAware +base 居中，而游戏画面保持宽屏布局。
+    SurfaceOriginGuard ogWorld(app.surface(), 0, 0);
     // [NEW] 本函数全量重绘整个表面——光标保存背景作废，跳过陈旧 uncompose 写回
     //   （防演出/移动期间光标处旧背景脏块闪现；见 Cursor::invalidate）
     app.cursor().invalidate();
@@ -716,7 +720,8 @@ void enterGameLoop(Application& app) {
     }
     app.audio().setSwitchDays(0);
     initTurnState(app);
-    runModal(app, &gameEventHandler, &app, 16);
+    // [NEW M4-D] centerBase=false：游戏内循环不是 640 基准 UI（地图区/右栏按宽屏布局派生）
+    runModal(app, &gameEventHandler, &app, 16, false, false);
 }
 
 } // namespace rich4

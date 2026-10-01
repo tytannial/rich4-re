@@ -390,7 +390,7 @@ int numberInputDialog(Application& app, int maxValue) {
     std::snprintf(ctx.text, sizeof(ctx.text), "0");
     RICH4_LOGI("number input dialog: max=%d (RE 0x453544)", ctx.maxValue);
     app.cursor().select(kCursorPanel, 1, 0); // [RE 0x452C02] 面板交互光标
-    const int result = runModal(app, numberInputHandler, &ctx);
+    const int result = runModal(app, numberInputHandler, &ctx, 0, true, false);
     app.cursor().select(kCursorArrow, 1, 0); // 恢复默认箭头
     RICH4_LOGI("number input result: %d", result);
     return result;

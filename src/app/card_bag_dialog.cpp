@@ -334,7 +334,7 @@ void useCardDialog(Application& app) {
         s.app = &app;
         s.sheet = &sheet;
         s.cur = cur;
-        const int id = runModal(app, &cardModalHandler, &s);  // [RE 0x441C83]
+        const int id = runModal(app, &cardModalHandler, &s, 0, true, false);  // [RE 0x441C83]
         if (id <= 0) {
             break;  // 取消 → 结束
         }
@@ -505,7 +505,7 @@ int selectCardOrItemFromPlayerDialog(Application& app, int targetPlayer) {
     s.target = targetPlayer;
     s.hasItems = targetHasItems(st, targetPlayer);
     RICH4_LOGI("selectCardOrItem: target=%d items=%d (RE 0x44192A)", targetPlayer, s.hasItems);
-    return runModal(app, &giftSelectHandler, &s, 0);
+    return runModal(app, &giftSelectHandler, &s, 0, true, false);
 }
 
 // [RE 0x44476A] 嫁祸卡目标选择（a2=0, a3=0：直接选目标，AI 自动）
@@ -545,7 +545,7 @@ int passOnCardDialog(Application& app, int user) {
         if (n == 1) {
             std::snprintf(text, sizeof text, "是否嫁禍給%s？", // [RE 0x46534E]
                           playerNameNoSpace(st, ids[0]).c_str());
-            if (!confirmDialog(app, text, uiMapCenterX(app.surface()), 320)) { // [RE 0x44476A askDialog]
+            if (!confirmDialog(app, text, 220, 320)) { // [RE 0x44476A askDialog]
                 return -1;
             }
             target = ids[0];

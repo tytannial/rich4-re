@@ -21,9 +21,11 @@ int uiMapLogicalWidth(const Surface& surface);
 inline int uiPanelLogicalX(const Surface& surface) { return uiMapLogicalWidth(surface); }
 // 右栏绘制原点偏移（= 右栏右移量；右栏函数内坐标保持 440 基准，经 SurfaceOriginGuard 平移）
 inline int uiPanelOffsetX(const Surface& surface) { return uiMapLogicalWidth(surface) - 440; }
-// 全屏居中锚点（主对话框居中；native 320 = 640/2）
-inline int uiScreenCenterX(const Surface& surface) { return uiLogicalWidth(surface) / 2; }
-// 地图区居中锚点（地图内询问框/元素；native 220 = 440/2；宽屏随地图区中心）
-inline int uiMapCenterX(const Surface& surface) { return uiMapLogicalWidth(surface) / 2; }
+// [NEW M4-D] 640 基准 UI（主菜单/选人/模态）水平居中偏移：native/free=0；wide(853)=106。
+//   由 Application::dispatchModalAware 统一消费（事件坐标 -base、绘制原点 +base）
+inline int uiModalBaseX(const Surface& surface) {
+    const int w = (uiLogicalWidth(surface) - 640) / 2;
+    return w > 0 ? w : 0;
+}
 
 } // namespace rich4

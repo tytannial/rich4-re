@@ -423,7 +423,7 @@ void aiDialog(Application& app) {
         ++st.slotCount;
     }
     RICH4_LOGI("ai dialog (RE 0x41E345): %d human slots, selected=%d", st.slotCount, st.selected);
-    runModal(app, &aiDialogEventHandler, &st);
+    runModal(app, &aiDialogEventHandler, &st, 0, true, false);
 }
 
 } // namespace rich4

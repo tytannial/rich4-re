@@ -26,11 +26,15 @@ public:
     // event == nullptr 表示"模态进入/重绘"请求，对应 WM_USER+1(0x401)。
     using Handler = bool (*)(const SDL_Event* event, void* user);
 
-    void push(Handler handler, void* user);
+    void push(Handler handler, void* user, bool centerBase = true, bool fillBars = true);
     void pop();
     Handler top() const;
     void* topUser() const;
     int depth() const { return m_depth; }
+    // [NEW M4-D] 栈顶是否为"640 基准 UI"（主菜单/选人/游戏内模态；游戏内循环 push 时传 false）
+    bool topCenterBase() const { return m_depth > 0 && m_stack[m_depth - 1].centerBase; }
+    // [NEW M4-D] 栈顶是否铺底（全屏剧场模态 → 宽画布两侧填黑；叠加式面板 → 保留游戏画面）
+    bool topFillBars() const { return m_depth > 0 && m_stack[m_depth - 1].fillBars; }
 
     bool dispatch(const SDL_Event& event);
 
@@ -51,6 +55,8 @@ private:
     struct Frame {
         Handler handler = nullptr;
         void* user = nullptr;
+        bool centerBase = true;
+        bool fillBars = true;
     };
 
     std::array<Frame, kMaxDepth> m_stack{};
@@ -65,6 +71,11 @@ private:
 
 // [RE 0x4018E7] runModal（定义见 src/app/event_stack.cpp）
 // tickMs > 0 时按该间隔向栈顶处理器派发 SDL_EVENT_TIMER（原版 SetTimer/WM_TIMER）
-int runModal(Application& app, EventStack::Handler handler, void* user, uint32_t tickMs = 0);
+// centerBase：本层是否为"640 基准 UI"（宽画布下由 dispatchModalAware 自动水平居中）；
+//   游戏内循环（enterGameLoop）传 false（地图区/右栏按宽屏布局派生绘制）
+// fillBars：全屏剧场模态（银行/股市等铺底界面）→ 宽画布两侧填黑一次；
+//   叠加式面板（设置/询问框/台词等不铺底）传 false（保留游戏画面），与 centerBase 正交
+int runModal(Application& app, EventStack::Handler handler, void* user, uint32_t tickMs = 0,
+             bool centerBase = true, bool fillBars = true);
 
 } // namespace rich4

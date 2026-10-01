@@ -461,11 +461,11 @@ void helpDialog(Application& app) {
         return;
     }
     state.ui = &uiImage;
-    state.originX = uiScreenCenterX(app.surface()) - uiImage.frame(0).width / 2;
+    state.originX = 320 - uiImage.frame(0).width / 2;
     state.originY = 240 - uiImage.frame(0).height / 2;
 
     RICH4_LOGI("help dialog at (%d,%d) (RE 0x44EB39)", state.originX, state.originY);
-    runModal(app, &helpEventHandler, &state);
+    runModal(app, &helpEventHandler, &state, 0, true, false);
 }
 
 } // namespace rich4

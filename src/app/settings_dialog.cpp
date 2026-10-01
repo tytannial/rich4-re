@@ -346,7 +346,7 @@ void applyControl(SettingsState& state, int control, int rx, int ry) {
             if (state.page != 0) {
                 // [RE 0x4103A3] 游戏内菜单：确认框 YES → postModalExit(control-2)（1/2/3）
                 // 原版: sub_453A32(320,200) 确认后 postModalExit(dword_474D74 - 2)
-                if (confirmDialog(*state.app, nullptr, uiScreenCenterX(state.app->surface()), 200)) {
+                if (confirmDialog(*state.app)) {
                     state.app->events().requestExit(control - 2);
                 }
             } else if (control == 3) {
@@ -460,7 +460,7 @@ int settingsDialog(Application& app, int page) {
     state.ui = &uiImage;
 
     // 对话框位置（原版 v11 = 320 - 帧0宽/2, v12 = 240 - 帧0高/2）
-    state.originX = uiScreenCenterX(app.surface()) - uiImage.frame(0).width / 2;
+    state.originX = 320 - uiImage.frame(0).width / 2;
     state.originY = 240 - uiImage.frame(0).height / 2;
 
     // 复制当前设置（原版 WM_USER+1: memcpy(&byte_48BB48, &byte_497158, 16)）
@@ -475,7 +475,7 @@ int settingsDialog(Application& app, int page) {
     redrawSettings(state);
     RICH4_LOGI("settings dialog: page=%d at (%d,%d) (RE 0x411B53)", page, state.originX,
                state.originY);
-    const int result = runModal(app, &settingsEventHandler, &state);
+    const int result = runModal(app, &settingsEventHandler, &state, 0, true, false);
     // [RE 0x411B53] 游戏内菜单返回值：1=重新遊戲(sub_411AA3) / 2=認輸投降(sub_411AE0) /
     //               3=結束遊戲(sub_411B46)
     if (page != 0) {

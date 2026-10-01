@@ -49,6 +49,12 @@ public:
     // 对应原版 InvalidateRect/WM_PAINT 驱动的表面绘制
     void renderFrame();
 
+    // [NEW M4-D] 640 基准 UI 派发（宽画布水平居中框架）：
+    //   栈顶为 centerBase 层且逻辑画布宽 > 640 时——进入时清两侧、事件鼠标坐标平移、
+    //   绘制原点偏移（SurfaceOriginGuard）包住 handler；否则恒等直通。
+    //   event == nullptr 表示"模态进入/重绘"（原版 PostMessage 0x401）。
+    bool dispatchModalAware(const SDL_Event* event);
+
     bool running() const { return m_running; }
     void quit() { m_running = false; }
 
@@ -248,6 +254,7 @@ private:
     TextRenderer m_text;
     bool m_uiClicked = false;
     bool m_skipInput = false; // [RE 0x4528B9/0x4544F6/0x45144F] 演出打断标志
+    bool m_modalBaseFilled = false; // [NEW M4-D] 640 基准模态两侧已清除（进入时一次）
     bool m_enterSwitchMusic = false; // [RE 0x401CFC/0x401D14] enterGameLoop a1
     std::string m_shotPath;
     int m_shotFrame = 0;

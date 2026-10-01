@@ -55,7 +55,7 @@ void specPtBuyStockDialog(Application& app, int specPtIdx) {
         const std::string name = big5ToUtf8(reinterpret_cast<const char*>(sp.pad4), 20);
         char text[192];
         std::snprintf(text, sizeof(text), "%s\n\n每股售價%d\n\n是否認購股份？", name.c_str(), per);
-        if (!confirmDialog(app, text, uiMapCenterX(app.surface()), 320)) {
+        if (!confirmDialog(app, text, 220, 320)) {
             return;
         }
         const int v = numberInputDialog(app, maxBuy);

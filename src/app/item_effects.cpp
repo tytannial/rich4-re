@@ -169,7 +169,7 @@ void playLine(Application& app, int player, const char* line, int exprFrame) {
         st.viewSmoothY = st.players[player].spriteY;
         st.viewScrolling = false;
     }
-    runModal(app, &itemLineHandler, &ctx, 16);
+    runModal(app, &itemLineHandler, &ctx, 16, true, false);
     st.manualView = savedMv;
     st.viewSmoothX = savedSx;
     st.viewSmoothY = savedSy;
@@ -1114,7 +1114,7 @@ int remoteDiceDialog(Application& app) {
     DicePickCtx c;
     c.app = &app;
     c.sheet = &sheet;
-    return runModal(app, &dicePickHandler, &c, 16);
+    return runModal(app, &dicePickHandler, &c, 16, true, false);
 }
 
 }  // namespace

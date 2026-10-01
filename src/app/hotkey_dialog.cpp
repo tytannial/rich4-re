@@ -367,12 +367,12 @@ void hotkeyDialog(Application& app) {
         return;
     }
     state.ui = &uiImage;
-    state.originX = uiScreenCenterX(app.surface()) - uiImage.frame(1).width / 2;
+    state.originX = 320 - uiImage.frame(1).width / 2;
     state.originY = 240 - uiImage.frame(1).height / 2;
 
     RICH4_LOGI("hotkey dialog at (%d,%d) (RE 0x411A86)", state.originX, state.originY);
     // [RE 0x4018E7] runModal(sub_411122)；[RE 0x411122] SetTimer(0xFA=250ms) 驱动编辑闪烁
-    runModal(app, &hotkeyEventHandler, &state, 250);
+    runModal(app, &hotkeyEventHandler, &state, 250, true, false);
 }
 
 } // namespace rich4

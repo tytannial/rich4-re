@@ -342,15 +342,14 @@ uint32_t dateDialog(Application& app, uint32_t currentDate) {
     }
 
     // 对话框居中（原版 v11 = 320 - 帧2宽/2, v12 = 240 - 帧2高/2）
-    // [NEW M4-D] 居中派生（宽屏=逻辑画布中心；native 320/240）
-    state.originX = uiScreenCenterX(app.surface()) - uiImage.frame(kFrameBg).width / 2;
+    state.originX = 320 - uiImage.frame(kFrameBg).width / 2;
     state.originY = 240 - uiImage.frame(kFrameBg).height / 2;
 
     redrawDateDialog(state);
     RICH4_LOGI("date dialog at (%d,%d) date=%u-%u-%u (RE 0x4119E3)", state.originX, state.originY,
                (currentDate >> 16) & 0xFFFF, (currentDate >> 8) & 0xFF, currentDate & 0xFF);
     // [RE 0x4018E7] runModal(sub_410AC3)
-    return static_cast<uint32_t>(runModal(app, &dateDialogEventHandler, &state));
+    return static_cast<uint32_t>(runModal(app, &dateDialogEventHandler, &state, 0, true, false));
 }
 
 } // namespace rich4

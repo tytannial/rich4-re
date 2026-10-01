@@ -135,7 +135,7 @@ bool confirmDialog(Application& app, const char* text, int cx, int cy) {
     saveRegion(bg, app.surface(), st.originX, st.originY, w, h);
     RICH4_LOGI("confirm dialog at (%d,%d)%s (RE 0x453A32)", cx, cy,
                text ? " +text (RE 0x440BA8)" : "");
-    const int result = runModal(app, &confirmEventHandler, &st);
+    const int result = runModal(app, &confirmEventHandler, &st, 0, true, false);
     restoreRegion(app.surface(), bg, st.originX, st.originY, w, h);
     return result == 1;
 }

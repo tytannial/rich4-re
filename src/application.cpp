@@ -2,6 +2,7 @@
 
 #include "game/app/debug/debug.h"
 #include "game/app/game_init.h"
+#include "game/app/ui_layout.h"
 #include "game/app/game_shutdown.h"
 #include "game/app/main_menu.h"
 #include "game/app/load_dialog.h"
@@ -235,13 +236,74 @@ void Application::pumpEvents() {
         // [RE 0x4019DD] wndProc
         // 依据: 0x4019DD 窗口过程; WM_DESTROY(2) 走 sub_401815+PostQuitMessage,
         // 默认分支转发给 dword_48A010[nIDEvent]（模态栈顶），无处理器时 DefWindowProcA
-        const bool consumed = m_events.dispatch(event);
+        // [NEW M4-D] 经 640 基准模态框架（宽画布居中；游戏内循环/非模态恒等直通）
+        const bool consumed = dispatchModalAware(&event);
         if (!consumed) {
             defaultEvent(event);
         }
         // [RE 0x401010] 钩子累积 word_46CB07 键位状态（定义见 handleKeyboardHook 依赖）
         m_input.handleEvent(event);
     }
+}
+
+// [NEW M4-D] 640 基准 UI 派发：宽画布下"主菜单/选人/游戏内模态"整体水平居中。
+// 依据: 原版 UI 坐标全部基于 640x480 全屏；重写宽画布（wide 逻辑 853 / --canvas）下若
+//   原样直绘会贴左、右侧露出旧画面（银行/股市等全屏模态实机可见）。
+// 方案: 栈顶为 centerBase 层且逻辑宽 > 640 时——
+//   ① 进入该层时把两侧 (0..base)/(base+640..宽) 清黑（一次；模态绘制只覆盖 640 基准区）；
+//   ② 事件鼠标坐标平移 -base（handler 命中逻辑保持原版 640 基准，与 named region 同源）；
+//   ③ 绘制原点 +base（SurfaceOriginGuard 包住 handler 内全部绘制，与右栏 origin 机制同）。
+//   native/free（逻辑 640）与游戏内循环（centerBase=false）完全恒等直通。
+bool Application::dispatchModalAware(const SDL_Event* event) {
+    const int base = uiModalBaseX(m_surface);
+    if (!(base > 0 && m_events.depth() > 0 && m_events.topCenterBase())) {
+        m_modalBaseFilled = false;
+        if (!event) {
+            if (EventStack::Handler h = m_events.top()) {
+                return h(nullptr, m_events.topUser());
+            }
+            return false;
+        }
+        return m_events.dispatch(*event);
+    }
+    // 两侧填黑仅对"全屏剧场模态"（铺底界面）：叠加式面板（设置/询问框/台词等，fillBars=false）
+    //   保留游戏画面；已填状态在 overlay 模态嵌套期间保持不变（如银行内弹确认框）
+    if (m_events.topFillBars() && !m_modalBaseFilled) {
+        m_modalBaseFilled = true;
+        const int lw = uiLogicalWidth(m_surface);
+        const int lh = uiLogicalHeight(m_surface);
+        m_surface.fillRect(0, 0, base, lh, 0);
+        if (base + 640 < lw) {
+            m_surface.fillRect(base + 640, 0, lw - base - 640, lh, 0);
+        }
+    }
+    SDL_Event shifted;
+    const SDL_Event* ev = event;
+    if (event) {
+        switch (event->type) {
+            case SDL_EVENT_MOUSE_MOTION:
+                shifted = *event;
+                shifted.motion.x = event->motion.x - static_cast<float>(base);
+                ev = &shifted;
+                break;
+            case SDL_EVENT_MOUSE_BUTTON_DOWN:
+            case SDL_EVENT_MOUSE_BUTTON_UP:
+                shifted = *event;
+                shifted.button.x = event->button.x - static_cast<float>(base);
+                ev = &shifted;
+                break;
+            default:
+                break;
+        }
+    }
+    SurfaceOriginGuard og(m_surface, base, 0);
+    if (!ev) {
+        if (EventStack::Handler h = m_events.top()) {
+            return h(nullptr, m_events.topUser());
+        }
+        return false;
+    }
+    return m_events.dispatch(*ev);
 }
 
 // [NEW M4-A2] free/wide：按窗口 drawable 重建画布与逻辑呈现（uiScale = 画布高/480）
@@ -256,6 +318,7 @@ void Application::applyWindowResize() {
     // 旧画布上的光标保存块作废（按旧区域写回新画布可能越界）；区域快照的恢复有大小
     // 校验兜底（restoreRegion 尺寸不匹配直接返回）
     m_cursor.invalidate();
+    m_modalBaseFilled = false; // [NEW M4-D] 画布尺寸变化 → 640 基准模态两侧需重填
     m_surface.destroy();
     if (!m_surface.create(m_renderer.handle(), w, h)) {
         RICH4_LOGE("applyWindowResize: surface recreate failed (%dx%d)", w, h);
