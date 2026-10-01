@@ -54,12 +54,26 @@ bool Application::init(const std::string& gameDir, bool headless, const DisplayC
     int canvasH = display.canvasHeight;
     m_autoScale = display.autoScale;
     if (m_autoScale) {
+        // [NEW M4-D 实机] free/wide：画布 = **逻辑尺寸**（设备/缩放比），绘制 scale 恒 1；
+        //   窗口呈现由 SDL logical presentation 放大（nearest）——绘制成本降至 native 同级，
+        //   彻底消除"分辨率越大越慢"（原"设备画布 + 块展开"成本 ∝ 设备像素）。
         int dw = 0;
         int dh = 0;
         SDL_GetWindowSizeInPixels(m_window.handle(), &dw, &dh);
-        canvasW = dw > 0 ? dw : display.windowWidth;
-        canvasH = dh > 0 ? dh : display.windowHeight;
-        drawScale = static_cast<float>(canvasH) / Surface::kHeight;
+        if (dw <= 0) {
+            dw = display.windowWidth;
+        }
+        if (dh <= 0) {
+            dh = display.windowHeight;
+        }
+        const float deviceScale = static_cast<float>(dh) / Surface::kHeight;
+        canvasW = static_cast<int>(dw / deviceScale + 0.5f);
+        if (canvasW < 640) {
+            canvasW = 640;
+        }
+        canvasH = Surface::kHeight;
+        drawScale = 1.0f;
+        RICH4_LOGI("autoScale: logical canvas %dx%d (device %dx%d)", canvasW, canvasH, dw, dh);
     } else {
         if (canvasW <= 0) {
             canvasW = static_cast<int>(Surface::kWidth * drawScale + 0.5f);
@@ -328,7 +342,16 @@ void Application::applyWindowResize() {
     int w = 0;
     int h = 0;
     SDL_GetWindowSizeInPixels(m_window.handle(), &w, &h);
-    if (w <= 0 || h <= 0 || (w == m_surface.width() && h == m_surface.height())) {
+    if (w <= 0 || h <= 0) {
+        return;
+    }
+    // [NEW M4-D 实机] 画布 = 逻辑尺寸（设备/缩放比），绘制 scale 恒 1；呈现由 SDL
+    //   logical presentation 放大——绘制成本与 native 同级（原设备画布成本 ∝ 分辨率）。
+    const float deviceScale = static_cast<float>(h) / Surface::kHeight;
+    const int lw = std::max(640, static_cast<int>(w / deviceScale + 0.5f));
+    const int lh = Surface::kHeight;
+    if (lw == m_surface.width() && lh == m_surface.height()) {
+        m_renderer.setLogicalSize(lw, lh); // 等比缩放：逻辑尺寸未变，仅同步呈现
         return;
     }
     // 旧画布上的光标保存块作废（按旧区域写回新画布可能越界）；区域快照的恢复有大小
@@ -336,14 +359,13 @@ void Application::applyWindowResize() {
     m_cursor.invalidate();
     m_modalBaseFilled = false; // [NEW M4-D] 画布尺寸变化 → 640 基准模态两侧需重填
     m_surface.destroy();
-    if (!m_surface.create(m_renderer.handle(), w, h)) {
-        RICH4_LOGE("applyWindowResize: surface recreate failed (%dx%d)", w, h);
+    if (!m_surface.create(m_renderer.handle(), lw, lh)) {
+        RICH4_LOGE("applyWindowResize: surface recreate failed (%dx%d)", lw, lh);
         return;
     }
-    m_surface.setScale(static_cast<float>(h) / Surface::kHeight);
-    m_renderer.setLogicalSize(w, h);
-    RICH4_LOGI("window resize: canvas %dx%d scale=%.3f (M4-A2 free/wide)", w, h,
-               static_cast<double>(m_surface.scale()));
+    m_surface.setScale(1.0f);
+    m_renderer.setLogicalSize(lw, lh);
+    RICH4_LOGI("window resize: logical canvas %dx%d (device %dx%d)", lw, lh, w, h);
 }
 
 void Application::mouseDevicePos(int& x, int& y) const {

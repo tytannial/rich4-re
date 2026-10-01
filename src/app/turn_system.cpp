@@ -1201,12 +1201,16 @@ void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, boo
         }
     };
     if (preserve) {
-        rx0 = std::max(0, x);
+        // [NEW M4-D 实机] 回卷区域 = FLC 实际绘制矩形——含 440 素材在宽地图区的居中偏移
+        //   （与 drawEventFlcFrame 同源）：若只回卷 x 起，宽屏下叠帧透明区会透出未恢复的
+        //   上一帧像素（警车/救护车押解入狱、住院动画的拖影残影）
+        const int drawX = x + (uiMapLogicalWidth(app.surface()) - 440) / 2;
+        rx0 = std::max(0, drawX);
         ry0 = std::max(0, y);
         // [NEW M4-D] 画布逻辑尺寸派生（宽画布下原 640 常量会截断回卷区域右侧）
         const int lwFrame = uiLogicalWidth(app.surface());
         const int lhFrame = uiLogicalHeight(app.surface());
-        rw = std::max(0, std::min(lwFrame, x + st.eventFlc.width()) - rx0);
+        rw = std::max(0, std::min(lwFrame, drawX + st.eventFlc.width()) - rx0);
         rh = std::max(0, std::min(lhFrame, y + st.eventFlc.height()) - ry0);
         if (rw > 0 && rh > 0) {
             snapBg();
