@@ -920,3 +920,12 @@ quickstart 跳过选人界面，`blitScrolledMap` 仅用于选人界面与通关
   "440 素材在宽地图区居中偏移"（+106）→ 宽屏下回卷区缺右侧 106 逻辑像素，透明区透出
   上一帧像素（警车/救护车拖影）。回卷区改为与 `drawEventFlcFrame` 同源。
 - 验证：21 场景全 PASS（18 native + 3 wide，含 54_jail）。
+
+### 18.10 线性放大过滤（2026-10-01，提交 `2e91ae8`）
+
+- 用户决策：字体不做高分专项，接受"低分辨率（逻辑画布）输出 + 窗口拉伸"；要求
+  呈现放大用**线性过滤**减少马赛克感。
+- `Surface::setLinearFilter`（默认线性）：逻辑画布 → 窗口的呈现放大用
+  `SDL_SCALEMODE_LINEAR`（1:1 呈现时两模式等价，native 不受影响）。
+- `DisplayConfig.linearFilter` + `--filter nearest|linear`（默认 linear；需要像素
+  完美时可回退 nearest）。模拟 1.5x 对比：linear 明显平滑。
