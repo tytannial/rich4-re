@@ -1114,7 +1114,8 @@ int remoteDiceDialog(Application& app) {
     DicePickCtx c;
     c.app = &app;
     c.sheet = &sheet;
-    return runModal(app, &dicePickHandler, &c, 16, true, false);
+    // [NEW M4-D 实机] 选骰框 = 游戏世界交互（diceHit 为画布坐标）→ centerBase=false
+    return runModal(app, &dicePickHandler, &c, 16, false, false);
 }
 
 }  // namespace

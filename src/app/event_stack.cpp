@@ -84,15 +84,31 @@ int runModal(Application& app, EventStack::Handler handler, void* user, uint32_t
             const bool step = virtualClock();
             if (step) {
                 clockAdvanceMs(interval);
-            }
-            const uint64_t now = nowMs();
-            if (step || now >= nextTick) {
-                nextTick = now + interval;
+                nextTick = nowMs() + interval;
                 SDL_Event timerEvent{};
                 timerEvent.type = kModalTimerEvent;
                 timerEvent.user.code = 0;
                 // [NEW M4-D] 经 dispatchModalAware（640 基准模态宽画布居中；游戏内循环直通）
                 app.dispatchModalAware(&timerEvent);
+            } else {
+                // [NEW M4-C2 实机] tick 追补：绘制耗时超过 interval（放大窗口后每帧变慢）时，
+                //   原实现 `nextTick = now + interval` 会把绘制耗时计入 tick 周期（20ms 绘制 →
+                //   20ms tick → 骰子/行走/位移等按 tick 推进的动画整体拖慢）。改为按 interval
+                //   网格累加 nextTick，欠账时连发补拍（上限 4/轮防雪崩），tick 周期稳定 ~interval。
+                int catchUp = 0;
+                uint64_t now = nowMs();
+                while (now >= nextTick && catchUp < 4) {
+                    nextTick += interval;
+                    SDL_Event timerEvent{};
+                    timerEvent.type = kModalTimerEvent;
+                    timerEvent.user.code = 0;
+                    app.dispatchModalAware(&timerEvent);
+                    ++catchUp;
+                    now = nowMs();
+                }
+                if (now >= nextTick) {
+                    nextTick = now + interval; // 长时间卡顿追不上 → 丢弃欠账防雪崩
+                }
             }
         }
     }

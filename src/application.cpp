@@ -482,8 +482,15 @@ void Application::renderFrame() {
     // [NEW M4-A2] free/wide：resize 后重建画布（须在 beginFrame 前）
     if (m_resizePending) {
         applyWindowResize();
+        // [NEW M4-D] 画布重建后内容为空；tickMs=0 的层（主菜单/多数模态）不主动重绘，
+        //   会保留空画布/旧像素（实机"放大缩小窗口后留残影"）→ 强制重绘栈顶一次
+        m_forceRepaint = true;
     }
     m_renderer.beginFrame();
+    if (m_forceRepaint) {
+        m_forceRepaint = false;
+        dispatchModalAware(nullptr);
+    }
 
     // [PORT WINMM:DirectSound] 音频混音喂流（每帧混合活动音效/音乐）
     m_audio.update();

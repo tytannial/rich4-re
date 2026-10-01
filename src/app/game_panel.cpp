@@ -97,8 +97,10 @@ void drawPlayerBar(Application& app) {
     if (state.panelFrame0.frameCount() <= 4) {
         return;
     }
-    const int panelX = uiPanelLogicalX(dst); // [NEW M4-D] 宽屏右栏右移
-    blitElementOpaque(dst, state.panelFrame0.frame(4), panelX, 0);
+    // [NEW M4-D 实机] 函数内坐标保持 440 基准（原版）：宽屏右移由上方 SurfaceOriginGuard
+    //   统一 +uiPanelOffsetX 完成——此处若再取 uiPanelLogicalX 会双重偏移，背景帧被画到
+    //   屏外（右栏背景缺失 → 花屏/金额更新残影）
+    blitElementOpaque(dst, state.panelFrame0.frame(4), 440, 0);
 
     const int v1 = state.currentPlayer;
     if (v1 >= state.playerCount && v1 != 8) {

@@ -1015,6 +1015,7 @@ bool cmdPlayerCash(Application& app, const std::vector<std::string>& a, std::str
         return false;
     }
     app.gameState().players[p].cash = parseInt(a[2]);
+    refreshPlayerPanelFor(app, p); // [NEW] 右栏金额立即刷新（脚本改钱后避免旧值残留）
     return true;
 }
 
@@ -1026,6 +1027,7 @@ bool cmdPlayerBank(Application& app, const std::vector<std::string>& a, std::str
         return false;
     }
     app.gameState().players[p].bank = parseInt(a[2]);
+    refreshPlayerPanelFor(app, p); // [NEW] 右栏金额立即刷新
     return true;
 }
 
@@ -1390,6 +1392,19 @@ bool cmdRng(Application& app, const std::vector<std::string>& a, std::string& er
 bool cmdSettingsAnim(Application& app, const std::vector<std::string>& a, std::string& err) {
     if (!argCount(a, 1, err, "settings.anim <0|1>")) return false;
     app.gameState().settings[1] = static_cast<uint8_t>(parseInt(a[1]) & 1);
+    return true;
+}
+
+// [NEW] settings.layout <0|1|2>：运行期改画面布局（0/1=完整信息面板 / 2=玩家条；
+//   测试右栏各布局用；下一帧全量重绘生效）
+bool cmdSettingsLayout(Application& app, const std::vector<std::string>& a, std::string& err) {
+    if (!argCount(a, 2, err, "settings.layout <0|1|2>")) return false;
+    const int v = parseInt(a[1]);
+    if (v < 0 || v > 2) {
+        err = "settings.layout: 0..2";
+        return false;
+    }
+    app.gameState().settings[5] = static_cast<uint8_t>(v);
     return true;
 }
 
@@ -2377,6 +2392,7 @@ const Cmd kCmds[] = {
     {"hosp", cmdHosp},
     {"rng", cmdRng},
     {"settings.anim", cmdSettingsAnim},
+{"settings.layout", cmdSettingsLayout},
     {"seed", cmdSeed},
     {"assert", cmdAssert},
     {"trace.clear", cmdTraceClear},

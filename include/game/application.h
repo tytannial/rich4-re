@@ -255,6 +255,7 @@ private:
     bool m_uiClicked = false;
     bool m_skipInput = false; // [RE 0x4528B9/0x4544F6/0x45144F] 演出打断标志
     bool m_modalBaseFilled = false; // [NEW M4-D] 640 基准模态两侧已清除（进入时一次）
+    bool m_forceRepaint = false;    // [NEW M4-D] resize 后强制重绘当前模态（tickMs=0 层不自绘）
     bool m_enterSwitchMusic = false; // [RE 0x401CFC/0x401D14] enterGameLoop a1
     std::string m_shotPath;
     int m_shotFrame = 0;

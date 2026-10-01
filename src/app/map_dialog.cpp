@@ -79,7 +79,9 @@ void mapDialog(Application& app) {
     RICH4_LOGI("map dialog (RE 0x40A9BD)");
     MapDialogState st;
     st.app = &app;
-    runModal(app, &mapDialogEventHandler, &st);
+    // [NEW M4-D 实机] 大地图是"叠加在游戏画面上"（0x40A801 不清屏；底图 @(20,60)）——
+    //   fillBars=false：宽画布下两侧保留游戏画面，不填黑（填黑会裁掉两侧游戏画面）
+    runModal(app, &mapDialogEventHandler, &st, 0, true, false);
 }
 
 } // namespace rich4

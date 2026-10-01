@@ -109,7 +109,8 @@ int selectFacilityDialog(Application& app, int flag) {
     FacilityState st;
     st.app = &app;
     RICH4_LOGI("select facility dialog (RE 0x440AAC)");
-    return runModal(app, &facilityEventHandler, &st);
+    // [NEW M4-D 实机] 设施选择面板叠加在地图上 → 不填黑两侧
+    return runModal(app, &facilityEventHandler, &st, 0, true, false);
 }
 
 } // namespace rich4

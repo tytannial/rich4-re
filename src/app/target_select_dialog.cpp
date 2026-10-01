@@ -375,7 +375,9 @@ int selectTargetDialog(Application& app, int mode, bool allowEmptyLand) {
         st.viewScrolling = false;
     }
     app.cursor().select(5, 1, 0);
-    const int r = runModal(app, &targetSelHandler, &c, 16);
+    // [NEW M4-D 实机] 目标选择 = 游戏世界交互（命中为画布坐标 mapHitRegions）→
+    //   不做 640 基准偏移（centerBase=false），也不填黑两侧
+    const int r = runModal(app, &targetSelHandler, &c, 16, false, false);
     st.manualView = c.savedManualView;
     st.viewSmoothX = c.savedViewX;
     st.viewSmoothY = c.savedViewY;

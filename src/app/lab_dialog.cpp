@@ -215,7 +215,8 @@ void labDevelopDialog(Application& app, Corp& cp) {    // [NEW] named region：5
             st.app = &app;
             st.sheet = &sheet;
             st.sub = cp.sub;
-            idx = runModal(app, &labEventHandler, &st);
+            // [NEW M4-D 实机] 研究所面板叠加在地图上 → 不填黑两侧
+    idx = runModal(app, &labEventHandler, &st, 0, true, false);
         } else {
             RICH4_LOGW("labDevelop: panel.mkf[11] unavailable (RE 0x44101D)");
         }
