@@ -799,3 +799,64 @@ quickstart 跳过选人界面，`blitScrolledMap` 仅用于选人界面与通关
   16ms tick + 内部时间门控（行走动画 60ms/帧、位移按 `kMoveSpeed` 折算），与原版默认档
   节奏已独立校准。逐档状态机对齐（快/慢档全链）如需另立专项。
 - 详见 `docs/formats/cfg.md`「设置字节消费点复核」表。
+
+## 18. 批次 C2 + D 收尾实施记录（2026-10-01，✅ 已落地）
+
+**提交线**：`b7410b7`(settings 消费点) → `9ad4270`(对话框派生) → `1d6e678`(640 基准框架)
+→ `1c3a3a0`(原点全路径) → `77ab5c8`(区域脏区) → `d2bb9af`(date/合成输入收口)。
+
+### 18.1 640 基准 UI 宽屏居中框架（1d6e678）
+
+- 原版全部 UI 坐标基于 640×480；宽画布（wide 逻辑 853 / `--canvas`）下模态/主菜单
+  贴左、右侧露旧画面（银行实机暴露）。**框架**：`Application::dispatchModalAware(event)`——
+  栈顶为 centerBase 层（`EventStack::Frame.centerBase`，`runModal(..., centerBase, fillBars)`）
+  且逻辑宽 > 640 时：进入时**两侧填黑一次**（仅全屏剧场模态 `fillBars=true`；叠加式保留
+  游戏画面）、事件鼠标坐标 -base、绘制原点 +base（SurfaceOriginGuard 包住 handler）。
+- `uiModalBaseX = (逻辑宽-640)/2`（native/free=0；wide=106）；游戏内循环
+  `runModal(..., false, false)` 直通。叠加式模态 17 处 `fillBars=false`
+  （设置/帮助/热键/日期/询问框/数字框/消息/台词/选骰/交易市场/AI/卡片道具/住院保释）。
+- `renderGameFrame` 入口强制 OriginGuard(0,0)：模态内重绘游戏画面保持宽屏布局，
+  模态自身面板居中（两者混叠场景正确）。
+- **C2 坐标回退**：confirm 14 处/4 主对话框架/trade 详情回 640 基准常数（框架统一平移，
+  避免双重偏移）；uiScreenCenterX/uiMapCenterX helper 移除。
+
+### 18.2 绘制原点全路径修正（1c3a3a0）
+
+`scale==1` 快速路径此前未应用 origin（`--canvas` 宽画布命中/绘制不一致、面板不居中）：
+- `blitElementRegion`/`Opaque`、`blitSpriteFrameClipped`、`blitScrolledMap`、
+  `scaleSurfaceChannels`、`saveRegion`/`restoreRegion`、`Surface::fillRect`、
+  `minigame blitSprScaled` —— origin≠0 时统一走设备化路径（1px 块与 native 等价）。
+- `text.cpp` 落点已 deviceX/deviceY（含 origin）→ blit 侧显式 origin=0 防二次应用。
+- `settingsDialog` 删除 runModal 前预绘制（模态进入 0x401 已在 origin 内重绘同内容；
+  提前无 origin 绘制在宽画布左侧留残影——`--canvas`/wide 实拍定位）；`dateDialog`
+  同类预绘制改包 SurfaceOriginGuard。
+- **世界锚定坐标派生**：showGodNarration 旁白居中地图区、attachEnd 飘走兜底/裁剪、
+  flyObjectSprite 快照区=地图区全宽、renderMap 恢复裁剪=逻辑画布、playEventFlc
+  preserve 回卷钳制=逻辑画布。
+
+### 18.3 区域级脏区（77ab5c8）
+
+- `game_panel.h` 脏区位（bit0 工具条/bit1 地图场景层/bit2 玩家条/bit3 小地图/bit4 日历；
+  `kDirtyAll`）；`renderGamePanel(app, dirty)` 按位绘制；`renderGameFrameWith(app, dirty)`
+  分区重绘（bit1 含地图+物件提示+GO+跳伞/FLC 叠加+高亮，层级与全量一致）；
+  `renderGameFrame` = 全量（100+ 调用点不变）。
+- timer 分支**保守标记**：视口平滑滚动、掷骰(1)/移动(2) → 地图层+小地图；宽屏 mapTop=0
+  下地图覆盖顶栏素材 → 地图层补画恒伴随顶栏；GO 闪烁 → 地图层；未标脏非空闲帧 → 全量。
+- 验证：native SHA 逐字节全等；移动期"局部 vs 强制全量"同帧截图逐字节 IDENTICAL
+  （trace 确认 0x0B 连续 135 帧局部路径）。
+
+### 18.4 调试合成输入收口（d2bb9af）
+
+- debug 合成鼠标（click/clickr/move/press + synthesizeClick）改经 dispatchModalAware：
+  脚本坐标 = 640 基准 → 栈顶模态时 +base 转画布坐标（事件 -base 命中 + 绘制 origin）。
+  修 headless 截图中"模态内合成点击触发重绘无 origin → 面板错位重影"（实机鼠标无此问题）。
+
+### 18.5 验证与边界
+
+- **native 逐字节**：top/bank/set 三张 SHA 全等（全程保持）；`--canvas 1024×480` 设置面板
+  居中 + "確定"点击命中；wide 银行居中+对称黑边、叠加式模态保留完整游戏画面、主菜单居中。
+- 22 场景 native 全 PASS（含 266/268/270/308 正确 quickstart 参数）。
+- **边界（设计决策/记录）**：宽屏顶栏右侧 (440..mapW)×(0,40) 为地图延展（观感增强，
+  不做装饰）；GO 面板保持原版固定 (180,120)（地图区内，忠实原版）；区域脏区为保守子集
+  （更多路径可细分，收益有限）；advancePanelX/Y 仍为 state 固定值；`--canvas` 任意尺寸
+  为开发入口（布局/命中已派生，非正式 preset）。
