@@ -94,10 +94,12 @@ int runModal(Application& app, EventStack::Handler handler, void* user, uint32_t
                 // [NEW M4-C2 实机] tick 追补：绘制耗时超过 interval（放大窗口后每帧变慢）时，
                 //   原实现 `nextTick = now + interval` 会把绘制耗时计入 tick 周期（20ms 绘制 →
                 //   20ms tick → 骰子/行走/位移等按 tick 推进的动画整体拖慢）。改为按 interval
-                //   网格累加 nextTick，欠账时连发补拍（上限 4/轮防雪崩），tick 周期稳定 ~interval。
+                //   网格累加 + 欠账连发补拍（上限 32/轮，足够覆盖极高分辨率绘制）。
+                //   追不上时**保留欠账**（下轮继续补；仅欠账 > 250ms 才重锚防雪崩）——
+                //   旧实现此处直接重置 nextTick 会把大分辨率下每轮剩余欠账永久丢弃（越放大越慢）。
                 int catchUp = 0;
                 uint64_t now = nowMs();
-                while (now >= nextTick && catchUp < 4) {
+                while (now >= nextTick && catchUp < 32) {
                     nextTick += interval;
                     SDL_Event timerEvent{};
                     timerEvent.type = kModalTimerEvent;
@@ -106,8 +108,8 @@ int runModal(Application& app, EventStack::Handler handler, void* user, uint32_t
                     ++catchUp;
                     now = nowMs();
                 }
-                if (now >= nextTick) {
-                    nextTick = now + interval; // 长时间卡顿追不上 → 丢弃欠账防雪崩
+                if (now >= nextTick && now - nextTick > 250) {
+                    nextTick = now; // 长时间卡顿（欠账 >250ms）→ 重锚防雪崩
                 }
             }
         }
