@@ -241,6 +241,30 @@ bool tipPerfBlocked(Application& app) {
     return app.events().depth() > 1;
 }
 
+// [NEW M4-C] 空闲帧判定（脏区重绘第一部分）：纯等待输入且无任何演出/动画/滚动/模态——
+//   此状态下场景内容不再变化，可跳过每 tick 的全量重绘（光标由 renderFrame 独立
+//   合成/恢复；GO 闪烁翻转点仍需一次重绘，由调用方补）。
+//   排除项即"画面会自行变化"的全部来源：控制位/AI 行动状态/跳伞·事件 FLC（blockingPerf）/
+//   骰子滚动·停留/剩余步进/视口滚动。模态期间 gameEventHandler 不在栈顶，timer 不派发。
+bool idleFrame(Application& app) {
+    const GameState& st = app.gameState();
+    if (!st.gamePlayerControl || st.viewScrolling) {
+        return false;
+    }
+    if (blockingPerf(app)) {
+        return false;
+    }
+    if (st.diceAnimActive || st.showDice || st.remainingSteps != 0) {
+        return false;
+    }
+    for (int p = 0; p < st.playerCount && p < 9; ++p) {
+        if (st.playerActionState[p] != 0) {
+            return false;
+        }
+    }
+    return true;
+}
+
 // [RE 0x417E26] WM_MOUSEMOVE
 void handleMouseMove(Application& app, int x, int y) {
     GameState& state = app.gameState();
@@ -512,7 +536,12 @@ bool gameEventHandler(const SDL_Event* event, void* user) {
         // [RE 0x401B9C] idle loop: sub_4192F7(渲染) + sub_40D7C4(状态机)
         updateGameState(app);
         updateScroll(app);
-        renderGameFrame(app);
+        // [NEW M4-C] 静止帧跳过：纯等待输入且场景无变化时不重绘（GO 闪烁翻转点除外）。
+        //   原版该窗口只按脏位补画增量层，重写全量重绘的等价保守实现。
+        const bool goBlinkTurn = (s_blinkTick == 0);
+        if (goBlinkTurn || !idleFrame(app)) {
+            renderGameFrame(app);
+        }
         return true;
     }
     // [RE 0x418C55/0x45144F] 跳伞入场 / 事件 FLC（得點券/卡片/入狱住院等阻塞播放）期间禁止交互：
