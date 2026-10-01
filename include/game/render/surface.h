@@ -50,6 +50,25 @@ public:
                    : static_cast<int>(d / m_scale + (d >= 0 ? 0.5f : -0.5f));
     }
 
+    // [NEW M4-D] 绘制原点（逻辑坐标偏移）：右栏在宽屏下整体右移 panelX-440 时，右栏
+    //   绘制函数内坐标保持 440 基准不动，由 origin 统一平移；native origin=(0,0) 恒等。
+    //   坐标（x/y）与长度（span）一律经本组 helper 变换；全局裁剪矩形为画布逻辑坐标，
+    //   不经 origin（保持 logicalToDevice）。
+    void setOrigin(int x, int y) {
+        m_originX = x;
+        m_originY = y;
+    }
+    int originX() const { return m_originX; }
+    int originY() const { return m_originY; }
+    int deviceX(int v) const { return logicalToDevice(m_originX + v); }
+    int deviceY(int v) const { return logicalToDevice(m_originY + v); }
+    int spanX(int v, int len) const {
+        return logicalToDevice(m_originX + v + len) - logicalToDevice(m_originX + v);
+    }
+    int spanY(int v, int len) const {
+        return logicalToDevice(m_originY + v + len) - logicalToDevice(m_originY + v);
+    }
+
     void clear();
 
     // [RE 0x4561BE] sub_4561BE
@@ -65,6 +84,25 @@ private:
     int m_width = kWidth;
     int m_height = kHeight;
     float m_scale = 1.0f;
+    int m_originX = 0; // [NEW M4-D] 绘制原点（逻辑）
+    int m_originY = 0;
+};
+
+// [NEW M4-D] 临时设置绘制原点的 RAII guard（右栏宽屏平移）。
+class SurfaceOriginGuard {
+public:
+    SurfaceOriginGuard(Surface& surface, int x, int y)
+        : m_surface(surface), m_oldX(surface.originX()), m_oldY(surface.originY()) {
+        surface.setOrigin(x, y);
+    }
+    ~SurfaceOriginGuard() { m_surface.setOrigin(m_oldX, m_oldY); }
+    SurfaceOriginGuard(const SurfaceOriginGuard&) = delete;
+    SurfaceOriginGuard& operator=(const SurfaceOriginGuard&) = delete;
+
+private:
+    Surface& m_surface;
+    int m_oldX;
+    int m_oldY;
 };
 
 // [NEW M4-A2] 临时切换绘制缩放的 RAII guard（地图层 worldScale=1；A2 用）。

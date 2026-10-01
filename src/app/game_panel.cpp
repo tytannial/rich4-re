@@ -1,5 +1,6 @@
 #include "game/app/game_loop.h"   // blockingPerf [M4-B C1]
 #include "game/app/game_panel.h"
+#include "game/app/ui_layout.h"
 
 #include <cstdio>
 #include <cstring>
@@ -91,10 +92,13 @@ void drawTopBar(Application& app) {
 void drawPlayerBar(Application& app) {
     GameState& state = app.gameState();
     Surface& dst = app.surface();
+    // [NEW M4-D] 宽屏右栏整体右移（函数内坐标保持 440 基准）
+    SurfaceOriginGuard og(dst, uiPanelOffsetX(dst), 0);
     if (state.panelFrame0.frameCount() <= 4) {
         return;
     }
-    blitElementOpaque(dst, state.panelFrame0.frame(4), 440, 0);
+    const int panelX = uiPanelLogicalX(dst); // [NEW M4-D] 宽屏右栏右移
+    blitElementOpaque(dst, state.panelFrame0.frame(4), panelX, 0);
 
     const int v1 = state.currentPlayer;
     if (v1 >= state.playerCount && v1 != 8) {
@@ -147,6 +151,8 @@ void drawPlayerBar(Application& app) {
 void drawPlayerInfoPanel(Application& app) {
     GameState& state = app.gameState();
     Surface& dst = app.surface();
+    // [NEW M4-D] 宽屏右栏整体右移（函数内坐标保持 440 基准）
+    SurfaceOriginGuard og(dst, uiPanelOffsetX(dst), 0);
     if (state.panelFrame0.frameCount() <= 0) {
         return;
     }
@@ -292,6 +298,8 @@ void drawPlayerInfoPanel(Application& app) {
 void drawMiniMap(Application& app) {
     GameState& state = app.gameState();
     Surface& dst = app.surface();
+    // [NEW M4-D] 宽屏右栏整体右移（函数内坐标保持 440 基准）
+    SurfaceOriginGuard og(dst, uiPanelOffsetX(dst), 0);
     const int layout = state.settings[5] & 3;
     const int v1 = kMiniMapY[layout];
     if (v1 == 0) {
@@ -476,6 +484,8 @@ void drawHolidayBackground(Application& app, int holiday) {
         return;
     }
     Surface& dst = app.surface();
+    // [NEW M4-D] 宽屏右栏整体右移（函数内坐标保持 440 基准）
+    SurfaceOriginGuard og(dst, uiPanelOffsetX(dst), 0);
     // [NEW M4-A2] 节日插画按画布 scale 缩放绘制（不透明；scale=1 时逐像素等价）
     blitScaled(dst, reinterpret_cast<const uint8_t*>(raw.pixels), raw.width * 2, nullptr, 440,
                280, 0, 0, raw.width, raw.height, false, true);
@@ -490,6 +500,8 @@ void drawHolidayBackground(Application& app, int holiday) {
 void drawCalendar(Application& app) {
     GameState& state = app.gameState();
     Surface& dst = app.surface();
+    // [NEW M4-D] 宽屏右栏整体右移（函数内坐标保持 440 基准）
+    SurfaceOriginGuard og(dst, uiPanelOffsetX(dst), 0);
     const uint32_t date = state.gameDate;
     const int year = static_cast<int>(date >> 16);
     const int month = static_cast<int>((date >> 8) & 0xFF);

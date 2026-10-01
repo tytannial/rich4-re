@@ -1186,10 +1186,10 @@ void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, boo
     Surface& dst = app.surface();
     // [NEW M4-A2] 回卷区域以设计逻辑坐标计算（rx0/ry0/rw/rh），快照/写回时设备化
     auto snapBg = [&]() {
-        const int rxd = dst.logicalToDevice(rx0);
-        const int ryd = dst.logicalToDevice(ry0);
-        const int rwd = dst.logicalSpanToDevice(rx0, rw);
-        const int rhd = dst.logicalSpanToDevice(ry0, rh);
+        const int rxd = dst.deviceX(rx0);
+        const int ryd = dst.deviceY(ry0);
+        const int rwd = dst.spanX(rx0, rw);
+        const int rhd = dst.spanY(ry0, rh);
         bg.resize(static_cast<size_t>(rwd) * rhd);
         for (int r = 0; r < rhd; ++r) {
             std::memcpy(&bg[static_cast<size_t>(r) * rwd],
@@ -1245,10 +1245,10 @@ void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, boo
             }
             // 回卷基准（切换前=开始前画面；切换后=切换帧纯净场景）+ 叠加当前动画帧
             {
-                const int rxd = dst.logicalToDevice(rx0);
-                const int ryd = dst.logicalToDevice(ry0);
-                const int rwd = dst.logicalSpanToDevice(rx0, rw);
-                const int rhd = dst.logicalSpanToDevice(ry0, rh);
+                const int rxd = dst.deviceX(rx0);
+                const int ryd = dst.deviceY(ry0);
+                const int rwd = dst.spanX(rx0, rw);
+                const int rhd = dst.spanY(ry0, rh);
                 for (int r = 0; r < rhd; ++r) {
                     std::memcpy(dst.pixels() + static_cast<size_t>(ryd + r) * dst.width() + rxd,
                                 &bg[static_cast<size_t>(r) * rwd],
@@ -1872,7 +1872,7 @@ void landAfterMove(Application& app, int p, uint16_t cellEntId) {
             demolishAtObjId(app, objId, 0);
             int sx = 0;
             int sy = 0;
-            if (projectMapPoint(st, objX, objY, sx, sy)) {
+            if (projectMapPoint(st, objX, objY, sx, sy, app.surface())) {
                 playEventFlc(app, 526, sx - 55, sy - 55, 95, false, 3);  // [RE 0x40F675 帧3=拆后场景]
             }
             break;
@@ -4019,7 +4019,7 @@ static void landingSpecialMove(Application& app, int p) {
         pl.dir = static_cast<uint8_t>(facingFromDelta(dx, dy));     // [RE 0x454FB4]
         int sx = 0;
         int sy = 0;
-        if (!projectMapPoint(st, wx, wy, sx, sy)) {
+        if (!projectMapPoint(st, wx, wy, sx, sy, app.surface())) {
             sx = wx;
             sy = wy;
         }

@@ -2,6 +2,7 @@
 
 #include "game/app/map_tables.h"
 #include "game/app/turn_system.h"
+#include "game/app/ui_layout.h"
 #include "game/application.h"
 #include "game/core/encoding.h"
 #include "game/core/trace.h"
@@ -231,10 +232,11 @@ void drawObjectTip(Application& app) {
     if (vy < static_cast<int>(base.height)) {
         v5 += 1;
     }
-    if (state.objectTipX > 440 - static_cast<int>(base.width)) {
+    Surface& dst = app.surface();
+    // [NEW M4-D] 方向判定按地图区右缘（宽屏加宽；native 440 等价）
+    if (state.objectTipX > uiMapLogicalWidth(dst) - static_cast<int>(base.width)) {
         v5 += 2;
     }
-    Surface& dst = app.surface();
     // [NEW M4-A2] 物件提示随画布 scale（objectTipX/Y 与文本均为逻辑坐标）
     blitElement(dst, ui.frame(v5 < ui.frameCount() ? v5 : 0), state.objectTipX, state.objectTipY,
                 false);

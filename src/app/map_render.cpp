@@ -11,6 +11,7 @@
 #include "game/app/map_objects.h"
 #include "game/app/map_tables.h"
 #include "game/app/turn_system.h"
+#include "game/app/ui_layout.h"
 #include "game/application.h"
 #include "game/core/log.h"
 #include "game/core/debug_hooks.h"
@@ -24,9 +25,12 @@ namespace rich4 {
 namespace {
 
 constexpr int kGridSize = 72;      // [RE docs/formats/map.md] GND 72x72
-constexpr int kViewCenterX = 220;  // [RE 0x40829D] v130 += 220
-constexpr int kViewCenterY = 260;  // [RE 0x40829D] v125 += 260
-constexpr int kViewHalf = 14;      // [RE 0x40829D] (row+14)/(col+14)
+constexpr int kViewCenterY = 260;  // [RE 0x40829D] v125 += 260（可见区 40..480 中心）
+// [NEW M4-D] 投影表扩展为 65x65（半窗口 32）；表内 [-14..14]^2 = exe 原表逐项保真。
+//   视口中心 x = 地图区逻辑宽/2（native 440/2=220 与原版等价；宽屏地图区加宽后右移）。
+constexpr int kIsoHalf = 32;
+constexpr int kIsoDirBytes = 4 * 65 * 65; // 16900（每方向字节数）
+constexpr int kIsoRowBytes = 4 * 65;      // 260（每行字节数）
 constexpr int kOrderCount = 296;   // [RE 0x473610] 每方向有效遍历项
 
 // [RE 0x475224/0x475228] 骰子面板位置表（8 方向，交错 int32 对）
@@ -103,8 +107,8 @@ void orColorMask(Surface& dst, const UiImage& spr, int frame, int x, int y, uint
     const int dstW = dst.width();
     uint16_t* base = dst.pixels();
     for (int ly = 0; ly < static_cast<int>(src.height); ++ly) {
-        const int y0 = dst.logicalToDevice(dy + ly);
-        const int y1 = dst.logicalToDevice(dy + ly + 1);
+        const int y0 = dst.deviceY(dy + ly);
+        const int y1 = dst.deviceY(dy + ly + 1);
         const int yc0 = y0 < top ? top : y0;
         const int yc1 = y1 < bottom ? y1 : bottom;
         if (yc0 >= yc1) {
@@ -115,8 +119,8 @@ void orColorMask(Surface& dst, const UiImage& spr, int frame, int x, int y, uint
             if (mrow[lx] == 0) {
                 continue;
             }
-            const int x0 = dst.logicalToDevice(dx + lx);
-            const int x1 = dst.logicalToDevice(dx + lx + 1);
+            const int x0 = dst.deviceX(dx + lx);
+            const int x1 = dst.deviceX(dx + lx + 1);
             const int xc0 = x0 < left ? left : x0;
             const int xc1 = x1 < right ? x1 : right;
             if (xc0 >= xc1) {
@@ -208,30 +212,33 @@ void renderMap(Application& app, int centerX, int centerY) {
     const int cellY = centerY >> 5;
     const int dir = state.mapRotation & 7;
 
+    // [NEW M4-D] 地图区逻辑宽（宽屏 = 逻辑画布 - 右栏；native 440）
+    const int mapW = uiMapLogicalWidth(dst);
     int projX = 0;
     int projY = 0;
     isoProject(state, centerX, centerY, projX, projY);
-    const int baseX = projX + kViewCenterX;
+    const int baseX = projX + mapW / 2;
     const int baseY = projY + kViewCenterY;
 
     const uint8_t* isoBytes = reinterpret_cast<const uint8_t*>(&kIsoProjection[0][0][0][0]);
-    // 原版索引为字节偏移（116 = 29 格 x 4 字节），取 int16 视图访问 CCF0/CCF2/CCF4/CCF6
+    // 表已扩为 65x65（每行 260 字节、每方向 16900 字节），取 int16 视图访问 (x,y) 对
     auto isoAt = [isoBytes](int byteOffset) {
         return *reinterpret_cast<const int16_t*>(isoBytes + byteOffset);
     };
 
-    // 裁剪到地图区 (0,40)-(440,480)（原版 dword_4861B8..C4）
-    setClipRect(0, 40, 440, 480);
+    // [NEW M4-D] 地图区裁剪：宽屏时画到顶栏之下（顶栏右侧露出视野）；native 保持原
+    //   (0,40,440,480) 裁剪（顶栏图标边缘透明像素不露地图，逐字节保真）
+    const int mapTop = (mapW <= 440) ? kTopBarH : 0;
+    setClipRect(0, mapTop, mapW, 480);
 
-    // 地面等距地块（按绘制遍历序）
-    for (int i = 0; i < kOrderCount; ++i) {
-        const int rowOff = kIsoDrawOrder[dir][i][0];
-        const int colOff = kIsoDrawOrder[dir][i][1];
+    // 地面等距地块：单个格点绘制（两种遍历路径共用）
+    auto drawGroundTile = [&](int rowOff, int colOff) {
         const int gx = colOff + cellX;
         const int gy = rowOff + cellY;
         const bool inBounds = gx >= 0 && gx < kGridSize && gy >= 0 && gy < kGridSize;
-        const int idx = 3364 * dir + 116 * (rowOff + kViewHalf) + 4 * (colOff + kViewHalf);
-        const int idx2 = idx + 116;
+        const int idx = kIsoDirBytes * dir + kIsoRowBytes * (rowOff + kIsoHalf) +
+                        4 * (colOff + kIsoHalf);
+        const int idx2 = idx + kIsoRowBytes;
         int16_t quad[4][2];
         quad[0][0] = static_cast<int16_t>(baseX + isoAt(idx + 2));
         quad[0][1] = static_cast<int16_t>(baseY + isoAt(idx));
@@ -247,8 +254,8 @@ void renderMap(Application& app, int centerX, int centerY) {
             yMin = std::min(yMin, static_cast<int>(quad[k][1]));
             yMax = std::max(yMax, static_cast<int>(quad[k][1]));
         }
-        if (yMax < 40 || yMin > 479) {
-            continue; // 视口外跳过（原版 sub_4557A1 内部裁剪）
+        if (yMax < mapTop || yMin > 479) {
+            return; // 视口外跳过（原版 sub_4557A1 内部裁剪；[M4-D] mapTop 宽屏=0/native=40）
         }
         // [RE 0x40829D] 越界地块用空白纹理（unk_48B2B4）填充，避免上一帧残留
         const uint8_t* tile = kBlankTile;
@@ -257,6 +264,36 @@ void renderMap(Application& app, int centerX, int centerY) {
             tile = state.gndBitmaps + (static_cast<size_t>(tileIndex) << 10);
         }
         isoBlitQuad(dst, tile, quad, state.gndPalette, true);
+    };
+
+    if (mapW <= 440) {
+        // 原版路径：296 项绘制遍历序（native 逐字节保真）
+        for (int i = 0; i < kOrderCount; ++i) {
+            drawGroundTile(kIsoDrawOrder[dir][i][0], kIsoDrawOrder[dir][i][1]);
+        }
+    } else {
+        // [NEW M4-D] 宽地图区：与视口相交的格点双循环（地面菱形互不重叠 → 顺序无关）；
+        //   超出原 29x29 窗口的格用扩展表外圈；格数上限 = 表半径 ±32
+        const int R = mapW / 2 / 28 + 3;
+        for (int rowOff = -R; rowOff <= R; ++rowOff) {
+            if (rowOff < -kIsoHalf || rowOff > kIsoHalf) {
+                continue;
+            }
+            for (int colOff = -R; colOff <= R; ++colOff) {
+                if (colOff < -kIsoHalf || colOff > kIsoHalf) {
+                    continue;
+                }
+                // 粗筛：格点左上角（表值）+ 32 尺寸与地图区相交
+                const int gidx = kIsoDirBytes * dir + kIsoRowBytes * (rowOff + kIsoHalf) +
+                                 4 * (colOff + kIsoHalf);
+                const int qx = baseX + isoAt(gidx + 2);
+                const int qy = baseY + isoAt(gidx);
+                if (qx + 32 <= 0 || qx >= mapW || qy + 32 <= 0 || qy >= 480) {
+                    continue;
+                }
+                drawGroundTile(rowOff, colOff);
+            }
+        }
     }
 
     // cellEnts 物件（图块 = map.mkf[24] 帧 sprite-1）
@@ -265,15 +302,15 @@ void renderMap(Application& app, int centerX, int centerY) {
     state.mapHitRegions.clear();
     for (size_t i = 1; i < state.cellEnts.size(); ++i) {
         const CellEnt& ce = state.cellEnts[i];
-        const int cr = (ce.y >> 5) - cellY + kViewHalf;
-        const int cc = (ce.x >> 5) - cellX + kViewHalf;
-        if (cr < 0 || cr > 28 || cc < 0 || cc > 28) {
+        const int cr = (ce.y >> 5) - cellY + kIsoHalf;
+        const int cc = (ce.x >> 5) - cellX + kIsoHalf;
+        if (cr < 0 || cr > 2 * kIsoHalf || cc < 0 || cc > 2 * kIsoHalf) {
             continue;
         }
         int px = 0;
         int py = 0;
         isoProject(state, ce.x, ce.y, px, py);
-        const int idx = 3364 * dir + 116 * cr + 4 * cc;
+        const int idx = kIsoDirBytes * dir + kIsoRowBytes * cr + 4 * cc;
         const int sx = baseX + isoAt(idx + 2) - px;
         const int sy = baseY + isoAt(idx) - py;
         if ((ce.occMask & 0xFFFF00u) == 0 && state.flagTiles.frameCount() > 4) {
@@ -303,15 +340,15 @@ void renderMap(Application& app, int centerX, int centerY) {
     std::vector<SpriteDraw> items;
     items.reserve(64);
     auto projectItem = [&](int px, int py, int& sx, int& sy) -> bool {
-        const int cr = (py >> 5) - cellY + kViewHalf;
-        const int cc = (px >> 5) - cellX + kViewHalf;
-        if (cr < 0 || cr > 28 || cc < 0 || cc > 28) {
+        const int cr = (py >> 5) - cellY + kIsoHalf;
+        const int cc = (px >> 5) - cellX + kIsoHalf;
+        if (cr < 0 || cr > 2 * kIsoHalf || cc < 0 || cc > 2 * kIsoHalf) {
             return false;
         }
         int ox = 0;
         int oy = 0;
         isoProject(state, px, py, ox, oy);
-        const int idx = 3364 * dir + 116 * cr + 4 * cc;
+        const int idx = kIsoDirBytes * dir + kIsoRowBytes * cr + 4 * cc;
         sx = baseX + isoAt(idx + 2) - ox;
         sy = baseY + isoAt(idx) - oy;
         return true;
@@ -747,8 +784,8 @@ void renderMap(Application& app, int centerX, int centerY) {
                 const int dstH = dst.height();
                 uint16_t* base = dst.pixels();
                 for (int ly = 0; ly < h; ++ly) {
-                    const int y0 = dst.logicalToDevice(dy + ly);
-                    const int y1 = dst.logicalToDevice(dy + ly + 1);
+                    const int y0 = dst.deviceY(dy + ly);
+                    const int y1 = dst.deviceY(dy + ly + 1);
                     const int yc0 = y0 < 0 ? 0 : y0;
                     const int yc1 = y1 < dstH ? y1 : dstH;
                     if (yc0 >= yc1) {
@@ -763,8 +800,8 @@ void renderMap(Application& app, int centerX, int centerY) {
                         if (cg >= 20 && cr <= 10 && cb <= 10) {
                             continue; // 色键：亮绿透明
                         }
-                        const int x0 = dst.logicalToDevice(dx + lx);
-                        const int x1 = dst.logicalToDevice(dx + lx + 1);
+                        const int x0 = dst.deviceX(dx + lx);
+                        const int x1 = dst.deviceX(dx + lx + 1);
                         const int xc0 = x0 < 0 ? 0 : x0;
                         const int xc1 = x1 < dstW ? x1 : dstW;
                         if (xc0 >= xc1) {
@@ -812,7 +849,8 @@ void blitColorMask(std::vector<uint16_t>& dst, int dstW, int dstH, const UiFrame
 }
 
 // [PORT 0x40829D] 世界像素坐标 → 当前视口屏幕坐标（与 renderMap 内 projectItem 同源公式）
-bool projectMapPoint(const GameState& state, int px, int py, int& sx, int& sy) {
+bool projectMapPoint(const GameState& state, int px, int py, int& sx, int& sy,
+                     const Surface& dst) {
     const int centerX = state.viewX;
     const int centerY = state.viewY;
     const int cellX = centerX >> 5;
@@ -821,11 +859,11 @@ bool projectMapPoint(const GameState& state, int px, int py, int& sx, int& sy) {
     int projX = 0;
     int projY = 0;
     isoProject(state, centerX, centerY, projX, projY);
-    const int baseX = projX + kViewCenterX;
+    const int baseX = projX + uiMapLogicalWidth(dst) / 2; // [NEW M4-D] 宽屏地图区中心
     const int baseY = projY + kViewCenterY;
-    const int cr = (py >> 5) - cellY + kViewHalf;
-    const int cc = (px >> 5) - cellX + kViewHalf;
-    if (cr < 0 || cr > 28 || cc < 0 || cc > 28) {
+    const int cr = (py >> 5) - cellY + kIsoHalf;
+    const int cc = (px >> 5) - cellX + kIsoHalf;
+    if (cr < 0 || cr > 2 * kIsoHalf || cc < 0 || cc > 2 * kIsoHalf) {
         return false;
     }
     const uint8_t* isoBytes = reinterpret_cast<const uint8_t*>(&kIsoProjection[0][0][0][0]);
@@ -835,7 +873,7 @@ bool projectMapPoint(const GameState& state, int px, int py, int& sx, int& sy) {
     int ox = 0;
     int oy = 0;
     isoProject(state, px, py, ox, oy);
-    const int idx = 3364 * dir + 116 * cr + 4 * cc;
+    const int idx = kIsoDirBytes * dir + kIsoRowBytes * cr + 4 * cc;
     sx = baseX + isoAt(idx + 2) - ox;
     sy = baseY + isoAt(idx) - oy;
     return true;
@@ -1092,10 +1130,10 @@ void drawEstateHighlight(Application& app) {
     const int dstW = dst.width();
     const int dstH = dst.height();
     auto adjust = [px, lut, dstW, dstH, &dst](int x, int y) {
-        const int x0 = dst.logicalToDevice(x);
-        const int x1 = dst.logicalToDevice(x + 1);
-        const int y0 = dst.logicalToDevice(y);
-        const int y1 = dst.logicalToDevice(y + 1);
+        const int x0 = dst.deviceX(x);
+        const int x1 = dst.deviceX(x + 1);
+        const int y0 = dst.deviceY(y);
+        const int y1 = dst.deviceY(y + 1);
         for (int yy = y0; yy < y1; ++yy) {
             if (yy < 0 || yy >= dstH) {
                 continue;

@@ -505,8 +505,8 @@ void TextRenderer::drawText(Surface& dst, const char* text, int x, int y, int al
     }
 
     // 按对齐调整目标位置（原版 switch (a5)；boxW/boxH 为设备像素 → 落点先设备化）
-    int sx = dst.logicalToDevice(x);
-    int sy = dst.logicalToDevice(y);
+    int sx = dst.deviceX(x);
+    int sy = dst.deviceY(y);
     switch (align) {
         case 1:
             sx -= boxW;

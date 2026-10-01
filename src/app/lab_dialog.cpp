@@ -82,10 +82,10 @@ void redrawLab(LabState& st) {
             const int gx = kLabBorderX0 + 3 + kLabIconStep * i;  // = 35+76i
             const int gy = kLabBorderY + 3;                     // = 297
             // [NEW M4-A2] 逻辑区域 → 设备区域（scale=1 恒等）
-            const int gxDev = dst.logicalToDevice(gx);
-            const int gyDev = dst.logicalToDevice(gy);
-            const int gw = dst.logicalSpanToDevice(gx, kLabGrayW);
-            const int gh = dst.logicalSpanToDevice(gy, kLabGrayH);
+            const int gxDev = dst.deviceX(gx);
+            const int gyDev = dst.deviceY(gy);
+            const int gw = dst.spanX(gx, kLabGrayW);
+            const int gh = dst.spanY(gy, kLabGrayH);
             const int avail = dst.width() - gxDev;
             const int n = gw < avail ? gw : avail;
             if (gxDev < 0 || n <= 0) {

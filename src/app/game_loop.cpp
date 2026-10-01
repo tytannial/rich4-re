@@ -26,6 +26,7 @@
 #include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/app/ui_layout.h"
 #include "game/core/trace.h"
 #include "game/render/blit.h"
 #include "game/render/surface.h"
@@ -63,7 +64,9 @@ void drawParachuteFrame(Application& app) {
     if (w <= 0 || h <= 0) {
         return;
     }
-    const int ox = (440 - w) / 2;
+    // [NEW M4-D] 宽地图区水平居中（native mapW=440 → 原 (440-w)/2 等价）
+    const int mapW = uiMapLogicalWidth(dst);
+    const int ox = (mapW - w) / 2;
     const int oy = 40 + (440 - h) / 2;
     blitScaled(dst, reinterpret_cast<const uint8_t*>(st.parachute.pixels()), w * 2, nullptr, ox,
                oy, 0, 0, w, h, false, false, 0);
@@ -81,8 +84,10 @@ void drawEventFlcFrame(Application& app) {
     if (w <= 0 || h <= 0) {
         return;
     }
-    blitScaled(dst, reinterpret_cast<const uint8_t*>(st.eventFlc.pixels()), w * 2, nullptr,
-               st.eventFlcX, st.eventFlcY, 0, 0, w, h, false, false, st.eventFlc.colorKey());
+    // [NEW M4-D] 440 宽事件素材在宽地图区内水平居中（native 偏移 0）
+    const int ox = st.eventFlcX + (uiMapLogicalWidth(dst) - 440) / 2;
+    blitScaled(dst, reinterpret_cast<const uint8_t*>(st.eventFlc.pixels()), w * 2, nullptr, ox,
+               st.eventFlcY, 0, 0, w, h, false, false, st.eventFlc.colorKey());
 }
 
 // [NEW] 小地图点击平滑跳转：每 tick 向目标视口中心插值（原版直接跳转）
@@ -121,16 +126,18 @@ int clampInt(int v, int lo, int hi) {
 
 // [RE 0x417E26] WM_MOUSEMOVE 小地图区域命中（返回小地图内坐标）
 // 区域: 布局 1 小地图在 (440,280)；布局 2 在 (440,80)-(640,280)
-bool miniMapHitRegion(const GameState& state, int x, int y, int& mx, int& my) {
+// [NEW M4-D] 右栏起点由布局派生（宽屏右移；native 仍 440）
+bool miniMapHitRegion(const GameState& state, const Surface& dst, int x, int y, int& mx, int& my) {
     const int layout = state.settings[5] & 3;
     const int miniY = kMiniMapY[layout];
     if (miniY == 0) {
         return false;
     }
-    if (x <= 440 || x >= 440 + kMiniMapW || y <= miniY || y >= miniY + kMiniMapH) {
+    const int panelX = uiPanelLogicalX(dst);
+    if (x <= panelX || x >= panelX + kMiniMapW || y <= miniY || y >= miniY + kMiniMapH) {
         return false;
     }
-    mx = x - 440;
+    mx = x - panelX;
     my = y - miniY;
     return true;
 }
@@ -272,7 +279,7 @@ void handleMouseMove(Application& app, int x, int y) {
     if (state.dragMiniMap) {
         int mx = 0;
         int my = 0;
-        if (!miniMapHitRegion(state, x, y, mx, my)) {
+        if (!miniMapHitRegion(state, app.surface(), x, y, mx, my)) {
             state.dragMiniMap = false;
             return;
         }
@@ -315,7 +322,8 @@ void handleLeftButtonDown(Application& app, int x, int y) {
     // [RE 0x4186BE] 非玩家控制期（AI 回合/掷骰/移动/结算）：仅保留地图区物件提示，
     //   其余点击（工具条/日历/面板）忽略（原版 0x4186BE 在 byte_46CAFD 检查之前）
     if (!state.gamePlayerControl) {
-        if (x < 440 && y >= kTopBarH) {
+        // [NEW M4-D] 地图区加宽后 x<mapW（顶栏仅占 x<440 段）
+        if (x < uiMapLogicalWidth(app.surface()) && (y >= kTopBarH || x >= 440)) {
             showObjectTip(app, x, y);
             renderGameFrame(app);
         }
@@ -359,15 +367,19 @@ void handleLeftButtonDown(Application& app, int x, int y) {
     }
     const int layout = state.settings[5] & 3;
     const int miniY = kMiniMapY[layout];
-    // 小地图箭头（旋转）：(443,miniY+3)-(493,miniY+28)，左/右各 25 像素
-    if (miniY != 0 && x >= 443 && x <= 493 && y >= miniY + 3 && y <= miniY + 28) {
-        state.pendingAction = (x - 443) / 25 + 1; // 1=左旋 / 2=右旋
+    // [NEW M4-D] 布局派生：右栏起点/地图区宽（宽屏右移；native 仍 440）
+    const int panelX = uiPanelLogicalX(app.surface());
+    const int mapW = uiMapLogicalWidth(app.surface());
+    // 小地图箭头（旋转）：(443,miniY+3)-(493,miniY+28)，左/右各 25 像素（相对右栏起点）
+    if (miniY != 0 && x >= panelX + 3 && x <= panelX + 53 && y >= miniY + 3 &&
+        y <= miniY + 28) {
+        state.pendingAction = (x - panelX - 3) / 25 + 1; // 1=左旋 / 2=右旋
         app.audio().playEffect(1); // [RE 0x41867F] 小地图区点击音效（dword_482322）
         renderGameFrame(app);      // 按下态箭头（帧 18/19）
         return;
     }
     // [RE 0x4182FA] 右侧信息面板页签点击（layout≠2；x∈[616,640) y∈[0,280) → tab = y/70）
-    if (layout != 2 && x >= 616 && x < 640 && y >= 0 && y < 280 &&
+    if (layout != 2 && x >= panelX + 176 && x < panelX + 200 && y >= 0 && y < 280 &&
         state.currentPlayer >= 0 && state.currentPlayer < state.playerCount) {
         const int tab = (y / 70) & 3; // [RE 0x41831D] idiv 0x46(70)
         Player& pl = state.players[state.currentPlayer];
@@ -381,7 +393,7 @@ void handleLeftButtonDown(Application& app, int x, int y) {
     // 小地图拖拽 / 点击平滑跳转
     int mx = 0;
     int my = 0;
-    if (miniMapHitRegion(state, x, y, mx, my)) {
+    if (miniMapHitRegion(state, app.surface(), x, y, mx, my)) {
         state.dragMiniMap = true;
         // [NEW] 点击小地图平滑跳转到该处（原版直接跳转）
         startScroll(app, clampInt((761856 * mx) >> 16, 220, 2084),
@@ -391,16 +403,16 @@ void handleLeftButtonDown(Application& app, int x, int y) {
     }
     // [RE 0x417E26] 日历点击切换显示模式（byte_497164）：
     //   原版条件 byte_49715D!=1（有日历的布局）且 y∈[288,314]，
-    //   左箭头 x∈[448,474]→大数字(0)、右箭头 x∈[478,504]→月历网格(1)
+    //   左箭头 x∈[448,474]→大数字(0)、右箭头 x∈[478,504]→月历网格(1)（相对右栏起点）
     if (layout != 1 && y >= 288 && y <= 314) {
-        if (x >= 448 && x <= 474) {
+        if (x >= panelX + 8 && x <= panelX + 34) {
             RICH4_LOGI("calendar click: mode->0 (RE 0x417E26)");
             app.audio().playEffect(1); // [RE 0x4183B7] 日历切换音效（dword_482322）
             state.calendarMode = 0;
             renderGameFrame(app);
             return;
         }
-        if (x >= 478 && x <= 504) {
+        if (x >= panelX + 38 && x <= panelX + 64) {
             RICH4_LOGI("calendar click: mode->1 (RE 0x417E26)");
             app.audio().playEffect(1); // [RE 0x4183FF] 日历切换音效（dword_482322）
             state.calendarMode = 1;
@@ -414,8 +426,9 @@ void handleLeftButtonDown(Application& app, int x, int y) {
         app.audio().playEffect(1); // [RE 0x418482] 工具条/页签点击音效（dword_482322）
         return;
     }
-    // [RE 0x4186BE] 地图区左键按下 → 物件提示（原版 x<440 && y>40 → sub_417559）
-    if (x < 440 && y >= kTopBarH) {
+    // [RE 0x4186BE] 地图区左键按下 → 物件提示（原版 x<440 && y>40 → sub_417559；
+    //   [NEW M4-D] 地图区加宽后 x<mapW，顶栏仅占 x<440 段）
+    if (x < mapW && (y >= kTopBarH || x >= 440)) {
         showObjectTip(app, x, y);
         renderGameFrame(app);
         return;
@@ -458,7 +471,7 @@ void handleRightButtonUp(Application& app, int x, int y) {
     }
     int mx = 0;
     int my = 0;
-    if (!miniMapHitRegion(state, x, y, mx, my)) {
+    if (!miniMapHitRegion(state, app.surface(), x, y, mx, my)) {
         return;
     }
     state.manualView = false;

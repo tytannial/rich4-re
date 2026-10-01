@@ -94,8 +94,8 @@ void isoBlitQuad(Surface& dst, const uint8_t* tile, const int16_t quad[4][2],
             continue;
         }
         // 目标设备块行（逻辑 y → 设备 [y0, y1)）
-        const int dy0 = std::max(dst.logicalToDevice(y), clipT);
-        const int dy1 = std::min(dst.logicalToDevice(y + 1), clipB);
+        const int dy0 = std::max(dst.deviceY(y), clipT);
+        const int dy1 = std::min(dst.deviceY(y + 1), clipB);
         if (dy0 >= dy1) {
             continue;
         }
@@ -119,8 +119,8 @@ void isoBlitQuad(Surface& dst, const uint8_t* tile, const int16_t quad[4][2],
             }
             const uint16_t col = palette[tile[iv * 32 + iu]];
             // 设备块填充（逻辑 x → 设备 [x0, x1)）
-            const int dxb0 = std::max(dst.logicalToDevice(x), clipL);
-            const int dxb1 = std::min(dst.logicalToDevice(x + 1), clipR);
+            const int dxb0 = std::max(dst.deviceX(x), clipL);
+            const int dxb1 = std::min(dst.deviceX(x + 1), clipR);
             if (dxb0 < dxb1) {
                 for (int yy = dy0; yy < dy1; ++yy) {
                     uint16_t* row = base + static_cast<size_t>(yy) * dstW;

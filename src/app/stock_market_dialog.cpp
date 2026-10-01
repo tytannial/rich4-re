@@ -332,10 +332,10 @@ void renderStockPanel(StockPanelState& s) {
 // ===== 走勢圖 [RE 0x429D65] =====
 // [NEW M4-A2] 逻辑像素 → 设备矩形覆盖（放大后相邻逻辑像素无采样缝；scale=1 时为单像素）
 void plotLogical(Surface& dst, int lx, int ly, uint16_t color) {
-    const int x0 = dst.logicalToDevice(lx);
-    const int x1 = dst.logicalToDevice(lx + 1);
-    const int y0 = dst.logicalToDevice(ly);
-    const int y1 = dst.logicalToDevice(ly + 1);
+    const int x0 = dst.deviceX(lx);
+    const int x1 = dst.deviceX(lx + 1);
+    const int y0 = dst.deviceY(ly);
+    const int y1 = dst.deviceY(ly + 1);
     for (int yy = y0; yy < y1; ++yy) {
         if (yy < 0 || yy >= dst.height()) {
             continue;

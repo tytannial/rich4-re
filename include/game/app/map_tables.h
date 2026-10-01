@@ -8,8 +8,10 @@ namespace rich4 {
 // 来源: DGROUP 段 0x415D1D / 0x46CCF0..0x473610 / 0x474910..0x474991 /
 //       0x475208..0x4752AA / 0x47E80C / 0x47ECEC..0x47FDF6 等
 
-// [RE 0x46CCF0] word_46CCF0 等距投影表（8 方向 x 29x29 格 x {i16 x, i16 y}）
-extern const int16_t kIsoProjection[8][29][29][2];
+// [RE 0x46CCF0] word_46CCF0 等距投影表（8 方向 x 65x65 格 x {i16 x, i16 y}）。
+//   表内 [-14..14]^2 = exe 原 29x29 逐项保真；外圈为边界步长线性外推（[NEW M4-D]
+//   宽地图区/放大模式视野；native 窗口逐项与原表一致）。
+extern const int16_t kIsoProjection[8][65][65][2];
 // [RE 0x473610] byte_473610 绘制遍历序（8 方向 x {i8 row, i8 col}，0x80 结束）
 extern const int8_t kIsoDrawOrder[8][296][2];
 // [RE 0x474910] byte_474910 等距投影系数

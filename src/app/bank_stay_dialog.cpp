@@ -232,10 +232,10 @@ void restoreStaticRect(StayCtx& ui, int x, int y, int w, int h) {
         return;
     }
     // [NEW M4-A2] 逻辑区域 → 设备区域（staticBg 为全画布设备快照，行距设备宽）
-    const int x0 = dst.logicalToDevice(x);
-    const int y0 = dst.logicalToDevice(y);
-    const int x1 = dst.logicalToDevice(x + w);
-    const int y1 = dst.logicalToDevice(y + h);
+    const int x0 = dst.deviceX(x);
+    const int y0 = dst.deviceY(y);
+    const int x1 = dst.deviceX(x + w);
+    const int y1 = dst.deviceY(y + h);
     if (x0 < 0 || y0 < 0 || x1 > dst.width() || y1 > dst.height() || x1 <= x0 || y1 <= y0) {
         return;
     }

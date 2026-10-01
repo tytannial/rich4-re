@@ -39,6 +39,12 @@ DGROUP_RAW = 0x61600
 DGROUP_VA = 0x463000
 
 ISO_TABLE_VA, ISO_TABLE_LEN = 0x46CCF0, 26912
+# [NEW M4-D] 等距投影表扩展：原表 29x29（半径 14），宽屏/放大模式需更大视野 →
+#   扩为 65x65（半径 32）；表内 29x29 逐项保真，外圈用边界最后一步差分线性外推
+#   （新区域无原版基准；步长外推即计划 §4.2 的"实测步长"法）。
+ISO_HALF_SRC, ISO_HALF_DST = 14, 32
+ISO_N_SRC = 2 * ISO_HALF_SRC + 1
+ISO_N_DST = 2 * ISO_HALF_DST + 1
 DRAW_ORDER_VA, DRAW_ORDER_DIRS, DRAW_ORDER_MAX = 0x473610, 8, 304
 ISO_COEFF_VA, ISO_COEFF_LEN = 0x474910, 32
 PIECE_OFF_VA = 0x474951
@@ -102,9 +108,47 @@ def main(argv: list[str]) -> int:
     out_path = Path(argv[2]) if len(argv) > 2 else Path("src/app/map_tables.cpp")
     r = ExeReader(exe_path.read_bytes())
 
-    # 等距投影表：i16[8][29][29][2]
+    # 等距投影表：i16[8][29][29][2]（exe 原表）→ 扩展为 [8][65][65][2]
     iso_raw = r.bytes_at(ISO_TABLE_VA, ISO_TABLE_LEN)
     iso_vals = list(struct.unpack_from(f"<{ISO_TABLE_LEN // 2}h", iso_raw, 0))
+    iso_src = [[[[0, 0] for _ in range(ISO_N_SRC)] for _ in range(ISO_N_SRC)]
+               for _ in range(8)]
+    for d in range(8):
+        base = d * ISO_N_SRC * ISO_N_SRC * 2
+        for rr in range(ISO_N_SRC):
+            for cc in range(ISO_N_SRC):
+                i = base + (rr * ISO_N_SRC + cc) * 2
+                iso_src[d][rr][cc] = [iso_vals[i], iso_vals[i + 1]]
+
+    iso_dst = [[[[0, 0] for _ in range(ISO_N_DST)] for _ in range(ISO_N_DST)]
+               for _ in range(8)]
+    lo_src = ISO_HALF_DST - ISO_HALF_SRC
+    hi_src = ISO_HALF_DST + ISO_HALF_SRC
+    for d in range(8):
+        T = iso_dst[d]
+        for rr in range(ISO_N_SRC):
+            for cc in range(ISO_N_SRC):
+                T[lo_src + rr][lo_src + cc] = list(iso_src[d][rr][cc])
+        # 列外推（对表内行）
+        for rr in range(lo_src, hi_src + 1):
+            dcol = (T[rr][hi_src][0] - T[rr][hi_src - 1][0],
+                    T[rr][hi_src][1] - T[rr][hi_src - 1][1])
+            for cc in range(hi_src + 1, ISO_N_DST):
+                T[rr][cc] = [T[rr][cc - 1][0] + dcol[0], T[rr][cc - 1][1] + dcol[1]]
+            dcol = (T[rr][lo_src][0] - T[rr][lo_src + 1][0],
+                    T[rr][lo_src][1] - T[rr][lo_src + 1][1])
+            for cc in range(lo_src - 1, -1, -1):
+                T[rr][cc] = [T[rr][cc + 1][0] + dcol[0], T[rr][cc + 1][1] + dcol[1]]
+        # 行外推（所有列）
+        for cc in range(ISO_N_DST):
+            drow = (T[hi_src][cc][0] - T[hi_src - 1][cc][0],
+                    T[hi_src][cc][1] - T[hi_src - 1][cc][1])
+            for rr in range(hi_src + 1, ISO_N_DST):
+                T[rr][cc] = [T[rr - 1][cc][0] + drow[0], T[rr - 1][cc][1] + drow[1]]
+            drow = (T[lo_src][cc][0] - T[lo_src + 1][cc][0],
+                    T[lo_src][cc][1] - T[lo_src + 1][cc][1])
+            for rr in range(lo_src - 1, -1, -1):
+                T[rr][cc] = [T[rr + 1][cc][0] + drow[0], T[rr + 1][cc][1] + drow[1]]
 
     # 绘制遍历序：8 方向 x 304 项，扫描到 -128
     order_raw = r.bytes_at(DRAW_ORDER_VA, DRAW_ORDER_DIRS * DRAW_ORDER_MAX * 2)
@@ -133,8 +177,14 @@ def main(argv: list[str]) -> int:
     # 道具表 byte_47FEE6 13×8B：+0 礼物池初值、+1 价格（点券，sub_445B3F 用）、+4 名称指针
     item_raw = r.bytes_at(MISC8_VA, 13 * 8)
     item_price = [item_raw[8 * i + 1] for i in range(13)]
-    item_names = [r.cstr_big5(struct.unpack_from("<I", item_raw, 8 * i + 4)[0])
-                  for i in range(13)]
+    # idx12（核子飛彈）名称指针原版无效（0x01010001，非 DGROUP 地址）→ 置空（沿用既有修补）
+    item_names = []
+    for i in range(13):
+        p = struct.unpack_from("<I", item_raw, 8 * i + 4)[0]
+        if p < DGROUP_VA or p >= DGROUP_VA + 0x20000:
+            item_names.append("")
+        else:
+            item_names.append(r.cstr_big5(p))
 
     misc80 = [tuple(r.u32(MISC80_VA, 2 * i + k) for k in range(2)) for i in range(MISC80_N)]
     calendar_res = [r.u16(CALENDAR_RES_VA, i) for i in range(CALENDAR_RES_N)]
@@ -172,17 +222,18 @@ def main(argv: list[str]) -> int:
     w("")
     w("namespace rich4 {")
     w("")
-    w("// [RE 0x46CCF0] word_46CCF0 等距投影表：8 方向 x 29x29 格 x {i16 x, i16 y}")
-    w("// 索引 = 3364*dir + 116*(row+14) + 4*(col+14)（字节），由 sub_40829D 查询")
-    w(f"const int16_t kIsoProjection[8][29][29][2] = {{")
-    step = 29 * 2
+    w(f"// [RE 0x46CCF0] word_46CCF0 等距投影表：8 方向 x {ISO_N_DST}x{ISO_N_DST} 格 x "
+      "{i16 x, i16 y}")
+    w(f"//   表内 [-{ISO_HALF_SRC}..{ISO_HALF_SRC}]^2 为 exe 原表逐项保真；外圈为边界步长线性外推")
+    w(f"//   （[NEW M4-D] 宽地图区/放大模式；native 29x29 窗口逐项与原表一致）")
+    w(f"//   索引 = {4 * ISO_N_DST * ISO_N_DST}*dir + {4 * ISO_N_DST}*(row+{ISO_HALF_DST}) + "
+      f"4*(col+{ISO_HALF_DST})（字节）")
+    w(f"const int16_t kIsoProjection[8][{ISO_N_DST}][{ISO_N_DST}][2] = {{")
     for d in range(8):
         w("  {")
-        base = d * 29 * step
-        for row in range(29):
-            rb = base + row * step
-            cells = ", ".join("{%d,%d}" % (iso_vals[rb + 2 * c], iso_vals[rb + 2 * c + 1])
-                              for c in range(29))
+        for row in range(ISO_N_DST):
+            cells = ", ".join("{%d,%d}" % (iso_dst[d][row][c][0], iso_dst[d][row][c][1])
+                              for c in range(ISO_N_DST))
             w("    {" + cells + "},")
         w("  },")
     w("};")

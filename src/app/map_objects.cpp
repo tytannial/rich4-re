@@ -552,7 +552,7 @@ void attachEnd(Application& app, int p) {
     st.cellTable[off + 3] = 0;
     int sx = 0;
     int sy = 0;
-    if (!projectMapPoint(st, pl.spriteX, pl.spriteY, sx, sy)) {
+    if (!projectMapPoint(st, pl.spriteX, pl.spriteY, sx, sy, app.surface())) {
         sx = 220;
         sy = 260;
     }
@@ -1021,11 +1021,11 @@ void flyObjectSprite(Application& app, int objId, int fromX, int fromY, int toX,
     int y0 = 0;
     int x1 = 0;
     int y1 = 0;
-    if (!projectMapPoint(st, fromX, fromY, x0, y0)) {
+    if (!projectMapPoint(st, fromX, fromY, x0, y0, dst)) {
         x0 = 0;
         y0 = 0;  // [RE 0x409A9D] 视口外 → (0,0)（原版语义）
     }
-    if (!projectMapPoint(st, toX, toY, x1, y1)) {
+    if (!projectMapPoint(st, toX, toY, x1, y1, dst)) {
         x1 = 0;
         y1 = 0;
     }
@@ -1046,10 +1046,10 @@ void flyObjectSprite(Application& app, int objId, int fromX, int fromY, int toX,
     constexpr int kSnapW = 440;
     constexpr int kSnapH = 440;
     // [NEW M4-A2] 逻辑区域 → 设备区域快照（scale=1 恒等）
-    const int kSnapXd = dst.logicalToDevice(kSnapX);
-    const int kSnapYd = dst.logicalToDevice(kSnapY);
-    const int kSnapWd = dst.logicalSpanToDevice(kSnapX, kSnapW);
-    const int kSnapHd = dst.logicalSpanToDevice(kSnapY, kSnapH);
+    const int kSnapXd = dst.deviceX(kSnapX);
+    const int kSnapYd = dst.deviceY(kSnapY);
+    const int kSnapWd = dst.spanX(kSnapX, kSnapW);
+    const int kSnapHd = dst.spanY(kSnapY, kSnapH);
     std::vector<uint16_t> background(static_cast<size_t>(kSnapWd) * kSnapHd);
     for (int r = 0; r < kSnapHd; ++r) {
         std::memcpy(background.data() + static_cast<size_t>(r) * kSnapWd,

@@ -89,8 +89,8 @@ bool blitSprScaled(Surface& dst, const UiImage& spr, int frame, int x, int y, ui
     // [NEW M4-A2] 画布 scale != 1：逻辑目标设备化 + SPR 16.16 与画布缩放复合为一次
     //   nearest 采样（scale == 1 走下方原定点路径，逐字节一致）
     if (dst.scale() != 1.0f) {
-        const int dxDev = dst.logicalToDevice(dx);
-        const int dyDev = dst.logicalToDevice(dy);
+        const int dxDev = dst.deviceX(dx);
+        const int dyDev = dst.deviceY(dy);
         const int dw = dst.logicalToDevice(sw);
         const int dh = dst.logicalToDevice(sh);
         if (dw <= 0 || dh <= 0) {

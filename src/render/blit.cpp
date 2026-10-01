@@ -110,8 +110,8 @@ bool blitScaled(Surface& dst, const uint8_t* src, int srcPitchBytes, const uint1
     const int dstW = dst.width();
     bool any = false;
     for (int ly = 0; ly < h; ++ly) {
-        const int y0 = dst.logicalToDevice(logY + ly);
-        const int y1 = dst.logicalToDevice(logY + ly + 1);
+        const int y0 = dst.deviceY(logY + ly);
+        const int y1 = dst.deviceY(logY + ly + 1);
         if (y1 <= y0) {
             continue;
         }
@@ -137,8 +137,8 @@ bool blitScaled(Surface& dst, const uint8_t* src, int srcPitchBytes, const uint1
                 }
                 col = p;
             }
-            const int x0 = dst.logicalToDevice(logX + lx);
-            const int x1 = dst.logicalToDevice(logX + lx + 1);
+            const int x0 = dst.deviceX(logX + lx);
+            const int x1 = dst.deviceX(logX + lx + 1);
             if (x1 <= x0) {
                 continue;
             }
@@ -254,15 +254,15 @@ void pressDown(Surface& dst, int x, int y, int w, int h, int shift, const uint8_
         return;
     }
     // [NEW M4-A2] 越界检查按逻辑画布（scale != 1 时设备宽高 != 640x480）
-    if (x < 0 || y < 0 || dst.logicalToDevice(x + w) > dst.width() ||
-        dst.logicalToDevice(y + h) > dst.height()) {
+    if (x < 0 || y < 0 || dst.deviceX(x + w) > dst.width() ||
+        dst.deviceY(y + h) > dst.height()) {
         return;
     }
     // [NEW M4-A2] 位移与搬运在设备域（scale=1 恒等）
-    const int dx = dst.logicalToDevice(x);
-    const int dy = dst.logicalToDevice(y);
-    const int dw = dst.logicalToDevice(x + w) - dx;
-    const int dh = dst.logicalToDevice(y + h) - dy;
+    const int dx = dst.deviceX(x);
+    const int dy = dst.deviceY(y);
+    const int dw = dst.deviceX(x + w) - dx;
+    const int dh = dst.deviceY(y + h) - dy;
     const int dshift = dst.logicalToDevice(shift);
     if (dshift <= 0 || dw <= dshift || dh <= dshift) {
         return;
@@ -334,10 +334,10 @@ void scaleSurfaceChannels(Surface& dst, int x, int y, int w, int h, const uint8_
     // [RE 0x4552E7] 依据: 对元素区域逐像素做分量缩放（调用方保证区域合法）
     // [NEW M4-A2] 逻辑区域 → 设备区域（scale=1 恒等）
     if (dst.scale() != 1.0f) {
-        const int x0 = dst.logicalToDevice(x);
-        const int y0 = dst.logicalToDevice(y);
-        const int x1 = dst.logicalToDevice(x + w);
-        const int y1 = dst.logicalToDevice(y + h);
+        const int x0 = dst.deviceX(x);
+        const int y0 = dst.deviceY(y);
+        const int x1 = dst.deviceX(x + w);
+        const int y1 = dst.deviceY(y + h);
         x = x0;
         y = y0;
         w = x1 - x0;
@@ -401,8 +401,8 @@ void blitScrolledMap(Surface& dst, const uint8_t* src, int offset) {
         const int dstW = dst.width();
         const int dstH = dst.height();
         for (int ly = 0; ly < kSrcRows; ++ly) {
-            const int y0 = dst.logicalToDevice(ly);
-            const int y1 = dst.logicalToDevice(ly + 1);
+            const int y0 = dst.deviceY(ly);
+            const int y1 = dst.deviceY(ly + 1);
             const int yc0 = y0 < 0 ? 0 : y0;
             const int yc1 = y1 < dstH ? y1 : dstH;
             if (yc0 >= yc1) {
@@ -411,8 +411,8 @@ void blitScrolledMap(Surface& dst, const uint8_t* src, int offset) {
             const uint16_t* srow = srcPx + static_cast<size_t>(ly) * Surface::kWidth;
             for (int lx = 0; lx < Surface::kWidth; ++lx) {
                 const uint16_t c = srow[(lx + offPix) % Surface::kWidth];
-                const int x0 = dst.logicalToDevice(lx);
-                const int x1 = dst.logicalToDevice(lx + 1);
+                const int x0 = dst.deviceX(lx);
+                const int x1 = dst.deviceX(lx + 1);
                 const int xc0 = x0 < 0 ? 0 : x0;
                 const int xc1 = x1 < dstW ? x1 : dstW;
                 if (xc0 >= xc1) {
@@ -449,10 +449,10 @@ bool saveRegion(std::vector<uint16_t>& out, const Surface& dst, int x, int y, in
     }
     // [NEW M4-A2] 逻辑区域 → 设备区域（save/restore 同一 scale 下自洽；scale=1 恒等）
     if (dst.scale() != 1.0f) {
-        const int x0 = dst.logicalToDevice(x);
-        const int y0 = dst.logicalToDevice(y);
-        const int x1 = dst.logicalToDevice(x + w);
-        const int y1 = dst.logicalToDevice(y + h);
+        const int x0 = dst.deviceX(x);
+        const int y0 = dst.deviceY(y);
+        const int x1 = dst.deviceX(x + w);
+        const int y1 = dst.deviceY(y + h);
         x = x0;
         y = y0;
         w = x1 - x0;
@@ -486,10 +486,10 @@ void restoreRegion(Surface& dst, const std::vector<uint16_t>& bg, int x, int y, 
     }
     // [NEW M4-A2] 逻辑区域 → 设备区域（与 saveRegion 同一 scale 下自洽；scale=1 恒等）
     if (dst.scale() != 1.0f) {
-        const int x0 = dst.logicalToDevice(x);
-        const int y0 = dst.logicalToDevice(y);
-        const int x1 = dst.logicalToDevice(x + w);
-        const int y1 = dst.logicalToDevice(y + h);
+        const int x0 = dst.deviceX(x);
+        const int y0 = dst.deviceY(y);
+        const int x1 = dst.deviceX(x + w);
+        const int y1 = dst.deviceY(y + h);
         x = x0;
         y = y0;
         w = x1 - x0;
