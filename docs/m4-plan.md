@@ -860,3 +860,15 @@ quickstart 跳过选人界面，`blitScrolledMap` 仅用于选人界面与通关
   不做装饰）；GO 面板保持原版固定 (180,120)（地图区内，忠实原版）；区域脏区为保守子集
   （更多路径可细分，收益有限）；advancePanelX/Y 仍为 state 固定值；`--canvas` 任意尺寸
   为开发入口（布局/命中已派生，非正式 preset）。
+
+### 18.6 实机四问题修复（2026-10-01，提交 `2b2a3cc`）
+
+| # | 现象 | 根因 | 修复 |
+|---|------|------|------|
+| 1 | 主菜单左右黑边留残影 | resize 重建画布后 tickMs=0 的层（主菜单/多数模态）不主动重绘（无 timer），画面停在旧内容 | `renderFrame` 在 `applyWindowResize` 后强制 `dispatchModalAware(nullptr)` 重绘栈顶一次（`m_forceRepaint`） |
+| 2 | 掷骰/行走等动画放大窗口后拖慢 | `runModal` tick 派发 `nextTick = now + interval` 把绘制耗时计入 tick 周期（20ms 绘制→20ms tick→按 tick 推进的动画慢 25%） | 改按 interval 网格累加 `nextTick += interval` + 欠账连发补拍（上限 4/轮防雪崩）；虚拟时钟分支不变；native SHA 仍全等 |
+| 3 | 右上玩家条（layout 2）花屏+金额残影 | `drawPlayerBar` 背景帧误用 `uiPanelLogicalX`（已含面板偏移）又被 `SurfaceOriginGuard` 二次 +offset → 背景帧画到屏外（露游戏画面=花屏；金额更新时旧文字残留=残影） | 恢复函数内 440 基准坐标（宽屏右移只由 guard 统一完成） |
+| 4 | 大地图打开后两侧被裁剪 | 0x40A801 是"叠加在游戏画面上"（底图 @(20,60) 不清屏），`runModal` 默认 fillBars=true 填黑两侧 | mapDialog → fillBars=false；同类审计：roulette/facility/lab（叠加面板）→ fillBars=false；target_select/dicePick（命中为画布坐标）→ centerBase=false |
+
+附带：debug 新命令 `settings.layout <0|1|2>`（运行期切右栏布局）；`player.cash/bank` 改值后
+`refreshPlayerPanelFor` 立即刷新右栏（脚本测试避免旧值残留）。
