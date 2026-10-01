@@ -345,7 +345,12 @@ uint32_t dateDialog(Application& app, uint32_t currentDate) {
     state.originX = 320 - uiImage.frame(kFrameBg).width / 2;
     state.originY = 240 - uiImage.frame(kFrameBg).height / 2;
 
-    redrawDateDialog(state);
+    // [NEW M4-D] 进入前预绘制在 640 基准 origin 内（宽画布居中；与模态内重绘位置一致，
+    //   否则宽画布左侧留未平移残影——同 settingsDialog 的 0x401 预绘制收口）
+    {
+        SurfaceOriginGuard og(app.surface(), uiModalBaseX(app.surface()), 0);
+        redrawDateDialog(state);
+    }
     RICH4_LOGI("date dialog at (%d,%d) date=%u-%u-%u (RE 0x4119E3)", state.originX, state.originY,
                (currentDate >> 16) & 0xFFFF, (currentDate >> 8) & 0xFF, currentDate & 0xFF);
     // [RE 0x4018E7] runModal(sub_410AC3)
