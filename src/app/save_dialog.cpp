@@ -178,7 +178,8 @@ int saveDialog(Application& app) {
             }
         }
     }
-    return runModal(app, &saveDialogEventHandler, &state);
+    // [NEW M4-D 实机] 两側保留游戏画面（同大地图处理，不填黑）
+    return runModal(app, &saveDialogEventHandler, &state, 0, true, false);
 }
 
 } // namespace rich4

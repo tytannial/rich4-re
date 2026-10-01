@@ -12,13 +12,12 @@ namespace rich4 {
 //   会临时关闭（SurfacePaintClipGuard），保证宽屏游戏画面不被 640 基准边界裁掉。
 static void mergePaintClipX(const Surface& dst, int& clipL, int& clipR) {
     if (dst.paintClipEnabled()) {
-        const int px0 = dst.logicalToDevice(dst.paintClipX0());
-        const int px1 = dst.logicalToDevice(dst.paintClipX1());
-        if (px0 > clipL) {
-            clipL = px0;
+        // 存值即设备坐标（设置时以真实画布 scale 计算；text 的 scale guard 不影响）
+        if (dst.paintClipX0() > clipL) {
+            clipL = dst.paintClipX0();
         }
-        if (px1 < clipR) {
-            clipR = px1;
+        if (dst.paintClipX1() < clipR) {
+            clipR = dst.paintClipX1();
         }
     }
 }

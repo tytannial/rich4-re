@@ -387,9 +387,14 @@ void drawMiniMap(Application& app) {
             markY = ((5696 * static_cast<int>(state.npcSlots[j - 4].pixelY)) >> 16) + v1;
         }
     }
+    // [实机反馈] 小地图方框 = 游戏内视野大小（地图区在小地图尺度下的尺寸：
+    //   5696/65536 ≈ 0.0869；native 38x38 / 宽屏随地图区宽 56x38）
+    const int viewW = (5696 * uiMapLogicalWidth(dst)) >> 16;
+    const int viewH = (5696 * 440) >> 16;
     if (markX && markY) {
         // [RE 0x416E6D] 当前玩家框（白色，push 0FFFFFFh）
-        drawRectBorder(dst, markX - 15, markY - 15, 30, 30, rgb888To555(0xFFFFFF));
+        drawRectBorder(dst, markX - viewW / 2, markY - viewH / 2, viewW, viewH,
+                       rgb888To555(0xFFFFFF));
     }
     // [RE 0x416E6D] 手动视野框（红色，push 0FF0000h；dword_48BE18 时显示视口中心）
     // 原版 sub_416E6D: if(dword_48BE18){ v5=(5696*dword_48BE1C)>>16; v6=(5696*dword_48BE20)>>16;
@@ -398,7 +403,8 @@ void drawMiniMap(Application& app) {
         const int vx = (5696 * state.viewSmoothX) >> 16;
         const int vy = (5696 * state.viewSmoothY) >> 16;
         if (vx + 440 != markX || vy + v1 != markY) {
-            drawRectBorder(dst, vx + 425, v1 + vy - 15, 30, 30, rgb888To555(0xFF0000));
+            drawRectBorder(dst, vx + 440 - viewW / 2, v1 + vy - viewH / 2, viewW, viewH,
+                           rgb888To555(0xFF0000));
         }
     }
 }

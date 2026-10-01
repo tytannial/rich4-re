@@ -305,7 +305,9 @@ bool Application::dispatchModalAware(const SDL_Event* event) {
     setClipRect(base, 0, base + 640, uiLogicalHeight(m_surface));
     const int savedPc0 = m_surface.paintClipX0();
     const int savedPc1 = m_surface.paintClipX1();
-    m_surface.setPaintClip(base, base + 640); // [NEW M4-D 实机] 模态绘制边界
+    // [NEW M4-D 实机] 模态绘制边界（存**设备坐标**：text 等落点已设备化，统一域）；
+    m_surface.setPaintClip(m_surface.logicalToDevice(base),
+                           m_surface.logicalToDevice(base + 640));
     SurfaceOriginGuard og(m_surface, base, 0);
     bool handled = false;
     if (!ev) {

@@ -4285,10 +4285,13 @@ void updateGameState(Application& app) {
                 if (st.diceAnimActive) {
                     // [NEW M4-C2/RE 0x419572/0x451387] 帧延时 = 10×dword_475264[settings[0]]
                     //   （游戏速度档：慢 50 / 默认 30 / 快 20 ms；原版 flcPlay unk_48C870）
+                    // [实机微调] 帧速 = 8×档位值（40/24/16ms，较原表 ×0.8 略微加速）；
+                    //   追帧累加（last += frameMs）保证放大/绘制偏慢时节奏仍精确
                     const uint32_t frameMs =
-                        10u * static_cast<uint32_t>(kDiceFlcSpeed[st.settings[0] & 3]);
-                    if (nowMs() - st.diceAnimLastMs >= frameMs) {
-                        st.diceAnimLastMs = nowMs();
+                        8u * static_cast<uint32_t>(kDiceFlcSpeed[st.settings[0] & 3]);
+                    const uint64_t nowDice = nowMs();
+                    while (st.diceAnimActive && nowDice - st.diceAnimLastMs >= frameMs) {
+                        st.diceAnimLastMs += frameMs;
                         if (!st.diceAnim.nextFrame()) {
                             st.diceAnimActive = false;
                             // [RE 0x41962F] FLC 结束 → 第二次落地音效槽 2（dword_48235A）
