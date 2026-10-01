@@ -737,22 +737,31 @@ void refreshPlayerPanelFor(Application& app, int player) {
     st.currentPlayer = saved;
 }
 
-void renderGamePanel(Application& app) {
+void renderGamePanel(Application& app, uint8_t dirty) {
     // [RE 0x417E26] WM_PAINT 分支：顶部工具条 + 按 byte_49715D 布局
+    // [NEW M4-C2] 区域脏区：仅重画 dirty 指定的区域（kDirtyAll = 原全量行为）
     const int layout = app.gameState().settings[5] & 3;
-    drawTopBar(app);
-    if (layout == 0) {
-        drawPlayerInfoPanel(app);
-        drawCalendar(app);
-    } else if (layout == 1) {
-        drawPlayerInfoPanel(app);
+    if (dirty & kDirtyTopBar) {
+        drawTopBar(app);
+    }
+    // 玩家条：layout 2 用信息条，其余用完整信息面板（原分支等价）
+    if (dirty & kDirtyPlayerBar) {
+        if (layout == 2) {
+            drawPlayerBar(app);
+        } else {
+            drawPlayerInfoPanel(app);
+        }
+    }
+    if ((dirty & kDirtyMiniMap) && layout != 0) {
         drawMiniMap(app);
-    } else {
-        drawPlayerBar(app);
-        drawMiniMap(app);
+    }
+    if ((dirty & kDirtyCalendar) && layout != 1) {
         drawCalendar(app);
     }
-    drawAdvancePanel(app);
+    // 前进面板（GO）绘于地图区之上：随地图场景层重画
+    if (dirty & kDirtyMap) {
+        drawAdvancePanel(app);
+    }
 }
 
 } // namespace rich4

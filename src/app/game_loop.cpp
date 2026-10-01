@@ -36,6 +36,9 @@ namespace rich4 {
 // [RE 0x417E26] 游戏内整帧绘制（定义见本文件末尾；匿名空间内多处调用，需前置声明）
 void renderGameFrame(Application& app);
 
+// [NEW M4-C2] 分区重绘（定义见本文件末尾；timer 分支局部补画用）
+void renderGameFrameWith(Application& app, uint8_t dirty);
+
 // [NEW] blockingPerf：阻塞演出谓词（声明见 include/game/app/game_loop.h；M4-B 批次 B）
 // 依据: 原版 0x45144F 事件 FLC / 0x418C55 跳伞入场期间 PeekMessage 只取消息不派发
 //   （窗口过程不处理）→ WM_TIMER/WM_PAINT 被丢弃，0x417191 前进面板这类"增量层"
@@ -549,11 +552,38 @@ bool gameEventHandler(const SDL_Event* event, void* user) {
         // [RE 0x401B9C] idle loop: sub_4192F7(渲染) + sub_40D7C4(状态机)
         updateGameState(app);
         updateScroll(app);
+        // [NEW M4-C2] 区域脏区（原版 dword_475110 五位）：高频纯动画路径只补画变化区。
+        //   保守清单——只标"绝对确定不变其它区域"的状态；不确定的一律全量，
+        //   保证"该变的必然变"（正确性优先，native 全量路径逐字节不变）。
+        // 宽屏下地图从 y=0 起画（mapTop=0）会覆盖顶栏素材区域 → 地图层补画恒伴随顶栏
+        // （native mapTop=40 时顶栏不被覆盖，重画幂等无害）
+        const uint8_t mapWithBar = kDirtyMap | kDirtyTopBar;
+        uint8_t dirty = 0;
+        if (!blockingPerf(app)) {
+            // ① 视口平滑滚动：地图视口 + 小地图红框（玩家条/日历不动）
+            if (app.gameState().viewScrolling) {
+                dirty |= mapWithBar | kDirtyMiniMap;
+            }
+            // ② 掷骰动画(1)/棋子移动(2)：地图层 + 小地图标记（结算/过天=3 不在此列，全量）
+            const int cur = app.gameState().currentPlayer;
+            if (cur >= 0 && cur < 9) {
+                const int act = app.gameState().playerActionState[cur];
+                if (act == 1 || act == 2) {
+                    dirty |= mapWithBar | kDirtyMiniMap;
+                }
+            }
+        }
         // [NEW M4-C] 静止帧跳过：纯等待输入且场景无变化时不重绘（GO 闪烁翻转点除外）。
-        //   原版该窗口只按脏位补画增量层，重写全量重绘的等价保守实现。
+        //   GO 面板属地图层（180,120 在地图区内）→ 翻转点仅补画地图层（原版增量层语义）。
         const bool goBlinkTurn = (s_blinkTick == 0);
+        if (goBlinkTurn) {
+            dirty |= mapWithBar;
+        }
+        if (dirty == 0) {
+            dirty = kDirtyAll; // 未标脏的非空闲帧：保守全量（与旧行为一致）
+        }
         if (goBlinkTurn || !idleFrame(app)) {
-            renderGameFrame(app);
+            renderGameFrameWith(app, dirty);
         }
         return true;
     }
@@ -654,15 +684,13 @@ void overlayEventFlcFrame(Application& app) {
     drawEventFlcFrame(app);
 }
 
-// [RE 0x417E26] 游戏内绘制（WM_PAINT 分支；定义见 gameEventHandler）
-// 顶部工具条 + 地图区 + 按 byte_49715D 布局的右侧面板；每 tick 全量重绘
-// 公开供阻塞动画流程（收租联动闪烁 0x451985）主动重绘
-void renderGameFrame(Application& app) {
+// [NEW M4-C2] 分区重绘：按 dirty 位补画（kDirtyAll = 全量，与前述逐帧全量路径等价）
+void renderGameFrameWith(Application& app, uint8_t dirty) {
     // [NEW M4-D] 游戏世界重绘永远按画布逻辑坐标（不受 640 基准模态 origin 影响）——
     //   模态 handler 内调用本函数重绘游戏画面时（选骰框/交易市场/台词气泡等），
     //   模态自身绘制经 dispatchModalAware +base 居中，而游戏画面保持宽屏布局。
     SurfaceOriginGuard ogWorld(app.surface(), 0, 0);
-    // [NEW] 本函数全量重绘整个表面——光标保存背景作废，跳过陈旧 uncompose 写回
+    // [NEW] 本函数重绘区域内像素全变——光标保存背景作废，跳过陈旧 uncompose 写回
     //   （防演出/移动期间光标处旧背景脏块闪现；见 Cursor::invalidate）
     app.cursor().invalidate();
     GameState& state = app.gameState();
@@ -670,29 +698,41 @@ void renderGameFrame(Application& app) {
     if (tipPerfBlocked(app)) {
         clearObjectTipForPerf(app);
     }
-    if (state.manualView) {
-        // [RE 0x48BE18] dword_48BE18 非 0：用平滑视口中心（原版 dword_48BE1C/BE20）
-        renderMap(app, state.viewSmoothX, state.viewSmoothY);
-    } else {
-        // 否则以当前玩家位置为中心
-        renderMap(app, -1, 0);
+    const bool mapRegion = (dirty & kDirtyMap) != 0;
+    if (mapRegion) {
+        if (state.manualView) {
+            // [RE 0x48BE18] dword_48BE18 非 0：用平滑视口中心（原版 dword_48BE1C/BE20）
+            renderMap(app, state.viewSmoothX, state.viewSmoothY);
+        } else {
+            // 否则以当前玩家位置为中心
+            renderMap(app, -1, 0);
+        }
+        // [RE 0x417559] 右键物件提示框（地图区之上、面板之下）；演出期双保险不画
+        if (!tipPerfBlocked(app)) {
+            drawObjectTip(app);
+        }
     }
-    // [RE 0x417559] 右键物件提示框（地图区之上、面板之下）；演出期双保险不画
-    if (!tipPerfBlocked(app)) {
-        drawObjectTip(app);
-    }
-    renderGamePanel(app);
+    renderGamePanel(app, dirty);
     // [RE 0x45144F/0x451985] 演出叠加层在**面板（含前进 GO 面板 0x417191）之后**——
     //   原版 flcPlay/高亮/跳伞都在完整场景（地图+工具条+右侧/前进面板已画完）的
     //   backbuffer 上 saveBackground 后末层叠加 = 动画盖住 GO（2026-09-29 层级修正；
     //   重排前重写把 GO 画在动画之上，演出动画被 GO 按钮遮挡）
-    if (state.parachuteActive && state.parachute.valid()) {
-        drawParachuteFrame(app);
+    if (mapRegion) {
+        if (state.parachuteActive && state.parachute.valid()) {
+            drawParachuteFrame(app);
+        }
+        if (state.eventFlcActive && state.eventFlc.valid()) {
+            drawEventFlcFrame(app);
+        }
+        drawEstateHighlight(app);
     }
-    if (state.eventFlcActive && state.eventFlc.valid()) {
-        drawEventFlcFrame(app);
-    }
-    drawEstateHighlight(app);
+}
+
+// [RE 0x417E26] 游戏内绘制（WM_PAINT 分支；定义见 gameEventHandler）
+// 顶部工具条 + 地图区 + 按 byte_49715D 布局的右侧面板；全量重绘
+// 公开供阻塞动画流程（收租联动闪烁 0x451985）主动重绘
+void renderGameFrame(Application& app) {
+    renderGameFrameWith(app, kDirtyAll);
 }
 
 void enterGameLoop(Application& app) {
