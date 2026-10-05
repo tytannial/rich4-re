@@ -844,8 +844,10 @@ quickstart 跳过选人界面，`blitScrolledMap` 仅用于选人界面与通关
   且逻辑宽 > 640 时：进入时**两侧填黑一次**（仅全屏剧场模态 `fillBars=true`；叠加式保留
   游戏画面）、事件鼠标坐标 -base、绘制原点 +base（SurfaceOriginGuard 包住 handler）。
 - `uiModalBaseX = (逻辑宽-640)/2`（native/free=0；wide=106）；游戏内循环
-  `runModal(..., false, false)` 直通。叠加式模态 17 处 `fillBars=false`
-  （设置/帮助/热键/日期/询问框/数字框/消息/台词/选骰/交易市场/AI/卡片道具/住院保释）。
+  `runModal(..., false, false)` 直通。叠加式模态 `fillBars=false`
+  （设置/帮助/热键/日期/询问框/数字框/消息/台词/选骰/交易市场/AI/卡片道具/住院保释；
+  **2026-10-05 实机补：银行 4 处**——`bankVisitDialog`（柜员机）/`bankStayDialog`（停留）/
+  週轉 `advHandler`/催收 `dueHandler`；此前用默认 true → 宽屏"金额输入框弹出后两侧黑"）。
 - `renderGameFrame` 入口强制 OriginGuard(0,0)：模态内重绘游戏画面保持宽屏布局，
   模态自身面板居中（两者混叠场景正确）。
 - **C2 坐标回退**：confirm 14 处/4 主对话框架/trade 详情回 640 基准常数（框架统一平移，

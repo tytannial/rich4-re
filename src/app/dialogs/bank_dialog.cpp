@@ -490,7 +490,9 @@ void bankVisitDialog(Application& app) {
         RICH4_LOGI("bank visit: player %d mode %d limit %d (RE 0x4379C9)", p, ui.mode, ui.limit);
         // [RE 0x4370BA/0x43714D] cursorSelect(27,1,0) 面板交互光标；退出恢复默认箭头 41
         app.cursor().select(27, 1, 0);
-        runModal(app, &visitHandler, &ui);
+        runModal(app, &visitHandler, &ui, 0, true, false);
+        // [NEW 实机] fillBars=false：柜员机为游戏内叠加面板（saveRegion/restoreRegion 语义），
+        //   宽屏两侧保留游戏画面（此前默认 true → 一次性填黑虽被每帧重绘盖掉，语义仍不对）
         app.cursor().select(41, 1, 0);
         restoreRegion(app.surface(), ui.bg, ui.bgX, ui.bgY, ui.bgW, ui.bgH);
         return;
