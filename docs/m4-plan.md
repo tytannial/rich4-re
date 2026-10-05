@@ -329,10 +329,11 @@ src/
 截图 API）④ `game_loop.cpp` ⑤ 生成物入 `gen/`。
 
 > **实施状态（2026-10-05）**：G(1/2) 生成物入 `src/gen/` + debug 归 `src/debug/`（`5bd7c8b`）；
-> G(2/2) 完成 `.cpp` 目录细分——`src/app/*_dialog.cpp`（33）→ `src/app/dialogs/`、
-> `ai_card/ai_item` → `src/app/ai/`（`b919f51`，纯 `git mv`，GLOB 零改动、无相对 include）。
-> **剩余**：`game/`+`ui/` 进一步分组（涉及头文件搬迁、63 处 include 需同步）与大文件拆分
-> （①②③④）留后续专项。
+> G(2/2) `.cpp` 目录细分**完成**——`src/app/` 60 文件分为 `dialogs/`（33，`*_dialog.cpp`）、
+> `ai/`（2）、`ui/`（5：game_panel/object_tip/float_message/main_menu/ui_layout）、
+> `game/`（20：流程/渲染/经济/存档/事件等）（`b919f51` + 本批，纯 `git mv`，GLOB 零改动、
+> 无相对 include）。**剩余**：大文件拆分（`turn_system.cpp` 4.2k / `debug.cpp` 3.0k 行、
+> application 调试截图 API）留后续专项。
 
 ---
 
@@ -965,10 +966,10 @@ quickstart 跳过选人界面，`blitScrolledMap` 仅用于选人界面与通关
   application（mediaDir/vsync/fullscreen/字体传入）；RICH4.CFG 红线保持。见 §6。
 - **G 源码结构重组（1/2）✅**（提交 `5bd7c8b`）：5 个生成物集中 `src/gen/`
   （生成脚本路径同步）、`debug.cpp`/`debug_keys.cpp` 归 `src/debug/`、删空目录。
-  **G(2/2) ✅（提交 `b919f51`）**：`.cpp` 目录细分——`src/app/*_dialog.cpp`（33）→
-  `src/app/dialogs/`、`ai_card/ai_item` → `src/app/ai/`（纯 git mv；GLOB 自动覆盖、
-  无相对 include；构建 + 00/20/312/316/320 全 PASS、re_map 通过）。剩余：`game/`+`ui/`
-  进一步分组（头文件搬迁）与大文件拆分（turn_system/debug）留后续专项（§7 实施状态）。
+  **G(2/2) ✅（`b919f51` + 本批）**：`src/app/` 60 文件 `.cpp` 目录细分完成——
+  `dialogs/`（33）/`ai/`（2）/`ui/`（5）/`game/`（20）（纯 git mv；GLOB 自动覆盖、
+  无相对 include；构建 + 00/20/312/320/90 全 PASS、re_map 通过）。剩余：大文件拆分
+  （turn_system 4.2k / debug 3.0k 行）留后续专项（§7 实施状态）。
 - **H 追加体验（1/4）✅**（提交 `a715bde`）：小游戏渲染插值——新增 `kModalFrameEvent`
   （真实时钟每轮派发、虚拟时钟零变化），挖寶/氣球/喜從天降 tick 间位置插值（渲染层只读）。
   H 剩余：8.1 射程（含三档方案，待决策）/8.2 预览高亮/8.4 同格消歧。
