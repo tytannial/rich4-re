@@ -214,8 +214,9 @@ free 3.52 / wide 2.68 ms。详见 `m4-plan.md` §17。
 - **F `rich4.ini` ✅**（`ef21ec9`）：`core/config.{h,cpp}`（INI 解析 / 缺失生成带注释模板 /
   `setConfigValue`；优先级 CLI > ini > RICH4.CFG > 内置默认；通用 `--set k=v`）；接入
   字体/字号/日志路径/媒体目录/vsync/fullscreen。RICH4.CFG 红线保持。
-- **G 结构重组（1/2）✅**（`5bd7c8b`）：生成物集中 `src/gen/`、debug 归 `src/debug/`；
-  G(2/2) `src/app/` 细分与大文件拆分留后续。
+- **G 结构重组 ✅**：(1/2) 生成物集中 `src/gen/`、debug 归 `src/debug/`（`5bd7c8b`）；
+  (2/2) `src/app/` 细分 `dialogs/`（33）+ `ai/`（2）（`b919f51`）；`game//ui/` 进一步分组与
+  大文件拆分（turn_system/debug）留后续专项。
 - **H 追加体验 ✅**：小游戏 tick 间插值（`a715bde`，`kModalFrameEvent` 真实时钟派发 /
   虚拟时钟零变化）、悬停目标预览高亮（`0aad3bc`）、同格多目标消歧（`80f45a0`，无主空地
   并入 y 排序 items 通道）、射程限制**撤回**（用户确认理解有误，保持原版语义，无代码改动）；
