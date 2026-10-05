@@ -12,6 +12,7 @@
 #include "game/app/game_loop.h"      // renderGameFrame（sub_41906A(1) 刷新迁移）
 #include "game/app/item_lines.h"     // kMoneyLines / playLine
 #include "game/app/turn_system.h"    // playEventFlc（破产 FLC556）
+#include "game/app/ui_layout.h"      // uiModalBaseX（640 基准模态居中偏移）
 #include "game/application.h"
 #include "game/core/log.h"
 #include "game/core/trace.h"
@@ -122,6 +123,7 @@ void paintBanner(DefeatState& ds) {
 //   重写以文本渲染（图集帧映射待实机核对，见 docs/reverse/frame-anchor.md）
 void paintCount(DefeatState& ds) {
     Surface& dst = ds.app->surface();
+    // [NEW M4-D 实机] restoreRegion 内部经 deviceX 自动应用绘制原点（handler 内 =base）
     restoreRegion(dst, ds.numBg, 280, 300, 80, 100);
     char buf[16];
     std::snprintf(buf, sizeof(buf), "%d", ds.countdown);
@@ -134,6 +136,9 @@ bool defeatHandler(const SDL_Event* event, void* user) {
     DefeatState& ds = *static_cast<DefeatState*>(user);
     if (!event) {
         ds.countdown = 10;
+        // [NEW M4-D 实机] saveRegion 内部经 deviceX 自动应用绘制原点（handler 内 =base）→
+        //   此处传 640 基准坐标（此前手动 +base 会双重偏移）；退出恢复在 runModal 后
+        //   （origin=0）另按 uiModalBaseX 传画布坐标
         saveRegion(ds.fullBg, ds.app->surface(), 0, 0, 640, 480);
         paintBanner(ds);
         saveRegion(ds.numBg, ds.app->surface(), 280, 300, 80, 100);
@@ -359,7 +364,8 @@ int defeatFlow(Application& app, bool playExitFlc) {
     trace::logf("dialog open name=defeat");
     // [RE 0x406C37] SetTimer(1000ms) → runModal tickMs=1000
     const int confirmed = runModal(app, &defeatHandler, &ds, 1000);
-    restoreRegion(app.surface(), ds.fullBg, 0, 0, 640, 480);
+    // [NEW M4-D 实机] 与 defeatHandler 保存坐标一致（含居中偏移）
+    restoreRegion(app.surface(), ds.fullBg, uiModalBaseX(app.surface()), 0, 640, 480);
     if (confirmed) {
         // [RE 0x407956] 失败鼓励台词 off_4808B2（列26 expr3），对当前玩家（=赢家 AI）
         const int p = st.currentPlayer;
@@ -473,12 +479,15 @@ void gameClearFlow(Application& app) {
             ms.deco.load(std::move(*blob));
         }
         std::vector<uint16_t> bg;
-        saveRegion(bg, app.surface(), 0, 0, 640, 480);
+        // [NEW M4-D 实机] 全屏演出（每 tick 全屏重画于 640 基准 origin 内）→ 快照/恢复
+        //   坐标含居中偏移（此前 0,0 保存 → 宽屏退出后恢复错位）
+        const int base = uiModalBaseX(app.surface());
+        saveRegion(bg, app.surface(), base, 0, 640, 480);
         app.audio().playSceneMusic(6, false); // [RE 0x407771] musicPlayScene(0x8006) 不压栈
         trace::logf("dialog open name=map_select");
         runModal(app, &mapSelHandler, &ms, 50); // [RE 0x40621E] SetTimer 50ms
         app.audio().stopMusic();                // [RE 0x407788] musicStop
-        restoreRegion(app.surface(), bg, 0, 0, 640, 480);
+        restoreRegion(app.surface(), bg, base, 0, 640, 480);
     }
     RICH4_LOGI("gameClearFlow: cleared=%d -> map=%d (RE 0x4075C1/0x4060E9)", cleared, st.mapIndex);
 }

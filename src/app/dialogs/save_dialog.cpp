@@ -164,7 +164,8 @@ int saveDialog(Application& app) {
         readSaveHeader(readableDataFile(app.gameDir(), name), state.slots[i]);
     }
 
-    redrawSaveDialog(state);
+    // [NEW M4-D 实机 2026-10-05] 删除模态外预绘制（同 loadDialog：无 origin 残影；
+    //   handler(nullptr) 进入时以正确 origin 重绘）
     RICH4_LOGI("save dialog (RE 0x404165)");
     // [NEW] named region：槽 0..4（命中帶 x(129,577) y=57+72i 與 MOTION hit 同源）
     {

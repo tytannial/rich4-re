@@ -15,12 +15,40 @@ inline constexpr int kPanelW = 200; // 右栏逻辑宽（原版 440..640）
 // 逻辑画布宽/高（= 设备宽/高 ÷ scale；scale=1 时等于设备尺寸）
 int uiLogicalWidth(const Surface& surface);
 int uiLogicalHeight(const Surface& surface);
+
+// [NEW M4-D 实机] 临时锁定 native(640) 布局 + 世界绘制原点偏移：全屏剧场模态（fillBars）
+//   进入时以原版 640 布局把游戏画面重绘到画布居中区（否则宽屏世界布局直接保留会被两侧
+//   黑边裁掉右栏 → "右栏被切半"观感）。仅在 renderModalBackdrop 期间生效，其余时刻 identity。
+bool layoutNativeLocked();
+// 当前世界绘制原点偏移（= renderModalBackdrop 的 base；其余时刻 0）。
+//   供内部会**绝对 setOrigin** 的绘制段（右栏 game_panel）叠加，与 blit 家族自动 +origin 一致。
+int uiLayoutWorldOriginX();
+
+// [NEW M4-D 实机] RAII：锁定/恢复 native 布局与世界原点（嵌套安全，计数式）
+class LayoutNativeGuard {
+public:
+    explicit LayoutNativeGuard(int worldOriginX = 0);
+    ~LayoutNativeGuard();
+    LayoutNativeGuard(const LayoutNativeGuard&) = delete;
+    LayoutNativeGuard& operator=(const LayoutNativeGuard&) = delete;
+    static bool locked() { return s_depth > 0; }
+    static int worldOriginX() { return s_worldOriginX; }
+
+private:
+    static int s_depth;
+    static int s_worldOriginX;
+    static int s_prevWorldOriginX;
+};
 // 地图区逻辑宽 = 逻辑画布宽 - 右栏（native 440；宽屏 >440）
 int uiMapLogicalWidth(const Surface& surface);
 // 右栏逻辑 x（= 地图区右缘）
 inline int uiPanelLogicalX(const Surface& surface) { return uiMapLogicalWidth(surface); }
 // 右栏绘制原点偏移（= 右栏右移量；右栏函数内坐标保持 440 基准，经 SurfaceOriginGuard 平移）
-inline int uiPanelOffsetX(const Surface& surface) { return uiMapLogicalWidth(surface) - 440; }
+// [NEW M4-D 实机] 叠加世界原点：native 模态背景重绘（renderModalBackdrop）期间右栏
+//   也要整体 +base（game_panel 用绝对 setOrigin，不叠加会覆盖外层原点 → 右栏贴左）
+inline int uiPanelOffsetX(const Surface& surface) {
+    return uiMapLogicalWidth(surface) - 440 + uiLayoutWorldOriginX();
+}
 // [NEW M4-D] 640 基准 UI（主菜单/选人/模态）水平居中偏移：native/free=0；wide(853)=106。
 //   由 Application::dispatchModalAware 统一消费（事件坐标 -base、绘制原点 +base）
 inline int uiModalBaseX(const Surface& surface) {

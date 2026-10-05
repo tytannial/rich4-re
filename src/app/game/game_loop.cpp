@@ -712,12 +712,19 @@ void overlayEventFlcFrame(Application& app) {
     drawEventFlcFrame(app);
 }
 
+// [NEW M4-D 实机] fillBars 模态进入时的背景重绘（native 640 布局居中，见头文件说明）
+void renderModalBackdrop(Application& app, int base) {
+    LayoutNativeGuard layout(base);
+    renderGameFrame(app);
+}
+
 // [NEW M4-C2] 分区重绘：按 dirty 位补画（kDirtyAll = 全量，与前述逐帧全量路径等价）
 void renderGameFrameWith(Application& app, uint8_t dirty) {
     // [NEW M4-D] 游戏世界重绘永远按画布逻辑坐标（不受 640 基准模态 origin 影响）——
     //   模态 handler 内调用本函数重绘游戏画面时（选骰框/交易市场/台词气泡等），
     //   模态自身绘制经 dispatchModalAware +base 居中，而游戏画面保持宽屏布局。
-    SurfaceOriginGuard ogWorld(app.surface(), 0, 0);
+    //   uiLayoutWorldOriginX 仅 renderModalBackdrop 期间 = base（native 背景重绘）。
+    SurfaceOriginGuard ogWorld(app.surface(), uiLayoutWorldOriginX(), 0);
     // [NEW M4-D 实机] 游戏世界重绘不受"模态绘制边界"约束（宽屏游戏画面保持铺满；
     //   模态内的面板/过场元素由 dispatchModalAware 的边界裁剪）
     SurfacePaintClipGuard pcgWorld(app.surface(), -1, -1);

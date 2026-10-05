@@ -226,6 +226,17 @@ free 3.52 / wide 2.68 ms。详见 `m4-plan.md` §17。
   入狱/住院 FLC 回卷拖影、线性放大过滤默认开启。
 - **并入 main ✅（merge `27bc265`）**：M4 36 提交 + main 8 修复合并（构建 + 16 场景冒烟 +
   ctest 全绿）；详见 `m4-plan.md` §19/§19.1。
+- **宽屏全屏模态修复 ✅ 2026-10-05（实机，`m4-plan.md` §20）**：ATM 重影（删模态外无 origin
+  预绘制、save/restore +base）；银行 4 处 fillBars 订正回 true；**全屏剧场模态背景改为
+  native 640 布局重绘居中**（`renderModalBackdrop`+`LayoutNativeGuard`，右栏不再被黑边切半）、
+  handler 返回后补填两侧、退出 `m_forceRepaint` 恢复；`mouseLogicalPos` 减绘制 origin
+  （真实鼠标路径按钮错位根因，debug 合成输入同步 +base）；拍卖静态帧移入 `handler(nullptr)`；
+  分红/confirm/defeat/mapSelect 快照坐标 +base。详见 `ui-controls.md` §22.1。
+- **实机二轮 ✅ 2026-10-05（`m4-plan.md` §20.4）**：**竖排文本修复**（原版 `drawText` align==3
+  = 竖排 `drawTextVertical` 0x44F7C7；重写 text.cpp 测量框宽高写反+首字裁顶 → 日历"星期五"、
+  托管"確定/取消"只显示单字；5 处 align=3 调用点=日历星期×2/托管/右栏页签）；
+  **fillBars 分类定稿**——全屏剧场（两侧黑）=银行停留/百货/医院/监狱/魔法屋/拍卖/开奖/结算等
+  640 铺底界面；叠加式（保留游戏画面）=ATM/新闻/命运/存读档/大地图/设置等面板。
 
 **跨平台 ✅ 2026-09-30**（原 M3-C，Windows x64 + Linux x86-64）：GDI → **FreeType 统一文本渲染**
 （删 366 行 GDI、字体 `resources/Fonts/` 不入库/缺失降级、`kFontSizeScale` 可调）、

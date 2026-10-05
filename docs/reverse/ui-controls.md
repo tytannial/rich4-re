@@ -451,6 +451,28 @@ void pressDown(Surface& dst, int x, int y, int w, int h, int shift, const uint8_
 - **吞事件覆盖层**：动画/提示类 handler 对无关事件 `return true`（转盘/消息框），阻止事件下传场景。
 - `dispatch`（0x4019DD）始终派发给栈顶 handler（`dword_48A010[深度]`）。
 
+### 22.1 宽屏 640 基准框架（M4-D，2026-10-05 实机收口）
+
+- **全屏剧场模态**（`fillBars=true`：银行停留/週轉/催收、百货、医院、监狱、魔法屋、
+  股市、月结/分红/开奖、拍卖、彩票投注、主菜单/选人/通关演出等 640×480 铺底界面）：
+  进入时 `dispatchModalAware` 先 `renderModalBackdrop`（栈内有游戏循环层时，
+  以原版 640 布局把世界重绘到居中区——布局派生经 `LayoutNativeGuard` 临时锁定 640、
+  世界原点 +base，`uiPanelOffsetX` 叠加世界原点），再两侧填黑；handler 返回后补填
+  （handler 内 `renderGameFrame` 覆盖不露）；退出时 `m_forceRepaint` 强制下一帧全量恢复
+  宽屏画面（防静止帧跳过重绘导致黑边残留）。
+- **叠加式模态**（`fillBars=false`）保留游戏画面：ATM 柜员机（320×338 悬浮面板）、
+  新闻/命运（440×480 报纸占地图区、右栏保留）、存读档、大地图、设置/询问框等；
+  `centerBase=false`（选目标/选骰等游戏世界交互）坐标不经 640 基准平移。
+- **竖排文本**：原版 `drawText` **align==3 = 竖排**（`drawTextVertical` 0x44F7C7，
+  逐字符基线 y += 字高+字距）；调用点=日历星期、银行柜台日历、托管"確定/取消"、
+  右栏 4 页签。重写 `text.cpp` 的竖排测量框 = 单字宽 × 总字高，首字基线自缓冲 pad 起。
+- **命中坐标双轨**：handler 内 `event->button.x` 已 -base（帧坐标直接可用）；读实时鼠标的
+  `mouseLogicalPos` 自动减绘制 origin（=base）→ 返回 640 基准，与命中区一致
+  （宽屏"按钮错位"根因修复；debug 合成输入覆盖坐标同步 +base）。
+- **模态外预绘制禁止**（或必须包 `SurfaceOriginGuard(base)` 且 save/restore 坐标 +base）：
+  进入重绘以 `handler(nullptr)` 为准；无 origin 预绘制会在宽画布左侧留未平移残影
+  （ATM 幽灵面板根因），且会被 backdrop 覆盖（拍卖静态帧改在 handler 内绘制）。
+
 ## 23. 交互音效（`audio.cpp`，0x4542CE）
 
 UI 音效与游戏音效槽**是两套**，勿混：

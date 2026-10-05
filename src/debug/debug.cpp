@@ -1634,10 +1634,13 @@ int g_lastPointerY = 0;
 // [NEW M4-D] 合成鼠标事件派发：脚本/region 坐标为 640 基准（原版语义）——
 //   栈顶为 640 基准模态时 +base 转画布坐标后走 dispatchModalAware（事件 -base +
 //   绘制 origin 包裹）；游戏内/非模态 base=0 直通（与原 synthetic dispatch 等价）。
+// [NEW M4-D 实机] 鼠标覆盖坐标同存**画布逻辑坐标**（lx+base），与事件坐标同一域——
+//   mouseLogicalPos 会减去当前绘制原点（=base）恢复 640 基准，两者一致。
 void dispatchSyntheticMouse(Application& app, SDL_Event& ev, int lx, int ly) {
     const int base = (app.events().depth() > 0 && app.events().topCenterBase())
                          ? uiModalBaseX(app.surface())
                          : 0;
+    app.setMouseOverride(lx + base, ly);
     switch (ev.type) {
         case SDL_EVENT_MOUSE_MOTION:
             ev.motion.x = static_cast<float>(lx + base);
@@ -1668,7 +1671,6 @@ void dispatchQueuedInputs(Application& app) {
     while (!g_queue.empty() && g_queue.front().frame <= g_inputTick) {
         const QueuedInput q = g_queue.front();
         g_queue.erase(g_queue.begin());
-        app.setMouseOverride(q.x, q.y);
         SDL_Event ev{};
         ev.type = SDL_EVENT_MOUSE_MOTION;
         ev.motion.x = static_cast<float>(q.x);
@@ -2623,7 +2625,7 @@ bool execLine(Application& app, const std::string& line, std::string& err) {
 }
 
 void synthesizeClick(Application& app, int x, int y, bool right, bool downOnly) {
-    app.setMouseOverride(x, y);
+    // 覆盖坐标由 dispatchSyntheticMouse 统一设置（lx+base，画布逻辑域）
     if (!right) {
         app.setUiClicked();
     }

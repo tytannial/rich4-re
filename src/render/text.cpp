@@ -411,17 +411,26 @@ void TextRenderer::drawText(Surface& dst, const char* text, int x, int y, int al
         lineWidths.push_back(penX);
     }
 
+    // [RE 0x44F7C7] 竖排行距 = 字高 + 字距 + 描边补偿（scale 下设备化）
+    int vLineH = surfScale == 1.0f ? impl->fontSize + impl->spacing
+                                   : static_cast<int>((impl->fontSize + impl->spacing) * surfScale + 0.5f);
+    if ((impl->style & 6) != 0) {
+        vLineH += u;
+    }
+
     // rc = DrawTextW(DT_CALCRECT) 尺寸 + 边距 10（原版 rc.right/bottom += 10；scale 下按 pad）
     int rcW = textWidth + pad;
     int rcH = static_cast<int>(lines.size()) * lineHeight + pad;
     if (align == 3) {
-        // 竖排：交换宽高（原版 rc.right = v8; rc.bottom = v7）——逐字符竖排总高 × 单字宽
+        // 竖排：包围盒 = 单字宽 × 竖排总高（原版交换横排测量宽高 rc.right=v8/rc.bottom=v7）。
+        // [NEW M4-D 实机] 此前宽高写反（rcW=总高、rcH=单字高）→ 测量搜索框只覆盖首字一小段，
+        //   竖排文本仅显示第一个字/半字（日历"星期五"、托管"確定/取消"实机问题根因）
         int vCount = 0;
         for (const Line& ln : lines) {
             vCount += static_cast<int>(ln.cps.size());
         }
-        rcW = vCount * lineHeight + pad;
-        rcH = px + pad;
+        rcW = px + pad;
+        rcH = vCount * vLineH + pad;
     }
     int rcLeft = 0;
     if (align == 4 || align == 7) {
@@ -430,15 +439,13 @@ void TextRenderer::drawText(Surface& dst, const char* text, int x, int y, int al
     }
 
     if (align == 3) {
-        // [RE 0x44F7C7] drawTextVertical：逐字符竖排（行距 = 字高 + 字距 + 描边补偿；scale 下设备化）
-        int lineH = surfScale == 1.0f
-                        ? impl->fontSize + impl->spacing
-                        : static_cast<int>((impl->fontSize + impl->spacing) * surfScale + 0.5f);
-        if ((impl->style & 6) != 0) {
-            lineH += u;
-        }
+        const int lineH = vLineH;
+        // [NEW M4-D 实机] 首字基线自缓冲顶部下移 **ascent**：字形在基线上方 bearingY 处
+        //   绘制，bearingY 可达 ascent（≈14+px）——用 pad(10) 仍会裁掉首字上半
+        //   （日历"星期五"/托管"確定"首字缺半个的根因）
+        const int vTop = ascent;
         auto drawVertical = [&](int ox, int oy) {
-            int vy = oy;
+            int vy = vTop + oy;
             for (const Line& ln : lines) {
                 for (uint32_t cp : ln.cps) {
                     const Glyph& g = loadGlyph(cp);
@@ -449,7 +456,7 @@ void TextRenderer::drawText(Surface& dst, const char* text, int x, int y, int al
             }
         };
         auto drawVerticalBg = [&](int ox, int oy) {
-            int vy = oy;
+            int vy = vTop + oy;
             for (const Line& ln : lines) {
                 for (uint32_t cp : ln.cps) {
                     const Glyph& g = loadGlyph(cp);

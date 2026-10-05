@@ -3,6 +3,7 @@
 #include <SDL3/SDL.h>
 
 #include "game/app/event_stack.h"
+#include "game/app/ui_layout.h"
 #include "game/application.h"
 #include "game/core/log.h"
 #include "game/core/trace.h"
@@ -132,11 +133,14 @@ bool confirmDialog(Application& app, const char* text, int cx, int cy) {
     std::vector<uint16_t> bg;
     const int w = ui.frame(0).width;
     const int h = ui.frame(0).height;
-    saveRegion(bg, app.surface(), st.originX, st.originY, w, h);
+    // [NEW M4-D 实机] save/restore 用画布坐标（含 640 基准模态居中偏移 base）：确认框
+    //   绘制在 origin +base 下；此前用 640 坐标保存/恢复 → 宽屏退出后恢复错位并残留面板
+    const int base = uiModalBaseX(app.surface());
+    saveRegion(bg, app.surface(), st.originX + base, st.originY, w, h);
     RICH4_LOGI("confirm dialog at (%d,%d)%s (RE 0x453A32)", cx, cy,
                text ? " +text (RE 0x440BA8)" : "");
     const int result = runModal(app, &confirmEventHandler, &st, 0, true, false);
-    restoreRegion(app.surface(), bg, st.originX, st.originY, w, h);
+    restoreRegion(app.surface(), bg, st.originX + base, st.originY, w, h);
     return result == 1;
 }
 

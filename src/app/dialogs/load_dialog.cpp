@@ -191,7 +191,8 @@ int loadDialog(Application& app) {
         return -1;
     }
 
-    redrawLoadDialog(state);
+    // [NEW M4-D 实机 2026-10-05] 删除模态外预绘制：此前无 640 基准 origin，宽画布下
+    //   在左侧留未平移残影；runModal 进入时 handler(nullptr) 会以正确 origin 重绘
     RICH4_LOGI("load dialog: %d slots scanned (RE 0x403D74)", kSlotCount);
     // [NEW] named region：槽 0..5（x(129,577) y=24+72i 與 MOTION hit 同源）
     {

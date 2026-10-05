@@ -1107,9 +1107,10 @@ bool stayHandler(const SDL_Event* event, void* user) {
                 AdvCtx adv;
                 adv.app = &app;
                 adv.sheet = ui.sheet;
-                const int r = runModal(app, &advHandler, &adv, 100, true, false); // [RE 0x4354xx]
-                // [NEW 实机] fillBars=false：银行界面为游戏内叠加模态（与存读档/大地图同类），
-                //   宽屏两侧保留游戏画面（此前默认 true → 弹出金额输入框时两侧黑）
+                // [NEW M4-D 实机 2026-10-05] fillBars 恢复默认 true：银行界面为全屏剧场
+                //   模态（週轉帧 2 同为 640×480 铺底）→ 宽屏两侧黑边、内容居中（用户要求）。
+                //   9434b10 曾误判为叠加式（历史记录见 m4-plan §18.1）
+                const int r = runModal(app, &advHandler, &adv, 100); // [RE 0x4354xx]
                 if (r != 0) {
                     ui.state = 11; // 週轉退出码 1 → 直接离开银行
                 } else {
@@ -1245,8 +1246,8 @@ void bankStayDialog(Application& app, int cellEntId) {
                    "assets=%d (RE 0x436668)",
                    ui.own ? 1 : 0, cellEntId, specObjId, specIdx, specOwner, p, assets);
         app.audio().pushSceneMusic(4); // [RE 0x43674F] musicPlayScene(4)
-        runModal(app, &stayHandler, &ui, 50, true, false); // [RE 0x43675D] SetTimer 50ms
-        // [NEW 实机] fillBars=false（游戏内叠加模态；宽屏两侧保留游戏画面，见 1110 注）
+        runModal(app, &stayHandler, &ui, 50); // [RE 0x43675D] SetTimer 50ms
+        // [NEW M4-D 实机 2026-10-05] fillBars 默认 true（全屏剧场，640×480 大堂铺底）
         app.audio().resumeSceneMusic(); // [RE 0x436765] musicStackPopRestore
         return;
     }
@@ -1307,7 +1308,7 @@ void bankDueDialog(Application& app) {
     ui.app = &app;
     ui.sheet = &sheet;
     app.audio().pushSceneMusic(4); // [RE 0x4369E2]
-    runModal(app, &dueHandler, &ui, 50, true, false); // [RE 0x4369F1]  // [NEW 实机] 同 1110
+    runModal(app, &dueHandler, &ui, 50); // [RE 0x4369F1]（全屏剧场 fillBars 默认 true，见 1110 注）
     app.audio().resumeSceneMusic();   // [RE 0x436A03]
     RICH4_LOGI("bankDue: player %d collect window done (RE 0x43695E)", p);
 }

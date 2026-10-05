@@ -9,6 +9,7 @@
 
 #include "game/app/economy.h"
 #include "game/app/event_stack.h"
+#include "game/app/ui_layout.h"
 #include "game/application.h"
 #include "game/core/encoding.h"
 #include "game/core/log.h"
@@ -146,6 +147,8 @@ bool dividendConfirmHandler(const SDL_Event* event, void* user) {
     Application& app = *ui.app;
     if (!event) { // 0x401
         Surface& dst = app.surface();
+        // [NEW M4-D 实机] restoreRegion 内部经 deviceX 自动应用绘制原点（=模态 base）——
+        //   此处传 640 基准坐标即可；此前手动 +base 在 origin=base 下双重偏移
         dst.clear();
         restoreRegion(dst, ui.bg, kFrameX, kFrameY, kFrameW, kFrameH);
         app.audio().playEffect(kSfxDividend); // [RE 0x42B4CE] audioPlayEffect(dword_4755A8, 0)
@@ -201,8 +204,14 @@ void dividendMeeting(Application& app) {
     if (ui.alive == 0) {
         return;
     }
-    drawDividendTable(ui);
-    saveRegion(ui.bg, app.surface(), kFrameX, kFrameY, kFrameW, kFrameH);
+    // [NEW M4-D 实机] 预绘制包 640 基准 origin（与模态内 dispatchModalAware 同域居中）；
+    //   快照/恢复坐标同步 +base——否则宽屏下表格贴左、确认黑屏后恢复错位
+    const int base = uiModalBaseX(app.surface());
+    {
+        SurfaceOriginGuard og(app.surface(), base, 0);
+        drawDividendTable(ui);
+    }
+    saveRegion(ui.bg, app.surface(), kFrameX + base, kFrameY, kFrameW, kFrameH);
     runModal(app, &dividendConfirmHandler, &ui, 1000); // [RE 0x42B3EB] SetTimer 1000ms
     // [RE 0x42BA97 尾] 分红入银行（不足由现金补，再不足淘汰）
     for (int i = 0; i < ui.alive; ++i) {

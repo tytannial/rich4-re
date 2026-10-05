@@ -1392,7 +1392,9 @@ void newsRun(Application& app, int idx) {
     }
     trace::logf("news idx=%d", idx);
     RICH4_LOGI("news event: idx %d text=%s (RE 0x44B6DF)", idx, kNewsTexts[idx]);
-    runModal(app, &newsHandler, &ctx, 16);
+    // [NEW M4-D 实机 2026-10-05] fillBars=false：新闻为 440×480 报纸面板叠加在地图区
+    //   （右栏保留游戏信息）→ 宽屏两侧保持游戏画面；此前默认 true 被填黑收窄
+    runModal(app, &newsHandler, &ctx, 16, true, false);
 }
 
 } // namespace

@@ -12,6 +12,7 @@
 #include "game/app/event_common.h"
 #include "game/app/event_stack.h"
 #include "game/app/message_dialog.h"
+#include "game/app/ui_layout.h"
 #include "game/application.h"
 #include "game/core/log.h"
 #include "game/app/debug/debug.h"
@@ -481,18 +482,23 @@ void bankVisitDialog(Application& app) {
         ui.mode = pl.bankFinanceFlags != 0 ? 1 : 0;
         ui.limit = ui.mode != 0 ? pl.cash : pl.bank;
         std::snprintf(ui.amount, sizeof(ui.amount), "0");
+        // [NEW M4-D 实机] 保存/恢复区域用**画布坐标**（含 640 基准模态居中偏移 base）：
+        //   runModal 内 handler 绘制经 dispatchModalAware 的 origin +base，若此处仍用
+        //   原版坐标 (60,71) 保存/恢复 → 宽屏下背景快照与面板错位（ATM 幽灵重影根因）。
+        const int base = uiModalBaseX(app.surface());
         ui.bgW = sheet.frame(0).width;
         ui.bgH = sheet.frame(0).height;
-        ui.bgX = kVisitX;
+        ui.bgX = kVisitX + base;
         ui.bgY = kVisitY;
         saveRegion(ui.bg, app.surface(), ui.bgX, ui.bgY, ui.bgW, ui.bgH);
-        redrawVisit(ui);
         RICH4_LOGI("bank visit: player %d mode %d limit %d (RE 0x4379C9)", p, ui.mode, ui.limit);
         // [RE 0x4370BA/0x43714D] cursorSelect(27,1,0) 面板交互光标；退出恢复默认箭头 41
         app.cursor().select(27, 1, 0);
+        // [NEW M4-D 实机] 删除模态外预绘制 redrawVisit：runModal 进入时 handler(nullptr)
+        //   会以正确 origin 绘制同一面板；此前无 origin 的预绘制在宽画布左侧留下
+        //   未平移的"幽灵面板"（实机重影根因）。fillBars=false = 叠加式（ATM 面板叠加在
+        //   宽屏游戏画面上，两侧保留游戏画面——2026-10-05 实机要求"保持宽屏底色"）
         runModal(app, &visitHandler, &ui, 0, true, false);
-        // [NEW 实机] fillBars=false：柜员机为游戏内叠加面板（saveRegion/restoreRegion 语义），
-        //   宽屏两侧保留游戏画面（此前默认 true → 一次性填黑虽被每帧重绘盖掉，语义仍不对）
         app.cursor().select(41, 1, 0);
         restoreRegion(app.surface(), ui.bg, ui.bgX, ui.bgY, ui.bgW, ui.bgH);
         return;

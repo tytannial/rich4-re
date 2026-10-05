@@ -918,7 +918,10 @@ void hospitalVisitDialog(Application& app) {
     ui.app = &app;
     ui.sheet = &sheet;
     ui.npcMark = &npcMark;
-    runModal(app, &hospHandler, &ui, 100, true, false);
+    // [NEW M4-D 实机 2026-10-05] fillBars=true：医院/监狱为全屏 640×480 底图
+    //   （panel[65]/[63] 帧 0 全屏场景）→ 宽屏两侧黑边、内容居中（此前 false 两侧
+    //   显示游戏地图，实机反馈"没有将底色置黑"）
+    runModal(app, &hospHandler, &ui, 100);
     app.audio().resumeSceneMusic(); // [RE 0x454BCC]
     RICH4_LOGI("hospitalVisit done (RE 0x43E9A4)");
 }
@@ -983,7 +986,7 @@ void jailBailDialog(Application& app) {
     ui.app = &app;
     ui.sheet = &sheet;
     ui.npcMark = &npcMark;
-    runModal(app, &bailHandler, &ui, 100, true, false);
+    runModal(app, &bailHandler, &ui, 100); // [NEW M4-D 实机] fillBars=true（同医院注）
     app.audio().resumeSceneMusic(); // [RE 0x454BCC] sub_454BCC 弹栈恢复
     RICH4_LOGI("jailBail done (RE 0x43D304)");
 }

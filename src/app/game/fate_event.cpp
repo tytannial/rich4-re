@@ -883,7 +883,9 @@ void fateRun(Application& app, int tableIdx) {
     }
     trace::logf("fate idx=%d", tableIdx);
     RICH4_LOGI("fate event: idx %d text=%s (RE 0x44DB81)", tableIdx, kFateTexts[tableIdx]);
-    runModal(app, &fateHandler, &ctx, 16);
+    // [NEW M4-D 实机 2026-10-05] fillBars=false：命运为报纸式面板叠加（同新闻）→
+    //   宽屏两侧保持游戏画面；此前默认 true 被填黑收窄
+    runModal(app, &fateHandler, &ctx, 16, true, false);
 }
 
 // ===== 触发判定（[RE 0x44BB4B fateEventCheck]）=====

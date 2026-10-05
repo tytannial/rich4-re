@@ -101,6 +101,10 @@ struct AuctionCtx {
     int price = 0;
     int seller = -1;
     int objId = 0;
+    // [NEW M4-D 实机] 静态画面绘制参数（原 runAuction 模态外预绘制局部量）：
+    //   缩略图帧 + 行数；静态绘制移入模态进入 handler(nullptr)（backdrop 之后，见下）
+    int thumbFrame = 0;
+    int rowsCount = 0;
     int state = 0;          // byte_48C4AC
     int curSlot = 0;        // dword_48C4A4 b0
     int bubble = 0;         // (>>4)&3：0=价 1=PASS 2=放弃
@@ -491,12 +495,63 @@ void tickBlink(AuctionCtx& ui) {
     }
 }
 
+// [RE 0x43C32B] 静态画面（帧 0 背景 + 遮罩 + 缩略图 + 標價 + 各玩家行）
+// [NEW M4-D 实机 2026-10-05] 从 runAuction 模态外预绘制移入模态进入 handler(nullptr)：
+//   fillBars 模态进入时 dispatchModalAware 会先以 native 布局重绘游戏画面背景
+//   （renderModalBackdrop），模态外预绘制会被该重绘覆盖（实机"拍卖帧丢失只剩消息框"）。
+//   绘制在 dispatch 的 640 基准 origin 内（与模态内其它绘制同域）。
+//   幂等：出列行（player=-1）跳过；forceRepaint 重复调用只重涂同内容。
+void drawAuctionStatic(AuctionCtx& ui) {
+    Application& app = *ui.app;
+    GameState& st = app.gameState();
+    Surface& dst = app.surface();
+    blitElementOpaque(dst, ui.sheet.frame(kFrameBg), 0, 0);
+    blitElement(dst, ui.sheet.frame(kFrameLeftMask), 123, 24, false);
+    blitElement(dst, ui.sheet.frame(kFrameRightMask), 67, 63, false);
+    blitElement(dst, ui.sheet.frame(ui.thumbFrame), 232, 180, false);
+    app.text().setFont(18, 0xFFFFFF, 1052688, 3, 0);
+    app.text().drawText(dst, kTextBidLabel, 182, 242, 0);
+    char buf[32];
+    std::snprintf(buf, sizeof(buf), "%d", ui.price);
+    app.text().drawText(dst, buf, 272, 262, 1);
+    bool faceDone = false;
+    for (int i = 0; i < ui.rowsCount; ++i) {
+        const int y = kRowY0 + 120 * i;
+        const int p = ui.rows[i].player;
+        if (p <= 0) {
+            continue;
+        }
+        const Player& pl = st.players[p - 1];
+        if (ui.rows[i].status != 0) {
+            if (ui.rows[i].status == 8) {
+                std::snprintf(buf, sizeof(buf), "%d", pl.cash);
+                app.text().drawText(dst, buf, 620, y + 14, 1);
+            } else {
+                app.text().drawText(dst, kStatusTexts[ui.rows[i].status & 7], 590, y + 14, 2);
+            }
+            blitSpriteFrame(dst, ui.rows[i].status == 7 ? ui.rows[i].sprNormal : ui.rows[i].sprRoll,
+                            0, kRowX, y);
+            ui.rows[i].player = -1; // [RE 0x43C4DE] 画后出列 + 清状态
+            ui.rows[i].status = 0;
+        } else {
+            if (!faceDone) { // [RE 0x43C4F8] 首个正常行画表情帧（原版一次性 quirk）
+                faceDone = true;
+                blitElement(dst, ui.sheet.frame(78 + pl.charIndex), kRowX, y, false);
+            }
+            std::snprintf(buf, sizeof(buf), "%d", pl.cash);
+            app.text().drawText(dst, buf, 620, y + 14, 1);
+            blitSpriteFrame(dst, ui.rows[i].sprNormal, 0, kRowX, y);
+        }
+    }
+}
+
 bool auctionHandler(const SDL_Event* event, void* user) {
     AuctionCtx& ui = *static_cast<AuctionCtx*>(user);
     Application& app = *ui.app;
     GameState& st = app.gameState();
     Surface& dst = app.surface();
-    if (!event) { // [RE 0x401/0x405] 初始：静态画面已绘，开场文本
+    if (!event) { // [RE 0x401/0x405] 初始：静态画面（backdrop 之后绘制）+ 开场文本
+        drawAuctionStatic(ui);
         ui.msg.setup(ui.sheet, kFrameMsg, 410, 60, 0, 0, 1052688, 0);
         ui.state = 1;
         ui.msg.show(app, kTextOpen);
@@ -754,48 +809,10 @@ bool runAuction(Application& app, int seller, int objId, bool playMusic) {
         return false; // [RE 0x43C315]
     }
 
-    // [RE 0x43C32B] 静态画面
-    Surface& dst = app.surface();
-    blitElementOpaque(dst, ui.sheet.frame(kFrameBg), 0, 0);
-    blitElement(dst, ui.sheet.frame(kFrameLeftMask), 123, 24, false);
-    blitElement(dst, ui.sheet.frame(kFrameRightMask), 67, 63, false);
-    blitElement(dst, ui.sheet.frame(thumbFrame), 232, 180, false);
-    app.text().setFont(18, 0xFFFFFF, 1052688, 3, 0);
-    app.text().drawText(dst, kTextBidLabel, 182, 242, 0);
-    char buf[32];
-    std::snprintf(buf, sizeof(buf), "%d", ui.price);
-    app.text().drawText(dst, buf, 272, 262, 1);
-    bool faceDone = false;
-    for (int i = 0; i < rows; ++i) {
-        const int y = kRowY0 + 120 * i;
-        const int p = ui.rows[i].player;
-        if (p <= 0) {
-            continue;
-        }
-        const Player& pl = st.players[p - 1];
-        if (ui.rows[i].status != 0) {
-            if (ui.rows[i].status == 8) {
-                std::snprintf(buf, sizeof(buf), "%d", pl.cash);
-                app.text().drawText(dst, buf, 620, y + 14, 1);
-            } else {
-                app.text().drawText(dst, kStatusTexts[ui.rows[i].status & 7], 590, y + 14, 2);
-            }
-            blitSpriteFrame(dst, ui.rows[i].status == 7 ? ui.rows[i].sprNormal
-                                                        : ui.rows[i].sprRoll,
-                            0, kRowX, y);
-            ui.rows[i].player = -1; // [RE 0x43C4DE] 画后出列 + 清状态
-            ui.rows[i].status = 0;
-        } else {
-            if (!faceDone) { // [RE 0x43C4F8] 首个正常行画表情帧（原版一次性 quirk）
-                faceDone = true;
-                blitElement(dst, ui.sheet.frame(78 + pl.charIndex), kRowX, y, false);
-            }
-            std::snprintf(buf, sizeof(buf), "%d", pl.cash);
-            app.text().drawText(dst, buf, 620, y + 14, 1);
-            blitSpriteFrame(dst, ui.rows[i].sprNormal, 0, kRowX, y);
-        }
-    }
-    app.renderFrame();
+    // [RE 0x43C32B] 静态画面：绘制已移至 auctionHandler(nullptr)（模态进入、backdrop 之后；
+    //   [NEW M4-D 实机 2026-10-05] 预绘制会被 renderModalBackdrop 覆盖 → 只传参数）
+    ui.thumbFrame = thumbFrame;
+    ui.rowsCount = rows;
 
     if (playMusic) {
         app.audio().pushSceneMusic(5); // [RE 0x43C6D4]

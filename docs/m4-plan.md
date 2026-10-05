@@ -845,9 +845,10 @@ quickstart 跳过选人界面，`blitScrolledMap` 仅用于选人界面与通关
   游戏画面）、事件鼠标坐标 -base、绘制原点 +base（SurfaceOriginGuard 包住 handler）。
 - `uiModalBaseX = (逻辑宽-640)/2`（native/free=0；wide=106）；游戏内循环
   `runModal(..., false, false)` 直通。叠加式模态 `fillBars=false`
-  （设置/帮助/热键/日期/询问框/数字框/消息/台词/选骰/交易市场/AI/卡片道具/住院保释；
-  **2026-10-05 实机补：银行 4 处**——`bankVisitDialog`（柜员机）/`bankStayDialog`（停留）/
-  週轉 `advHandler`/催收 `dueHandler`；此前用默认 true → 宽屏"金额输入框弹出后两侧黑"）。
+  （设置/帮助/热键/日期/询问框/数字框/消息/台词/选骰/交易市场/AI/卡片道具/住院保释）。
+  ~~2026-10-05 实机补：银行 4 处 fillBars=false~~ **【已订正，见 §20】**
+  9434b10 曾把银行 4 处（柜员机/停留/週轉/催收）误判为叠加式——银行界面为 640×480
+  全屏铺底，应为全屏剧场 `fillBars=true`（用户 2026-10-05 反馈要求两侧黑边内容居中）。
 - `renderGameFrame` 入口强制 OriginGuard(0,0)：模态内重绘游戏画面保持宽屏布局，
   模态自身面板居中（两者混叠场景正确）。
 - **C2 坐标回退**：confirm 14 处/4 主对话框架/trade 详情回 640 基准常数（框架统一平移，
@@ -1005,3 +1006,90 @@ quickstart 跳过选人界面，`blitScrolledMap` 仅用于选人界面与通关
 - **M4 并入 main ✅（2026-10-05，merge `27bc265`）**：`feat/m4-render-ui` 36 提交并入
   main（3 处冲突解决：map_render gray+空 spr 复合、target_select cursorFrames+高亮并存、
   address-map 重生成）；合并后构建通过、16 场景冒烟全 PASS、ctest/L0 通过。
+
+## 20. 宽屏全屏模态修复（2026-10-05 实机，并入 main 后）
+
+**实机反馈**：① ATM 面板重影；② 银行/百货/医院/监狱/魔法屋等地图路标 UI 大界面
+两侧仍是游戏画面且按钮错位；要求"原版全屏 UI 画面保持比例置中、两侧黑色填充"。
+
+### 20.1 根因
+
+| # | 现象 | 根因 |
+|---|------|------|
+| 1 | ATM 重影 | `bankVisitDialog` 在 `runModal` **之前**预绘制 `redrawVisit`（无 origin，画在画布 (60,71)），模态内每帧重绘在 `base+(60,71)` → 左侧残留未平移"幽灵面板"；`saveRegion/restoreRegion` 也用 640 坐标 |
+| 2 | 按钮错位 | 模态命中用 `Application::mouseLogicalPos`（读 SDL 实时鼠标）——宽屏返回**画布坐标**，未减模态 origin=base → 与 640 基准命中区整体差 106px（银行停留/保释/百货/数字框/小游戏娃娃）|
+| 3 | 两侧游戏画面 | 9434b10 将银行 4 处误设 `fillBars=false`（银行实为全屏铺底）|
+| 4 | 右栏被切半 | 仅填黑两侧而保留宽屏世界画面 → 640 区里宽屏右栏（653..853）被黑边裁掉；原版语义背景应为完整 640 布局画面 |
+| 5 | 退出后黑边残留 | 填黑后静止帧跳过重绘（`idleFrame`）不会自愈 |
+
+### 20.2 修复
+
+- **fillBars 全屏剧场框架增强**（`application.cpp`）：
+  - 进入时先 `renderModalBackdrop(*this, base)`——`LayoutNativeGuard(base)`（布局派生临时锁定
+    640：`uiLayout.h` + 世界原点；`uiPanelOffsetX` 叠加世界原点）把游戏画面以**原版 640 布局**
+    重绘到居中区（完整右栏在 440..640），再两侧填黑；仅栈内有游戏循环层时执行
+    （`EventStack::hasGameplayLayer`，主菜单/选人赛前模态不重绘世界）。
+  - handler 返回后重填两侧（handler 内 `renderGameFrame` 可能覆盖）。
+  - 从填黑模态退出（栈顶转非 centerBase）→ `m_forceRepaint=true`，下一帧游戏循环
+    `nullptr` 分支全量重绘恢复宽屏画面。
+- **mouseLogicalPos 减绘制 origin**（`application.cpp`）：模态 dispatch 期间 origin=base →
+  返回 640 基准坐标；debug 合成输入覆盖坐标同步 `+base`（`dispatchSyntheticMouse` 统一），
+  headless 与真实鼠标路径一致。
+- **预绘制收口**：ATM/存读档删除模态外预绘制（`handler(nullptr)` 进入时以正确 origin 重绘）；
+  拍卖静态帧移入 `auctionHandler(nullptr)`（否则被 backdrop 覆盖）；分红预绘制包
+  `SurfaceOriginGuard` + 快照/恢复坐标 `+base`；confirm/defeat/mapSelect 的
+  `saveRegion/restoreRegion` 坐标 `+base`。
+- **银行 4 处 `fillBars` 恢复默认 true**（订正 9434b10）。
+
+### 20.3 验证
+
+- native：ATM/拍卖/医院/监狱/百货/魔法屋/开奖/月结等修正区与 native 截图像素级一致
+  （409k 像素仅 356 差异=光标/闪烁）；退出后两侧恢复游戏画面。
+- wide：截图像素验证——中间区 106..746 与 native 全图几乎逐像素一致、两侧恒黑；
+  `mouseLogicalPos` 真实鼠标路径（`--game-click` warp，wide 点击 (451,345)）命中银行
+  "申請貸款"（DBG 实测 mouse=(345,345) originX=106 event=(345,345) hit=1）。
+- 回归：228/192/320/114/110/54/66/56/258/222/286/246/252/220/234/283/112/120
+  native + wide 全 PASS（含 20.2 各项对应场景）。
+
+### 20.4 实机二轮：竖排文本 + fillBars 分类订正（2026-10-05）
+
+**实机反馈**：① 日历"星期"显示错误；② 托管界面"確定/取消"字符显示错误；
+③ ATM 被错误收窄（应保持宽屏底色/游戏画面）；④ 医院/监狱没有将底色置黑；
+⑤ 新闻/命运界面被左右压缩（同 ATM）。
+
+**根因与修复**：
+
+| # | 现象 | 根因 | 修复 |
+|---|------|------|------|
+| 1/2 | "星期五"只剩首字、"確定/取消"只剩单字 | 原版 `drawText` **align==3 = 竖排**（`drawTextVertical` 0x44F7C7）；重写 text.cpp 虽实现了竖排，但测量搜索框**宽高写反**（rcW=竖排总高、rcH=单字高）→ measure 只覆盖首字；且首字基线从缓冲区 y=0 起（字形上半被裁） | `text.cpp`：align==3 时 `rcW=单字宽+pad / rcH=竖排总高+pad`；竖排基线自 `pad` 起（5 处 align=3 调用点均为原版竖排语义：日历星期×2/托管確定取消/右栏 4 页签）|
+| 3/5 | ATM/新闻/命运两侧黑 | 三者均为**叠加式**面板（ATM 320×338 悬浮、新闻/命运 440×480 报纸占地图区、右栏保留）→ 应 `fillBars=false` | `bankVisitDialog`/`newsEvent`/`fateEvent` 改 `fillBars=false`（ATM 保留 20.2 的删预绘制+save/restore +base 修复）|
+| 4 | 医院/监狱两侧显示游戏地图 | panel[65]/[63] 帧 0 是**全屏 640×480 场景**（含右栏区域），应两侧黑+全屏居中 | `hospitalVisitDialog`/`jailBailDialog` 改 `fillBars=true`（订正此前叠加式分类）|
+
+**分类基准（2026-10-05 定稿）**：
+- **全屏剧场（fillBars=true，两侧黑+640 居中）**：银行停留/週轉/催收、百货、医院、监狱、
+  魔法屋、拍卖、开奖、结算/月结、分红、股市、彩票投注、主菜单/选人/通关演出。
+- **叠加式（fillBars=false，保留游戏画面）**：ATM 柜员机、新闻、命运、存读档、大地图、
+  设置/帮助/热键/日期/询问框/数字框/消息/台词/选骰/设施/研究所/交易市场/AI/卡片道具/
+  住院保释面板（选择面板）。
+
+**附带修正（saveRegion/restoreRegion origin 语义）**：`saveRegion/restoreRegion` 内部经
+`deviceX/deviceY` **自动应用绘制原点**（同 blit 家族）→ 模态 handler 内（origin=base）
+调用时一律传 640 基准坐标，不得手动 +base（20.2 在 dividend handler / defeat handler
+内手动 +base 会造成双重偏移——本轮已订正；runModal 外调用（bank/confirm/mapSelect/
+defeatFlow 尾）origin=0 保留手动 +base）。
+
+**三轮修正（2026-10-05 实机：拍卖嵌套未置黑 + 竖排首字仍缺半）**：
+
+- **嵌套 fillBars 模态填黑失效**：新闻/命运/魔法屋内调用 `runAuction` 时，拍卖层进入
+  `dispatchModalAware` 发生在**外层 handler 调用栈内**——外层 `SurfaceOriginGuard(=base)`
+  与 `paintClip(base..base+640)` 尚未析构/恢复，填黑被平移且被裁剪带裁掉（顶层进入无此问题）。
+  修复：进入分支的 backdrop/填黑与末尾事后填黑均加 `SurfaceOriginGuard(0,0)` +
+  `SurfacePaintClipGuard(-1,-1)`（绝对画布坐标 + 绕过外层裁剪）。
+- **竖排首字仍缺半个**：首字基线此前用 `pad=10` 起，但字形上缘在基线以上 `bearingY`
+  （≈ascent 14+px）→ 改用 `ascent` 作首字基线（`vTop = ascent`）。
+
+**验证**：wide 截图——日历竖排"星期五"完整（首字含）、托管竖排"確定/取消"完整、
+新闻触发的拍卖两侧纯黑（strip max=0，嵌套路径）、ATM/新闻/命运两侧保留游戏画面、
+医院/监狱两侧纯黑、defeat 倒计时+"PLAY AGAIN"横幅居中（native 背景+两侧黑）；
+ATM 真实鼠标命中（`--game-click` (451,345) → hit=1 + number input）；
+54/66/228/68/110/114/258/222/00/248/320 + 286/56/220/246/192/234 native + wide 全 PASS。

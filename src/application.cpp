@@ -2,6 +2,7 @@
 
 #include "game/app/debug/debug.h"
 #include "game/app/game_init.h"
+#include "game/app/game_loop.h"
 #include "game/app/ui_layout.h"
 #include "game/render/blit.h"
 #include "game/app/game_shutdown.h"
@@ -285,7 +286,13 @@ void Application::pumpEvents() {
 bool Application::dispatchModalAware(const SDL_Event* event) {
     const int base = uiModalBaseX(m_surface);
     if (!(base > 0 && m_events.depth() > 0 && m_events.topCenterBase())) {
-        m_modalBaseFilled = false;
+        // [NEW M4-D 实机] 从"两侧已填黑"的全屏剧场模态退出（或切到游戏内循环）时，画布
+        //   两侧仍是黑色（游戏画面被填黑覆盖且静止帧跳过重绘不会自愈）→ 标记下一帧强制
+        //   重绘栈顶（游戏循环 nullptr 分支 = renderGameFrame 全量，两侧游戏画面恢复）
+        if (m_modalBaseFilled) {
+            m_modalBaseFilled = false;
+            m_forceRepaint = true;
+        }
         if (!event) {
             if (EventStack::Handler h = m_events.top()) {
                 return h(nullptr, m_events.topUser());
@@ -296,14 +303,30 @@ bool Application::dispatchModalAware(const SDL_Event* event) {
     }
     // 两侧填黑仅对"全屏剧场模态"（铺底界面）：叠加式面板（设置/询问框/台词等，fillBars=false）
     //   保留游戏画面；已填状态在 overlay 模态嵌套期间保持不变（如银行内弹确认框）
-    if (m_events.topFillBars() && !m_modalBaseFilled) {
-        m_modalBaseFilled = true;
+    const auto fillModalBars = [&]() {
         const int lw = uiLogicalWidth(m_surface);
         const int lh = uiLogicalHeight(m_surface);
         m_surface.fillRect(0, 0, base, lh, 0);
         if (base + 640 < lw) {
             m_surface.fillRect(base + 640, 0, lw - base - 640, lh, 0);
         }
+    };
+    if (m_events.topFillBars() && !m_modalBaseFilled) {
+        m_modalBaseFilled = true;
+        // [NEW M4-D 实机] 填黑/背景重绘用绝对画布坐标且绕过模态绘制边界：嵌套在其它
+        //   centerBase 模态内进入时（如新闻/命运/魔法屋内调用 runAuction），外层
+        //   dispatchModalAware 的 SurfaceOriginGuard(=base) 与 paintClip(base..base+640)
+        //   仍在作用域 → 不归零/不关裁剪会把黑条填到错误位置或被裁掉
+        //   （实机"拍卖两侧没置黑"根因；顶层进入时两者本就是 0/-1，无行为差异）
+        SurfaceOriginGuard og0(m_surface, 0, 0);
+        SurfacePaintClipGuard pcg0(m_surface, -1, -1);
+        // [NEW M4-D 实机] 背景先以原版 640 布局重绘到居中区（宽屏世界布局直接保留会被
+        //   两侧黑边裁掉右栏 → "右栏被切半"观感；原版语义背景 = 完整 640 画面）。
+        //   仅游戏世界可用时（栈内有游戏内循环层）——主菜单/选人赛前模态不可重绘
+        if (m_events.hasGameplayLayer()) {
+            renderModalBackdrop(*this, base);
+        }
+        fillModalBars();
     }
     SDL_Event shifted;
     const SDL_Event* ev = event;
@@ -346,6 +369,16 @@ bool Application::dispatchModalAware(const SDL_Event* event) {
     }
     setClipRect(savedClip[0], savedClip[1], savedClip[2], savedClip[3]);
     m_surface.setPaintClip(savedPc0, savedPc1);
+    // [NEW M4-D 实机] handler 内可能全量重绘宽屏游戏画面（renderGameFrame 用于演出/预览），
+    //   把两侧黑边重新覆盖 → 返回后按栈顶重新填黑，保证全屏剧场模态两侧恒黑
+    //   （叠加式子模态 fillBars=false 不改动；栈顶已变（嵌套退出）时按其属性处理）
+    if (m_events.topFillBars()) {
+        // 填黑用绝对画布坐标（og 尚在作用域）+ 绕过本层恢复后的模态绘制边界
+        // （嵌套 fillBars 层时 savedPc0/Pc1 = 外层裁剪带，会把两侧黑条裁掉）
+        SurfaceOriginGuard og0(m_surface, 0, 0);
+        SurfacePaintClipGuard pcg0(m_surface, -1, -1);
+        fillModalBars();
+    }
     return handled;
 }
 
@@ -401,11 +434,14 @@ void Application::mouseDevicePos(int& x, int& y) const {
 
 void Application::mouseLogicalPos(int& x, int& y) const {
     // [NEW M4-A2] 设计逻辑坐标（UI 层坐标：设备 / scale；scale=1 恒等）
+    // [NEW M4-D 实机] 再减去当前绘制原点：640 基准模态 dispatch 期间 origin=base，
+    //   模态 handler 内（银行停留/保释/百货/数字框/小游戏）读到的鼠标坐标须恢复为
+    //   原版 640 基准，否则宽屏下按钮命中整体偏移 base（实机"按钮错位"根因）。
     int dx = 0;
     int dy = 0;
     mouseDevicePos(dx, dy);
-    x = m_surface.deviceToLogical(dx);
-    y = m_surface.deviceToLogical(dy);
+    x = m_surface.deviceToLogical(dx) - m_surface.originX();
+    y = m_surface.deviceToLogical(dy) - m_surface.originY();
 }
 
 void Application::transformMouseEvent(SDL_Event& event) {

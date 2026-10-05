@@ -38,6 +38,17 @@ public:
     int depth() const { return m_depth; }
     // [NEW M4-D] 栈顶是否为"640 基准 UI"（主菜单/选人/游戏内模态；游戏内循环 push 时传 false）
     bool topCenterBase() const { return m_depth > 0 && m_stack[m_depth - 1].centerBase; }
+    // [NEW M4-D 实机] 栈内是否存在游戏内循环层（centerBase=false）：
+    //   fillBars 模态背景 native 重绘（renderModalBackdrop）仅当游戏世界可用时执行，
+    //   主菜单/选人/新游戏等赛前模态栈内无该层（此时世界资源未就绪，不可重绘）
+    bool hasGameplayLayer() const {
+        for (int i = 0; i < m_depth; ++i) {
+            if (!m_stack[i].centerBase) {
+                return true;
+            }
+        }
+        return false;
+    }
     // [NEW M4-D] 栈顶是否铺底（全屏剧场模态 → 宽画布两侧填黑；叠加式面板 → 保留游戏画面）
     bool topFillBars() const { return m_depth > 0 && m_stack[m_depth - 1].fillBars; }
 

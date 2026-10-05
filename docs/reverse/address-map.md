@@ -6,15 +6,15 @@
 
 | 地址 | 原符号 | 重写位置 | 依据 |
 |------|--------|----------|------|
-| `0x401010` | 全局键盘钩子 | `src/application.cpp:447` | fn(0x401010) 读 word_497168 键位表： word_497168/6A/6C/6E（游標上/右/下/左移）→ SetCursorPos(±10) word_497170（確定執行）→ PostMessageA(WM_LBUTTONDOWN/UP)（word_46CB09 去重） word_497172（取消指令）→ 抬起时 PostMessageA(WM_RBUTTONUP)（合成右键抬起，模态按右键机制处理）（迁移: SetCursorPos/PostMessageA → SDL_WarpMouseInWindow/SDL_PushEvent（逻辑像素 ±10）） |
+| `0x401010` | 全局键盘钩子 | `src/application.cpp:483` | fn(0x401010) 读 word_497168 键位表： word_497168/6A/6C/6E（游標上/右/下/左移）→ SetCursorPos(±10) word_497170（確定執行）→ PostMessageA(WM_LBUTTONDOWN/UP)（word_46CB09 去重） word_497172（取消指令）→ 抬起时 PostMessageA(WM_RBUTTONUP)（合成右键抬起，模态按右键机制处理）（迁移: SetCursorPos/PostMessageA → SDL_WarpMouseInWindow/SDL_PushEvent（逻辑像素 ±10）） |
 | `0x401543` | showLoading | `src/app/game/new_game.cpp:347` | 0x401543 反编译; sub_450441(dword_48A0E4, 601) 取 614400 字节全屏图, memcpy 到 dword_48A08C 后 BltFast 显示 |
 | `0x4015D6` | gameInit | `src/app/game/game_init.cpp:17` | 0x4015D6 反编译; 失败路径弹 "DirectDraw Initial Error!" / "DirectDraw SetMode Error!"; 由 WinMain(0x401B9C) 调用, 返回非 0 才进入主循环（迁移: DirectDrawCreate + SetCooperativeLevel(FULLSCREEN\|EXCLUSIVE) + SetDisplayMode(640,480,16) → SDL 窗口 + 逻辑分辨率（Application::init）） |
 | `0x401815` | gameShutdown | `src/app/game/game_shutdown.cpp:9` | 0x401815 反编译; if (!byte_46CB05) 保证幂等; 依次关闭音频/MKF/输入/调色板, 卸载键盘钩子, Release 主表面/后台表面/DirectDraw 接口 |
 | `0x4018E7` | runModal | `src/app/game/event_stack.cpp:56` | 0x4018E7 反编译; dword_48A010[++nIDEvent]=handler; PostMessage(0x401) 通知进入; 局部消息泵直到 WM_USER+2(0x402); 返回 Msg.lParam; --nIDEvent（迁移: Win32 局部消息泵 → SDL 事件循环（Application::pumpEvents/renderFrame）; 0x401/0x402 消息 → handler(nullptr) / EventStack::requestExit; SetTimer/WM_TIMER → 循环内按 tickMs 合成 SDL_EVENT_TIMER（选人界面动画用）） |
 | `0x401966` | postModalExit | `src/app/game/event_stack.cpp:43` | PostMessageA(hWnd, 0x402, 0, lParam) —— 请求退出当前模态并回传结果 |
 | `0x401981` | enterGameLoop | `include/game/app/game_loop.h:7` | 0x401981 压入 sub_417E26（游戏内事件处理器）并 PostMessage(0x401)； a1 != 0 时调 sub_454D91(0)（迁移: 模态栈 + 消息泵 → runModal（EventStack）） |
-| `0x4019DD` | wndProc | `src/application.cpp:264` | 0x4019DD 窗口过程; WM_DESTROY(2) 走 sub_401815+PostQuitMessage, 默认分支转发给 dword_48A010[nIDEvent]（模态栈顶），无处理器时 DefWindowProcA [NEW M4-D] 经 640 基准模态框架（宽画布居中；游戏内循环/非模态恒等直通） |
-| `0x401B9C` | WinMain | `src/application.cpp:22` | 0x401B9C 反编译; RegisterClassA("Rich4") + CreateWindowExA(0, "Rich4", "Rich4", 0x80000000=WS_POPUP, 屏幕宽高) + sub_4015D6() + ShowWindow(5)（迁移: Win32 窗口类/全屏窗口 → SDL_CreateWindow（窗口化，现代化目标）; 显示模式由 0x4015D6 的 SetDisplayMode(640,480,16) 决定 → 逻辑分辨率 640x480） |
+| `0x4019DD` | wndProc | `src/application.cpp:265` | 0x4019DD 窗口过程; WM_DESTROY(2) 走 sub_401815+PostQuitMessage, 默认分支转发给 dword_48A010[nIDEvent]（模态栈顶），无处理器时 DefWindowProcA [NEW M4-D] 经 640 基准模态框架（宽画布居中；游戏内循环/非模态恒等直通） |
+| `0x401B9C` | WinMain | `src/application.cpp:23` | 0x401B9C 反编译; RegisterClassA("Rich4") + CreateWindowExA(0, "Rich4", "Rich4", 0x80000000=WS_POPUP, 屏幕宽高) + sub_4015D6() + ShowWindow(5)（迁移: Win32 窗口类/全屏窗口 → SDL_CreateWindow（窗口化，现代化目标）; 显示模式由 0x4015D6 的 SetDisplayMode(640,480,16) 决定 → 逻辑分辨率 640x480） |
 | `0x401CEB` | stockInit | `src/app/game/new_game.cpp:564` | 0x401B9C case 0/4 调用序列（0x401CEB → 0x4291D6）；loadMapData 的 0x428CAF 已先建好 specPt 映射；读档链（case 1）不调用（行情由存档恢复，重写完整存档恢复待 P5） 差异: 开局若为休市日（周日/节日），stockTick 内部 stockIsClosed 判定后跳过——与原版一致 |
 | `0x401E59` | 保存背景并绘制当前光标帧 | `include/game/render/cursor.h:32` | 0x401E59 计算 (x-offsetX, y-offsetY)，裁剪到 640x480，先 sub_451A97 保存背景再 sub_4562A5 绘制光标; dword_48A168 记录绘制位置 |
 | `0x401F98` | fptc | `include/game/render/cursor.h:37` | 0x401F98 中 word_48A176/word_48A174 控制帧间隔, word_48A172 递增回绕; GetCursorPos 与 dword_48A168/164 比较，变化或换帧时重绘（迁移: GetCursorPos（屏幕坐标）→ 由调用方传入 640x480 逻辑坐标） |
@@ -137,7 +137,7 @@
 | `0x4291D6` | stockTick | `src/app/game/stock_system.cpp:105` | 0x4291D6 反编译; ① 停市判定 sub_428D01（dword_4990DC \|\| isSpecialDate）→ 跳过； ② 全局扰动 dword_4990EC = (rand()-0x4000)/4097； ③ 每支：昨收 = 当前价 → 停牌（动量 = 0）/新闻（bit4 ? +10 : -10）/正常（个股扰动 (rand()-0x4000)/1171 → 动量 += 扰动×波动率 + 全局扰动；价格远离基准（上市=面值/10000、 非上市=基准价）时动量 ×0.5 或 ×2）→ clamp ±10 → 当前价 = sub_428EC5(昨收,动量) → stockHistory[144*i + turnCounter]； ④ turnCounter = (+1) % 144；大盘 = Σ价格 × 10 差异: 无（休市事件源 = 新闻 idx26 newsEvt26_stockHaltAll 0x44B0A0 → st.stockMarketClosed=10， news_dialog.cpp；advanceDay 递减/bit7 见 turn_system.cpp） |
 | `0x4294D5` | updateSpecPtControl | `src/app/game/stock_system.cpp:202` | 0x4294D5 反编译; ① 从 shareholders[4] 移除该玩家（memmove 压缩）； ② 若持股 > 0：从索引 2 倒序比较（空位跳过、持股 >= 我则停、否则后移）→ 插入； ③ owner = shareholders[0]（第一大股东）；owner 变化 → rebuildMiniMap 并返回 1 |
 | `0x42BA97` | 15 | `include/game/app/dividend.h:7` | 0x42BA97/0x42B3EB 反编译；详见 docs/reverse/functions/bank-system.md §6。 |
-| `0x42BA97` | 15 | `src/app/dialogs/dividend_dialog.cpp:174` | 0x42BA97 反编译；逐存活玩家 × 12 家上市公司：比例 = 持股/总持股（存 float）、 分红 = (double)fund × ratio → int 截断（正负同式）；总持股≠0 → fund 清零； runModal(sub_42B3EB) 后统一入银行（不足现金补 → 破产 sub_40CD87，其 a1 参数未被使用）。 |
+| `0x42BA97` | 15 | `src/app/dialogs/dividend_dialog.cpp:177` | 0x42BA97 反编译；逐存活玩家 × 12 家上市公司：比例 = 持股/总持股（存 float）、 分红 = (double)fund × ratio → int 截断（正负同式）；总持股≠0 → fund 清零； runModal(sub_42B3EB) 后统一入银行（不足现金补 → 破产 sub_40CD87，其 a1 参数未被使用）。 |
 | `0x42D145` | 卖卡 | `src/app/dialogs/shop_dialog.cpp:183` | 0x42D145 反编译; sub_441343 移除 + dbl_464364=0.9 |
 | `0x42D1B2` | 卖道具 | `src/app/dialogs/shop_dialog.cpp:194` | 0x42D1B2 反编译; g_playerCards[15p+id] -= n（基址 0x49915B = itemStock-1）; g_cardPool[id] += n（= misc8A[id-1]，id≤8） |
 | `0x42D237` | 买卡 | `src/app/dialogs/shop_dialog.cpp:163` | 0x42D237 反编译（尾共享 0x42D25C：points -= price; return 10*price） |
@@ -150,7 +150,7 @@
 | `0x433BD8` | payFromBank | `src/app/game/economy.cpp:107` | 0x433BD8 反编译; bank -= amount；不足 → cash += bank(负值) → bank = 0； cash < 0 → cash = 0 + eliminatePlayer（0x40CD87） |
 | `0x436A5A` | checkLoanDue | `src/app/game/turn_system.cpp:3611` | 0x436A5A 反编译; v = sub_4521AA(当前日期, loanDate)（= 距到期剩余天数） v==0 强执（showMessage 0x464B2C → sub_433BD8 扣款 → 清 loan/loanDate）； v==1/2 提醒（0x464B43/0x464B5C）；v==3 催收演出 sub_43695E（柜员动画窗，1.4 银行 UI 接入） 差异: sub_43695E 演出与 sub_41906A 刷新暂以日志占位 |
 | `0x439BFA` | 月初结息（advanceDay | `include/game/app/month_settle.h:7` | 0x439BFA/0x437E61 反编译；dbl_464E88=1.1；详见 docs/reverse/functions/bank-system.md §5。 参数: app（游戏状态/音频/事件栈） |
-| `0x439F0D` | auctionAiMaxBid | `src/app/dialogs/auction_dialog.cpp:121` | 0x439F0D 反编译 + disasm FPU（dbl_465018=0.3、dbl_465020=0.5 为 double， IDA float 显示误读已核）；estate 同地段自有数 + level>>1 + 1 加价、 供需系数 6.0 - 空地占比×4.0、随机折扣 [0.5,0.8]、上限 (3.0~3.5)×基价×M、封顶现金。 |
+| `0x439F0D` | auctionAiMaxBid | `src/app/dialogs/auction_dialog.cpp:125` | 0x439F0D 反编译 + disasm FPU（dbl_465018=0.3、dbl_465020=0.5 为 double， IDA float 显示误读已核）；estate 同地段自有数 + level>>1 + 1 加价、 供需系数 6.0 - 空地占比×4.0、随机折扣 [0.5,0.8]、上限 (3.0~3.5)×基价×M、封顶现金。 |
 | `0x43BDE5` | runAuction | `include/game/app/auction_dialog.h:7` | 0x43BDE5/0x43A2DD/0x439F0D 反编译；详见 docs/reverse/functions/43380a-magic-house.md §5 |
 | `0x43D1B3` | 保释玩家 | `src/app/dialogs/jail_dialog.cpp:163` | 0x43D13E blitOpaque 底图帧 0 区域 (格,140×137) + 0x43D189 空格框； 0x43CF2C days=BYTE2&0x7F（0 则 1），addPlayerDebt(i,cur,-100×M×days)（欠款矩阵未建模）； 0x43CF5F PostMessage(0x205) = 立即退出（原版释放无浮动消息） |
 | `0x43D593` | jailPlayer | `src/app/game/turn_system.cpp:3358` | releaseJailNpc/releaseHospitalNpc 反编译（a1>=4 段）: byte_498E30 = g_currentPlayer（bailer）；byte_498E32 = 0（busy 自由游走）； word_498E2C = word_48BAE0/48BAE2（監獄/醫院格）、word_498E2E = 0；g_miscTable80/word_498E2A = cellEnt 坐标；byte_498E33 = 1（監獄）/2（醫院）；**起点格类型匹配（監獄格 type4 / 醫院格 type5） 恒真 → \|=0x80 抓回闩锁**；jailFlags/hospitalFlags = 0；loadWalkResources。 见 498df0-event-slot-npc.md §2。 |
@@ -217,7 +217,7 @@
 | `0x456770` | sub_456770 | `include/game/render/blit.h:60` | 0x456770 反编译; 帧头 12 字节 {w,h,offX,offY,size}, 8bit 索引 + 调色板, 目标 = (x - offX, y - offY), 裁剪到 dword_4861B8/C0/BC/C4 用于游戏内地图精灵（棋子/住宅用地/商業用地/行業設施點/事件格） |
 | `0x4568C2` | SPR | `src/app/dialogs/minigame_dialog.cpp:72` | 0x4568C2 反编译（目标矩形 = (x-offX, y-offY, scale*w>>16, scale*h>>16)， 源步长 = 65536²/scale 定点累加，8bit 索引查调色板，0 透明，全裁剪返回 false） |
 | `0x45709C` | start | `src/main.cpp:27` | 0x45709C 为 CRT 入口 thunk（jmp sub_458CED）; sub_458CED 初始化 CRT 后调用 WinMain(GetModuleHandleA(0), 0, lpCmdLine, 10)（迁移: CRT 启动 + WinMain → 标准 main(argc, argv); lpCmdLine → --game <dir> 参数） |
-| `0x46CAD8` | nIDEvent | `include/game/app/event_stack.h:69` | 栈顶索引; 0x4018E7 中 ++nIDEvent 压栈、--nIDEvent 出栈 |
+| `0x46CAD8` | nIDEvent | `include/game/app/event_stack.h:80` | 栈顶索引; 0x4018E7 中 ++nIDEvent 压栈、--nIDEvent 出栈 |
 | `0x46CAFC` | byte_46CAFC | `include/game/game_state.h:300` | WinMain case 0/4 调 sub_406DE7(byte_46CAFC)；进入游戏后置 1， 再次进入时 lParam!=0 → 0x406DE7 保留上次选人配置并自动確定 |
 | `0x46CB05` | byte_46CB05 | `include/game/game_state.h:284` | 0x401815 清理函数的幂等标志（非 0 时跳过清理） |
 | `0x46CB28` | word_46CB28 | `src/app/ui/main_menu.cpp:19` | DGROUP 原始数据 0x46CB28: BE00 7C01 4801 7C01 D401 7A01 4801 C201 3E00 7C01 为 5 组 u16 (x, y)；0x4029FD 循环 i<5 用 word_46CB28[2i]/word_46CB2A[2i] 布局 索引语义（由 0x40257A 点击分支与 WinMain switch 推断）: 0 新游戏 / 1 读档 / 2 设置(不退出) / 3 退出 / 4 新游戏(模式 1) |
@@ -259,7 +259,7 @@
 |--------------|----------|----------|
 | Win32:UnhookWindowsHookEx 键盘钩子卸载 | `src/app/game/game_shutdown.cpp:27` | 0x401815 UnhookWindowsHookEx(hhk)；SDL 侧无全局钩子，无需对应 |
 | DDraw:Release 主表面(0x48A0DC)/后台表面(0x48A0E0)/lpDD 释放 | `src/app/game/game_shutdown.cpp:30` | SDL3 纹理由 Renderer 析构统一释放（Application::shutdown） |
-| Win32:GetCursorPos | `src/application.cpp:412` | 原版全屏 640x480，鼠标屏幕坐标即游戏坐标； SDL 窗口可缩放 + letterbox 逻辑呈现，需把窗口坐标换算为 640x480 逻辑坐标 |
+| Win32:GetCursorPos | `src/application.cpp:448` | 原版全屏 640x480，鼠标屏幕坐标即游戏坐标； SDL 窗口可缩放 + letterbox 逻辑呈现，需把窗口坐标换算为 640x480 逻辑坐标 |
 | Win32:MultiByteToWideChar(950) + WideCharToMultiByte(CP_UTF8) | `src/core/encoding.cpp:33` | 原版（Windows 独占）经系统代码页 950 转换；非 Windows 无此 API，旧实现为 空桩 → 所有 BIG5 文本为空。改为内嵌 cp950 映射表（tools/gen_big5_tables.py 生成 src/core/big5_tables.cpp）查表 + 手工 UTF-8 编码：两平台行为完全一致，且消除对 系统代码页/语言包的依赖（docs/cross-platform.md）。 语义保持: length < 0 取 strlen；length 显式时按字节数转换（嵌入 0 字节照转， 与原 MultiByteToWideChar 一致）；非法序列 → U+FFFD（等价系统默认替换行为）。 |
 | DDraw:BltFast 后台表面 → 主表面 | `src/render/surface.cpp:17` | 0x401543 BltFast(dword_48A0DC, ..., dword_48A0E0) 把绘制结果送上屏幕 → SDL_UpdateTexture + SDL_RenderTexture；像素格式 RGB555 与原版资源一致 （SDL3 命名为 SDL_PIXELFORMAT_XRGB1555，bit10-14=R / bit5-9=G / bit0-4=B） |
 | Win32:CreateCompatibleDC/CreateDIBSection + GDI DrawTextW | `src/render/text.cpp:157` | GDI 为 Windows 独占 → FreeType（本地 third_party 优先构建，见 CMakeLists） 渲染到同一 512x200 RGB555 缓冲，后续 measure/blit/清零语义与原实现一致 （327 处 drawText 调用点零改动；docs/cross-platform.md 阶段4） |
