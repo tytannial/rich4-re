@@ -785,6 +785,9 @@ void moneySpawn(MoneyCtx& ui, int x, bool fromCloud) {
     MoneyBag& b = ui.bags[i];
     b.x = static_cast<int16_t>(x);
     b.y = 100;
+    // [NEW M4-H 实机] 生成时同步插值起点：槽是复用的，旧 prevY 可能停在屏幕底部
+    //   （上一袋子落地处），不重置会让第一帧插值"从底部滑到顶部"（实机"从底部抛出"感）
+    b.prevY = 100;
     b.flags = static_cast<int16_t>(type | ((sway & 0xFF) << 8));
     b.vy = -16;
 }
