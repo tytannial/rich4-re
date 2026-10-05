@@ -929,3 +929,18 @@ quickstart 跳过选人界面，`blitScrolledMap` 仅用于选人界面与通关
   `SDL_SCALEMODE_LINEAR`（1:1 呈现时两模式等价，native 不受影响）。
 - `DisplayConfig.linearFilter` + `--filter nearest|linear`（默认 linear；需要像素
   完美时可回退 nearest）。模拟 1.5x 对比：linear 明显平滑。
+
+## 19. 批次 E~H 推进记录（2026-10-01/05）
+
+- **E 文本高分定点化**：按用户决策**跳过**（"暂不考虑字体，低分辨率输出 + 窗口拉伸；
+  线性过滤减少马赛克感"，见 §18.9/§18.10）。
+- **F 配置系统 `rich4.ini` ✅**（提交 `ef21ec9`）：`core/config.{h,cpp}`——INI 解析 +
+  缺失生成带注释默认模板 + `setConfigValue`（section.key/裸键）；接入 main（预扫 --game →
+  loadConfig → CLI 覆盖 + 通用 `--set k=v`）/text（字体/字号参数化）/log（路径）/
+  application（mediaDir/vsync/fullscreen/字体传入）；RICH4.CFG 红线保持。见 §6。
+- **G 源码结构重组（1/2）✅**（提交 `5bd7c8b`）：5 个生成物集中 `src/gen/`
+  （生成脚本路径同步）、`debug.cpp`/`debug_keys.cpp` 归 `src/debug/`、删空目录；
+  `src/app/` 细分（game/ui/dialogs）留 G(2/2)。
+- **H 追加体验（1/4）✅**（提交 `a715bde`）：小游戏渲染插值——新增 `kModalFrameEvent`
+  （真实时钟每轮派发、虚拟时钟零变化），挖寶/氣球/喜從天降 tick 间位置插值（渲染层只读）。
+  H 剩余：8.1 射程（含三档方案，待决策）/8.2 预览高亮/8.4 同格消歧。
