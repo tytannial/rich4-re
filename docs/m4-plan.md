@@ -792,6 +792,19 @@ quickstart 跳过选人界面，`blitScrolledMap` 仅用于选人界面与通关
 - `--canvas WxH` 任意尺寸（scale=1）下地图区按 440（布局派生只认 scale 推导的画布），
   命中仍按左上 640×480；正式 preset（native/wide/free）不受影响。
 
+### 17.4.1 S4 收口审计（2026-10-05，✅ 结论：三项为设计内/已派生，无代码遗留）
+
+1. **`advancePanelX/Y`**：IDA 复核 `qword_475284` 为**静态常量 (180,120)**（18 处 xref
+   全为读取、无写入点；`beginPlayerTurn` 仅读它 `SetCursorPos(+46,+34)` 移鼠标到 GO 中心，
+   重写不劫持光标）→ 重写常量一致，无需动态化；宽屏已随 `uiMapCenterShiftX` 平移
+   （绘制与命中同源）。`game_panel.cpp` 旧注释"原版动态确定"已订正。
+2. **对话框居中 `320-w/2`**：是 **640 基准模态框架的设计内坐标**（`dispatchModalAware`
+   统一 `uiModalBaseX` 平移+事件 -base），非散落缺陷 → 不改；任意逻辑宽下自动居中。
+3. **宽屏顶栏右侧 `(440,mapW)×(0,40)`**：保持**地图视野延展**（原版无此区域；D1 验收
+   "非黑像素 74%→97%"即此项），不另加装饰素材。
+4. **`--canvas WxH` 任意尺寸**：D 收尾后布局/命中全派生（`uiMapLogicalWidth` 等），
+   已由 `--extra "--canvas 1024x768"` 全量矩阵验收（§15.4）；无遗留。
+
 ### 17.5 settings 消费点复核 + settings[0] 接入（2026-10-01）
 
 - **订正 §3.2 "两个死配置"**：IDA xrefs 复核——`settings[6]/[7]`（0x49715E/15F）**无任何

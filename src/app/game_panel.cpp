@@ -592,7 +592,9 @@ void drawCalendar(Application& app) {
 //     travel 0/3: 帧 6（byte_496BA0）或 7，(x+8/y+26) 或 (x+7/y+26)
 //     travel 1: 2 个骰子（帧 2i+6 未选 / 2i+7 选中），(x+8/y+19i+16) / (x+7/y+19i+16)
 //     travel 2: 3 个骰子，(x+8/y+16j+9) / (x+7/y+16j+9)
-// 差异: 位置 qword_475284 原版动态确定，当前用 advancePanelX/Y
+// 位置 = qword_475284 **静态常量 (180,120)**（2026-10-05 IDA 复核：18 处 xref 全为读取，
+//   无任何写入点；beginPlayerTurn 仅读它 SetCursorPos(+46,+34) 把鼠标移到 GO 中心——
+//   重写不劫持系统光标）；宽屏经 uiMapCenterShiftX 随地图区中心平移（绘制/命中同源）
 // [M4-B C1] 阻塞演出期禁止绘制（原版前进面板是一次性增量层 0x417191，演出期消息泵
 //   不派发 → 既不会重画也不会残留；重写逐帧全量重绘必须显式收口，见 blockingPerf）
 void drawAdvancePanel(Application& app) {
