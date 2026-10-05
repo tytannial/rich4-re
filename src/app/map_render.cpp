@@ -355,10 +355,11 @@ void renderMap(Application& app, int centerX, int centerY) {
     };
     auto addItem = [&](const UiImage* spr, int frame, int px, int py, int colorIdx, uint16_t id,
                        const UiImage* hitSpr = nullptr, int hitFrame = 0) {
-        if (!spr || spr->frameCount() <= 0) {
+        // [NEW M4-H 8.4] 允许"仅登记命中、不绘制"（spr 空、hitSpr 非空——无主空地）
+        if ((!spr || spr->frameCount() <= 0) && (!hitSpr || hitSpr->frameCount() <= 0)) {
             return;
         }
-        if (frame < 0 || frame >= spr->frameCount()) {
+        if (spr && (frame < 0 || frame >= spr->frameCount())) {
             frame = 0; // 帧数不足时回退首帧（防越界）
         }
         if (hitSpr && (hitFrame < 0 || hitFrame >= hitSpr->frameCount())) {
@@ -578,23 +579,14 @@ void renderMap(Application& app, int centerX, int centerY) {
         //   重写曾用帧 4（51x51）"体感调整"导致道路/地块边界判定与原版不一致，现对齐原版
         const int pickFrame = (8 - (state.mapRotation + es.dir)) & 1;
         if (es.owner == 0 && es.level == 0) {
-            // [RE 0x40829D/0x409B18] 无主空地：tile=0 不绘制但**仍登记 drawList id=2000+n**，
-            //   rebuildPickBuffer 照写 g_pickMask → 拾取与 highlightBlink 均有效
-            //   （旧注释"无主不写缓冲/hlShape=null"为误读；命运 id1 徵收/山洪归公后
-            //   目标变无主，原版高亮照常 → 曾因 hlShape 缺失导致重写无闪烁）
-            int sx = 0;
-            int sy = 0;
-            if (state.flagTiles.frameCount() > pickFrame && projectItem(es.x, es.y, sx, sy)) {
-                const UiFrameView& pf = state.flagTiles.frame(pickFrame);
-                state.mapHitRegions.push_back(
-                    {sx - pf.offsetX, sy - pf.offsetY, pf.width, pf.height,
-                     static_cast<uint16_t>(2000 + i), &state.flagTiles, pickFrame, sx, sy});
-                GameState::MapHitRegion& hit = state.mapHitRegions.back();
-                hit.hlShape = &state.flagTiles;
-                hit.hlFrame = (8 - (state.mapRotation + es.dir)) & 1;
-                hit.hlAnchorX = sx;
-                hit.hlAnchorY = sy;
-            }
+            // [RE 0x40829D/0x409B18] 无主空地：tile=0 不绘制但**仍登记 drawList id=2000+n**
+            //   （rebuildPickBuffer 照写 g_pickMask → 拾取与 highlightBlink 均有效）。
+            // [NEW M4-H 8.4] 改走 items 通道参与 y 排序：原实现直接 push 使无主地块
+            //   位于"cellEnt 格之后、y 排序精灵之前"，与其上方 2~3 格精灵重叠时拾取
+            //   顺序与原版（同一 y 排序 drawList）不一致；现与有主地块同列（仅登记不绘制，
+            //   hlShape/hlAnchor 由排序后推送循环按 estate 统一设置）。
+            addItem(nullptr, 0, es.x, es.y, -1, static_cast<uint16_t>(2000 + i),
+                    &state.flagTiles, pickFrame);
             continue;
         }
         if (es.level == 0) {
@@ -718,18 +710,21 @@ void renderMap(Application& app, int centerX, int centerY) {
                 hit.hlAnchorY = it.y;
             }
         }
-        if (it.spr->isSprite()) {
-            // [RE 0x40986A] 调色板[255] = 拥有者颜色（0=黑轮廓、1..8=玩家色、-1=原图）
-            if (it.colorIdx < 0) {
-                it.spr->setPaletteEntry(255, it.spr->basePaletteEntry(255));
-            } else if (it.colorIdx == 0) {
-                it.spr->setPaletteEntry(255, 0);
-            } else if (it.colorIdx <= state.playerCount) {
-                it.spr->setPaletteEntry(255, rgb888To555(state.players[it.colorIdx - 1].color));
+        if (it.spr) {
+            if (it.spr->isSprite()) {
+                // [RE 0x40986A] 调色板[255] = 拥有者颜色（0=黑轮廓、1..8=玩家色、-1=原图）
+                if (it.colorIdx < 0) {
+                    it.spr->setPaletteEntry(255, it.spr->basePaletteEntry(255));
+                } else if (it.colorIdx == 0) {
+                    it.spr->setPaletteEntry(255, 0);
+                } else if (it.colorIdx <= state.playerCount) {
+                    it.spr->setPaletteEntry(255,
+                                            rgb888To555(state.players[it.colorIdx - 1].color));
+                }
+                blitSpriteFrameClipped(dst, *it.spr, it.frame, it.x, it.y, true);
+            } else {
+                blitElement(dst, it.spr->frame(it.frame), it.x, it.y, true);
             }
-            blitSpriteFrameClipped(dst, *it.spr, it.frame, it.x, it.y, true);
-        } else {
-            blitElement(dst, it.spr->frame(it.frame), it.x, it.y, true);
         }
         if (it.objLife) {
             // [RE 0x4098BD] 炸弹挂身：寿命数字（16 号字，y−60，样式 2）
