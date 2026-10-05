@@ -14,6 +14,11 @@ class Application;
 // 迁移: SDL3 无内置定时器事件，用 SDL_EVENT_USER 合成
 constexpr uint32_t kModalTimerEvent = SDL_EVENT_USER;
 
+// [NEW M4-H] 渲染帧事件（tick 间插值）：真实时钟下 runModal 每轮派发一次，
+//   user.code = 距上次 timer 派发的毫秒数；虚拟时钟（headless）不派发 →
+//   测试行为零变化。模态可据此在两次逻辑 tick 之间做"只读渲染插值"。
+constexpr uint32_t kModalFrameEvent = SDL_EVENT_USER + 1;
+
 // 模态事件处理器栈。
 // [RE 0x48A010] dword_48A010
 // 依据: 0x48A010 为 20 项函数指针数组; 0x4019DD 窗口过程把消息转发给

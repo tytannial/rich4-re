@@ -74,6 +74,7 @@ int runModal(Application& app, EventStack::Handler handler, void* user, uint32_t
         app.dispatchModalAware(nullptr);
     }
     uint64_t nextTick = nowMs() + app.events().timerInterval();
+    uint64_t lastTickMs = nowMs(); // [NEW M4-H] 上次 timer 派发时刻（frame 事件 elapsed 基准）
     while (app.running() && !app.events().exitRequested()) {
         app.pumpEvents();
         app.renderFrame();
@@ -85,12 +86,21 @@ int runModal(Application& app, EventStack::Handler handler, void* user, uint32_t
             if (step) {
                 clockAdvanceMs(interval);
                 nextTick = nowMs() + interval;
+                lastTickMs = nowMs();
                 SDL_Event timerEvent{};
                 timerEvent.type = kModalTimerEvent;
                 timerEvent.user.code = 0;
                 // [NEW M4-D] 经 dispatchModalAware（640 基准模态宽画布居中；游戏内循环直通）
                 app.dispatchModalAware(&timerEvent);
             } else {
+                // [NEW M4-H] 渲染帧事件（tick 间插值）：每轮一次，code = 距上次 tick 的毫秒；
+                //   虚拟时钟不派发 → headless 行为零变化。模态据此做只读渲染插值。
+                {
+                    SDL_Event frameEvent{};
+                    frameEvent.type = kModalFrameEvent;
+                    frameEvent.user.code = static_cast<int>(nowMs() - lastTickMs);
+                    app.dispatchModalAware(&frameEvent);
+                }
                 // [NEW M4-C2 实机] tick 追补：绘制耗时超过 interval（放大窗口后每帧变慢）时，
                 //   原实现 `nextTick = now + interval` 会把绘制耗时计入 tick 周期（20ms 绘制 →
                 //   20ms tick → 骰子/行走/位移等按 tick 推进的动画整体拖慢）。改为按 interval
@@ -101,6 +111,7 @@ int runModal(Application& app, EventStack::Handler handler, void* user, uint32_t
                 uint64_t now = nowMs();
                 while (now >= nextTick && catchUp < 32) {
                     nextTick += interval;
+                    lastTickMs = now;
                     SDL_Event timerEvent{};
                     timerEvent.type = kModalTimerEvent;
                     timerEvent.user.code = 0;

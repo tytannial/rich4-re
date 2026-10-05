@@ -236,6 +236,7 @@ constexpr int kDigIntro = 10;       // [RE 0x41534B]
 
 struct DigCtx {
     Application* app = nullptr;
+    float subTick = 0.0f; // [NEW M4-H] tick 间插值相位（0..1；frame 事件更新）
     UiImage digits;     // panel[79]
     UiImage board;      // panel[80]：0 背景/1 站立/2 黑化/3 冰屋/4..8 宝物堆/9 洞
     UiImage walk;       // panel[82] 8 方向×4 帧
@@ -492,9 +493,13 @@ void drawDig(DigCtx& ui) {
     const int cellY = kDigCells[cr][cc].y;
     switch (ui.state) {
     case 2: {
+        // [NEW M4-H] 位置插值（phase + subTick）平滑行走；动画帧仍用整数 phase
         const int p = ui.phase;
-        const int x = cellX + p * ((kDigCells[nr][nc].x - cellX) >> 2);
-        const int y = cellY + p * ((kDigCells[nr][nc].y - cellY) >> 2);
+        const float pf = static_cast<float>(p) + ui.subTick;
+        const int x = cellX + static_cast<int>(
+                                  pf * static_cast<float>(kDigCells[nr][nc].x - cellX) / 4.0f);
+        const int y = cellY + static_cast<int>(
+                                  pf * static_cast<float>(kDigCells[nr][nc].y - cellY) / 4.0f);
         blitSpriteFrame(dst, ui.walk, 4 * ui.dir + p, x, y);
         break;
     }
@@ -580,7 +585,12 @@ bool digHandler(const SDL_Event* event, void* user) {
         return true;
     }
     switch (event->type) {
+    case kModalFrameEvent: // [NEW M4-H] 渲染帧：只重绘（tick 间插值）
+        ui.subTick = std::min(1.0f, static_cast<float>(event->user.code) / 100.0f);
+        drawDig(ui);
+        return true;
     case kModalTimerEvent:  // [RE 0x414904 0x113]
+        ui.subTick = 0.0f;
         if (ui.uiState == 0) {
             if (--ui.intro <= 0) {
                 ui.uiState = 1;
@@ -717,6 +727,7 @@ struct MoneyBag {
 
 struct MoneyCtx {
     Application* app = nullptr;
+    float subTick = 0.0f; // [NEW M4-H] tick 间插值相位（0..1；frame 事件更新）
     UiImage digits;
     UiImage rich;    // panel[93] 财神
     UiImage cloud;   // panel[94] 云
@@ -823,7 +834,13 @@ void moneyTick(MoneyCtx& ui, bool runLogic) {
         }
         const uint32_t scale = static_cast<uint32_t>(32768.0 * (1.0 + v1 / 250.0));
         const int rot = (b.flags >> 4) & 7;
-        blitSprScaled(dst, ui.bag[type], rot, bx, b.y, scale);
+        // [NEW M4-H] 下落插值（超前 1 tick 平滑；接取判定仍用逻辑 b.y）
+        int by = b.y;
+        if (ui.subTick > 0.0f) {
+            const int step = b.y >= 130 ? kMoneyFallSpeed[type] : b.vy;
+            by += static_cast<int>(static_cast<float>(step) * ui.subTick);
+        }
+        blitSprScaled(dst, ui.bag[type], rot, bx, by, scale);
         if (runLogic) {
             b.flags = static_cast<int16_t>((b.flags & ~0xF0) | ((((b.flags >> 4) + 1) & 7) << 4));
             if (b.y >= 130) {
@@ -868,7 +885,13 @@ void moneyTick(MoneyCtx& ui, bool runLogic) {
     }
     const int df = ui.dollDir != 0 ? ui.dollWalk + ui.dollHalf * (ui.dollDir - 1) + 5
                                    : ui.dollExpr;
-    blitSpriteFrame(dst, ui.doll, df < ui.doll.frameCount() ? df : ui.dollExpr, ui.dollX, 380);
+    // [NEW M4-H] 娃娃步进插值（dir 1=左移 / 2=右移，步长 10）
+    int dollDrawX = ui.dollX;
+    if (ui.subTick > 0.0f && ui.dollDir != 0) {
+        const int step = ui.dollDir == 1 ? -10 : 10;
+        dollDrawX += static_cast<int>(static_cast<float>(step) * ui.subTick);
+    }
+    blitSpriteFrame(dst, ui.doll, df < ui.doll.frameCount() ? df : ui.dollExpr, dollDrawX, 380);
     if (!runLogic) {
         return;
     }
@@ -1015,7 +1038,12 @@ bool moneyHandler(const SDL_Event* event, void* user) {
         return true;
     }
     switch (event->type) {
+    case kModalFrameEvent: // [NEW M4-H] 渲染帧：只重绘（tick 间插值）
+        ui.subTick = std::min(1.0f, static_cast<float>(event->user.code) / 50.0f);
+        drawMoney(ui, false);
+        return true;
     case kModalTimerEvent:  // [RE 0x415068 0x113]
+        ui.subTick = 0.0f;
         if (ui.uiState == 0) {
             if (--ui.intro <= 0) {
                 ui.uiState = 1;
@@ -1144,6 +1172,7 @@ struct BalloonCtx {
     int slowdown = 0;
     int wind = 0;
     uint64_t settleMs = 0;
+    float subTick = 0.0f; // [NEW M4-H] tick 间插值相位（0..1；frame 事件更新）
 };
 
 // [RE 0x412F6F] 气球移动/生成
@@ -1275,14 +1304,25 @@ void drawBalloon(BalloonCtx& ui) {
             continue;
         }
         const UiFrameView& fr = ui.scene.frame((b.type & 0xF) + 1);
-        const int top = b.y - fr.offsetY;
+        // [NEW M4-H] 上升插值（tick 间平滑；风/减速档与逻辑同式）
+        int by = b.y;
+        if (ui.subTick > 0.0f && (b.type & 0xF0) == 0 && ui.slowdown == 0) {
+            int sp = kBalloonSpeed[b.type & 0xF];
+            if (ui.wind == -1) {
+                sp *= 2;
+            } else if (ui.wind == 1) {
+                sp >>= 1;
+            }
+            by -= static_cast<int>(static_cast<float>(sp) * ui.subTick);
+        }
+        const int top = by - fr.offsetY;
         if (top >= 387) {
             anyAlive = true;  // 还在面板后面升起，不可见但存活
             continue;
         }
         const int hh = top < 0 ? fr.height + top : (387 - top < fr.height ? 387 - top : fr.height);
         if (hh > 0 &&
-            blitElementRegion(dst, fr, b.x, b.y, 0, top < 0 ? -top : 0, fr.width, hh, false)) {
+            blitElementRegion(dst, fr, b.x, by, 0, top < 0 ? -top : 0, fr.width, hh, false)) {
             anyAlive = true;
         } else if (top + fr.height <= 0) {
             b.x = 0;  // 完全飞出顶部
@@ -1323,7 +1363,12 @@ bool balloonHandler(const SDL_Event* event, void* user) {
         return true;
     }
     switch (event->type) {
+    case kModalFrameEvent: // [NEW M4-H] 渲染帧：只重绘（tick 间插值）
+        ui.subTick = std::min(1.0f, static_cast<float>(event->user.code) / 100.0f);
+        drawBalloon(ui);
+        return true;
     case kModalTimerEvent:
+        ui.subTick = 0.0f;
         if (ui.state == 0) {
             if (--ui.intro <= 0) {
                 ui.state = 1;
