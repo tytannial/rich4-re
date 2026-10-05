@@ -245,4 +245,7 @@ python tools/run_tests.py --no-ctest --extra "--canvas 1024x768"
 | 308_go_panel_surrender | M4-B | 前进面板演出期可见（0x417191）：`surrender; trace.clear` 同帧清窗 → 認輸 + 死神选人窗口内 `go panel draw cur=0` 必须为 0（**修前 75 次 → 修后 0 次**） |
 | 310_host_release | 托管 | 面板 toggle 托管（`config applied`）→ 当前回合起自动行动（`type=5` + `landmove p=0`）；AI 回合放行工具条第 3 按钮（`topbar idle host button down`）→ toggle 解除 → 下回合 `type=1` 恢复输入 |
 | 312_npc_tip_name | M4-H | 事件槽 NPC 悬停提示名（原版 0x417B9F `dword_47ED5A` 分支）：release→teleport 同格→press 强制渲染→clickplayer 4（扫 0xF004 掩码点）→ `tip show id=61444`（小偷）。**注**：直改状态后 C1 idleFrame 跳过静止帧，脚本须 press 触发渲染 |
+| 314_overlap_multi_player | M4-H | 同格多玩家拾取顺序（叠放上层=后绘制者）：player 0/1 teleport 同格 → clickplayer 1 → `tip show id=61441` |
+| 316_minigame_money_doll | M4-H | 喜從天降交互版（settings.anim 1）：`minigame enter money` + `move` 合成鼠标驱动娃娃（mouseLogicalPos/鼠标覆盖）+ `minigame score` trace（trace 为本次新增） |
+| 320_wide_layout_hit | M4-D | 布局派生命中区：`clickr tab.2`（panelX+176 派生）→ `tab switch 2`；`clickr top.6` → `dialog open name=query`；native 与 `--extra "--preset wide"` 双跑 |
 | 52/54/62/64/66/68/70/72/74/82/84/90/94/96/100/102/103 | 见 run_tests --matrix | 得點券/監獄/卡片格/小衰神流标/醫院/新聞命運/NPC释放/连锁收费/改建卡/公園/行業設施點缴费/查询面板clickr/请神符+老虎机tap/漲價flag/樂透投注grid/監獄保释grid/醫院出院grid |

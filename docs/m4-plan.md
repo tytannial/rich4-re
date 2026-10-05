@@ -512,12 +512,13 @@ H  追加四项（射程 → 预览高亮 → 小游戏插值/键盘 → 同格�
 | 场景 | 断言 |
 |---|---|
 | `308_go_panel_surrender` **✅** | 認輸 + 死神选人窗口无 `go panel draw cur=0`（修前 75 次 / 修后 0 次） |
-| `30x_go_panel_load_parachute` | 读档残留未落地玩家 → 跳伞期无 GO |
-| `31x_native_pixel_equal` | native preset 渲染与冻结基准逐字节一致（A1 已以一次性 A/B 脚本验证 800×600 左上区 diff=0，见 §15.2；常驻场景待 A2 preset 落地后建立） |
-| `31x_wide_layout_hit` | 宽屏下顶栏/右栏/GO 命中区正确（`clickr` named region） |
-| `32x_minigame_money_doll` | `move` 驱动娃娃 → 娃娃位置/判定按死区语义变化（需补 trace） |
-| `32x_overlap_multi_player` | 同格两玩家：默认取叠放上层；候选数=2（若做面板） |
-| `32x_unowned_parcel_pick` | 无主地块上/下方叠对象时点选结果与原版一致 |
+| `312_npc_tip_name` **✅**（`50f4cef`） | 事件槽 NPC 悬停提示名（`tip show id=61444` "小偷"；press 强制渲染规避 C1 idleFrame） |
+| `314_overlap_multi_player` **✅** | 同格两玩家取叠放上层：teleport 同格 → `clickplayer 1` → `tip show id=61441`（2026-10-05） |
+| `316_minigame_money_doll` **✅** | 喜從天降交互版（settings.anim 1）：`minigame enter/score` trace + `move` 驱动娃娃（2026-10-05；trace 由本次新增） |
+| `320_wide_layout_hit` **✅**（native + `--preset wide` 双跑） | 布局派生命中：`clickr tab.2`（panelX+176 派生）→ `tab switch 2`；`clickr top.6` → `dialog open name=query`（2026-10-05） |
+| `318_go_panel_load_parachute` 🟡 待构造 | 读档残留未落地玩家 → 跳伞期无 GO（需"未落地玩家"存档，构造复杂） |
+| `31x_native_pixel_equal` 🟡 待建（脚本） | native preset 渲染与冻结基准逐字节一致（A1 已以一次性 A/B 脚本验证 800×600 左上区 diff=0，见 §15.2；常驻形态建议脚本基线比对） |
+| `322_unowned_parcel_pick` 🟡 待构造 | 无主地块上/下方叠对象时点选结果与原版一致（需 estate→格 传送辅助与重叠构造） |
 
 ---
 

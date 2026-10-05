@@ -410,6 +410,7 @@ void handleLeftButtonDown(Application& app, int x, int y) {
         if (pl.panelTab != tab) {
             app.audio().playEffect(1); // [RE 0x41833B] dword_482322
             pl.panelTab = static_cast<uint8_t>(tab);
+            trace::logf("tab switch %d", tab);
             renderGameFrame(app);
         }
         return;
@@ -776,9 +777,12 @@ void enterGameLoop(Application& app) {
             std::snprintf(nm, sizeof(nm), "top.%d", i);
             debug::registerRegion(nm, i * 40, 0, 40, 40);
         }
-        for (int t = 0; t < 4; ++t) { // 右侧面板页签 [RE 0x4182FA tab = y/70, x∈[616,640)]
+        // [NEW M4-D 宽屏] 页签 x 随右栏布局派生（与 0x4182FA 命中同源 panelX+176..+200；
+        //   native panelX=440 → 616 不变；宽屏 853 → 829，脚本 clickr 不再命中错位）
+        const int panelX = uiPanelLogicalX(app.surface());
+        for (int t = 0; t < 4; ++t) {
             std::snprintf(nm, sizeof(nm), "tab.%d", t);
-            debug::registerRegion(nm, 616, t * 70, 24, 70);
+            debug::registerRegion(nm, panelX + 176, t * 70, 24, 70);
         }
     }
     // [RE 0x4019C8] enterGameLoop(a1)：**a1≠0（LABEL_6 通关续战/读档继续快速入局）才

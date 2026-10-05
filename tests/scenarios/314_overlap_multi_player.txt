@@ -1,0 +1,16 @@
+# id: 314_overlap_multi_player
+# covers: 同格多玩家拾取顺序（叠放上层 = 后绘制者）——玩家 0 与 AI 玩家 1 同格，
+#         clickplayer 1 精确命中 0xF001 掩码点，tip show id=61441
+#   注：teleport 直改状态后 C1 idleFrame 跳过静止帧，press 强制一帧渲染
+# timeout: 90000
+wait idle 3000
+player.teleport 0 1
+player.teleport 1 1
+wait frames 5
+press 220 240
+release
+wait frames 3
+clickplayer 1
+wait frames 2
+assert trace "tip show id=61441"
+quit

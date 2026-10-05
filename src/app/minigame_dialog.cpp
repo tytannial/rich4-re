@@ -602,6 +602,7 @@ bool digHandler(const SDL_Event* event, void* user) {
             }
         } else if (ui.gamePhase == 2) {  // 结算倒计时 20 tick（点击可跳）
             if (--ui.countdown <= 0) {
+                trace::logf("minigame score %d", digScore(ui));
                 app.events().requestExit(digScore(ui));
                 return true;
             }
@@ -698,6 +699,7 @@ int miniGameDigRun(Application& app) {
         ui.titleOk = ui.title.open(std::move(*blob78));
     }
     app.audio().pushSceneMusic(12);  // [RE 0x41539C]
+    trace::logf("minigame enter dig");
     const int score = runModal(app, &digHandler, &ui, 100);
     app.audio().resumeSceneMusic();
     app.audio().stopEffect(kSfxDigGood);
@@ -1094,6 +1096,7 @@ bool moneyHandler(const SDL_Event* event, void* user) {
             drawMoney(ui, true);
         } else {
             if (nowMs() - ui.settleMs >= 2000) {  // [RE 0x415144] 2s → 退出
+                trace::logf("minigame score %d", moneyScore(ui));
                 app.events().requestExit(moneyScore(ui));
                 return true;
             }
@@ -1151,6 +1154,7 @@ int miniGameMoneyRun(Application& app) {
         ui.titleOk = ui.title.open(std::move(*blob78));
     }
     app.audio().pushSceneMusic(10);  // [RE 0x4157CC]
+    trace::logf("minigame enter money");
     const int score = runModal(app, &moneyHandler, &ui, 50);
     app.audio().resumeSceneMusic();
     RICH4_LOGI("minigame: money score=%d (RE 0x4155FC)", score);
@@ -1410,6 +1414,7 @@ bool balloonHandler(const SDL_Event* event, void* user) {
                 ui.settleMs = nowMs();
             }
         } else if (nowMs() - ui.settleMs >= 2000) {
+            trace::logf("minigame score %d", ui.score);
             app.events().requestExit(ui.score);
             return true;
         }
@@ -1451,6 +1456,7 @@ int miniGameBalloonsRun(Application& app) {
         ui.titleOk = ui.title.open(std::move(*blob78));
     }
     app.audio().pushSceneMusic(11);  // [RE 0x415597]
+    trace::logf("minigame enter balloon");
     const int score = runModal(app, &balloonHandler, &ui, 100);
     app.audio().resumeSceneMusic();  // [RE 0x4155AD]
     RICH4_LOGI("minigame: balloons score=%d (RE 0x4154DC)", score);

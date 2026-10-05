@@ -1,0 +1,17 @@
+# id: 320_wide_layout_hit
+# covers: 布局派生命中区（named region）：工具条 top.*（440 基准）与右栏页签 tab.*
+#         （x 随 panelX 派生——宽屏 853 画布 panelX=653 → 829；native 440 → 616）。
+#         跑法：run_tests --extra "--preset wide" 为宽屏回归；native 下同场景亦通过。
+# timeout: 120000
+wait idle 3000
+settings.layout 0
+clickr tab.2
+wait trace "tab switch 2" 8000
+assert trace "tab switch 2"
+clickr top.6
+wait trace "dialog open name=query" 8000
+assert trace "dialog open name=query"
+rclick 320 240
+wait frames 40
+assert state errors == 0
+quit

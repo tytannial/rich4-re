@@ -1,0 +1,19 @@
+# id: 316_minigame_money_doll
+# covers: [HELP 30] 喜從天降交互版（settings.anim 1，0x4155FC）——minigame enter/score trace +
+#         move 合成鼠标驱动娃娃（mouseLogicalPos/m_mouseOv 路径，0x4135F4 死区跟随）
+# timeout: 180000
+wait idle 1000
+settings.anim 1
+player.cash 0 300000
+find.evtcell 8
+assert state selected >= 1
+land
+wait log "minigame enter money" 20000
+move 200 420
+wait frames 60
+move 500 420
+wait frames 60
+move 320 420
+wait log "minigame score" 120000
+assert state errors == 0
+quit

@@ -1398,7 +1398,7 @@ bool cmdSettingsAnim(Application& app, const std::vector<std::string>& a, std::s
 // [NEW] settings.layout <0|1|2>：运行期改画面布局（0/1=完整信息面板 / 2=玩家条；
 //   测试右栏各布局用；下一帧全量重绘生效）
 bool cmdSettingsLayout(Application& app, const std::vector<std::string>& a, std::string& err) {
-    if (!argCount(a, 2, err, "settings.layout <0|1|2>")) return false;
+    if (!argCount(a, 1, err, "settings.layout <0|1|2>")) return false;
     const int v = parseInt(a[1]);
     if (v < 0 || v > 2) {
         err = "settings.layout: 0..2";
