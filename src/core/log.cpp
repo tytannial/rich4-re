@@ -1,4 +1,5 @@
 #include "game/core/log.h"
+#include "game/core/config.h"
 
 #include "game/core/paths.h"
 
@@ -61,7 +62,9 @@ void formatStamp(char* out, size_t cap) {
 //   banner，便于 append 模式下区分多次启动）。依据: 实机问题需回传日志
 std::FILE* logFile() {
     static std::FILE* f = [] {
-        const char* path = "rich4.log";
+        // [NEW M4-F] 日志路径可配（rich4.ini [paths] logFile；空 = rich4.log）
+        std::string pathCfg = config().logFile;
+        const char* path = pathCfg.empty() ? "rich4.log" : pathCfg.c_str();
         if (std::FILE* r = std::fopen(path, "rb")) {
             std::fseek(r, 0, SEEK_END);
             const long sz = std::ftell(r);

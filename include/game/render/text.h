@@ -29,7 +29,9 @@ public:
     TextRenderer(const TextRenderer&) = delete;
     TextRenderer& operator=(const TextRenderer&) = delete;
 
-    bool init();
+    // [NEW M4-F] 字体路径/字号缩放由 rich4.ini 配置（默认 = 原硬编码值）
+    bool init(const char* regularPath = nullptr, const char* boldPath = nullptr,
+              float sizeScale = 1.09f);
     void shutdown();
 
     // [RE 0x45441A] 接入语音播放：drawText 的 '#NNNN' 前缀触发 Audio::playVoice（原版
@@ -54,6 +56,9 @@ public:
     void measure(const uint16_t* buffer, int bufferWidth, const int rect[4], int outRect[4]);
 
 private:
+    std::string m_fontRegular; // [NEW M4-F] 配置字体
+    std::string m_fontBold;
+    float m_sizeScale = 1.09f;
     struct Impl;
     Impl* m_impl = nullptr;
     Audio* m_audio = nullptr;

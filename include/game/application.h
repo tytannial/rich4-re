@@ -37,6 +37,9 @@ public:
         bool autoScale = false;
         // [NEW M4-D 实机] 呈现放大过滤（默认线性；1:1 时无差别）
         bool linearFilter = true;
+        // [NEW M4-F] 垂直同步/全屏（rich4.ini [display]）
+        bool vsync = true;
+        bool fullscreen = false;
     };
     bool init(const std::string& gameDir, bool headless = false,
               const DisplayConfig& display = DisplayConfig{});

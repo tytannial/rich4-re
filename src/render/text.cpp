@@ -25,12 +25,12 @@ constexpr int kBufferHeight = 200;
 // [PORT] GDI CreateFontA(-size)「字符高度」→ FreeType em size 映射系数。
 //   依据: HarmonyOS Sans 汉字 bbox 高 ≈ 0.915em（fontTools 实测），原版 16px 細明體点阵
 //   汉字高 ≈ 16px → em ≈ 17.5 → 系数 ≈ 1.09；实机对照（--shot + tools/frame_align.py）可调。
-constexpr float kFontSizeScale = 1.09f; // TODO: 实机对照微调
+constexpr const char* kDefaultFontRegular = "resources/Fonts/HarmonyOS_Sans_SC_Regular.ttf";
+constexpr const char* kDefaultFontBold = "resources/Fonts/HarmonyOS_Sans_SC_Bold.ttf";
+constexpr float kDefaultFontSizeScale = 1.09f;
 
 // [PORT] 字体路径（先写死；后续改为配置文件/命令行参数）
 //   TODO: 改为配置项（resources/Fonts/ 不入库，见 .gitignore；缺失时文本降级为空操作）
-constexpr const char* kFontRegularPath = "resources/Fonts/HarmonyOS_Sans_SC_Regular.ttf";
-constexpr const char* kFontBoldPath = "resources/Fonts/HarmonyOS_Sans_SC_Bold.ttf";
 
 constexpr int kMaxGlyphCache = 65536;
 
@@ -143,10 +143,14 @@ struct TextRenderer::Impl {
 
 TextRenderer::~TextRenderer() { shutdown(); }
 
-bool TextRenderer::init() {
+bool TextRenderer::init(const char* regularPath, const char* boldPath, float sizeScale) {
     if (m_impl) {
         return true;
     }
+    // [NEW M4-F] 配置字体/字号（nullptr = 内置默认）
+    m_fontRegular = regularPath != nullptr ? regularPath : kDefaultFontRegular;
+    m_fontBold = boldPath != nullptr ? boldPath : kDefaultFontBold;
+    m_sizeScale = sizeScale > 0.0f ? sizeScale : kDefaultFontSizeScale;
     auto* impl = new Impl();
     impl->buffer.assign(static_cast<size_t>(kBufferWidth) * kBufferHeight, 0);
 
@@ -159,17 +163,17 @@ bool TextRenderer::init() {
         delete impl;
         return false;
     }
-    if (FT_New_Face(impl->library, kFontRegularPath, 0, &impl->faces[0]) != 0) {
+    if (FT_New_Face(impl->library, m_fontRegular.c_str(), 0, &impl->faces[0]) != 0) {
         RICH4_LOGW("TextRenderer: font unavailable: %s (text rendering disabled)",
-                   kFontRegularPath);
+                   m_fontRegular.c_str());
         impl->faces[0] = nullptr;
     }
-    if (FT_New_Face(impl->library, kFontBoldPath, 0, &impl->faces[1]) != 0) {
+    if (FT_New_Face(impl->library, m_fontBold.c_str(), 0, &impl->faces[1]) != 0) {
         impl->faces[1] = nullptr; // Bold 缺失 → 回落 Regular
     }
     impl->usable = impl->faces[0] != nullptr;
     if (impl->usable) {
-        RICH4_LOGI("TextRenderer: FreeType ready (%s)", kFontRegularPath);
+        RICH4_LOGI("TextRenderer: FreeType ready (%s)", m_fontRegular.c_str());
     }
     m_impl = impl;
     return true;
@@ -289,7 +293,7 @@ void TextRenderer::drawText(Surface& dst, const char* text, int x, int y, int al
     }
     // [NEW M4-A2] 文本按画布 scale 1:1 光栅化（设备像素字号 = 设计字号 × kFontSizeScale × scale）
     const float surfScale = dst.scale();
-    const int px = static_cast<int>(impl->fontSize * kFontSizeScale * surfScale + 0.5f);
+    const int px = static_cast<int>(impl->fontSize * m_sizeScale * surfScale + 0.5f);
     const int bufW =
         surfScale == 1.0f ? kBufferWidth
                           : static_cast<int>(kBufferWidth * surfScale + 0.5f);

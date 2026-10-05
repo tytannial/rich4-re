@@ -10,6 +10,7 @@
 #include "game/app/new_game.h"
 #include "game/app/victory.h"
 #include "game/core/log.h"
+#include "game/core/config.h"
 
 #include <chrono>
 #include <cstring>
@@ -25,10 +26,15 @@ bool Application::init(const std::string& gameDir, bool headless, const DisplayC
     //       显示模式由 0x4015D6 的 SetDisplayMode(640,480,16) 决定 → 逻辑分辨率 640x480
     m_gameDir = gameDir;
     m_headless = headless;
-    // [NEW] 媒体目录（音乐/视频）：优先 <gameDir>/Media，回退 <gameDir>/../Media
-    m_mediaDir = gameDir + "/Media";
-    if (!std::filesystem::exists(m_mediaDir + "/Music")) {
-        m_mediaDir = gameDir + "/../Media";
+    // [NEW] 媒体目录（音乐/视频）：rich4.ini [paths] mediaDir 优先；
+    //   默认 <gameDir>/Media，回退 <gameDir>/../Media
+    if (!config().mediaDir.empty()) {
+        m_mediaDir = config().mediaDir;
+    } else {
+        m_mediaDir = gameDir + "/Media";
+        if (!std::filesystem::exists(m_mediaDir + "/Music")) {
+            m_mediaDir = gameDir + "/../Media";
+        }
     }
 
     // [NEW] headless 测试运行（docs/testing.md）：SDL dummy 驱动——无真实窗口/显卡/声卡；
@@ -82,8 +88,12 @@ bool Application::init(const std::string& gameDir, bool headless, const DisplayC
             canvasH = static_cast<int>(Surface::kHeight * drawScale + 0.5f);
         }
     }
-    if (!m_renderer.create(m_window.handle(), canvasW, canvasH, !headless)) {
+    if (!m_renderer.create(m_window.handle(), canvasW, canvasH, !headless && display.vsync)) {
         return false;
+    }
+    // [NEW M4-F] 全屏（rich4.ini [display] fullscreen；headless 不适用）
+    if (display.fullscreen && !headless) {
+        SDL_SetWindowFullscreen(m_window.handle(), true);
     }
     // [RE 0x48A08C] 后台绘制缓冲（RGB555）
     if (!m_surface.create(m_renderer.handle(), canvasW, canvasH)) {
@@ -93,8 +103,9 @@ bool Application::init(const std::string& gameDir, bool headless, const DisplayC
     m_surface.setScale(drawScale);
     // [NEW M4-D 实机] 呈现放大过滤（逻辑画布 → 窗口；默认线性平滑）
     m_surface.setLinearFilter(display.linearFilter);
-    // [RE 0x44F935] 文本渲染表面（512x200，原版 dword_4762CC）
-    m_text.init();
+    // [RE 0x44F935] 文本渲染表面（512x200，原版 dword_4762CC）；
+    //   [NEW M4-F] 字体/字号来自 rich4.ini [text]
+    m_text.init(config().fontRegular.c_str(), config().fontBold.c_str(), config().sizeScale);
 
     // [RE 0x4015D6] 游戏初始化（失败等价于原版 "DirectDraw Initial Error!" 弹窗后退出）
     if (!gameInit(*this)) {
