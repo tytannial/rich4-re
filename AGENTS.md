@@ -208,8 +208,23 @@ free 3.52 / wide 2.68 ms。详见 `m4-plan.md` §17。
 - **debug 合成输入**（click/clickr 等）走模态框架（640 基准 → +base 派发），headless
   截图与实机一致。
 - 验证：native top/bank/set SHA 逐字节全等；`--canvas 1024x480` 居中+命中；22 场景全 PASS。
-- 详见 `m4-plan.md` §18。**M4 剩余：E 文本高分定点化 / F `rich4.ini` / G 结构重组 /
-  H 追加体验（见 §5~§8）**。
+- 详见 `m4-plan.md` §18。
+**M4 收尾 ✅ 2026-10-05（E~H + 实机多轮 + 并入 main）**：
+- **E 文本高分**：用户决策跳过（低分辨率输出 + 线性过滤拉伸，见 §18.9/§18.10）。
+- **F `rich4.ini` ✅**（`ef21ec9`）：`core/config.{h,cpp}`（INI 解析 / 缺失生成带注释模板 /
+  `setConfigValue`；优先级 CLI > ini > RICH4.CFG > 内置默认；通用 `--set k=v`）；接入
+  字体/字号/日志路径/媒体目录/vsync/fullscreen。RICH4.CFG 红线保持。
+- **G 结构重组（1/2）✅**（`5bd7c8b`）：生成物集中 `src/gen/`、debug 归 `src/debug/`；
+  G(2/2) `src/app/` 细分与大文件拆分留后续。
+- **H 追加体验 ✅**：小游戏 tick 间插值（`a715bde`，`kModalFrameEvent` 真实时钟派发 /
+  虚拟时钟零变化）、悬停目标预览高亮（`0aad3bc`）、同格多目标消歧（`80f45a0`，无主空地
+  并入 y 排序 items 通道）、射程限制**撤回**（用户确认理解有误，保持原版语义，无代码改动）；
+  尾巴（`50f4cef`）：财神巡游插值 + 事件槽 NPC 悬停提示名 + `sub_40D293` 15 调用点全量复核。
+- **实机多轮修复（§18.6~18.10）**：主菜单/选人残影、tick 追补 + 自适应 vsync、GO/骰子居中 +
+  模态绘制边界、骰子提速 + 小地图视野框、**逻辑画布 + GPU 放大**（分辨率无关帧率）、
+  入狱/住院 FLC 回卷拖影、线性放大过滤默认开启。
+- **并入 main ✅（merge `27bc265`）**：M4 36 提交 + main 8 修复合并（构建 + 16 场景冒烟 +
+  ctest 全绿）；详见 `m4-plan.md` §19/§19.1。
 
 **跨平台 ✅ 2026-09-30**（原 M3-C，Windows x64 + Linux x86-64）：GDI → **FreeType 统一文本渲染**
 （删 366 行 GDI、字体 `resources/Fonts/` 不入库/缺失降级、`kFontSizeScale` 可调）、

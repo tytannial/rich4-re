@@ -406,8 +406,12 @@ int selectTargetDialog(Application& app, int mode, bool allowEmptyLand) {
     c.flags = static_cast<uint16_t>(mode & 0xFFFF);
     c.filter = static_cast<uint8_t>((mode >> 8) & 0xFF);  // [RE 0x445E4D BYTE1]
     if ((c.flags & 0x40) != 0) {
-        // [RE 0x445E4D] 0x40 → 全可选 + 滚动模式（0x80 | 0x37）
-        c.flags = static_cast<uint16_t>(0x80 | 0x37);
+        // [RE 0x445E4D] 0x40 宏：flags = (原 flags & 0x80) | 0x37，且清 BYTE1（原版 v14 清 0）
+        //   ——单独 0x40 = 0x37（**不能滚屏**）；滚屏只来自 0x80
+        //   （飛彈 0x300C0 / 核子飛彈 0x400C0 / 房地產公司 0x2090086 三处低字含 0xC0，
+        //    保留 0x80 与恒置 0x80|0x37 结果一致；无 0x80 的 0x40 调用点不存在）
+        c.flags = static_cast<uint16_t>((c.flags & 0x80) | 0x37);
+        c.filter = 0;
     }
     c.cursorType = (mode >> 16) & 0xFF;
     c.cursorFrames = ((mode >> 24) & 0xFF) + 1;  // [RE 0x445EC1] dword_48C58C=(mode>>24)+1

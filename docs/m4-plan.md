@@ -523,6 +523,11 @@ H  追加四项（射程 → 预览高亮 → 小游戏插值/键盘 → 同格�
 
 ## 11. 逆向档案订正清单（随对应改动一起提交）
 
+> ✅ **2026-10-05 全部完成**（提交 `50f4cef` + 文档批）：1→`map-target-audit.md` §1（按字节
+> 订正 + 无射程结论）；2→`420e9a-item-ai.md` §1.1（采集器中心澄清 + 全图化为重写决策）；
+> 3→`target_select_dialog.h` + `.cpp`（0x40 分支精确 `(flags&0x80)|0x37` + 清 BYTE1）；
+> 4→`ui-controls.md` §21/§39；5→`item-effects.md` §1.3（核弹口径=目标处一屏）。
+
 1. `docs/reverse/functions/map-target-audit.md` §1：mode 字节语义（byte2=`cursorSelect` index、
    byte3=frameCount-1）、`0x40` 精确语义（`(flags&0x80)|0x37` 且清 BYTE1）、补
    **房地產公司 `0x2090086` 可滚屏**。
@@ -953,7 +958,19 @@ quickstart 跳过选人界面，`blitScrolledMap` 仅用于选人界面与通关
   未命中/退出即清（全局快照单份）。场景 210/212/140/200/260 等全 PASS。
 - **H(1/4) 小游戏渲染插值 ✅**（提交 `a715bde`）：kModalFrameEvent（真实时钟每轮派发、
   虚拟时钟零变化）；挖寶/氣球/喜從天降 tick 间位置插值。
-- **H(3/4) 同格多目标消歧**：待做。
+- **H(3/4) 同格多目标消歧 ✅**（提交 `80f45a0`）：无主空地改走 `addItem` 通道
+  （spr=nullptr 仅登记不绘制）与有主地块同参 `stable_sort(y)`，拾取顺序与原版
+  "同一 y 排序 drawList" 对齐；绘制循环加 `it.spr` 守卫，绘制输出不变；14 场景 PASS。
 - **H(4/4) 射程限制：撤回（2026-10-05 用户确认）**——此前对本项的理解有误，**M4 不做
   射程限制**（保持原版语义：人类选目标仅视口限制；AI 判据不动），相关提议（自定义
   射程表 b）作废，留待后续专项处理。**无任何代码改动**（仅有本节记录，已订正）。
+- **H 小尾巴 ✅（提交 `50f4cef`）**：喜从天降财神巡游 `richX` 插值（`prevRichX` 回插，
+  与袋子同构——本函数"先画后更新"）；事件槽 NPC 悬停提示名修复（`buildTipText`
+  0xF000|4..7 → `kNpcNames`，原版 0x417B9F `dword_47ED5A` 分支；此前返回空=悬停无提示）；
+  `sub_40D293` 15 调用点全量复核（showObjectTip/onPlayerActionPhase×3/模态自身/10 卡道具
+  全部对齐，范围路径 = 位掩码全体命中等价；详见 §11 与 `map-target-audit.md` §1）；
+  调试命令增强 `dump hits` / `npc.dump` 坐标槽位；场景 `312_npc_tip_name`
+  （release→teleport→press 强制渲染→clickplayer 4 → `tip show id=61444 "小偷"`）。
+- **M4 并入 main ✅（2026-10-05，merge `27bc265`）**：`feat/m4-render-ui` 36 提交并入
+  main（3 处冲突解决：map_render gray+空 spr 复合、target_select cursorFrames+高亮并存、
+  address-map 重生成）；合并后构建通过、16 场景冒烟全 PASS、ctest/L0 通过。

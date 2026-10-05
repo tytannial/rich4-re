@@ -8,15 +8,22 @@
 > `rebuildPickBuffer` 0x409B18（g_drawList + g_pickMask 形状）→ `pickMapObject` 0x40A9D7。
 > 重写对应：`selectTargetDialog`（`target_select_dialog.cpp`）+ `mapHitRegions`（`map_render.cpp`）。
 
-## 1. mode 编码（0x445E4D WM_USER+1 lParam）
+## 1. mode 编码（0x445E4D WM_USER+1 lParam；2026-10-05 按字节复核订正）
 
 ```
-bits 0-15  = flags（筛选：1 普通格/物件、2 住宅、4 商業、0x10 玩家、0x20 挂身物件；
-             0x40 特殊 → flags = 0xB7|0x80 滚动模式；0x80 滚动）
-bits 8-15  = BYTE1 高字节过滤（case 1..8）——**非 0 时取代低 flags 判定**（原版 v14 清 0）
-bits 16-23 = 光标类型（cursorSelect(type,1,10)）
-bits 24-31 = 光标 idx-1
+byte0 = flags（筛选：1 普通格/物件、2 住宅、4 商業、0x10 玩家、0x20 挂身物件；
+        0x40 宏 → flags = (原 flags & 0x80) | 0x37 且**清 BYTE1**——单独 0x40 = 0x37（不能滚屏）；
+        0x80 = 地图滚动模式，**仅 3 个调用点带**：飛彈 0x300C0 / 核子飛彈 0x400C0 /
+        房地產公司 0x2090086）
+byte1 = BYTE1 高字节过滤（case 1..8）——**非 0 时取代低 flags 判定**（原版 v14 清 0）
+byte2 = cursorSelect index（命中时光标类型，0x445E4D 内 cursorSelect(x,1,10)）
+byte3 = frameCount-1（命中光标动画帧数；0x445EC1 dword_48C58C=(mode>>24)+1）
 ```
+
+> **无半径/距离/同路段射程**：人类选目标的唯一空间判据 = 目标锚点像素落在当前
+> 440×440 拾取缓冲内（`rebuildPickBuffer` 0x409B18）；`sub_40A45C(a1)` 半径版中心 =
+> **视口中心**（0x40A48F `441*(220-a1)`），以任意世界坐标为中心的是 `sub_40A0B1`
+> （仅 2 个 AI 调用者）。（2026-10-05 射程专项撤回后的结论留档。）
 
 ## 2. BYTE1 case 1..8 语义（0x445E4D 反编译，2026-09-27 实现）
 

@@ -430,6 +430,9 @@ void pressDown(Surface& dst, int x, int y, int w, int h, int shift, const uint8_
   `uncompose`（0x401F5E）写回背景。**位置 = (mouse - offsetX, - offsetY)**，热区在帧头 offset。
 - `getRect`（0x4024C0）给脏矩形。
 - 常用 id：面板交互光标 **27**、默认箭头 **41**；模态进入设、退出恢复（§13）。
+- **实测（2026-10-05）**：`moneyWndProc`（0x414FCD）**无任何 `cursorSelect` 调用**
+  （0x4021F8 的 xref 仅 `digWndProc`/`balloonWndProc`）→ 喜從天降进出不改光标、
+  无专属游戏光标；据此撤销旧判断"case 8 缺光标设置"（`m4-plan` §9.3 已记）。
 
 ## 22. 模态对话框框架（`runModal`，0x4018E7）
 
@@ -981,6 +984,10 @@ UI 音效与游戏音效槽**是两套**，勿混：
   `surrenderPlayer` 起手 / `topBarFinish` 的 `canResume` 追加 `!blockingPerf(app)`。
   场景 `308_go_panel_surrender`（`surrender; trace.clear` 同帧清窗；**修前 75 次 cur=0 / 修后 0 次**）；
   新增命令 `trace.clear`（负向断言窗口前置）。`m4-plan.md` §14 有完整实测记录。
+  ⑥ **事件 FLC 素材一律 440 宽**（2026-10-05 宽地图区实测）：事件动画帧/回卷区以
+  native 440×440 地图区为基准；宽屏（地图区 >440）播放与回卷须水平平移 `(mapW-440)/2`
+  （`drawEventFlcFrame` 与 `playEventFlc` 回卷区同源；native 偏移 0）。曾因回卷区未含
+  该偏移，入狱/住院过渡动画在宽屏留拖影（2026-10-01 实机五轮修，见 `m4-plan` §18.9）。
 
 ## 新增控件模板（发现新控件时复制填写）
 
