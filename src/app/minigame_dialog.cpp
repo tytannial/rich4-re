@@ -747,6 +747,7 @@ struct MoneyCtx {
     int uiState = 0;      // 0=intro 1=title 2=play 3=settle
     uint64_t settleMs = 0;
     int richX = 110;
+    int prevRichX = 110; // [NEW M4-H] 财神巡游插值起点（本 tick 更新前）
     int richState = 3;
     int richFrame = 4;
     int richWait = 0;
@@ -871,7 +872,14 @@ void moneyTick(MoneyCtx& ui, bool runLogic) {
     if (ui.cloudFrame != -1) {
         blitSpriteFrame(dst, ui.cloud, ui.cloudFrame, ui.cloudX, 125);
     }
-    blitSpriteFrame(dst, ui.rich, kRichFrames[ui.richState][ui.richFrame], ui.richX, 126);
+    // [NEW M4-H 实机] 财神巡游插值（与袋子同理：绘制在更新前，prevRichX → richX 回插；
+    //   转身/结束时 richX 不动 → 插值退化为原值）
+    int rx = ui.richX;
+    if (ui.subTick > 0.0f) {
+        rx = static_cast<int>(static_cast<float>(ui.prevRichX) +
+                              static_cast<float>(ui.richX - ui.prevRichX) * ui.subTick);
+    }
+    blitSpriteFrame(dst, ui.rich, kRichFrames[ui.richState][ui.richFrame], rx, 126);
     // [RE 0x4135F4] 娃娃跟随鼠标（原版 GetCursorPos；640x480 全屏下光标坐标 = 逻辑坐标）
     if (runLogic && ui.gamePhase != 2 && !ui.boomActive) {
         // [PORT Win32:GetCursorPos] 窗口化 + letterbox 缩放后，窗口坐标 ≠ 逻辑坐标：
@@ -925,6 +933,7 @@ void moneyTick(MoneyCtx& ui, bool runLogic) {
         }
     }
     // 财神巡游（[RE 0x41387F]）
+    ui.prevRichX = ui.richX; // [NEW M4-H] 插值起点（本 tick 更新前）
     if (ui.gamePhase == 1) {
         ui.richState = 2;
         ui.richFrame = 2;
@@ -1033,6 +1042,7 @@ bool moneyHandler(const SDL_Event* event, void* user) {
         ui.gamePhase = 0;
         ui.uiState = 0;
         ui.richX = 110;
+        ui.prevRichX = 110;
         ui.richState = 3;
         ui.richFrame = 4;
         ui.richWait = 0;

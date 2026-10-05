@@ -1,0 +1,17 @@
+# id: 312_npc_tip_name
+# covers: 事件槽 NPC（四大恶人）悬停提示名——原版 0x417B9F dword_47ED5A 分支
+#         （重写 buildTipText 曾对 0xF000|4..7 返回空 → 悬停无提示）
+#   注：release/teleport 直改状态后静止帧不渲染（C1 idleFrame），需 press 强制一帧渲染；
+#       press 命中项随 NPC 走位波动，故断言用 clickplayer（扫 0xF004 掩码点，精确）
+# timeout: 90000
+wait idle 3000
+npc.release 4
+player.teleport 0 1
+wait frames 5
+press 220 240
+release
+wait frames 3
+clickplayer 4
+wait frames 2
+assert trace "tip show id=61444"
+quit

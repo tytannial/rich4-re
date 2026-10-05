@@ -41,7 +41,12 @@ std::string buildTipText(const GameState& state, uint16_t id) {
         return {};
     }
     if ((id & 0xF000) == 0xF000) { // 玩家棋子（0xF000|玩家号）
-        return ownerName(state, static_cast<uint8_t>((id & 0xF) + 1));
+        const int p = id & 0xF;
+        if (p < 4) {
+            return ownerName(state, static_cast<uint8_t>(p + 1));
+        }
+        // [RE 0x417B9F] 事件槽 NPC（4..7）→ dword_47ED5A 四大恶人名（重写 kNpcNames）
+        return (p <= 7 && kNpcNames[p]) ? kNpcNames[p] : std::string();
     }
     if (id < 2000) { // cellEnt 名称（+4）
         if (id < state.cellEnts.size()) {

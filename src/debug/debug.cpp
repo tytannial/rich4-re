@@ -1591,6 +1591,20 @@ bool cmdDump(Application& app, const std::vector<std::string>& a, std::string& e
                    sp.sharesLeft);
         return true;
     }
+    if (what == "hits") {
+        int n = 0;
+        for (const auto& hr : st.mapHitRegions) {
+            if ((hr.id & 0xF000) != 0xF000) {
+                continue;
+            }
+            RICH4_LOGI("dump hit id=%u rect=(%d,%d,%d,%d) anchor=(%d,%d) shape=%d", hr.id, hr.x,
+                       hr.y, hr.w, hr.h, hr.anchorX, hr.anchorY, hr.shape ? 1 : 0);
+            ++n;
+        }
+        RICH4_LOGI("dump hits: player entries=%d total=%d", n,
+                   static_cast<int>(st.mapHitRegions.size()));
+        return true;
+    }
     if (what == "state") {
         RICH4_LOGI("dump state: turn=%d day=%d date=%u players=%u cur=%d moneyMul=%d humans=%d "
                    "publicFund=%d selected=%u",
@@ -1962,8 +1976,12 @@ bool cmdNpcDump(Application& app, const std::vector<std::string>&, std::string& 
     GameState& st = app.gameState();
     for (int i = 0; i < 5; ++i) {
         const NpcSlot80& s = st.npcSlots[i];
-        RICH4_LOGI("dump npc %d: busy=%u status=0x%02X bailer=%u cell=%u", i + 4, s.busy, s.status,
-                   s.bailer, s.cell);
+        RICH4_LOGI("dump npc %d: busy=%u status=0x%02X bailer=%u cell=%u sprite=(%d,%d) grp=%u act=%u "
+                   "w0=%d w1=%d w2=%d",
+                   i + 4, s.busy, s.status, s.bailer, s.cell, st.players[i + 4].spriteX,
+                   st.players[i + 4].spriteY, st.playerMoveGroup[i + 4], st.playerActionState[i + 4],
+                   st.walkRes[i + 4][0].frameCount(), st.walkRes[i + 4][1].frameCount(),
+                   st.walkRes[i + 4][2].frameCount());
     }
     (void)err;
     return true;
