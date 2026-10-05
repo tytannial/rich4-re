@@ -377,6 +377,7 @@ void TextRenderer::drawText(Surface& dst, const char* text, int x, int y, int al
         std::vector<uint32_t> cps;
     };
     std::vector<Line> lines(1);
+    std::vector<int> lineWidths; // [RE 0x44FABC] 每行排版宽度（居中按**行**独立，见绘制段）
     int textWidth = 0;
     {
         int penX = 0;
@@ -386,6 +387,7 @@ void TextRenderer::drawText(Surface& dst, const char* text, int x, int y, int al
             uint32_t cp = 0;
             nextCodepoint(p, end, cp);
             if (cp == '\n') {
+                lineWidths.push_back(penX);
                 lines.emplace_back();
                 penX = 0;
                 continue;
@@ -396,6 +398,7 @@ void TextRenderer::drawText(Surface& dst, const char* text, int x, int y, int al
             const Glyph& g = loadGlyph(cp);
             const int adv = g.advance + charSpacing;
             if (penX > 0 && penX + adv > impl->bufW) {
+                lineWidths.push_back(penX);
                 lines.emplace_back();
                 penX = 0;
             }
@@ -405,6 +408,7 @@ void TextRenderer::drawText(Surface& dst, const char* text, int x, int y, int al
                 textWidth = penX;
             }
         }
+        lineWidths.push_back(penX);
     }
 
     // rc = DrawTextW(DT_CALCRECT) 尺寸 + 边距 10（原版 rc.right/bottom += 10；scale 下按 pad）
@@ -465,10 +469,15 @@ void TextRenderer::drawText(Surface& dst, const char* text, int x, int y, int al
         drawVertical(0, 0);
     } else {
         // 主文本绘制：基线 = ascent + 行序×行高；笔位 = 字符 advance 累加 + 字距
-        auto drawHorizontal = [&](int ox, int oy, uint16_t color555) {
+        // [RE 0x44FABC] 原版 a5=4/7 时 DrawTextA(uFormat=DT_CENTER) 于 512 居中带 →
+        //   **每行独立水平居中**（并非按最长行统一居中——后者会让短行看起来左对齐；
+        //   2026-10-05 实机反馈"买地提示未居中"根因）
+        const bool centered = (align == 4 || align == 7);
+        auto drawHorizontal = [&](int offX, int oy, uint16_t color555) {
             for (size_t li = 0; li < lines.size(); ++li) {
                 const int baseline = oy + ascent + static_cast<int>(li) * lineHeight;
-                int penX = ox;
+                const int lw = li < lineWidths.size() ? lineWidths[li] : 0;
+                int penX = offX + (centered ? (impl->bufW / 2 - (lw >> 1)) : 0);
                 for (uint32_t cp : lines[li].cps) {
                     const Glyph& g = loadGlyph(cp);
                     blendGlyph(g, penX + g.bearingX, baseline - g.bearingY, color555);
@@ -476,18 +485,16 @@ void TextRenderer::drawText(Surface& dst, const char* text, int x, int y, int al
                 }
             }
         };
-        const bool centered = (align == 4 || align == 7);
-        const int ox = centered ? (impl->bufW / 2 - (textWidth >> 1)) : 0;
         if (impl->style & kTextStyleShadow) {
-            drawHorizontal(ox + u, u, bg555);
+            drawHorizontal(u, u, bg555);
         } else if (impl->style & kTextStyleOutline) {
             static const int kDx[4] = {1, 1, 0, 2};
             static const int kDy[4] = {0, 2, 1, 1};
             for (int i = 0; i < 4; ++i) {
-                drawHorizontal(ox + kDx[i] * u, kDy[i] * u, bg555);
+                drawHorizontal(kDx[i] * u, kDy[i] * u, bg555);
             }
         }
-        drawHorizontal(ox, 0, fg555);
+        drawHorizontal(0, 0, fg555);
     }
 
     // 测量实际包围盒 [RE 0x44F70C]

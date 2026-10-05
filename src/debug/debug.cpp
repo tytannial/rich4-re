@@ -2477,10 +2477,11 @@ bool isBlockingCmd(const std::string& name) {
 
 bool isInteractiveCmd(const std::string& name) {
     // 阻塞模态期间仍需可执行的应答类命令（点地图/选目标也属应答）
+    // [NEW] shot：只读截图（无副作用），模态阻塞期允许执行（脚本留存模态画面证据）
     static const char* const kInter[] = {"click",     "clickr",  "rclick",    "move",
                                          "key",       "confirm", "tap",       "clickcell",
                                          "clickplayer", "clicksel", "press",  "presssel",
-                                         "release"};
+                                         "release",   "shot"};
     for (const char* i : kInter) {
         if (name == i) {
             return true;

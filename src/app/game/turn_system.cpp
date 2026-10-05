@@ -2199,8 +2199,11 @@ int landingEvent(Application& app, uint16_t cellEntId) {
     }
     // case 0：普通格，按 objId 分（objId == 0 → 无事件返回 0x80；
     //   有 objId 的住宅用地/商業用地/行業設施點路径统一在 loc_41B111 返回等待值后下一位）
-    // 差异: 原版 0x88 = 8 帧；重写帧率更高（约 2 倍），暂用 0x90 = 16 帧对齐观感
-    constexpr int kLandingWait = 0x90;
+    // [RE 0x41B111 var_14=0x88] 等待值：bit7=交棒、低 7 位 = **原版状态机步数** 8——
+    //   原版状态机按 settings[0] 刻度（byte_46CB20={6,4,2}×20ms=120/80/40ms，默认 80ms/
+    //   步，见 m4-plan §17.5）→ 默认档 8 步 ≈ 640ms。重写固定 16ms tick → 40 帧 ≈ 640ms。
+    //   旧值 16 帧(256ms) 偏短：实机反馈"买地/加盖后效果来不及看清就进下一回合"。
+    constexpr int kLandingWait = 0x80 | 40;
     if (objId == 0) {
         return 0x80;
     }
