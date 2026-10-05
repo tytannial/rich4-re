@@ -33,7 +33,7 @@ def main() -> None:
     assert len(t) == HOLIDAY_N, f"short read {len(t)}"
 
     # 校验：前 5 字段与现有 kHoliday[..][5] 一致（防偏移错）
-    src = Path("src/app/map_tables.cpp").read_text(encoding="utf-8")
+    src = Path("src/gen/map_tables.cpp").read_text(encoding="utf-8")
     import re
     existing = re.search(r"const uint8_t kHoliday\[8\]\[24\]\[5\]\s*=\s*\{(.*?)\n\};", src, re.S)
     if existing:
@@ -81,7 +81,7 @@ def main() -> None:
             "// {flag,type,month,day,weekday, effectFlags, resFlcLo,resFlcHi, flcParamLo,flcParamHi, musicLo,musicHi}",
             "const uint8_t kHoliday[8][24][12] = {",
         ]) + "\n" + "\n".join(lines[4:-1]) + "\n};"
-        mt = Path("src/app/map_tables.cpp")
+        mt = Path("src/gen/map_tables.cpp")
         mt_src = mt.read_text(encoding="utf-8")
         pat = _re.compile(r"// \[RE 0x47FF4A\].*?\nconst uint8_t kHoliday\[8\]\[24\]\[5\] = \{.*?\n\};", _re.S)
         if pat.search(mt_src):
@@ -95,7 +95,7 @@ def main() -> None:
         hdr.write_text(hs, encoding="utf-8", newline="\n")
         print("[write] updated map_tables.cpp + map_tables.h (kHoliday[..][12])")
 
-        # 农历浮动节日表 dword_47639C → src/app/holiday_tables.cpp + extern
+        # 农历浮动节日表 dword_47639C → src/gen/holiday_tables.cpp + extern
         flen = 8401
         fb = va_to_raw(FLOAT_VA)
         rows = [int.from_bytes(data[fb + i * 4: fb + i * 4 + 2], "little") for i in range(flen)]
@@ -111,7 +111,7 @@ def main() -> None:
         for i in range(0, flen, 12):
             fl.append("    " + ",".join(str(x) for x in rows[i:i + 12]) + ",")
         fl += ["};", "", f"const int kFloatHolidayLen = {flen};", "", "}  // namespace rich4", ""]
-        ht = Path("src/app/holiday_tables.cpp")
+        ht = Path("src/gen/holiday_tables.cpp")
         ht.write_text("\n".join(fl), encoding="utf-8", newline="\n")
         hs2 = hdr.read_text(encoding="utf-8")
         if "kFloatHoliday" not in hs2:

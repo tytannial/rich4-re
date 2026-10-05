@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""从 rich4.exe 提取游戏内(0x417E26)静态表，生成 src/app/map_tables.cpp。
+"""从 rich4.exe 提取游戏内(0x417E26)静态表，生成 src/gen/map_tables.cpp。
 
 表位置（DGROUP 段, VA 0x463000 → raw 0x61600）::
 
@@ -105,7 +105,7 @@ def fmt_i8(v: int) -> str:
 
 def main(argv: list[str]) -> int:
     exe_path = Path(argv[1]) if len(argv) > 1 else Path("resources/MultiverseJourney/rich4.exe")
-    out_path = Path(argv[2]) if len(argv) > 2 else Path("src/app/map_tables.cpp")
+    out_path = Path(argv[2]) if len(argv) > 2 else Path("src/gen/map_tables.cpp")
     r = ExeReader(exe_path.read_bytes())
 
     # 等距投影表：i16[8][29][29][2]（exe 原表）→ 扩展为 [8][65][65][2]

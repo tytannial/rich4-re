@@ -1,11 +1,11 @@
-"""[NEW] 生成 src/core/big5_tables.cpp —— cp950(950) 双字节 → Unicode 映射表。
+"""[NEW] 生成 src/gen/big5_tables.cpp —— cp950(950) 双字节 → Unicode 映射表。
 
 依据: 游戏内码 BIG5/cp950（docs/formats/text.md）；原版 Windows 版经
       MultiByteToWideChar(950) 转换，非 Windows 平台无此 API → 内嵌映射表统一两平台
       （docs/cross-platform.md）。表内容 = Python codec cp950（源自 Windows CP950 表）。
 
 用法:
-  python tools/gen_big5_tables.py            # 生成到 src/core/big5_tables.cpp
+  python tools/gen_big5_tables.py            # 生成到 src/gen/big5_tables.cpp
   python tools/gen_big5_tables.py --check    # 只统计不写文件
 """
 from __future__ import annotations
