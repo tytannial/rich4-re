@@ -721,6 +721,7 @@ constexpr int kMoneyIntro = 10;
 struct MoneyBag {
     int16_t x = 0;     // 0=空槽
     int16_t y = 0;
+    int16_t prevY = 0; // [NEW M4-H] 上一 tick 起点（插值用；"画后更新"修正重影）
     int16_t flags = 0; // 低 nibble 类型、bit4-6 旋转帧、高字节 摆幅（有符号）
     int16_t vy = 0;
 };
@@ -834,14 +835,18 @@ void moneyTick(MoneyCtx& ui, bool runLogic) {
         }
         const uint32_t scale = static_cast<uint32_t>(32768.0 * (1.0 + v1 / 250.0));
         const int rot = (b.flags >> 4) & 7;
-        // [NEW M4-H] 下落插值（超前 1 tick 平滑；接取判定仍用逻辑 b.y）
+        // [NEW M4-H 实机] 下落插值 = prevY → y 回插：本函数"先画后更新"，timer 帧
+        //   （subTick=0）画更新前的 b.y；frame 帧（timer 后，b.y 已更新）从 prevY 平滑到 b.y。
+        //   此前"超前 1 tick"（b.y + step*t）会让 frame 帧越过下一格、timer 帧又跳回，
+        //   每 50ms 弹跳一次（实机"宝物重影"）。
         int by = b.y;
         if (ui.subTick > 0.0f) {
-            const int step = b.y >= 130 ? kMoneyFallSpeed[type] : b.vy;
-            by += static_cast<int>(static_cast<float>(step) * ui.subTick);
+            by = static_cast<int>(static_cast<float>(b.prevY) +
+                                  static_cast<float>(b.y - b.prevY) * ui.subTick);
         }
         blitSprScaled(dst, ui.bag[type], rot, bx, by, scale);
         if (runLogic) {
+            b.prevY = b.y; // [NEW M4-H] 插值起点（本 tick 更新前）
             b.flags = static_cast<int16_t>((b.flags & ~0xF0) | ((((b.flags >> 4) + 1) & 7) << 4));
             if (b.y >= 130) {
                 b.y = static_cast<int16_t>(b.y + kMoneyFallSpeed[type]);
