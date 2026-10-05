@@ -1,4 +1,5 @@
 #include "game/app/spec_pt_dialog.h"
+#include "game/app/ui_layout.h"
 
 #include <cstdio>
 

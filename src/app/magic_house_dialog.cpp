@@ -128,25 +128,9 @@ void blitFlcFrame(Surface& dst, const FliDecoder& flc, int x, int y, bool transp
     if (!flc.valid()) {
         return;
     }
-    const uint16_t key = flc.colorKey();
-    const uint16_t* src = flc.pixels();
-    for (int row = 0; row < flc.height(); ++row) {
-        const int py = y + row;
-        if (py < 0 || py >= Surface::kHeight) {
-            continue;
-        }
-        for (int col = 0; col < flc.width(); ++col) {
-            const int px = x + col;
-            if (px < 0 || px >= Surface::kWidth) {
-                continue;
-            }
-            const uint16_t c = src[static_cast<size_t>(row) * flc.width() + col];
-            if (transparent && c == key) {
-                continue;
-            }
-            dst.pixels()[static_cast<size_t>(py) * Surface::kWidth + px] = c;
-        }
-    }
+    // [NEW M4-A2] FLC 当前帧按画布 scale 缩放叠加（色键透明；scale=1 逐像素等价）
+    blitScaled(dst, reinterpret_cast<const uint8_t*>(flc.pixels()), flc.width() * 2, nullptr, x,
+               y, 0, 0, flc.width(), flc.height(), false, !transparent, flc.colorKey());
 }
 
 // ===== 目标选择（0x431842）=====
@@ -316,8 +300,8 @@ void applyMagicPenalty(Application& app, int pen, const std::vector<int>& target
                 Surface& dst = app.surface();
                 std::vector<uint16_t> pre(dst.pixels(),
                                           dst.pixels() +
-                                              static_cast<size_t>(Surface::kWidth) *
-                                                  Surface::kHeight);
+                                              static_cast<size_t>(dst.width()) *
+                                                  dst.height());
                 const int flags = angelUpgrade(app, objId); // [RE 0x40B110]
                 std::memcpy(dst.pixels(), pre.data(), pre.size() * sizeof(uint16_t));
                 app.renderFrame();
@@ -423,12 +407,8 @@ void restoreBigBuf(MagicCtx& ui) {
     if (ui.hoverBuf.empty()) {
         return;
     }
-    Surface& dst = ui.app->surface();
-    for (int r = 0; r < 128; ++r) {
-        std::memcpy(dst.pixels() + static_cast<size_t>(ui.hoverBufY + r) * Surface::kWidth +
-                        ui.hoverBufX,
-                    ui.hoverBuf.data() + static_cast<size_t>(r) * 144, 144 * sizeof(uint16_t));
-    }
+    // [NEW M4-A2] 区域快照走公共 API（逻辑区域按画布 scale 设备化；与 saveRegion 对应）
+    restoreRegion(ui.app->surface(), ui.hoverBuf, ui.hoverBufX, ui.hoverBufY, 144, 128);
     ui.hoverBuf.clear();
 }
 
@@ -560,12 +540,8 @@ bool magicHandler(const SDL_Event* event, void* user) {
             int bx = 0;
             int by = 0;
             bigRect(ui, v, bx, by);
-            ui.hoverBuf.resize(static_cast<size_t>(144) * 128);
-            for (int r = 0; r < 128; ++r) {
-                std::memcpy(ui.hoverBuf.data() + static_cast<size_t>(r) * 144,
-                            dst.pixels() + static_cast<size_t>(by + r) * Surface::kWidth + bx,
-                            144 * sizeof(uint16_t));
-            }
+            // [NEW M4-A2] 区域快照走公共 API（逻辑区域按画布 scale 设备化）
+            saveRegion(ui.hoverBuf, dst, bx, by, 144, 128);
             ui.hoverBufX = bx;
             ui.hoverBufY = by;
             blitElement(dst, ui.sheet.frame(kPenalties[v].bigFrame), kPenalties[v].bigX,

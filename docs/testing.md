@@ -219,13 +219,18 @@ roulette_dialog 0x43F7C6 处 [NEW] 注释）；`roulette theme=<t> cell=<c>` tra
 - `tests/unit/`（microtest.h 自写框架，无外部依赖）首批 22 checks：
   `estateRouteRent` 同路段求和/连锁×2000/moneyMul、存档 `save∘parse∘save` 字节稳定、
   MkfArchive/LZHUF 解压确定性。
-- `tools/run_tests.py`：ctest + 场景批量（超时看门狗/`--filter`/`--repeat`）+
+- `tools/run_tests.py`：ctest + 场景批量（超时看门狗/`--filter`/`--repeat`/`--extra`）+
   `build/test-report.json` + **覆盖矩阵**（`# covers: [HELP n]` ↔ help-checklist 99 条，
   输出未覆盖清单）；任一失败 → 退出码 1。
+  `--extra "<rich4 参数>"` 透传给每个场景（如 `--extra "--canvas 1024x768"` 做大画布回归，
+  M4-A1 用；见 m4-plan §15.4）。
+- **性能诊断**：`rich4 --stats`（每 120 帧输出 `perf: FPS (ms/frame) canvas=WxH scale=S`，
+  墙钟窗口平均；`--preset free|wide` 放大回归用；M4-A2 加，见 m4-plan §16）。
 
 ```powershell
 python tools/run_tests.py --matrix
 python tools/run_tests.py --filter rent --repeat 3
+python tools/run_tests.py --no-ctest --extra "--canvas 1024x768"
 ```
 
 ## 4. 设计约束（实施时强制）

@@ -5,6 +5,7 @@
 namespace rich4 {
 
 class Application;
+class Surface;
 struct GameState;
 
 // [RE 0x40829D] 等距地图渲染
@@ -27,7 +28,9 @@ int randomCellEnt(const GameState& state, int nearCellEnt);
 
 // [PORT 0x40829D] 世界像素坐标 → 当前视口屏幕坐标（renderMap 的 projectItem 同源公式：
 //   以 state.viewX/viewY 为视口中心；越出 29x29 可视格返回 false）
-bool projectMapPoint(const GameState& state, int px, int py, int& sx, int& sy);
+// [NEW M4-D] 增 Surface 参数：视口中心 x 依赖地图区逻辑宽（宽屏地图区加宽）
+bool projectMapPoint(const GameState& state, int px, int py, int& sx, int& sy,
+                     const Surface& dst);
 
 // [RE 0x407AD2] 地图物件/棋子资源初始化（loadMapData 末尾段；定义见 new_game.cpp loadMap）
 // 每玩家棋子动画 = data.mkf[21*charIndex + 128 + 3*travel]

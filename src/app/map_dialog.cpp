@@ -32,13 +32,9 @@ void redrawMap(MapDialogState& st) {
         const int w = bf.width;
         const int h = bf.height;
         if (w > 0 && h > 0 && state.bigMapBuffer.size() == static_cast<size_t>(w) * h) {
-            uint16_t* d = dst.pixels() + static_cast<size_t>(60) * Surface::kWidth + 20;
-            for (int y = 0; y < h; ++y) {
-                for (int x = 0; x < w; ++x) {
-                    d[static_cast<size_t>(y) * Surface::kWidth + x] =
-                        state.bigMapBuffer[static_cast<size_t>(y) * w + x];
-                }
-            }
+            // [NEW M4-A2] 大地图工作副本按画布 scale 缩放绘制（scale=1 逐像素等价）
+            blitScaled(dst, reinterpret_cast<const uint8_t*>(state.bigMapBuffer.data()), w * 2,
+                       nullptr, 20, 60, 0, 0, w, h, false, true);
         }
     } else if (state.miniMapRaw.frameCount() > 1) {
         blitElementOpaque(dst, state.miniMapRaw.frame(1), 20, 60);
@@ -83,7 +79,9 @@ void mapDialog(Application& app) {
     RICH4_LOGI("map dialog (RE 0x40A9BD)");
     MapDialogState st;
     st.app = &app;
-    runModal(app, &mapDialogEventHandler, &st);
+    // [NEW M4-D 实机] 大地图是"叠加在游戏画面上"（0x40A801 不清屏；底图 @(20,60)）——
+    //   fillBars=false：宽画布下两侧保留游戏画面，不填黑（填黑会裁掉两侧游戏画面）
+    runModal(app, &mapDialogEventHandler, &st, 0, true, false);
 }
 
 } // namespace rich4

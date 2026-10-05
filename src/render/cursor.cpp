@@ -53,18 +53,73 @@ const UiFrameView* Cursor::currentFrame() const {
 
 void Cursor::uncompose(Surface& dst) {
     // [RE 0x401F5E] 依据: sub_456280(word_46CB14, dword_48A0E8, dword_48A0EC, dword_48A0F0)
-    // 把保存的背景区域写回表面
+    // 把保存的背景区域写回表面（设备域；行距 = m_saveStride）
     if (!m_visible) {
         return;
     }
     for (int row = 0; row < m_saveH; ++row) {
         uint16_t* d = dst.pixels() + static_cast<size_t>(m_saveY + row) * dst.width() + m_saveX;
-        const uint16_t* s = m_saved.data() + static_cast<size_t>(row) * kSize;
+        const uint16_t* s = m_saved.data() + static_cast<size_t>(row) * m_saveStride;
         for (int col = 0; col < m_saveW; ++col) {
             d[col] = s[col];
         }
     }
     m_visible = false;
+}
+
+void Cursor::blitFrameDevice(Surface& dst, const UiFrameView& frame, int devX, int devY) const {
+    // [NEW M4-A2] 帧按画布 scale 放大（设备尺寸 nearest 采样；0 透明）。
+    //   光标资源为 SMP（16bit 像素直取）或 SPR（8bit 索引 + 调色板）——两种都支持
+    const bool sprite = m_image.isSprite();
+    const uint8_t* idx8 = sprite ? m_image.frameBytes(m_cursorIndex + m_frame) : nullptr;
+    const uint16_t* palette = m_image.palette();
+    const uint16_t* px16 = sprite ? nullptr : frame.pixels;
+    if ((sprite && (!idx8 || !palette)) || (!sprite && !px16)) {
+        return;
+    }
+    // 每个帧像素（逻辑）展开为设备块（像素完美；scale=1 时块=1 像素）
+    const int dstW = dst.width();
+    const int dstH = dst.height();
+    uint16_t* base = dst.pixels();
+    for (int ly = 0; ly < frame.height; ++ly) {
+        const int y0 = devY + dst.logicalToDevice(ly);
+        const int y1 = devY + dst.logicalToDevice(ly + 1);
+        const int yc0 = y0 < 0 ? 0 : y0;
+        const int yc1 = y1 < dstH ? y1 : dstH;
+        if (yc0 >= yc1) {
+            continue;
+        }
+        const uint8_t* srow8 = idx8 ? idx8 + static_cast<size_t>(ly) * frame.width : nullptr;
+        const uint16_t* srow16 = px16 ? px16 + static_cast<size_t>(ly) * frame.width : nullptr;
+        for (int lx = 0; lx < frame.width; ++lx) {
+            uint16_t col = 0;
+            if (sprite) {
+                const uint8_t idx = srow8[lx];
+                if (idx == 0) {
+                    continue;
+                }
+                col = palette[idx];
+            } else {
+                col = srow16[lx];
+                if (col == 0) {
+                    continue;
+                }
+            }
+            const int x0 = devX + dst.logicalToDevice(lx);
+            const int x1 = devX + dst.logicalToDevice(lx + 1);
+            const int xc0 = x0 < 0 ? 0 : x0;
+            const int xc1 = x1 < dstW ? x1 : dstW;
+            if (xc0 >= xc1) {
+                continue;
+            }
+            for (int yy = yc0; yy < yc1; ++yy) {
+                uint16_t* row = base + static_cast<size_t>(yy) * dstW;
+                for (int xx = xc0; xx < xc1; ++xx) {
+                    row[xx] = col;
+                }
+            }
+        }
+    }
 }
 
 void Cursor::compose(Surface& dst, int x, int y) {
@@ -83,10 +138,13 @@ void Cursor::compose(Surface& dst, int x, int y) {
     // [RE 0x401E59] 依据: 光标位置 = (x - offsetX, y - offsetY);
     // 背景保存区域固定 32x32（原版 v2=v3=32），裁剪到屏幕;
     // 光标帧由 sub_4562A5→sub_455C52 按帧自身尺寸（如 23x23）blit
-    int saveX = x - frame->offsetX;
-    int saveY = y - frame->offsetY;
-    int saveW = kSize;
-    int saveH = kSize;
+    // [NEW M4-A2] 鼠标坐标 x/y 为设备坐标：offset 与包围盒按画布 scale 设备化
+    const int saveXDev = dst.logicalToDevice(frame->offsetX);
+    const int saveYDev = dst.logicalToDevice(frame->offsetY);
+    int saveX = x - saveXDev;
+    int saveY = y - saveYDev;
+    int saveW = dst.logicalToDevice(kSize);
+    int saveH = saveW;
     if (saveX < 0) {
         saveW += saveX;
         saveX = 0;
@@ -110,15 +168,19 @@ void Cursor::compose(Surface& dst, int x, int y) {
     m_saveY = saveY;
     m_saveW = saveW;
     m_saveH = saveH;
+    m_saveStride = saveW;
+    if (m_saved.size() < static_cast<size_t>(saveW) * saveH) {
+        m_saved.assign(static_cast<size_t>(saveW) * saveH, 0);
+    }
     for (int row = 0; row < saveH; ++row) {
         const uint16_t* s = dst.pixels() + static_cast<size_t>(saveY + row) * dst.width() + saveX;
-        uint16_t* d = m_saved.data() + static_cast<size_t>(row) * kSize;
+        uint16_t* d = m_saved.data() + static_cast<size_t>(row) * m_saveStride;
         for (int col = 0; col < saveW; ++col) {
             d[col] = s[col];
         }
     }
 
-    blitElement(dst, *frame, x, y, false);
+    blitFrameDevice(dst, *frame, saveX, saveY);
     m_visible = true;
     m_posX = x;
     m_posY = y;
@@ -147,8 +209,8 @@ void Cursor::update(Surface& dst, int mouseX, int mouseY) {
     (void)dst;
 }
 
-void Cursor::getRect(int mouseX, int mouseY, int outRect[4]) const {
-    // [RE 0x4024C0] 依据: 光标位置 + 当前帧 offset 得到 32x32 包围盒，裁剪到 640x480
+void Cursor::getRect(const Surface& dst, int mouseX, int mouseY, int outRect[4]) const {
+    // [RE 0x4024C0] 依据: 光标位置 + 当前帧 offset 得到 32x32 包围盒，裁剪到画布
     const UiFrameView* frame = currentFrame();
     const int ox = frame ? frame->offsetX : 0;
     const int oy = frame ? frame->offsetY : 0;
@@ -162,11 +224,11 @@ void Cursor::getRect(int mouseX, int mouseY, int outRect[4]) const {
     if (outRect[1] < 0) {
         outRect[1] = 0;
     }
-    if (outRect[2] > Surface::kWidth) {
-        outRect[2] = Surface::kWidth;
+    if (outRect[2] > dst.width()) {
+        outRect[2] = dst.width();
     }
-    if (outRect[3] > Surface::kHeight) {
-        outRect[3] = Surface::kHeight;
+    if (outRect[3] > dst.height()) {
+        outRect[3] = dst.height();
     }
 }
 

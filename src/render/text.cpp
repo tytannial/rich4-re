@@ -25,12 +25,12 @@ constexpr int kBufferHeight = 200;
 // [PORT] GDI CreateFontA(-size)「字符高度」→ FreeType em size 映射系数。
 //   依据: HarmonyOS Sans 汉字 bbox 高 ≈ 0.915em（fontTools 实测），原版 16px 細明體点阵
 //   汉字高 ≈ 16px → em ≈ 17.5 → 系数 ≈ 1.09；实机对照（--shot + tools/frame_align.py）可调。
-constexpr float kFontSizeScale = 1.09f; // TODO: 实机对照微调
+constexpr const char* kDefaultFontRegular = "resources/Fonts/HarmonyOS_Sans_SC_Regular.ttf";
+constexpr const char* kDefaultFontBold = "resources/Fonts/HarmonyOS_Sans_SC_Bold.ttf";
+constexpr float kDefaultFontSizeScale = 1.09f;
 
 // [PORT] 字体路径（先写死；后续改为配置文件/命令行参数）
 //   TODO: 改为配置项（resources/Fonts/ 不入库，见 .gitignore；缺失时文本降级为空操作）
-constexpr const char* kFontRegularPath = "resources/Fonts/HarmonyOS_Sans_SC_Regular.ttf";
-constexpr const char* kFontBoldPath = "resources/Fonts/HarmonyOS_Sans_SC_Bold.ttf";
 
 constexpr int kMaxGlyphCache = 65536;
 
@@ -126,15 +126,31 @@ struct TextRenderer::Impl {
     int fontSize = 16;  // dword_4762D4 字高（竖排行距用）
 
     std::unordered_map<uint64_t, Glyph> cache;
-    std::vector<uint16_t> buffer; // 512x200 RGB555
+    std::vector<uint16_t> buffer; // RGB555 文本缓冲（按 scale 放大：512x200 × scale）
+    int bufW = kBufferWidth;
+    int bufH = kBufferHeight;
+
+    // [NEW M4-A2] 文本缓冲按当前绘制 scale 重建（尺寸变化才重建并清零）
+    void ensureBuffer(int w, int h) {
+        if (bufW == w && bufH == h && buffer.size() == static_cast<size_t>(w) * h) {
+            return;
+        }
+        bufW = w;
+        bufH = h;
+        buffer.assign(static_cast<size_t>(w) * h, 0);
+    }
 };
 
 TextRenderer::~TextRenderer() { shutdown(); }
 
-bool TextRenderer::init() {
+bool TextRenderer::init(const char* regularPath, const char* boldPath, float sizeScale) {
     if (m_impl) {
         return true;
     }
+    // [NEW M4-F] 配置字体/字号（nullptr = 内置默认）
+    m_fontRegular = regularPath != nullptr ? regularPath : kDefaultFontRegular;
+    m_fontBold = boldPath != nullptr ? boldPath : kDefaultFontBold;
+    m_sizeScale = sizeScale > 0.0f ? sizeScale : kDefaultFontSizeScale;
     auto* impl = new Impl();
     impl->buffer.assign(static_cast<size_t>(kBufferWidth) * kBufferHeight, 0);
 
@@ -147,17 +163,17 @@ bool TextRenderer::init() {
         delete impl;
         return false;
     }
-    if (FT_New_Face(impl->library, kFontRegularPath, 0, &impl->faces[0]) != 0) {
+    if (FT_New_Face(impl->library, m_fontRegular.c_str(), 0, &impl->faces[0]) != 0) {
         RICH4_LOGW("TextRenderer: font unavailable: %s (text rendering disabled)",
-                   kFontRegularPath);
+                   m_fontRegular.c_str());
         impl->faces[0] = nullptr;
     }
-    if (FT_New_Face(impl->library, kFontBoldPath, 0, &impl->faces[1]) != 0) {
+    if (FT_New_Face(impl->library, m_fontBold.c_str(), 0, &impl->faces[1]) != 0) {
         impl->faces[1] = nullptr; // Bold 缺失 → 回落 Regular
     }
     impl->usable = impl->faces[0] != nullptr;
     if (impl->usable) {
-        RICH4_LOGI("TextRenderer: FreeType ready (%s)", kFontRegularPath);
+        RICH4_LOGI("TextRenderer: FreeType ready (%s)", m_fontRegular.c_str());
     }
     m_impl = impl;
     return true;
@@ -275,7 +291,16 @@ void TextRenderer::drawText(Surface& dst, const char* text, int x, int y, int al
     if (!face) {
         return;
     }
-    const int px = static_cast<int>(impl->fontSize * kFontSizeScale + 0.5f);
+    // [NEW M4-A2] 文本按画布 scale 1:1 光栅化（设备像素字号 = 设计字号 × kFontSizeScale × scale）
+    const float surfScale = dst.scale();
+    const int px = static_cast<int>(impl->fontSize * m_sizeScale * surfScale + 0.5f);
+    const int bufW =
+        surfScale == 1.0f ? kBufferWidth
+                          : static_cast<int>(kBufferWidth * surfScale + 0.5f);
+    const int bufH =
+        surfScale == 1.0f ? kBufferHeight
+                          : static_cast<int>(kBufferHeight * surfScale + 0.5f);
+    impl->ensureBuffer(bufW, bufH);
     if (FT_Set_Pixel_Sizes(face, 0, static_cast<FT_UInt>(px)) != 0) {
         return;
     }
@@ -317,19 +342,19 @@ void TextRenderer::drawText(Surface& dst, const char* text, int x, int y, int al
         uint16_t* buf = impl->buffer.data();
         for (int r = 0; r < g.height; ++r) {
             const int py = gy + r;
-            if (py < 0 || py >= kBufferHeight) {
+            if (py < 0 || py >= impl->bufH) {
                 continue;
             }
             for (int c = 0; c < g.width; ++c) {
                 const int pxx = gx + c;
-                if (pxx < 0 || pxx >= kBufferWidth) {
+                if (pxx < 0 || pxx >= impl->bufW) {
                     continue;
                 }
                 const uint8_t cov = g.cov[static_cast<size_t>(r) * g.width + c];
                 if (cov == 0) {
                     continue;
                 }
-                uint16_t& d = buf[static_cast<size_t>(py) * kBufferWidth + pxx];
+                uint16_t& d = buf[static_cast<size_t>(py) * impl->bufW + pxx];
                 d = blend555(d, color555, cov);
             }
         }
@@ -337,7 +362,12 @@ void TextRenderer::drawText(Surface& dst, const char* text, int x, int y, int al
 
     const uint16_t fg555 = rgb888To555(impl->fgRgb);
     const uint16_t bg555 = rgb888To555(impl->bgRgb);
-    const int charSpacing = impl->spacing - 1; // SetTextCharacterExtra(spacing-1)
+    // [NEW M4-A2] 字距/边距/阴影描边步长按 scale 设备化（scale=1 恒等）
+    const int u = surfScale == 1.0f ? 1 : static_cast<int>(surfScale + 0.5f);
+    const int pad = surfScale == 1.0f ? 10 : static_cast<int>(10 * surfScale + 0.5f);
+    const int charSpacing =
+        surfScale == 1.0f ? impl->spacing - 1
+                          : static_cast<int>((impl->spacing - 1) * surfScale + 0.5f);
     const int ascent = static_cast<int>(face->size->metrics.ascender >> 6);
     const int descent = static_cast<int>(-(face->size->metrics.descender >> 6));
     const int lineHeight = ascent + descent;
@@ -365,7 +395,7 @@ void TextRenderer::drawText(Surface& dst, const char* text, int x, int y, int al
             }
             const Glyph& g = loadGlyph(cp);
             const int adv = g.advance + charSpacing;
-            if (penX > 0 && penX + adv > kBufferWidth) {
+            if (penX > 0 && penX + adv > impl->bufW) {
                 lines.emplace_back();
                 penX = 0;
             }
@@ -377,29 +407,31 @@ void TextRenderer::drawText(Surface& dst, const char* text, int x, int y, int al
         }
     }
 
-    // rc = DrawTextW(DT_CALCRECT) 尺寸 + 边距 10（原版 rc.right/bottom += 10）
-    int rcW = textWidth + 10;
-    int rcH = static_cast<int>(lines.size()) * lineHeight + 10;
+    // rc = DrawTextW(DT_CALCRECT) 尺寸 + 边距 10（原版 rc.right/bottom += 10；scale 下按 pad）
+    int rcW = textWidth + pad;
+    int rcH = static_cast<int>(lines.size()) * lineHeight + pad;
     if (align == 3) {
         // 竖排：交换宽高（原版 rc.right = v8; rc.bottom = v7）——逐字符竖排总高 × 单字宽
         int vCount = 0;
         for (const Line& ln : lines) {
             vCount += static_cast<int>(ln.cps.size());
         }
-        rcW = vCount * lineHeight + 10;
-        rcH = px + 10;
+        rcW = vCount * lineHeight + pad;
+        rcH = px + pad;
     }
     int rcLeft = 0;
     if (align == 4 || align == 7) {
-        // 水平居中到 256（512 缓冲中心）
-        rcLeft = 256 - (rcW >> 1);
+        // 水平居中到缓冲中心（512 缓冲中心 256；scale 下 bufW/2）
+        rcLeft = impl->bufW / 2 - (rcW >> 1);
     }
 
     if (align == 3) {
-        // [RE 0x44F7C7] drawTextVertical：逐字符竖排（行距 = 字高 + 字距 + 描边补偿）
-        int lineH = impl->fontSize + impl->spacing;
+        // [RE 0x44F7C7] drawTextVertical：逐字符竖排（行距 = 字高 + 字距 + 描边补偿；scale 下设备化）
+        int lineH = surfScale == 1.0f
+                        ? impl->fontSize + impl->spacing
+                        : static_cast<int>((impl->fontSize + impl->spacing) * surfScale + 0.5f);
         if ((impl->style & 6) != 0) {
-            ++lineH;
+            lineH += u;
         }
         auto drawVertical = [&](int ox, int oy) {
             int vy = oy;
@@ -423,12 +455,12 @@ void TextRenderer::drawText(Surface& dst, const char* text, int x, int y, int al
             }
         };
         if (impl->style & kTextStyleShadow) {
-            drawVerticalBg(1, 1);
+            drawVerticalBg(u, u);
         } else if (impl->style & kTextStyleOutline) {
-            drawVerticalBg(1, 0);
-            drawVerticalBg(1, 2);
-            drawVerticalBg(0, 1);
-            drawVerticalBg(2, 1);
+            drawVerticalBg(u, 0);
+            drawVerticalBg(u, 2 * u);
+            drawVerticalBg(0, u);
+            drawVerticalBg(2 * u, u);
         }
         drawVertical(0, 0);
     } else {
@@ -445,14 +477,14 @@ void TextRenderer::drawText(Surface& dst, const char* text, int x, int y, int al
             }
         };
         const bool centered = (align == 4 || align == 7);
-        const int ox = centered ? (256 - (textWidth >> 1)) : 0;
+        const int ox = centered ? (impl->bufW / 2 - (textWidth >> 1)) : 0;
         if (impl->style & kTextStyleShadow) {
-            drawHorizontal(ox + 1, 1, bg555);
+            drawHorizontal(ox + u, u, bg555);
         } else if (impl->style & kTextStyleOutline) {
             static const int kDx[4] = {1, 1, 0, 2};
             static const int kDy[4] = {0, 2, 1, 1};
             for (int i = 0; i < 4; ++i) {
-                drawHorizontal(ox + kDx[i], kDy[i], bg555);
+                drawHorizontal(ox + kDx[i] * u, kDy[i] * u, bg555);
             }
         }
         drawHorizontal(ox, 0, fg555);
@@ -461,24 +493,24 @@ void TextRenderer::drawText(Surface& dst, const char* text, int x, int y, int al
     // 测量实际包围盒 [RE 0x44F70C]
     const int search[4] = {rcLeft, 0, rcLeft + rcW, rcH};
     int box[4] = {0, 0, 0, 0};
-    measure(impl->buffer.data(), kBufferWidth, search, box);
+    measure(impl->buffer.data(), impl->bufW, search, box);
     const int boxW = box[2] - box[0] + 1;
     const int boxH = box[3] - box[1] + 1;
     if (boxW <= 1 && boxH <= 1) {
         // 无可见像素：仍需清零尝试区域
-        for (int row = 0; row < rcH && row < kBufferHeight; ++row) {
-            const int n = rcW < kBufferWidth - rcLeft ? rcW : kBufferWidth - rcLeft;
+        for (int row = 0; row < rcH && row < impl->bufH; ++row) {
+            const int n = rcW < impl->bufW - rcLeft ? rcW : impl->bufW - rcLeft;
             if (n > 0) {
-                std::memset(impl->buffer.data() + static_cast<size_t>(row) * kBufferWidth + rcLeft,
+                std::memset(impl->buffer.data() + static_cast<size_t>(row) * impl->bufW + rcLeft,
                             0, static_cast<size_t>(n) * sizeof(uint16_t));
             }
         }
         return;
     }
 
-    // 按对齐调整目标位置（原版 switch (a5)）
-    int sx = x;
-    int sy = y;
+    // 按对齐调整目标位置（原版 switch (a5)；boxW/boxH 为设备像素 → 落点先设备化）
+    int sx = dst.deviceX(x);
+    int sy = dst.deviceY(y);
     switch (align) {
         case 1:
             sx -= boxW;
@@ -505,21 +537,25 @@ void TextRenderer::drawText(Surface& dst, const char* text, int x, int y, int al
     }
 
     // blit 到目标（原版 sub_456495/sub_4564E6 → sub_455FD9）
+    // [NEW M4-A2] 文本已在设备像素光栅化：以 scale=1 直接 1:1 写入设备坐标（无二次放大）
     UiFrameView view;
-    view.width = kBufferWidth;
-    view.height = kBufferHeight;
+    view.width = static_cast<uint16_t>(impl->bufW);
+    view.height = static_cast<uint16_t>(impl->bufH);
     view.offsetX = 0;
     view.offsetY = 0;
     view.pixels = impl->buffer.data();
+    SurfaceScaleGuard devGuard(dst, 1.0f);
+    // [NEW M4-D] sx/sy 已经 deviceX/deviceY（含 origin）→ blit 侧置 origin=0 防二次应用
+    SurfaceOriginGuard originGuard(dst, 0, 0);
     blitElementRegion(dst, view, sx, sy, box[0], box[1], boxW, boxH, false);
 
     // 清零已用文本区域（原版 sub_4561BE(&unk_4762E8, left, top, w, h, 0)）
     auto* buffer = impl->buffer.data();
     for (int row = box[1]; row <= box[3]; ++row) {
-        if (row < 0 || row >= kBufferHeight) {
+        if (row < 0 || row >= impl->bufH) {
             continue;
         }
-        std::memset(buffer + static_cast<size_t>(row) * kBufferWidth + box[0], 0,
+        std::memset(buffer + static_cast<size_t>(row) * impl->bufW + box[0], 0,
                     static_cast<size_t>(boxW) * sizeof(uint16_t));
     }
 }

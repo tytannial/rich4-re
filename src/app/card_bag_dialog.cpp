@@ -1,4 +1,5 @@
 #include "game/app/card_bag_dialog.h"
+#include "game/app/ui_layout.h"
 
 #include <SDL3/SDL.h>
 
@@ -342,7 +343,7 @@ void useCardDialog(Application& app) {
         s.app = &app;
         s.sheet = &sheet;
         s.cur = cur;
-        const int id = runModal(app, &cardModalHandler, &s);  // [RE 0x441C83]
+        const int id = runModal(app, &cardModalHandler, &s, 0, true, false);  // [RE 0x441C83]
         if (id <= 0) {
             break;  // 取消 → 结束
         }
@@ -514,7 +515,7 @@ int selectCardOrItemFromPlayerDialog(Application& app, int targetPlayer) {
     s.target = targetPlayer;
     s.hasItems = targetHasItems(st, targetPlayer);
     RICH4_LOGI("selectCardOrItem: target=%d items=%d (RE 0x44192A)", targetPlayer, s.hasItems);
-    return runModal(app, &giftSelectHandler, &s, 0);
+    return runModal(app, &giftSelectHandler, &s, 0, true, false);
 }
 
 // [RE 0x44476A] 嫁祸卡目标选择（mode=0 惩罚 / 1 收费 / 2 查税；fee = 收费金额）

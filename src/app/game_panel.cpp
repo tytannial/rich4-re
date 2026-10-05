@@ -1,5 +1,6 @@
 #include "game/app/game_loop.h"   // blockingPerf [M4-B C1]
 #include "game/app/game_panel.h"
+#include "game/app/ui_layout.h"
 
 #include <cstdio>
 #include <cstring>
@@ -91,9 +92,14 @@ void drawTopBar(Application& app) {
 void drawPlayerBar(Application& app) {
     GameState& state = app.gameState();
     Surface& dst = app.surface();
+    // [NEW M4-D] 宽屏右栏整体右移（函数内坐标保持 440 基准）
+    SurfaceOriginGuard og(dst, uiPanelOffsetX(dst), 0);
     if (state.panelFrame0.frameCount() <= 4) {
         return;
     }
+    // [NEW M4-D 实机] 函数内坐标保持 440 基准（原版）：宽屏右移由上方 SurfaceOriginGuard
+    //   统一 +uiPanelOffsetX 完成——此处若再取 uiPanelLogicalX 会双重偏移，背景帧被画到
+    //   屏外（右栏背景缺失 → 花屏/金额更新残影）
     blitElementOpaque(dst, state.panelFrame0.frame(4), 440, 0);
 
     const int v1 = state.currentPlayer;
@@ -147,6 +153,8 @@ void drawPlayerBar(Application& app) {
 void drawPlayerInfoPanel(Application& app) {
     GameState& state = app.gameState();
     Surface& dst = app.surface();
+    // [NEW M4-D] 宽屏右栏整体右移（函数内坐标保持 440 基准）
+    SurfaceOriginGuard og(dst, uiPanelOffsetX(dst), 0);
     if (state.panelFrame0.frameCount() <= 0) {
         return;
     }
@@ -292,6 +300,8 @@ void drawPlayerInfoPanel(Application& app) {
 void drawMiniMap(Application& app) {
     GameState& state = app.gameState();
     Surface& dst = app.surface();
+    // [NEW M4-D] 宽屏右栏整体右移（函数内坐标保持 440 基准）
+    SurfaceOriginGuard og(dst, uiPanelOffsetX(dst), 0);
     const int layout = state.settings[5] & 3;
     const int v1 = kMiniMapY[layout];
     if (v1 == 0) {
@@ -333,12 +343,9 @@ void drawMiniMap(Application& app) {
     }
 #endif
     if (state.miniMapBuffer.size() == static_cast<size_t>(kMiniMapW) * kMiniMapH) {
-        uint16_t* d = dst.pixels() + static_cast<size_t>(v1) * Surface::kWidth + 440;
-        for (int row = 0; row < kMiniMapH; ++row) {
-            std::memcpy(d, &state.miniMapBuffer[static_cast<size_t>(row) * kMiniMapW],
-                        kMiniMapW * sizeof(uint16_t));
-            d += Surface::kWidth;
-        }
+        // [NEW M4-A2] 小地图工作副本按画布 scale 缩放绘制（scale=1 逐像素等价）
+        blitScaled(dst, reinterpret_cast<const uint8_t*>(state.miniMapBuffer.data()),
+                   kMiniMapW * 2, nullptr, 440, v1, 0, 0, kMiniMapW, kMiniMapH, false, true);
     } else if (state.miniMap.frameCount() > 0) {
         blitElementOpaque(dst, state.miniMap.frame(0), 440, v1);
     }
@@ -380,9 +387,14 @@ void drawMiniMap(Application& app) {
             markY = ((5696 * static_cast<int>(state.npcSlots[j - 4].pixelY)) >> 16) + v1;
         }
     }
+    // [实机反馈] 小地图方框 = 游戏内视野大小（地图区在小地图尺度下的尺寸：
+    //   5696/65536 ≈ 0.0869；native 38x38 / 宽屏随地图区宽 56x38）
+    const int viewW = (5696 * uiMapLogicalWidth(dst)) >> 16;
+    const int viewH = (5696 * 440) >> 16;
     if (markX && markY) {
         // [RE 0x416E6D] 当前玩家框（白色，push 0FFFFFFh）
-        drawRectBorder(dst, markX - 15, markY - 15, 30, 30, rgb888To555(0xFFFFFF));
+        drawRectBorder(dst, markX - viewW / 2, markY - viewH / 2, viewW, viewH,
+                       rgb888To555(0xFFFFFF));
     }
     // [RE 0x416E6D] 手动视野框（红色，push 0FF0000h；dword_48BE18 时显示视口中心）
     // 原版 sub_416E6D: if(dword_48BE18){ v5=(5696*dword_48BE1C)>>16; v6=(5696*dword_48BE20)>>16;
@@ -391,7 +403,8 @@ void drawMiniMap(Application& app) {
         const int vx = (5696 * state.viewSmoothX) >> 16;
         const int vy = (5696 * state.viewSmoothY) >> 16;
         if (vx + 440 != markX || vy + v1 != markY) {
-            drawRectBorder(dst, vx + 425, v1 + vy - 15, 30, 30, rgb888To555(0xFF0000));
+            drawRectBorder(dst, vx + 440 - viewW / 2, v1 + vy - viewH / 2, viewW, viewH,
+                           rgb888To555(0xFF0000));
         }
     }
 }
@@ -479,20 +492,11 @@ void drawHolidayBackground(Application& app, int holiday) {
         return;
     }
     Surface& dst = app.surface();
-    uint16_t* d = dst.pixels();
-    for (int row = 0; row < raw.height; ++row) {
-        const int py = 280 + row;
-        if (py < 0 || py >= Surface::kHeight) {
-            continue;
-        }
-        for (int col = 0; col < raw.width; ++col) {
-            const int px = 440 + col;
-            if (px < 0 || px >= Surface::kWidth) {
-                continue;
-            }
-            d[static_cast<size_t>(py) * Surface::kWidth + px] = raw.pixels[row * raw.width + col];
-        }
-    }
+    // [NEW M4-D] 宽屏右栏整体右移（函数内坐标保持 440 基准）
+    SurfaceOriginGuard og(dst, uiPanelOffsetX(dst), 0);
+    // [NEW M4-A2] 节日插画按画布 scale 缩放绘制（不透明；scale=1 时逐像素等价）
+    blitScaled(dst, reinterpret_cast<const uint8_t*>(raw.pixels), raw.width * 2, nullptr, 440,
+               280, 0, 0, raw.width, raw.height, false, true);
 }
 
 // [RE 0x4169BC] 日历（440,280-640,480；panel.mkf[2]）
@@ -504,6 +508,8 @@ void drawHolidayBackground(Application& app, int holiday) {
 void drawCalendar(Application& app) {
     GameState& state = app.gameState();
     Surface& dst = app.surface();
+    // [NEW M4-D] 宽屏右栏整体右移（函数内坐标保持 440 基准）
+    SurfaceOriginGuard og(dst, uiPanelOffsetX(dst), 0);
     const uint32_t date = state.gameDate;
     const int year = static_cast<int>(date >> 16);
     const int month = static_cast<int>((date >> 8) & 0xFF);
@@ -605,7 +611,8 @@ void drawAdvancePanel(Application& app) {
     trace::logf("go panel draw cur=%d", state.currentPlayer);
     Surface& dst = app.surface();
     const Player& p = state.players[state.currentPlayer];
-    const int x = state.advancePanelX;
+    // [NEW M4-D 实机] 宽屏下前进面板随地图区中心平移（native shift=0；用户要求居中）
+    const int x = state.advancePanelX + uiMapCenterShiftX(dst);
     const int y = state.advancePanelY;
     int v1 = 0;
     if (p.skipMove) {
@@ -739,22 +746,31 @@ void refreshPlayerPanelFor(Application& app, int player) {
     st.currentPlayer = saved;
 }
 
-void renderGamePanel(Application& app) {
+void renderGamePanel(Application& app, uint8_t dirty) {
     // [RE 0x417E26] WM_PAINT 分支：顶部工具条 + 按 byte_49715D 布局
+    // [NEW M4-C2] 区域脏区：仅重画 dirty 指定的区域（kDirtyAll = 原全量行为）
     const int layout = app.gameState().settings[5] & 3;
-    drawTopBar(app);
-    if (layout == 0) {
-        drawPlayerInfoPanel(app);
-        drawCalendar(app);
-    } else if (layout == 1) {
-        drawPlayerInfoPanel(app);
+    if (dirty & kDirtyTopBar) {
+        drawTopBar(app);
+    }
+    // 玩家条：layout 2 用信息条，其余用完整信息面板（原分支等价）
+    if (dirty & kDirtyPlayerBar) {
+        if (layout == 2) {
+            drawPlayerBar(app);
+        } else {
+            drawPlayerInfoPanel(app);
+        }
+    }
+    if ((dirty & kDirtyMiniMap) && layout != 0) {
         drawMiniMap(app);
-    } else {
-        drawPlayerBar(app);
-        drawMiniMap(app);
+    }
+    if ((dirty & kDirtyCalendar) && layout != 1) {
         drawCalendar(app);
     }
-    drawAdvancePanel(app);
+    // 前进面板（GO）绘于地图区之上：随地图场景层重画
+    if (dirty & kDirtyMap) {
+        drawAdvancePanel(app);
+    }
 }
 
 } // namespace rich4

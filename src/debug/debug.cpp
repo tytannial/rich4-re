@@ -33,6 +33,7 @@
 #include "game/app/game_panel.h"
 #include "game/app/map_tables.h"
 #include "game/application.h"
+#include "game/app/ui_layout.h"
 #include "game/core/clock.h"
 #include "game/core/debug_hooks.h"
 #include "game/core/encoding.h"
@@ -1014,6 +1015,7 @@ bool cmdPlayerCash(Application& app, const std::vector<std::string>& a, std::str
         return false;
     }
     app.gameState().players[p].cash = parseInt(a[2]);
+    refreshPlayerPanelFor(app, p); // [NEW] 右栏金额立即刷新（脚本改钱后避免旧值残留）
     return true;
 }
 
@@ -1025,6 +1027,7 @@ bool cmdPlayerBank(Application& app, const std::vector<std::string>& a, std::str
         return false;
     }
     app.gameState().players[p].bank = parseInt(a[2]);
+    refreshPlayerPanelFor(app, p); // [NEW] 右栏金额立即刷新
     return true;
 }
 
@@ -1392,6 +1395,19 @@ bool cmdSettingsAnim(Application& app, const std::vector<std::string>& a, std::s
     return true;
 }
 
+// [NEW] settings.layout <0|1|2>：运行期改画面布局（0/1=完整信息面板 / 2=玩家条；
+//   测试右栏各布局用；下一帧全量重绘生效）
+bool cmdSettingsLayout(Application& app, const std::vector<std::string>& a, std::string& err) {
+    if (!argCount(a, 2, err, "settings.layout <0|1|2>")) return false;
+    const int v = parseInt(a[1]);
+    if (v < 0 || v > 2) {
+        err = "settings.layout: 0..2";
+        return false;
+    }
+    app.gameState().settings[5] = static_cast<uint8_t>(v);
+    return true;
+}
+
 bool cmdSeed(Application& app, const std::vector<std::string>& a, std::string& err) {
     (void)app;
     if (!argCount(a, 1, err, "seed <n>")) return false;
@@ -1601,6 +1617,29 @@ int g_inputTick = 0;
 int g_lastPointerX = 0;
 int g_lastPointerY = 0;
 
+// [NEW M4-D] 合成鼠标事件派发：脚本/region 坐标为 640 基准（原版语义）——
+//   栈顶为 640 基准模态时 +base 转画布坐标后走 dispatchModalAware（事件 -base +
+//   绘制 origin 包裹）；游戏内/非模态 base=0 直通（与原 synthetic dispatch 等价）。
+void dispatchSyntheticMouse(Application& app, SDL_Event& ev, int lx, int ly) {
+    const int base = (app.events().depth() > 0 && app.events().topCenterBase())
+                         ? uiModalBaseX(app.surface())
+                         : 0;
+    switch (ev.type) {
+        case SDL_EVENT_MOUSE_MOTION:
+            ev.motion.x = static_cast<float>(lx + base);
+            ev.motion.y = static_cast<float>(ly);
+            break;
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        case SDL_EVENT_MOUSE_BUTTON_UP:
+            ev.button.x = static_cast<float>(lx + base);
+            ev.button.y = static_cast<float>(ly);
+            break;
+        default:
+            break;
+    }
+    app.dispatchModalAware(&ev);
+}
+
 void queueInput(int x, int y, bool right, bool isMove, int kind = 0) {
     g_lastPointerX = x;
     g_lastPointerY = y;
@@ -1620,7 +1659,7 @@ void dispatchQueuedInputs(Application& app) {
         ev.type = SDL_EVENT_MOUSE_MOTION;
         ev.motion.x = static_cast<float>(q.x);
         ev.motion.y = static_cast<float>(q.y);
-        app.events().dispatch(ev);
+        dispatchSyntheticMouse(app, ev, q.x, q.y);
         if (!q.isMove) {
             const bool down = q.kind == 0 || q.kind == 1;
             const bool up = q.kind == 0 || q.kind == 2;
@@ -1633,14 +1672,14 @@ void dispatchQueuedInputs(Application& app) {
                 if (!q.right) {
                     app.setUiClicked(); // 与真实左键按下语义一致（转盘提前停等 consumeUiClick）
                 }
-                app.events().dispatch(ev);
+                dispatchSyntheticMouse(app, ev, q.x, q.y);
             }
             if (up) {
                 ev.type = SDL_EVENT_MOUSE_BUTTON_UP;
                 ev.button.button = q.right ? SDL_BUTTON_RIGHT : SDL_BUTTON_LEFT;
                 ev.button.x = static_cast<float>(q.x);
                 ev.button.y = static_cast<float>(q.y);
-                app.events().dispatch(ev);
+                dispatchSyntheticMouse(app, ev, q.x, q.y);
             }
         }
     }
@@ -2353,6 +2392,7 @@ const Cmd kCmds[] = {
     {"hosp", cmdHosp},
     {"rng", cmdRng},
     {"settings.anim", cmdSettingsAnim},
+{"settings.layout", cmdSettingsLayout},
     {"seed", cmdSeed},
     {"assert", cmdAssert},
     {"trace.clear", cmdTraceClear},
@@ -2572,16 +2612,16 @@ void synthesizeClick(Application& app, int x, int y, bool right, bool downOnly) 
     ev.type = SDL_EVENT_MOUSE_MOTION;
     ev.motion.x = static_cast<float>(x);
     ev.motion.y = static_cast<float>(y);
-    app.events().dispatch(ev);
+    dispatchSyntheticMouse(app, ev, x, y);
     ev.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
     ev.button.button = right ? SDL_BUTTON_RIGHT : SDL_BUTTON_LEFT;
     ev.button.clicks = 1;
     ev.button.x = static_cast<float>(x);
     ev.button.y = static_cast<float>(y);
-    app.events().dispatch(ev);
+    dispatchSyntheticMouse(app, ev, x, y);
     if (!downOnly) {
         ev.type = SDL_EVENT_MOUSE_BUTTON_UP;
-        app.events().dispatch(ev);
+        dispatchSyntheticMouse(app, ev, x, y);
     }
 }
 

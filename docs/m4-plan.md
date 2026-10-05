@@ -20,7 +20,20 @@
 > - **批次 B（GO 面板）✅ 已实施**：C1（窄谓词 `blockingPerf`）+ C2（4 个控制位入口）；C3 判定
 >   不需要。验收场景 `308_go_panel_surrender`——**修前 FAIL（窗口内 75 次 `cur=0` 面板绘制）、
 >   修后 PASS（0 次）**，判别力已实测。详见 §14。
-> - **下一步 = A1**（画布运行期尺寸；实测替换面仅 17 文件 95 处，见 §1.1 订正）。
+> - **批次 A1（画布运行期尺寸，scale 恒 1）✅ 已实施**：`Surface` 运行期宽高 + 95 处
+>   `Surface::kWidth/kHeight` 全量参数化（17 文件）+ blit 家族行距/裁剪取自画布 + 新增
+>   `--canvas WxH` 开发入口；L0 新增 4 用例；矩阵 94/94、save-selftest STABLE、re_map 通过，
+>   **800×600 画布与 native 左上 640×480 逐像素一致（A/B diff=0）**。详见 §15。
+> - **批次 A2（scale + 缩放 blit + 文本 1:1 光栅化 + preset/resize）✅ 已实施**：
+>   `Surface::scale/logicalToDevice/deviceToLogical` + `SurfaceScaleGuard`；blit 家族
+>   **逻辑像素→设备块展开**（`blitScaled` 导出；UI 散点叠加全设备化：区域快照走
+>   `saveRegion/restoreRegion`、FLC/RAW 叠加走 `blitScaled`；**像素完美**，scale=1 恒等）；
+>   文本 `设计字号×scale` 1:1 光栅化（阴影/描边/字距/边距乘 scale）；光标按 scale 放大；
+>   **鼠标双坐标**（UI 逻辑 / 地图设备）；**free/wide 整幅画面放大**（worldScale=uiScale）；
+>   **演出帧节拍改绝对截止时刻**（放大后动画不变慢）；`--scale <f>` / `--preset
+>   native|wide|free`（free 处理窗口 resize）/ `--stats`；`run_tests.py --extra`。
+>   含 4 项实机修复（§16.3）：free 界面错位 / 光标 SMP / 放大拖慢（17→9.8ms）/ 动画节拍。
+>   **下一步 = C 脏区重绘 + UI 布局表 + 命中派生**。
 
 | 批次 | 内容 | 依赖 | 风险 | 建议顺序 |
 |------|------|------|------|----------|
@@ -426,8 +439,8 @@ WYSIWYG）；`drawRectBorder`/`scaleSurfaceChannels`/`drawEstateHighlight` **都
 ### 9.1 建议顺序
 
 ```
-A1 画布运行期尺寸（scale 恒 1）→ 全量矩阵回归   ← 下一批
-A2 引入 scale + 缩放 blit + 文本 scale + 阴影/描边乘 scale
+A1 画布运行期尺寸（scale 恒 1）→ 全量矩阵回归   ✅ 2026-09-30（见 §15）
+A2 引入 scale + 缩放 blit + 文本 scale + 阴影/描边乘 scale   ✅ 2026-09-30（见 §16）
 B  GO 面板 C2+C1（+C3）                          ✅ 2026-09-30（C3 判定不需要，见 §14）
 C  脏区重绘还原 → UI 布局表 → 命中派生
 E  文本定点化/亚像素（可与 C 并行）
@@ -500,7 +513,7 @@ H  追加四项（射程 → 预览高亮 → 小游戏插值/键盘 → 同格�
 |---|---|
 | `308_go_panel_surrender` **✅** | 認輸 + 死神选人窗口无 `go panel draw cur=0`（修前 75 次 / 修后 0 次） |
 | `30x_go_panel_load_parachute` | 读档残留未落地玩家 → 跳伞期无 GO |
-| `31x_native_pixel_equal` | native preset 渲染与冻结基准逐字节一致 |
+| `31x_native_pixel_equal` | native preset 渲染与冻结基准逐字节一致（A1 已以一次性 A/B 脚本验证 800×600 左上区 diff=0，见 §15.2；常驻场景待 A2 preset 落地后建立） |
 | `31x_wide_layout_hit` | 宽屏下顶栏/右栏/GO 命中区正确（`clickr` named region） |
 | `32x_minigame_money_doll` | `move` 驱动娃娃 → 娃娃位置/判定按死区语义变化（需补 trace） |
 | `32x_overlap_multi_player` | 同格两玩家：默认取叠放上层；候选数=2（若做面板） |
@@ -584,3 +597,363 @@ H  追加四项（射程 → 预览高亮 → 小游戏插值/键盘 → 同格�
 **窗口构造关键**：`surrender; trace.clear` 写在同一脚本行——`execLine` 以 `;` 并列，两命令在
 **同一帧**生效（投降请求置位后立刻清 trace）。若分成两个 step，则"清 trace 与投降之间"那一帧的
 **合法**面板绘制会落进窗口造成误判（首版即如此误判）。
+
+---
+
+## 15. 批次 A1 实施记录（2026-09-30，✅ 已落地）
+
+### 15.1 改动清单
+
+| # | 位置 | 改动 | 依据 |
+|---|------|------|------|
+| 1 | `include/game/render/surface.h`、`src/render/surface.cpp` | `Surface` 宽高运行期化（`m_width/m_height`，默认 native 640×480）；`create(renderer, w, h)`；`present/fillRect/saveBmp` 全走运行期值；create 成功后把全局裁剪窗口重置为画布全尺寸 | 0x48A08C 后台缓冲 / 0x4861B8 全局裁剪 |
+| 2 | `src/render/blit.cpp` | `pressDown`/`saveRegion`/`restoreRegion` 步长与边界改画布 `width()/height()`；`blitScrolledMap` 源行距固定 640（地图预览位图）、目标行距按画布、**行数取 min(画布高, 480)**（见 §15.4）；全局 clip 初值标注为设计尺寸 | 0x455C52 / 0x456180 等 |
+| 3 | `include/game/render/cursor.h`、`src/render/cursor.cpp` | `Cursor::getRect` 增 `const Surface&` 参数，裁剪到运行期画布（无调用点，改签名安全） | 0x4024C0 |
+| 4 | `src/app/*.cpp`（15 文件）、`src/application.cpp`、`src/main.cpp` | 95 处 `Surface::kWidth/kHeight` → `dst.width()/height()`（像素步长/边界）；`Application::init` 增画布尺寸参数；新增 `--canvas WxH` 开发入口（默认 native） | — |
+| 5 | `tests/unit/test_surface.cpp`（新增） | L0 锁定：运行期宽高/默认 native、fillRect 越界裁剪、blit 按画布裁剪（<640 画布）、saveRegion/restoreRegion 越界语义、blitScrolledMap 源 640 行距 + 画布目标行距 | — |
+
+**范围外（按 §1.4 分两次提交约定）**：scale 缩放 blit、文本 scale、preset 表、窗口 resize 处理——
+均留待 A2；A1 只做运行期尺寸，且默认路径行为与 640×480 逐像素一致。
+
+### 15.2 验收结果（实测）
+
+| 项 | 结果 |
+|---|---|
+| L0 单测 | **121 checks / 0 fails PASS**（新增 4 用例：`surface_runtime_size_fill_clip` / `surface_blit_clips_to_runtime_canvas` / `surface_region_save_restore_uses_canvas` / `surface_scrolled_map_runtime_width`） |
+| L1 场景矩阵 | **94/94 PASS**（`python tools/run_tests.py --matrix`；本次含 `84_ai_marathon` 505s 亦 PASS） |
+| 存档往返 | `rich4 --save-selftest 0` → `STABLE(t1==t2)=YES` |
+| 逆向标注 | `python tools/re_map.py` 校验通过 |
+| **像素 A/B** | `--shot --shot-frame 300`（seed 42 quickstart）：native 640×480 与 `--canvas 800x600` 左上 640×480 区域**逐像素一致（diff=0）** |
+| 稳定性 | 00_smoke ×20 + `--canvas 800x600` ×5 全部 EXIT=0 |
+
+### 15.3 已知边界与遗留
+
+- `--canvas` 目前只服务开发验证：画布大于 640×480 时其余区域为黑（布局仍按 native 坐标，
+  宽屏布局属批次 C/D）；窗口仍固定 1280×960，逻辑呈现（LETTERBOX）随画布尺寸同步。
+- `Surface::kWidth/kHeight` 保留为**设计尺寸常量**：仅余 3 处引用（create 默认参数、
+  `blit.cpp` 全局 clip 初值、`blitScrolledMap` 的 640 宽预览源行距），均已注释语义。
+- 开发观察（未复现）：首次全量构建后的二进制曾出现启动即反复重开主菜单（同一命令 clean
+  重建后无法复现；后续 20+ 次运行全绿）。两轮均处于可能存在残留进程的窗口期，暂归因构建
+  产物/运行环境瞬态；若后续复现，从 `runModal` 退出条件（`running`/`exitRequested`）入手排查。
+
+---
+
+## 16. 批次 A2 实施记录（2026-09-30，✅ 已落地）
+
+**目标**：`scale` 机制 + 缩放 blit + 文本 1:1 光栅化 + preset/窗口 resize（scale=1 恒等）。
+
+### 16.1 改动清单
+
+| # | 位置 | 改动 | 依据 |
+|---|------|------|------|
+| 1 | `surface.h/cpp` | `scale/loginToDevice/logicalSpanToDevice/deviceToLogical` + `SurfaceScaleGuard`；`fillRect` 逻辑矩形设备化 | — |
+| 2 | `blit.cpp/h` | **`blitScaled`**（**逻辑像素→设备块展开**；SPR/16bit/色键/不透明）导出供 UI 散点复用；四个 blit 入口 `scale != 1` 分支；`pressDown`/`scaleSurfaceChannels`/`saveRegion`/`restoreRegion` 设备化；`blitScrolledMap` 缩放 + 环绕采样；全局裁剪逻辑坐标 → 设备化 | 0x455C52/0x456180 等 |
+| 3 | `text.cpp` | `px = 字号 × kFontSizeScale × scale`；缓冲按 scale 重建；折行/边距/字距/阴影/描边/落点全设备化；**blit 前 `SurfaceScaleGuard(1)` 1:1 写入**（无二次放大） | 0x44FABC |
+| 4 | `cursor.cpp` | 保存区域/偏移按 scale 设备化；`blitFrameDevice` 帧放大绘制（**SMP 16bit 与 SPR 8bit 双支持**） | 0x401E59 |
+| 5 | `iso_blit.cpp` | 等距四边形**逻辑域行扫描 + 每个逻辑像素展开为设备块**（像素完美；scale=1 时块=1px 与原浮点路径逐字节一致） | 0x4557A1 |
+| 6 | `map_render.cpp` | `orColorMask`/`drawEstateHighlight` 逐逻辑像素 → 设备矩形；骰子 FLC 设备采样（色键范围在采样后判断）；`setClipRect` 恢复为设计逻辑坐标 | 0x456384/0x451985 |
+| 7 | `game_loop.cpp`/`map_objects.cpp`/`turn_system.cpp` | 跳伞/事件 FLC 叠加改 `blitScaled`；飞行动画/飘走快照区域设备化；`playEventFlc` 保帧回卷区域设备化 | 0x45144F/0x451A97 |
+| 8 | UI 散点（18 文件） | 区域快照统一走 `saveRegion/restoreRegion`（气泡/大图悬停/消息板）；FLC/RAW 叠加统一走 `blitScaled`（乐透/魔法屋/小游戏/月结/卡片获得/银行插画/大地图/小地图）；走势图逐点经 `plotLogical`；数字输入框 SPR 区域改 `blitScaled` | 各对应地址 |
+| 9 | `application.h/cpp` | `DisplayConfig`（窗口/画布/uiScale/autoScale）；`--preset native|wide|free`；`SDL_EVENT_WINDOW_RESIZED → applyWindowResize`（free：画布=drawable、uiScale=高/480、逻辑呈现同步）；**鼠标双坐标**（`mouseLogicalPos`=设计逻辑、`mouseDevicePos`=设备；事件坐标统一逻辑）；方向键步长 ×scale | 0x401B9C |
+| 10 | `tools/run_tests.py` | `--extra "<参数>"` 透传（`--preset`/`--scale` 回归） | — |
+| 11 | `tests/unit/test_surface.cpp` | +1 用例（高画布行数钳制） | — |
+
+### 16.2 关键语义（与 §1.2/§6 的差异说明）
+
+- **free/wide preset 下 `worldScale = uiScale`（整幅画面放大，nearest）**：免费/宽屏 preset 的
+  直觉行为即"把 640×480 画面放大 N 倍"（free 1280×960 → 恰好铺满；像素放大保锐利）。
+  §1.2 的"worldScale 默认 1:1"实为 **D 阶段"宽屏视野扩展"**（地图区变大而非放大 UI）的语义；
+  当前地图层无独立 scale，与 UI 同倍率（`renderMap` 去 guard 后全链路跟随）。
+- **鼠标双坐标**：事件/命中统一设计逻辑坐标（`transformMouseEvent` ÷scale；合成输入本为逻辑）；
+  光标/地图 `mapHitRegions` 用设备坐标（A2 后 mapHitRegions 回**逻辑**，与 A1 前语义一致）。
+- **`--canvas` 任意尺寸**仍为开发入口（scale 恒 1；`--preset` 与之互斥时告警忽略）。
+
+### 16.3 验收与实机修复
+
+| 项 | 结果 |
+|---|---|
+| 编译 | 干净重建零错误（MSVC Debug） |
+| scale=1 恒等 | native 截图与 A2 中途基线 **diff=343px，bbox (0,0)-(22,22)**——恰为光标帧回归（见下） |
+| **free 整幅放大** | free(1280×960, scale=2) 截图**降采样 2× 与 native diff=0.8%**（文本 1:1 光栅化/图标边缘），画面即 native 的 2 倍放大 |
+| preset 冒烟 | native/wide/free 完整「主菜单→选人→确定→进入游戏」×各 1 + native smoke 全 EXIT=0 |
+| 选人界面 A/B | 见 §15.4（native vs 800×600 逐像素 diff=0） |
+
+**实机问题修复（2026-09-30 用户反馈，本批内）**：
+1. **free 模式界面错乱**：初版把 free 做成"UI 放大 + 地图 1:1"，两层坐标错位（顶栏盖地图、
+   中部残 Loading 画面）。**修正为 worldScale=uiScale 整幅放大**（§16.2），free 画面即
+   native 的 2 倍（降采样 diff 0.8% 验证）。
+2. **主菜单/游戏内看不到鼠标**：`Cursor::blitFrameDevice` 初版假设 SPR（8bit+调色板），
+   而光标资源是 **SMP（16bit 直取）** → 提前 return。修复为 SMP/SPR 双支持。
+3. **窗口放大后整体拖慢 + 放大画面有采样细纹**：
+   - 初版放大是"逐设备像素反查源像素"（nearest 采样）——非整数/大倍数下采样边界抖动
+     （实测 free 地图 2×2 块内部不一致率 **59%**，视觉细纹）；每设备像素一次除法/浮点
+     插值也慢（free 1280×960 纯 CPU 绘制 **17 ms/帧**）。
+   - **修正为"逻辑像素 → 设备块展开"**（每个源像素填 `[logicalToDevice(lx), logicalToDevice(lx+1))`
+     设备块）：`blitScaled`/`isoBlitQuad`/`blitScrolledMap`/光标/骰子/orColorMask 全部统一该模型。
+   - 结果：**free 地图块不一致率 59% → 0%（像素完美）**；**native 截图逐字节 diff=0**
+     （scale=1 时块=1px，与统一前完全一致）；**性能 free 17 → 9.8 ms/帧、wide 12 → 8.2 ms**
+     （`--stats` 实测，headless 纯 CPU；native 5.5 ms）。实机验证命令：`--preset free --stats`。
+   - `--stats` 新增（每 120 帧输出 FPS/帧耗时；性能诊断用）。
+4. **窗口放大后动画变慢**（实机反馈"动画效果还有点变慢"）：所有逐帧演出循环的帧间隔
+   原为"绘制完成后再等固定间隔"（绘制耗时**外加**在帧间隔上）——原版绘制≈瞬时无感，
+   放大后每帧多 5~10ms → 动画整体放慢。**修正为绝对节拍**（`frameWaitStep`，
+   `deadline += interval`，绘制耗时**计入**帧间隔）：`playEventFlc` / `playHighlightBlink`
+   / `playSettleFlc`（月结）/ `attachEnd`（飘走）/ `flyObjectSprite`（物件飞行）五处统一；
+   虚拟时钟下 delayMs 仅推进虚拟时间，测试语义与时长断言不变。静态停留
+   （`eventAudioWait`/`showGodNarration`/holdMs）与原版 `sub_45285E` 对齐，保持固定等待。
+
+### 16.4 已知边界与遗留
+
+- **wide(1280×720) 右侧黑边**（内容 960×720）：宽屏视野扩展（地图区铺满）属批次 D
+  （等距表 R=32 + 地面去表化）。
+- linear 滤镜与 UI 位图缩放缓存未做（实时 nearest 采样，UI 位图量小已够用）。
+- 调试注入（`--shot-cursor`/`--game-click` 的窗口坐标换算）在 scale>1 下按设备近似
+  （native 不受影响；正式交互不受影响）。
+- 命中派生/布局表仍按计划在批次 C 收口（当前为"逻辑坐标统一"的最小方案，`--canvas`
+  任意尺寸的布局错位仍在）。
+
+### 15.4 实机问题修复：选人界面高画布崩溃（2026-09-30）
+
+**现象**：`--canvas 800x600` + 主菜单「新遊戲」进入选人界面 → **访问冲突崩溃**
+（0xC0000005，BMP 未生成）。
+
+**根因**：`blitScrolledMap` 的目标拷贝循环按 `dst.height()` 遍历，但源是 640×480 的
+地图预览位图（`jump.mkf`，固定 480 行 × 1280B）。画布高 > 480 时按目标高多遍历出 120 行
+（800×600/1024×768/1280×720 均触发），`src += 1280` 越界读源缓冲（15 万字节量级）→
+访问冲突。native 640×480 与画布高 ≤ 480 时不触发（故矩阵/截图 A/B 未暴露——矩阵全部
+quickstart 跳过选人界面，`blitScrolledMap` 仅用于选人界面与通关地图选择）。
+
+**修复**：行数取 `min(dst.height(), 480)`（源没有的行不写）；`blitScrolledMap` 的源语义
+注释明确（640×480、480 行）。L0 新增 `surface_scrolled_map_high_canvas_rows_clamped`
+（320×520 画布：前 480 行正确写入、480 行以下保持原值）。
+
+**验证**：
+- 选人界面 `--canvas 800x600` 崩溃消除、`--canvas 1024x768` / `1280x720` 完整开局流程
+  （选人→确定→补 AI→过渡→进入游戏）EXIT=0；
+- 选人界面 native vs `--canvas 800x600` 左上 640×480 **逐像素一致（diff=0）**；
+- L0 **126 checks / 0 fails**；全量矩阵 **94/94**；`--extra "--canvas 1024x768"` 全量
+  （94/94，含 84_ai_marathon）——大画布全路径无越界；
+- `--save-selftest 0` → STABLE=YES。
+
+**工具**：`tools/run_tests.py` 新增 `--extra "<rich4 参数>"`（透传给每个场景，
+宽屏/画布尺寸回归用）。
+
+
+---
+
+## 17. 批次 C1 + D1 实施记录（2026-09-30，✅ 已落地）
+
+### 17.1 C1 静止帧跳过（脏区重绘第一部分）
+
+| # | 位置 | 改动 | 依据 |
+|---|------|------|------|
+| 1 | `game_loop.cpp` | `idleFrame(app)`：`gamePlayerControl && !viewScrolling && !blockingPerf && !diceAnimActive && !showDice && remainingSteps==0 && 全部 playerActionState==0`；timer 分支 `if (goBlinkTurn || !idleFrame(app)) renderGameFrame(app);` | 原版该窗口只按 `dword_475110` 脏位补画增量层，重写全量重绘的保守等价 |
+
+- **语义**：空闲期场景不变（光标由 renderFrame 独立合成/恢复；GO 闪烁翻转点仍重绘）。
+- **性能**（`--stats`，headless，等待输入期）：native 5.5→**1.5ms**、free 9.8→**3.5ms**。
+- **验证**：free 空闲截图与全量重绘版**逐字节 diff=0**（无残影）；00_smoke/20_rent_route/52_event_dianquan 全 PASS。
+
+### 17.2 D1 宽地图区
+
+| # | 位置 | 改动 | 依据 |
+|---|------|------|------|
+| 1 | `tools/gen_map_tables.py`、`map_tables.h/cpp` | 等距投影表 **29×29 → 65×65**（半窗口 14→32）：表内原表**逐项保真**、外圈用边界步长线性外推；索引 `16900*dir + 260*(row+32) + 4*(col+32)`；生成器补 idx12 无效名称指针特判 | §4.2 R=32 建议；表内回归 6728 项 0 差异 |
+| 2 | `ui_layout.h/cpp`（新） | 逻辑画布宽 = 设备宽/scale；地图区宽 = 逻辑画布宽 − 右栏 200；右栏 x/偏移派生；`kTopBarH=40`/`kPanelW=200` | §3.2 布局表第一批 |
+| 3 | `map_render.cpp` | 视口中心 x = mapW/2；裁剪 `(0,mapTop)-(mapW,480)`（宽屏 mapTop=0 / native 40）；**宽屏去表化**：与视口相交格点双循环（地面互不重叠 → 顺序无关；格点左上角粗筛 + 表 ±32 上限），native 保留原 296 项遍历序 | §4.2"宽屏可完全去表化" |
+| 4 | `surface.h`、`blit/surface/text/iso` 等 | **绘制原点** `origin/deviceX/deviceY/spanX/spanY` + `SurfaceOriginGuard`；全部坐标变换点统一 deviceX/Y（native origin=0 恒等） | 右栏整体平移 |
+| 5 | `game_panel.cpp` | 右栏 5 函数（玩家条/信息面板/小地图/节日/日历）加 origin guard（坐标保持 440 基准不动） | 同上 |
+| 6 | `game_loop.cpp`、`object_tip.cpp` | 命中派生：小地图/箭头（panelX+3..+53）/页签（+176..+200）/日历（+8..+34、+38..+64）/地图区（x<mapW，顶栏仅 x<440 段）；物件提示方向判定按 mapW；`miniMapHitRegion` 增 Surface 参数 | §3.2"命中必须从同一张表派生" |
+| 7 | `game_loop.cpp` | FLC/跳伞素材在宽地图区水平居中（`(mapW-440)/2`；native 偏移 0） | §4.1 |
+
+### 17.3 验收（实测）
+
+| 项 | 结果 |
+|---|---|
+| native 逐字节 | 截图与基线 **diff=0**（含投影表扩展 + mapTop 裁剪 + origin 机制） |
+| free | 降采样 2× 与 native **diff 0.7%**（= native 干净 2 倍） |
+| wide | 非黑像素 **74% → 97%**（右侧 320px 黑边被地图视野填满） |
+| 冒烟 | 00_smoke / 20_rent_route / 52_event_dianquan（FLC 演出）/ 114_magic_smoke + wide 冒烟 全 PASS |
+| 性能（静止期） | native **1.47ms** / free **3.52ms** / wide **2.68ms**（`--stats`） |
+
+### 17.4 已知边界与遗留
+
+- **宽屏顶栏右侧**：顶栏素材 440 宽，`(440,mapW)×(0,40)` 区域露出地图（观感增强而非缺陷）；
+  顶栏宽屏装饰/拉伸未做（D 收尾）。
+- **区域级脏区（5 位 dword_475110）未做**：当前只有"全量/跳过"两档；计划中的按区补画
+  （GO 只重绘地图区等）留 C2。
+- **布局表收口未完成**：`advancePanelX/Y`、对话框居中（`320-w/2`）、`kMiniMapY` 等仍是
+  散落常量；`settings[6..8]`（日曆/縮小地圖/組合畫面）未接布局。**C2**。
+- `--canvas WxH` 任意尺寸（scale=1）下地图区按 440（布局派生只认 scale 推导的画布），
+  命中仍按左上 640×480；正式 preset（native/wide/free）不受影响。
+
+### 17.5 settings 消费点复核 + settings[0] 接入（2026-10-01）
+
+- **订正 §3.2 "两个死配置"**：IDA xrefs 复核——`settings[6]/[7]`（0x49715E/15F）**无任何
+  引用**（原版未消费），旧称"日曆/縮小地圖/組合畫面"不成立；`settings[8]`（0x497160）
+  是**与日期等游戏全局重叠的字段**（45 处引用），不是设置。
+- **`settings[1]~[5]` 重写已消费**（音效开关/音乐音量/音效音量/自动存档/布局）；
+  `settings[0]`（游戏速度）本轮接入**骰子 FLC 帧速**：`kDiceFlcSpeed`={5,3,2}×10ms
+  （慢 50 / 默认 30 / 快 20 ms，原版 flags bit4-7 覆盖 `unk_48C870`）。
+- **已知差异（记录，不阻塞）**：原版状态机按 `settings[0]` 刻度（`byte_46CB20`={6,4,2}
+  ×20ms = 120/80/40ms，`cursorTimer` 置 `byte_46CAFA` → WinMain 步进）驱动；重写为固定
+  16ms tick + 内部时间门控（行走动画 60ms/帧、位移按 `kMoveSpeed` 折算），与原版默认档
+  节奏已独立校准。逐档状态机对齐（快/慢档全链）如需另立专项。
+- 详见 `docs/formats/cfg.md`「设置字节消费点复核」表。
+
+## 18. 批次 C2 + D 收尾实施记录（2026-10-01，✅ 已落地）
+
+**提交线**：`b7410b7`(settings 消费点) → `9ad4270`(对话框派生) → `1d6e678`(640 基准框架)
+→ `1c3a3a0`(原点全路径) → `77ab5c8`(区域脏区) → `d2bb9af`(date/合成输入收口)。
+
+### 18.1 640 基准 UI 宽屏居中框架（1d6e678）
+
+- 原版全部 UI 坐标基于 640×480；宽画布（wide 逻辑 853 / `--canvas`）下模态/主菜单
+  贴左、右侧露旧画面（银行实机暴露）。**框架**：`Application::dispatchModalAware(event)`——
+  栈顶为 centerBase 层（`EventStack::Frame.centerBase`，`runModal(..., centerBase, fillBars)`）
+  且逻辑宽 > 640 时：进入时**两侧填黑一次**（仅全屏剧场模态 `fillBars=true`；叠加式保留
+  游戏画面）、事件鼠标坐标 -base、绘制原点 +base（SurfaceOriginGuard 包住 handler）。
+- `uiModalBaseX = (逻辑宽-640)/2`（native/free=0；wide=106）；游戏内循环
+  `runModal(..., false, false)` 直通。叠加式模态 17 处 `fillBars=false`
+  （设置/帮助/热键/日期/询问框/数字框/消息/台词/选骰/交易市场/AI/卡片道具/住院保释）。
+- `renderGameFrame` 入口强制 OriginGuard(0,0)：模态内重绘游戏画面保持宽屏布局，
+  模态自身面板居中（两者混叠场景正确）。
+- **C2 坐标回退**：confirm 14 处/4 主对话框架/trade 详情回 640 基准常数（框架统一平移，
+  避免双重偏移）；uiScreenCenterX/uiMapCenterX helper 移除。
+
+### 18.2 绘制原点全路径修正（1c3a3a0）
+
+`scale==1` 快速路径此前未应用 origin（`--canvas` 宽画布命中/绘制不一致、面板不居中）：
+- `blitElementRegion`/`Opaque`、`blitSpriteFrameClipped`、`blitScrolledMap`、
+  `scaleSurfaceChannels`、`saveRegion`/`restoreRegion`、`Surface::fillRect`、
+  `minigame blitSprScaled` —— origin≠0 时统一走设备化路径（1px 块与 native 等价）。
+- `text.cpp` 落点已 deviceX/deviceY（含 origin）→ blit 侧显式 origin=0 防二次应用。
+- `settingsDialog` 删除 runModal 前预绘制（模态进入 0x401 已在 origin 内重绘同内容；
+  提前无 origin 绘制在宽画布左侧留残影——`--canvas`/wide 实拍定位）；`dateDialog`
+  同类预绘制改包 SurfaceOriginGuard。
+- **世界锚定坐标派生**：showGodNarration 旁白居中地图区、attachEnd 飘走兜底/裁剪、
+  flyObjectSprite 快照区=地图区全宽、renderMap 恢复裁剪=逻辑画布、playEventFlc
+  preserve 回卷钳制=逻辑画布。
+
+### 18.3 区域级脏区（77ab5c8）
+
+- `game_panel.h` 脏区位（bit0 工具条/bit1 地图场景层/bit2 玩家条/bit3 小地图/bit4 日历；
+  `kDirtyAll`）；`renderGamePanel(app, dirty)` 按位绘制；`renderGameFrameWith(app, dirty)`
+  分区重绘（bit1 含地图+物件提示+GO+跳伞/FLC 叠加+高亮，层级与全量一致）；
+  `renderGameFrame` = 全量（100+ 调用点不变）。
+- timer 分支**保守标记**：视口平滑滚动、掷骰(1)/移动(2) → 地图层+小地图；宽屏 mapTop=0
+  下地图覆盖顶栏素材 → 地图层补画恒伴随顶栏；GO 闪烁 → 地图层；未标脏非空闲帧 → 全量。
+- 验证：native SHA 逐字节全等；移动期"局部 vs 强制全量"同帧截图逐字节 IDENTICAL
+  （trace 确认 0x0B 连续 135 帧局部路径）。
+
+### 18.4 调试合成输入收口（d2bb9af）
+
+- debug 合成鼠标（click/clickr/move/press + synthesizeClick）改经 dispatchModalAware：
+  脚本坐标 = 640 基准 → 栈顶模态时 +base 转画布坐标（事件 -base 命中 + 绘制 origin）。
+  修 headless 截图中"模态内合成点击触发重绘无 origin → 面板错位重影"（实机鼠标无此问题）。
+
+### 18.5 验证与边界
+
+- **native 逐字节**：top/bank/set 三张 SHA 全等（全程保持）；`--canvas 1024×480` 设置面板
+  居中 + "確定"点击命中；wide 银行居中+对称黑边、叠加式模态保留完整游戏画面、主菜单居中。
+- 22 场景 native 全 PASS（含 266/268/270/308 正确 quickstart 参数）。
+- **边界（设计决策/记录）**：宽屏顶栏右侧 (440..mapW)×(0,40) 为地图延展（观感增强，
+  不做装饰）；GO 面板保持原版固定 (180,120)（地图区内，忠实原版）；区域脏区为保守子集
+  （更多路径可细分，收益有限）；advancePanelX/Y 仍为 state 固定值；`--canvas` 任意尺寸
+  为开发入口（布局/命中已派生，非正式 preset）。
+
+### 18.6 实机四问题修复（2026-10-01，提交 `2b2a3cc`）
+
+| # | 现象 | 根因 | 修复 |
+|---|------|------|------|
+| 1 | 主菜单左右黑边留残影 | resize 重建画布后 tickMs=0 的层（主菜单/多数模态）不主动重绘（无 timer），画面停在旧内容 | `renderFrame` 在 `applyWindowResize` 后强制 `dispatchModalAware(nullptr)` 重绘栈顶一次（`m_forceRepaint`） |
+| 2 | 掷骰/行走等动画放大窗口后拖慢 | `runModal` tick 派发 `nextTick = now + interval` 把绘制耗时计入 tick 周期（20ms 绘制→20ms tick→按 tick 推进的动画慢 25%） | 改按 interval 网格累加 `nextTick += interval` + 欠账连发补拍（上限 4/轮防雪崩）；虚拟时钟分支不变；native SHA 仍全等 |
+| 3 | 右上玩家条（layout 2）花屏+金额残影 | `drawPlayerBar` 背景帧误用 `uiPanelLogicalX`（已含面板偏移）又被 `SurfaceOriginGuard` 二次 +offset → 背景帧画到屏外（露游戏画面=花屏；金额更新时旧文字残留=残影） | 恢复函数内 440 基准坐标（宽屏右移只由 guard 统一完成） |
+| 4 | 大地图打开后两侧被裁剪 | 0x40A801 是"叠加在游戏画面上"（底图 @(20,60) 不清屏），`runModal` 默认 fillBars=true 填黑两侧 | mapDialog → fillBars=false；同类审计：roulette/facility/lab（叠加面板）→ fillBars=false；target_select/dicePick（命中为画布坐标）→ centerBase=false |
+
+附带：debug 新命令 `settings.layout <0|1|2>`（运行期切右栏布局）；`player.cash/bank` 改值后
+`refreshPlayerPanelFor` 立即刷新右栏（脚本测试避免旧值残留）。
+
+### 18.7 实机二轮修复（2026-10-01，提交 `9d00d9f`）
+
+- **掷骰面板（GO）与骰子动画居中**：新增 `uiMapCenterShiftX`（= 地图区宽/2 − 220；
+  native 0）= 宽屏视口中心相对原版 220 的位移；`drawAdvancePanel`/命中（同源）与骰子
+  FLC 落点统一 +shift（骰子跟随视口中心）。
+- **模态绘制边界 `paintClip`（选人界面过场残影根因）**：确认→补 AI 后角色右移/面板
+  收起，元素"经过"左右黑边时残留（`blitElementOpaque`/`blitSpriteFrame`/`blitScrolledMap`/
+  `fillRect` 的 `useClipRect=false` 路径不查任何边界）。新增 `Surface::paintClip`
+  （画布逻辑边界）+ `SurfacePaintClipGuard`：`dispatchModalAware` 在 centerBase 模态
+  期间设 `(base, base+640)`，所有 UI 绘制统一与边界取交（原快速路径在边界启用时转
+  设备化路径）；`renderGameFrameWith` 重绘游戏画面时关闭（宽屏游戏画面不被裁）。
+  native 下 base=0 → 等价原版 640 屏幕边界，SHA 全等。
+- **主菜单预绘制残影**：`mainMenuScene` 进入前 `redrawMenu` 无 origin；非首次进入
+  （主菜单→选人→取消→回主菜单，`m_modalBaseFilled` 已 true 不再填黑）时左侧残留
+  无偏移按钮。预绘制包 `SurfaceOriginGuard`。
+- **main_menu named region** `menu.0..4`（脚本 clickr menu.0 进选人）。
+- 验证：native SHA 全等；wide 选人过场（帧 700..730）两侧采样全黑、取消回退单份按钮、
+  GO 面板 286 逻辑 ≈ 地图区中心；17 场景全 PASS。
+
+### 18.8 实机三轮修复（2026-10-01，提交 `bc23a19`）
+
+- **文字被裁根因（选人配置项/系统设置/买地提示没字）**：paintClip 存"画布逻辑值"，
+  但 text 落点经 `SurfaceScaleGuard(1)` 后是"设备像素"（×真实 scale）→ clip 与文本落点
+  不同域（宽屏右侧文本全被裁）。改为**设置时以真实画布 scale 一次设备化**（存设备坐标，
+  `logicalToDevice(base)`），blit/fillRect 侧直接用值；native 下等价不变。
+- **存/读档保画面**：`saveDialog`/`loadDialog` → `fillBars=false`（宽画布两侧保留游戏
+  画面，与大地图一致）。
+- **掷骰提速**：帧速 `10×档位值`（50/30/20ms）→ `8×档位值`（40/24/16ms，×0.8 略微
+  加速）；节拍改追帧累加（`last += frameMs`）保证绘制偏慢时节奏精确。
+- **小地图视野框**：白/红方框由固定 30×30 改为**游戏内视野尺寸**（5696/65536 尺度；
+  native 38×38、宽屏随地图区宽 56×38）。
+- 验证：18 场景全 PASS；wide 选人/设置文字恢复、存档两侧游戏画面、native 小地图
+  视野框生效。
+
+### 18.9 实机五轮修复（2026-10-01，提交 `9ad41a5`）
+
+- **放大窗口后帧率低（一帧一帧）根因**：autoScale 原架构"设备画布 + 逻辑像素块展开"，
+  每帧绘制与纹理上传 ∝ 设备像素（窗口越大越慢）。改为**逻辑画布 + SDL logical
+  presentation 呈现放大**：画布 = 设备/缩放比（wide 853×480 / free 640×480）、绘制
+  scale 恒 1 —— 成本与 native 同级且**与窗口分辨率无关**。实测移动期：wide
+  3-4.5ms→1.5-1.7ms、free 3.6-3.9ms→1.4-1.6ms（native 1.6-2.4ms）。等比缩放仅同步
+  logical presentation；非 autoScale（native/`--canvas`/`--scale`）不变。
+  代价：文本按设计字号光栅化后呈现层放大（大窗口略像素化；"窗口分辨率文本层"后续专项）。
+- **入狱/住院押解动画残影**：`playEventFlc` 保帧回卷区用 FLC 实参 x，叠帧落点含
+  "440 素材在宽地图区居中偏移"（+106）→ 宽屏下回卷区缺右侧 106 逻辑像素，透明区透出
+  上一帧像素（警车/救护车拖影）。回卷区改为与 `drawEventFlcFrame` 同源。
+- 验证：21 场景全 PASS（18 native + 3 wide，含 54_jail）。
+
+### 18.10 线性放大过滤（2026-10-01，提交 `2e91ae8`）
+
+- 用户决策：字体不做高分专项，接受"低分辨率（逻辑画布）输出 + 窗口拉伸"；要求
+  呈现放大用**线性过滤**减少马赛克感。
+- `Surface::setLinearFilter`（默认线性）：逻辑画布 → 窗口的呈现放大用
+  `SDL_SCALEMODE_LINEAR`（1:1 呈现时两模式等价，native 不受影响）。
+- `DisplayConfig.linearFilter` + `--filter nearest|linear`（默认 linear；需要像素
+  完美时可回退 nearest）。模拟 1.5x 对比：linear 明显平滑。
+
+## 19. 批次 E~H 推进记录（2026-10-01/05）
+
+- **E 文本高分定点化**：按用户决策**跳过**（"暂不考虑字体，低分辨率输出 + 窗口拉伸；
+  线性过滤减少马赛克感"，见 §18.9/§18.10）。
+- **F 配置系统 `rich4.ini` ✅**（提交 `ef21ec9`）：`core/config.{h,cpp}`——INI 解析 +
+  缺失生成带注释默认模板 + `setConfigValue`（section.key/裸键）；接入 main（预扫 --game →
+  loadConfig → CLI 覆盖 + 通用 `--set k=v`）/text（字体/字号参数化）/log（路径）/
+  application（mediaDir/vsync/fullscreen/字体传入）；RICH4.CFG 红线保持。见 §6。
+- **G 源码结构重组（1/2）✅**（提交 `5bd7c8b`）：5 个生成物集中 `src/gen/`
+  （生成脚本路径同步）、`debug.cpp`/`debug_keys.cpp` 归 `src/debug/`、删空目录；
+  `src/app/` 细分（game/ui/dialogs）留 G(2/2)。
+- **H 追加体验（1/4）✅**（提交 `a715bde`）：小游戏渲染插值——新增 `kModalFrameEvent`
+  （真实时钟每轮派发、虚拟时钟零变化），挖寶/氣球/喜從天降 tick 间位置插值（渲染层只读）。
+  H 剩余：8.1 射程（含三档方案，待决策）/8.2 预览高亮/8.4 同格消歧。
+
+### 19.1 后续批次（2026-10-05 续）
+
+- **H(2/4) 悬停预览高亮 ✅**（提交 `0aad3bc`）：选目标模态悬停时把目标拾取形状写入
+  `highlightShapes`（与 captureHighlightShapes 同源换算），`drawEstateHighlight` 逐帧
+  闪烁（50ms/帧、16 帧 + 400ms 停留，由 `kModalFrameEvent` 驱动）；目标变化才重置相位；
+  未命中/退出即清（全局快照单份）。场景 210/212/140/200/260 等全 PASS。
+- **H(1/4) 小游戏渲染插值 ✅**（提交 `a715bde`）：kModalFrameEvent（真实时钟每轮派发、
+  虚拟时钟零变化）；挖寶/氣球/喜從天降 tick 间位置插值。
+- **H(3/4) 同格多目标消歧**：待做。
+- **H(4/4) 射程限制：撤回（2026-10-05 用户确认）**——此前对本项的理解有误，**M4 不做
+  射程限制**（保持原版语义：人类选目标仅视口限制；AI 判据不动），相关提议（自定义
+  射程表 b）作废，留待后续专项处理。**无任何代码改动**（仅有本节记录，已订正）。

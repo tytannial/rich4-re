@@ -1,4 +1,5 @@
 #include "game/app/turn_system.h"
+#include "game/app/ui_layout.h"
 
 #include <algorithm>
 #include <cmath>
@@ -71,6 +72,8 @@ constexpr int kMoveSpeed[4] = {8, 12, 16, 8};
 constexpr float kMoveScale = 0.125f;
 // [RE 0x498EC4] 骰子/掷骰动画帧数（原版取资源头 >>3；B4 接入资源前用固定值）
 constexpr int kDiceAnimFrames = 12;
+// [RE 0x475264] dword_475264 骰子 FLC 帧延时档（settings[0] → ×10ms：慢 50/默认 30/快 20）
+constexpr int kDiceFlcSpeed[4] = {5, 3, 2, 0};
 // [RE 0x419572] 掷骰后停留帧数（原版 sub_45285E(500) 约 500ms 显示点数）
 constexpr int kDiceHoldFrames = 30;
 // [RE 0x482414] byte_482414 方向映射表
@@ -1088,15 +1091,20 @@ void playHighlightBlink(Application& app, bool preRedraw) {
         captureHighlightShapes(app);
     } else {
         captureHighlightShapes(app);  // 用调用方现有记录（修改前画面）
-        snap.assign(dst.pixels(), dst.pixels() + static_cast<size_t>(Surface::kWidth) *
-                                                        Surface::kHeight);
+        snap.assign(dst.pixels(), dst.pixels() + static_cast<size_t>(dst.width()) *
+                                                        dst.height());
     }
     RICH4_LOGI("route highlight: %zu estates + %zu corps -> %zu shapes (RE 0x451985)",
                st.highlightEstates.size(), st.highlightCorps.size(), st.highlightShapes.size());
-    auto waitAudio = [&app](int ms) {
-        for (int t = 0; t < ms; t += 5) {
+    // [NEW M4-A2] 帧节拍（绝对截止时刻；绘制耗时计入帧间隔）
+    uint64_t deadline = nowMs();
+    auto waitAudio = [&app, &deadline](int ms) {
+        deadline += static_cast<uint64_t>(ms);
+        for (;;) {
             app.audio().update();
-            delayMs(5);
+            if (!frameWaitStep(deadline)) {
+                break;
+            }
         }
     };
     auto presentFrame = [&](int f) {
@@ -1179,19 +1187,31 @@ void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, boo
     int rw = 0;
     int rh = 0;
     Surface& dst = app.surface();
+    // [NEW M4-A2] 回卷区域以设计逻辑坐标计算（rx0/ry0/rw/rh），快照/写回时设备化
     auto snapBg = [&]() {
-        bg.resize(static_cast<size_t>(rw) * rh);
-        for (int r = 0; r < rh; ++r) {
-            std::memcpy(&bg[static_cast<size_t>(r) * rw],
-                        dst.pixels() + static_cast<size_t>(ry0 + r) * Surface::kWidth + rx0,
-                        static_cast<size_t>(rw) * sizeof(uint16_t));
+        const int rxd = dst.deviceX(rx0);
+        const int ryd = dst.deviceY(ry0);
+        const int rwd = dst.spanX(rx0, rw);
+        const int rhd = dst.spanY(ry0, rh);
+        bg.resize(static_cast<size_t>(rwd) * rhd);
+        for (int r = 0; r < rhd; ++r) {
+            std::memcpy(&bg[static_cast<size_t>(r) * rwd],
+                        dst.pixels() + static_cast<size_t>(ryd + r) * dst.width() + rxd,
+                        static_cast<size_t>(rwd) * sizeof(uint16_t));
         }
     };
     if (preserve) {
-        rx0 = std::max(0, x);
+        // [NEW M4-D 实机] 回卷区域 = FLC 实际绘制矩形——含 440 素材在宽地图区的居中偏移
+        //   （与 drawEventFlcFrame 同源）：若只回卷 x 起，宽屏下叠帧透明区会透出未恢复的
+        //   上一帧像素（警车/救护车押解入狱、住院动画的拖影残影）
+        const int drawX = x + (uiMapLogicalWidth(app.surface()) - 440) / 2;
+        rx0 = std::max(0, drawX);
         ry0 = std::max(0, y);
-        rw = std::max(0, std::min(Surface::kWidth, x + st.eventFlc.width()) - rx0);
-        rh = std::max(0, std::min(Surface::kHeight, y + st.eventFlc.height()) - ry0);
+        // [NEW M4-D] 画布逻辑尺寸派生（宽画布下原 640 常量会截断回卷区域右侧）
+        const int lwFrame = uiLogicalWidth(app.surface());
+        const int lhFrame = uiLogicalHeight(app.surface());
+        rw = std::max(0, std::min(lwFrame, drawX + st.eventFlc.width()) - rx0);
+        rh = std::max(0, std::min(lhFrame, y + st.eventFlc.height()) - ry0);
         if (rw > 0 && rh > 0) {
             snapBg();
         }
@@ -1203,9 +1223,13 @@ void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, boo
     // [RE 0x45144F] g_flcInterruptible（flcOpen flags bit1）：原版延时循环内
     //   PeekMessage 检测 514/517/257 → v6=1 提前退出（停在当前帧、不重绘）
     //   光标隐藏由 Application::renderFrame 按 eventFlcActive 统一驱动
+    // [NEW M4-A2] 帧节拍 = 绝对截止时刻（绘制耗时计入帧间隔）——画布放大后每帧绘制
+    //   变慢不再拖慢动画总时长（原版绘制≈瞬时，此改动逼近原版观感）
+    uint64_t deadline = nowMs();
     bool aborted = false;
     while (!aborted && st.eventFlc.nextFrame()) {
         ++frameNo;
+        deadline += static_cast<uint64_t>(interval);
         if (preserve && rw > 0 && rh > 0) {
             if (!switched && frameNo >= switchFrame) {
                 // [RE 0x450F04] 切换帧 = sub_40829D(-1,0)：**以动画开始前的视口**全量重绘
@@ -1230,10 +1254,16 @@ void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, boo
                 switched = true;
             }
             // 回卷基准（切换前=开始前画面；切换后=切换帧纯净场景）+ 叠加当前动画帧
-            for (int r = 0; r < rh; ++r) {
-                std::memcpy(dst.pixels() + static_cast<size_t>(ry0 + r) * Surface::kWidth + rx0,
-                            &bg[static_cast<size_t>(r) * rw],
-                            static_cast<size_t>(rw) * sizeof(uint16_t));
+            {
+                const int rxd = dst.deviceX(rx0);
+                const int ryd = dst.deviceY(ry0);
+                const int rwd = dst.spanX(rx0, rw);
+                const int rhd = dst.spanY(ry0, rh);
+                for (int r = 0; r < rhd; ++r) {
+                    std::memcpy(dst.pixels() + static_cast<size_t>(ryd + r) * dst.width() + rxd,
+                                &bg[static_cast<size_t>(r) * rwd],
+                                static_cast<size_t>(rwd) * sizeof(uint16_t));
+                }
             }
             overlayEventFlcFrame(app);
         } else {
@@ -1248,13 +1278,16 @@ void playEventFlc(Application& app, int mkfIndex, int x, int y, int soundId, boo
         }
         // [RE 0x45144F] 打断检测（g_flcInterruptible=flags bit1）：原版在帧间延时循环内
         //   PeekMessage 检测 514/517/257 → v6=1 提前结束，表面停在当前帧（不重绘）
-        for (int t = 0; t < interval; t += 5) {
+        // [NEW M4-A2] 睡到帧截止（frameWaitStep 单次 ≤5ms，保持打断检查频率）
+        for (;;) {
             if (interruptible && app.consumeSkipInput()) {
                 aborted = true;
                 break;
             }
+            if (!frameWaitStep(deadline)) {
+                break;
+            }
             app.audio().update();
-            delayMs(5);
         }
         if (aborted) {
             trace::logf("flc skip idx=%d frame=%d (RE 0x45144F g_flcInterruptible)", mkfIndex,
@@ -1412,21 +1445,9 @@ void cardGetDraw(CardGetCtx& ctx) {
     app.text().setFont(16, 0xF0F0F0, 0x101010, kTextStyleShadow | kTextStyleBold, 1);
     app.text().drawText(dst, ctx.text, 220, 129, 4); // [RE 0x44FABC]
     if (ctx.w > 0 && ctx.h > 0) {
-        uint16_t* d = dst.pixels();
-        for (int row = 0; row < ctx.h; ++row) {
-            const int py = 200 + row; // [RE 0x441F73] (138,200)（元素偏移 0）
-            if (py < 0 || py >= Surface::kHeight) {
-                continue;
-            }
-            for (int col = 0; col < ctx.w; ++col) {
-                const int px = 138 + col;
-                if (px < 0 || px >= Surface::kWidth) {
-                    continue;
-                }
-                d[static_cast<size_t>(py) * Surface::kWidth + px] =
-                    ctx.pixels[static_cast<size_t>(row) * ctx.w + col];
-            }
-        }
+        // [NEW M4-A2] 卡片图 (138,200) 按画布 scale 缩放叠加（不透明；scale=1 逐像素等价）
+        blitScaled(dst, reinterpret_cast<const uint8_t*>(ctx.pixels.data()), ctx.w * 2, nullptr,
+                   138, 200, 0, 0, ctx.w, ctx.h, false, true);
     }
 }
 
@@ -1875,7 +1896,7 @@ void landAfterMove(Application& app, int p, uint16_t cellEntId) {
             demolishAtObjId(app, objId, 0);
             int sx = 0;
             int sy = 0;
-            if (projectMapPoint(st, objX, objY, sx, sy)) {
+            if (projectMapPoint(st, objX, objY, sx, sy, app.surface())) {
                 playEventFlc(app, 526, sx - 55, sy - 55, 95, false, 3);  // [RE 0x40F675 帧3=拆后场景]
             }
             break;
@@ -1969,7 +1990,7 @@ int realtyPickUpgrade(Application& app, int sel, int times, bool ownerPath) {
     // 施工前场景快照（angelUpgrade 可能弹设施选择面板残留；FLC553 保帧基准 = 旧建筑）
     Surface& dst = app.surface();
     std::vector<uint16_t> preUpgrade(
-        dst.pixels(), dst.pixels() + static_cast<size_t>(Surface::kWidth) * Surface::kHeight);
+        dst.pixels(), dst.pixels() + static_cast<size_t>(dst.width()) * dst.height());
     int flags = angelUpgrade(app, sel);  // [RE 0x40B110]
     if ((flags & 0x80) == 0) {
         for (int i = 1; i < times; ++i) {
@@ -4077,7 +4098,7 @@ static void landingSpecialMove(Application& app, int p) {
         pl.dir = static_cast<uint8_t>(facingFromDelta(dx, dy));     // [RE 0x454FB4]
         int sx = 0;
         int sy = 0;
-        if (!projectMapPoint(st, wx, wy, sx, sy)) {
+        if (!projectMapPoint(st, wx, wy, sx, sy, app.surface())) {
             sx = wx;
             sy = wy;
         }
@@ -4325,6 +4346,9 @@ void updateGameState(Application& app) {
                     st.diceAnimActive = blob && st.diceAnim.open(std::move(*blob));
                     if (st.diceAnimActive) {
                         st.diceAnim.nextFrame();
+                        // [NEW M4-C2/RE 0x419572/0x451387] 帧节拍起点：帧延时 =
+                        //   10*dword_475264[settings[0]] = 50/30/20ms（游戏速度档）
+                        st.diceAnimLastMs = nowMs();
                     } else {
                         st.remainingSteps = rollDice(app);
                         st.diceHoldStartMs = nowMs();
@@ -4332,18 +4356,28 @@ void updateGameState(Application& app) {
                     }
                 }
                 if (st.diceAnimActive) {
-                    if (!st.diceAnim.nextFrame()) {
-                        st.diceAnimActive = false;
-                        // [RE 0x41962F] FLC 结束 → 第二次落地音效槽 2（dword_48235A）
-                        app.audio().playEffectSlot(2);
-                        st.remainingSteps = rollDice(app); // 滚动结束 → 最终点数
-                        st.diceHoldStartMs = nowMs();
-                        st.dicePhase = 2;
-                    } else if (!st.diceLandPlayed && st.diceAnim.frameIndex() == 30) {
-                        // [RE 0x451387] FLC 第30帧（落地瞬间）→ 第一次落地音效槽 2
-                        //   （sub_450F04 用 dword_48C850=0x1E 触发帧 + dword_48C840=槽2）
-                        app.audio().playEffectSlot(2);
-                        st.diceLandPlayed = true;
+                    // [NEW M4-C2/RE 0x419572/0x451387] 帧延时 = 10×dword_475264[settings[0]]
+                    //   （游戏速度档：慢 50 / 默认 30 / 快 20 ms；原版 flcPlay unk_48C870）
+                    // [实机微调] 帧速 = 8×档位值（40/24/16ms，较原表 ×0.8 略微加速）；
+                    //   追帧累加（last += frameMs）保证放大/绘制偏慢时节奏仍精确
+                    const uint32_t frameMs =
+                        8u * static_cast<uint32_t>(kDiceFlcSpeed[st.settings[0] & 3]);
+                    const uint64_t nowDice = nowMs();
+                    while (st.diceAnimActive && nowDice - st.diceAnimLastMs >= frameMs) {
+                        st.diceAnimLastMs += frameMs;
+                        if (!st.diceAnim.nextFrame()) {
+                            st.diceAnimActive = false;
+                            // [RE 0x41962F] FLC 结束 → 第二次落地音效槽 2（dword_48235A）
+                            app.audio().playEffectSlot(2);
+                            st.remainingSteps = rollDice(app); // 滚动结束 → 最终点数
+                            st.diceHoldStartMs = nowMs();
+                            st.dicePhase = 2;
+                        } else if (!st.diceLandPlayed && st.diceAnim.frameIndex() == 30) {
+                            // [RE 0x451387] FLC 第30帧（落地瞬间）→ 第一次落地音效槽 2
+                            //   （sub_450F04 用 dword_48C850=0x1E 触发帧 + dword_48C840=槽2）
+                            app.audio().playEffectSlot(2);
+                            st.diceLandPlayed = true;
+                        }
                     }
                     break;
                 }

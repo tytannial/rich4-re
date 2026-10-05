@@ -1,4 +1,5 @@
 #include "game/app/jail_dialog.h"
+#include "game/app/ui_layout.h"
 
 #include <SDL3/SDL.h>
 
@@ -917,7 +918,7 @@ void hospitalVisitDialog(Application& app) {
     ui.app = &app;
     ui.sheet = &sheet;
     ui.npcMark = &npcMark;
-    runModal(app, &hospHandler, &ui, 100);
+    runModal(app, &hospHandler, &ui, 100, true, false);
     app.audio().resumeSceneMusic(); // [RE 0x454BCC]
     RICH4_LOGI("hospitalVisit done (RE 0x43E9A4)");
 }
@@ -982,7 +983,7 @@ void jailBailDialog(Application& app) {
     ui.app = &app;
     ui.sheet = &sheet;
     ui.npcMark = &npcMark;
-    runModal(app, &bailHandler, &ui, 100);
+    runModal(app, &bailHandler, &ui, 100, true, false);
     app.audio().resumeSceneMusic(); // [RE 0x454BCC] sub_454BCC 弹栈恢复
     RICH4_LOGI("jailBail done (RE 0x43D304)");
 }

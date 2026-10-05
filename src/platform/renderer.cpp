@@ -16,7 +16,11 @@ bool Renderer::create(SDL_Window* window, int logicalWidth, int logicalHeight, b
     m_logicalHeight = logicalHeight;
     setWidescreen(true);
     if (vsync) {
-        SDL_SetRenderVSync(m_renderer, 1);
+        // [NEW M4-D 实机] 自适应 vsync：绘制超过一帧（16.7ms）时允许立即呈现（不锁 30fps）。
+        //   严格 vsync 下"绘制 17ms"会等下一个 vblank → 半速抖动（放大窗口后动画观感变慢的主因之一）。
+        if (!SDL_SetRenderVSync(m_renderer, SDL_RENDERER_VSYNC_ADAPTIVE)) {
+            SDL_SetRenderVSync(m_renderer, 1); // 驱动不支持自适应 → 回退严格 vsync
+        }
     }
     return true;
 }
@@ -26,6 +30,16 @@ void Renderer::destroy() {
         SDL_DestroyRenderer(m_renderer);
         m_renderer = nullptr;
     }
+}
+
+void Renderer::setLogicalSize(int width, int height) {
+    // [NEW M4-A2] 逻辑呈现随画布尺寸（free preset resize）
+    if (width <= 0 || height <= 0) {
+        return;
+    }
+    m_logicalWidth = width;
+    m_logicalHeight = height;
+    setWidescreen(true);
 }
 
 void Renderer::setWidescreen(bool enabled) {

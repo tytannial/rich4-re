@@ -206,7 +206,8 @@ int loadDialog(Application& app) {
         }
     }
     // [RE 0x4018E7] runModal(sub_40363A)：返回槽索引或 -1
-    return runModal(app, &loadDialogEventHandler, &state);
+    // [NEW M4-D 实机] 两側保留游戏画面（同大地图处理，不填黑）
+    return runModal(app, &loadDialogEventHandler, &state, 0, true, false);
 }
 
 } // namespace rich4

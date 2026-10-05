@@ -14,6 +14,12 @@
 绘制流程：CPU 写 `dword_48A08C` → Lock/Unlock + BltFast 上屏。
 SDL 侧：写 `Surface` → `SDL_UpdateTexture` → `SDL_RenderPresent`。
 
+[M4-A1] 画布尺寸运行期化：原版后台缓冲恒 640×480（`614400 = 640*480*2`），重写 `Surface`
+宽高改为运行期（`create(renderer, w, h)`，默认 native 640×480）——所有像素步长/边界一律走
+`width()/height()`（含 blit 族、区域保存恢复、各对话框快照）；`kWidth/kHeight` 仅作设计尺寸
+常量（create 默认值、全局 clip 初值、`blitScrolledMap` 的 640 宽预览源行距）。
+`--canvas WxH` 为开发验证入口（docs/m4-plan.md §15）。
+
 ## UI 元素结构（12 字节）
 
 ```
@@ -73,7 +79,7 @@ SDL 侧：写 `Surface` → `SDL_UpdateTexture` → `SDL_RenderPresent`。
 | `sub_401F5E` | 恢复背景 | `Cursor::uncompose` |
 | `sub_401F98` | 20ms 定时器：动画推进 + 位置跟踪重绘 | `Cursor::update` |
 | `sub_40235D` / `sub_402250` | WM_PAINT 前移除 / 后重绘 | `Application::renderFrame` |
-| `sub_4024C0` | 光标包围矩形 | `Cursor::getRect` |
+| `sub_4024C0` | 光标包围矩形 | `Cursor::getRect`（[M4-A1] 增 `const Surface&` 参数，裁剪到运行期画布尺寸） |
 
 ## 主菜单
 

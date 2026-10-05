@@ -169,7 +169,7 @@ void playLine(Application& app, int player, const char* line, int exprFrame) {
         st.viewSmoothY = st.players[player].spriteY;
         st.viewScrolling = false;
     }
-    runModal(app, &itemLineHandler, &ctx, 16);
+    runModal(app, &itemLineHandler, &ctx, 16, true, false);
     st.manualView = savedMv;
     st.viewSmoothX = savedSx;
     st.viewSmoothY = savedSy;
@@ -543,7 +543,7 @@ int useItemRobotWorker(Application& app) {
     Surface& dst = app.surface();
     std::vector<uint16_t> preUpgrade(
         dst.pixels(),
-        dst.pixels() + static_cast<size_t>(Surface::kWidth) * Surface::kHeight);
+        dst.pixels() + static_cast<size_t>(dst.width()) * dst.height());
     const int flags = angelUpgrade(app, v);  // [RE 0x40B110]
     std::memcpy(dst.pixels(), preUpgrade.data(),
                 preUpgrade.size() * sizeof(uint16_t));
@@ -1114,7 +1114,8 @@ int remoteDiceDialog(Application& app) {
     DicePickCtx c;
     c.app = &app;
     c.sheet = &sheet;
-    return runModal(app, &dicePickHandler, &c, 16);
+    // [NEW M4-D 实机] 选骰框 = 游戏世界交互（diceHit 为画布坐标）→ centerBase=false
+    return runModal(app, &dicePickHandler, &c, 16, false, false);
 }
 
 }  // namespace

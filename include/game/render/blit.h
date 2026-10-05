@@ -35,6 +35,17 @@ bool blitElementRegionOpaque(Surface& dst, const UiFrameView& src, int x, int y,
 // 依据: 不透明 blit（整元素, qmemcpy 快速拷贝）, 裁剪到目标尺寸
 bool blitElementOpaque(Surface& dst, const UiFrameView& src, int x, int y);
 
+// [NEW M4-A2] 缩放 blit 核心（nearest 采样；各 blit 入口在 scale != 1 时调用）。
+//   src = 源像素基址；srcPitchBytes = 源每行字节数；
+//   palette != nullptr → 8bit 索引 + 调色板（SPR，索引 0 透明）；
+//   palette == nullptr → RGB555（每像素 2B；opaque=false 时像素 == colorKey 透明）。
+//   逻辑目标左上 (logX, logY)（调用方已减去帧 offset）；源区域 (srcX, srcY, w, h)，
+//   逻辑尺寸 (w, h) 放大为设备 dw×dh。
+//   公共导出：UI 层逐像素叠加（FLC/RAW 位图）复用。
+bool blitScaled(Surface& dst, const uint8_t* src, int srcPitchBytes, const uint16_t* palette,
+                int logX, int logY, int srcX, int srcY, int w, int h, bool useClipRect,
+                bool opaque, uint16_t colorKey = 0);
+
 // [RE 0x45620F] sub_45620F
 // 依据: 0x45620F 用 memset32 画上下边、循环画左右边的空心矩形（颜色经 convertColor）
 // 用于存档槽悬停高亮（0xFFFF00）与地图选择框

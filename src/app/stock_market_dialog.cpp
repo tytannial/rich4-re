@@ -330,15 +330,32 @@ void renderStockPanel(StockPanelState& s) {
 }
 
 // ===== 走勢圖 [RE 0x429D65] =====
+// [NEW M4-A2] 逻辑像素 → 设备矩形覆盖（放大后相邻逻辑像素无采样缝；scale=1 时为单像素）
+void plotLogical(Surface& dst, int lx, int ly, uint16_t color) {
+    const int x0 = dst.deviceX(lx);
+    const int x1 = dst.deviceX(lx + 1);
+    const int y0 = dst.deviceY(ly);
+    const int y1 = dst.deviceY(ly + 1);
+    for (int yy = y0; yy < y1; ++yy) {
+        if (yy < 0 || yy >= dst.height()) {
+            continue;
+        }
+        uint16_t* row = dst.pixels() + static_cast<size_t>(yy) * dst.width();
+        for (int xx = x0; xx < x1; ++xx) {
+            if (xx >= 0 && xx < dst.width()) {
+                row[xx] = color;
+            }
+        }
+    }
+}
+
 void drawLine(Surface& dst, int x0, int y0, int x1, int y1, uint16_t color) {
-    uint16_t* px = dst.pixels();
+    // [NEW M4-A2] 逻辑坐标 Bresenham；落笔经 plotLogical 设备化（scale=1 等价）
     int dx = std::abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
     int dy = -std::abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
     int err = dx + dy;
     for (;;) {
-        if (x0 >= 0 && x0 < Surface::kWidth && y0 >= 0 && y0 < Surface::kHeight) {
-            px[y0 * Surface::kWidth + x0] = color;
-        }
+        plotLogical(dst, x0, y0, color);
         if (x0 == x1 && y0 == y1) break;
         const int e2 = 2 * err;
         if (e2 >= dy) { err += dy; x0 += sx; }
@@ -464,15 +481,13 @@ void renderChart(ChartState& c) {
     const uint16_t cBlue = rgb888To555(0x0000D0);
     const uint16_t kBlack = 0x0000;
     const int cx = 502, cy = 365, rx = 88, ry = 29;
-    uint16_t* px = dst.pixels();
+    // [NEW M4-A2] 图表逐点绘制经 plotLogical 设备化（scale=1 逐像素等价）
     auto ellipseOutline = [&](int ecx, int ecy) {
         for (int i = 0; i <= 720; ++i) {
             const double a = i * (2 * kPi / 720.0);
             const int ex = ecx + static_cast<int>(std::lround(rx * std::cos(a)));
             const int ey = ecy + static_cast<int>(std::lround(ry * std::sin(a)));
-            if (ex >= 0 && ex < Surface::kWidth && ey >= 0 && ey < Surface::kHeight) {
-                px[ey * Surface::kWidth + ex] = kBlack;
-            }
+            plotLogical(dst, ex, ey, kBlack);
         }
     };
     // 底椭圆（圆柱壁）：填充蓝 + 黑轮廓
@@ -481,9 +496,8 @@ void renderChart(ChartState& c) {
         for (int x = cx - rx; x <= cx + rx; ++x) {
             const double nx = (x - cx) / static_cast<double>(rx);
             const double ny = (ey - cy) / static_cast<double>(ry);
-            if (nx * nx + ny * ny <= 1.0 && y >= 0 && y < Surface::kHeight && x >= 0 &&
-                x < Surface::kWidth) {
-                px[y * Surface::kWidth + x] = cBlue;
+            if (nx * nx + ny * ny <= 1.0) {
+                plotLogical(dst, x, y, cBlue);
             }
         }
     }
@@ -503,7 +517,7 @@ void renderChart(ChartState& c) {
             } else {
                 col = (ang < frac * 2 * kPi) ? cBlue : cRed;  // 持股扇=蓝，其余=红
             }
-            px[y * Surface::kWidth + x] = col;
+            plotLogical(dst, x, y, col);
         }
     }
     ellipseOutline(cx, cy);

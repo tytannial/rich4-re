@@ -81,9 +81,23 @@ void redrawLab(LabState& st) {
         for (int i = st.sub; i < kLabIconCount; ++i) {
             const int gx = kLabBorderX0 + 3 + kLabIconStep * i;  // = 35+76i
             const int gy = kLabBorderY + 3;                     // = 297
-            for (int row = 0; row < kLabGrayH; ++row) {
-                uint16_t* line = dst.pixels() + static_cast<size_t>(gy + row) * dst.width() + gx;
-                grayscaleImage(line, kLabGrayW);  // [RE 0x455442] 0 像素保持（透明）
+            // [NEW M4-A2] 逻辑区域 → 设备区域（scale=1 恒等）
+            const int gxDev = dst.deviceX(gx);
+            const int gyDev = dst.deviceY(gy);
+            const int gw = dst.spanX(gx, kLabGrayW);
+            const int gh = dst.spanY(gy, kLabGrayH);
+            const int avail = dst.width() - gxDev;
+            const int n = gw < avail ? gw : avail;
+            if (gxDev < 0 || n <= 0) {
+                continue;
+            }
+            for (int row = 0; row < gh; ++row) {
+                if (gyDev + row < 0 || gyDev + row >= dst.height()) {
+                    continue;
+                }
+                uint16_t* line = dst.pixels() + static_cast<size_t>(gyDev + row) * dst.width() +
+                                 gxDev;
+                grayscaleImage(line, static_cast<size_t>(n));  // [RE 0x455442] 0 像素保持（透明）
             }
         }
     }
@@ -201,7 +215,8 @@ void labDevelopDialog(Application& app, Corp& cp) {    // [NEW] named region：5
             st.app = &app;
             st.sheet = &sheet;
             st.sub = cp.sub;
-            idx = runModal(app, &labEventHandler, &st);
+            // [NEW M4-D 实机] 研究所面板叠加在地图上 → 不填黑两侧
+    idx = runModal(app, &labEventHandler, &st, 0, true, false);
         } else {
             RICH4_LOGW("labDevelop: panel.mkf[11] unavailable (RE 0x44101D)");
         }

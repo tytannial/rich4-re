@@ -11,6 +11,7 @@
 #include "game/app/map_objects.h"
 #include "game/app/map_tables.h"
 #include "game/app/turn_system.h"
+#include "game/app/ui_layout.h"
 #include "game/application.h"
 #include "game/core/log.h"
 #include "game/core/debug_hooks.h"
@@ -24,9 +25,12 @@ namespace rich4 {
 namespace {
 
 constexpr int kGridSize = 72;      // [RE docs/formats/map.md] GND 72x72
-constexpr int kViewCenterX = 220;  // [RE 0x40829D] v130 += 220
-constexpr int kViewCenterY = 260;  // [RE 0x40829D] v125 += 260
-constexpr int kViewHalf = 14;      // [RE 0x40829D] (row+14)/(col+14)
+constexpr int kViewCenterY = 260;  // [RE 0x40829D] v125 += 260（可见区 40..480 中心）
+// [NEW M4-D] 投影表扩展为 65x65（半窗口 32）；表内 [-14..14]^2 = exe 原表逐项保真。
+//   视口中心 x = 地图区逻辑宽/2（native 440/2=220 与原版等价；宽屏地图区加宽后右移）。
+constexpr int kIsoHalf = 32;
+constexpr int kIsoDirBytes = 4 * 65 * 65; // 16900（每方向字节数）
+constexpr int kIsoRowBytes = 4 * 65;      // 260（每行字节数）
 constexpr int kOrderCount = 296;   // [RE 0x473610] 每方向有效遍历项
 
 // [RE 0x475224/0x475228] 骰子面板位置表（8 方向，交错 int32 对）
@@ -94,21 +98,41 @@ void orColorMask(Surface& dst, const UiImage& spr, int frame, int x, int y, uint
     int right = 0;
     int bottom = 0;
     getClipRect(left, top, right, bottom);
+    // [NEW M4-A2] 裁剪设备化；每个掩膜逻辑像素展开为设备块 OR（scale=1 时块=1 像素）
+    left = dst.logicalToDevice(left);
+    top = dst.logicalToDevice(top);
+    right = dst.logicalToDevice(right);
+    bottom = dst.logicalToDevice(bottom);
     const int dx = x - src.offsetX;
     const int dy = y - src.offsetY;
-    for (int row = 0; row < src.height; ++row) {
-        const int py = dy + row;
-        if (py < top || py >= bottom) {
+    const int dstW = dst.width();
+    uint16_t* base = dst.pixels();
+    for (int ly = 0; ly < static_cast<int>(src.height); ++ly) {
+        const int y0 = dst.deviceY(dy + ly);
+        const int y1 = dst.deviceY(dy + ly + 1);
+        const int yc0 = y0 < top ? top : y0;
+        const int yc1 = y1 < bottom ? y1 : bottom;
+        if (yc0 >= yc1) {
             continue;
         }
-        uint16_t* drow = dst.pixels() + static_cast<size_t>(py) * Surface::kWidth;
-        const uint8_t* mrow = mask + static_cast<size_t>(row) * src.width;
-        for (int col = 0; col < src.width; ++col) {
-            const int px = dx + col;
-            if (px < left || px >= right || mrow[col] == 0) {
+        const uint8_t* mrow = mask + static_cast<size_t>(ly) * src.width;
+        for (int lx = 0; lx < static_cast<int>(src.width); ++lx) {
+            if (mrow[lx] == 0) {
                 continue;
             }
-            drow[px] |= color;
+            const int x0 = dst.deviceX(dx + lx);
+            const int x1 = dst.deviceX(dx + lx + 1);
+            const int xc0 = x0 < left ? left : x0;
+            const int xc1 = x1 < right ? x1 : right;
+            if (xc0 >= xc1) {
+                continue;
+            }
+            for (int yy = yc0; yy < yc1; ++yy) {
+                uint16_t* row = base + static_cast<size_t>(yy) * dstW;
+                for (int xx = xc0; xx < xc1; ++xx) {
+                    row[xx] |= color;
+                }
+            }
         }
     }
 }
@@ -158,6 +182,7 @@ void renderMap(Application& app, int centerX, int centerY) {
     // [RE 0x40829D] 依据: 视口中心 = 当前玩家像素坐标; 首次时随机出生点并占用
     GameState& state = app.gameState();
     Surface& dst = app.surface();
+    // [NEW M4-A2] 地图层跟随画布 scale（整体画面放大；宽屏视野扩展属批次 D）
 
     if (centerX == -1) {
         // 非手动视角：以当前玩家位置为中心（原版 sub_415E70 非 dword_48BE18 分支）
@@ -188,30 +213,33 @@ void renderMap(Application& app, int centerX, int centerY) {
     const int cellY = centerY >> 5;
     const int dir = state.mapRotation & 7;
 
+    // [NEW M4-D] 地图区逻辑宽（宽屏 = 逻辑画布 - 右栏；native 440）
+    const int mapW = uiMapLogicalWidth(dst);
     int projX = 0;
     int projY = 0;
     isoProject(state, centerX, centerY, projX, projY);
-    const int baseX = projX + kViewCenterX;
+    const int baseX = projX + mapW / 2;
     const int baseY = projY + kViewCenterY;
 
     const uint8_t* isoBytes = reinterpret_cast<const uint8_t*>(&kIsoProjection[0][0][0][0]);
-    // 原版索引为字节偏移（116 = 29 格 x 4 字节），取 int16 视图访问 CCF0/CCF2/CCF4/CCF6
+    // 表已扩为 65x65（每行 260 字节、每方向 16900 字节），取 int16 视图访问 (x,y) 对
     auto isoAt = [isoBytes](int byteOffset) {
         return *reinterpret_cast<const int16_t*>(isoBytes + byteOffset);
     };
 
-    // 裁剪到地图区 (0,40)-(440,480)（原版 dword_4861B8..C4）
-    setClipRect(0, 40, 440, 480);
+    // [NEW M4-D] 地图区裁剪：宽屏时画到顶栏之下（顶栏右侧露出视野）；native 保持原
+    //   (0,40,440,480) 裁剪（顶栏图标边缘透明像素不露地图，逐字节保真）
+    const int mapTop = (mapW <= 440) ? kTopBarH : 0;
+    setClipRect(0, mapTop, mapW, 480);
 
-    // 地面等距地块（按绘制遍历序）
-    for (int i = 0; i < kOrderCount; ++i) {
-        const int rowOff = kIsoDrawOrder[dir][i][0];
-        const int colOff = kIsoDrawOrder[dir][i][1];
+    // 地面等距地块：单个格点绘制（两种遍历路径共用）
+    auto drawGroundTile = [&](int rowOff, int colOff) {
         const int gx = colOff + cellX;
         const int gy = rowOff + cellY;
         const bool inBounds = gx >= 0 && gx < kGridSize && gy >= 0 && gy < kGridSize;
-        const int idx = 3364 * dir + 116 * (rowOff + kViewHalf) + 4 * (colOff + kViewHalf);
-        const int idx2 = idx + 116;
+        const int idx = kIsoDirBytes * dir + kIsoRowBytes * (rowOff + kIsoHalf) +
+                        4 * (colOff + kIsoHalf);
+        const int idx2 = idx + kIsoRowBytes;
         int16_t quad[4][2];
         quad[0][0] = static_cast<int16_t>(baseX + isoAt(idx + 2));
         quad[0][1] = static_cast<int16_t>(baseY + isoAt(idx));
@@ -227,8 +255,8 @@ void renderMap(Application& app, int centerX, int centerY) {
             yMin = std::min(yMin, static_cast<int>(quad[k][1]));
             yMax = std::max(yMax, static_cast<int>(quad[k][1]));
         }
-        if (yMax < 40 || yMin > 479) {
-            continue; // 视口外跳过（原版 sub_4557A1 内部裁剪）
+        if (yMax < mapTop || yMin > 479) {
+            return; // 视口外跳过（原版 sub_4557A1 内部裁剪；[M4-D] mapTop 宽屏=0/native=40）
         }
         // [RE 0x40829D] 越界地块用空白纹理（unk_48B2B4）填充，避免上一帧残留
         const uint8_t* tile = kBlankTile;
@@ -237,6 +265,36 @@ void renderMap(Application& app, int centerX, int centerY) {
             tile = state.gndBitmaps + (static_cast<size_t>(tileIndex) << 10);
         }
         isoBlitQuad(dst, tile, quad, state.gndPalette, true);
+    };
+
+    if (mapW <= 440) {
+        // 原版路径：296 项绘制遍历序（native 逐字节保真）
+        for (int i = 0; i < kOrderCount; ++i) {
+            drawGroundTile(kIsoDrawOrder[dir][i][0], kIsoDrawOrder[dir][i][1]);
+        }
+    } else {
+        // [NEW M4-D] 宽地图区：与视口相交的格点双循环（地面菱形互不重叠 → 顺序无关）；
+        //   超出原 29x29 窗口的格用扩展表外圈；格数上限 = 表半径 ±32
+        const int R = mapW / 2 / 28 + 3;
+        for (int rowOff = -R; rowOff <= R; ++rowOff) {
+            if (rowOff < -kIsoHalf || rowOff > kIsoHalf) {
+                continue;
+            }
+            for (int colOff = -R; colOff <= R; ++colOff) {
+                if (colOff < -kIsoHalf || colOff > kIsoHalf) {
+                    continue;
+                }
+                // 粗筛：格点左上角（表值）+ 32 尺寸与地图区相交
+                const int gidx = kIsoDirBytes * dir + kIsoRowBytes * (rowOff + kIsoHalf) +
+                                 4 * (colOff + kIsoHalf);
+                const int qx = baseX + isoAt(gidx + 2);
+                const int qy = baseY + isoAt(gidx);
+                if (qx + 32 <= 0 || qx >= mapW || qy + 32 <= 0 || qy >= 480) {
+                    continue;
+                }
+                drawGroundTile(rowOff, colOff);
+            }
+        }
     }
 
     // cellEnts 物件（图块 = map.mkf[24] 帧 sprite-1）
@@ -245,15 +303,15 @@ void renderMap(Application& app, int centerX, int centerY) {
     state.mapHitRegions.clear();
     for (size_t i = 1; i < state.cellEnts.size(); ++i) {
         const CellEnt& ce = state.cellEnts[i];
-        const int cr = (ce.y >> 5) - cellY + kViewHalf;
-        const int cc = (ce.x >> 5) - cellX + kViewHalf;
-        if (cr < 0 || cr > 28 || cc < 0 || cc > 28) {
+        const int cr = (ce.y >> 5) - cellY + kIsoHalf;
+        const int cc = (ce.x >> 5) - cellX + kIsoHalf;
+        if (cr < 0 || cr > 2 * kIsoHalf || cc < 0 || cc > 2 * kIsoHalf) {
             continue;
         }
         int px = 0;
         int py = 0;
         isoProject(state, ce.x, ce.y, px, py);
-        const int idx = 3364 * dir + 116 * cr + 4 * cc;
+        const int idx = kIsoDirBytes * dir + kIsoRowBytes * cr + 4 * cc;
         const int sx = baseX + isoAt(idx + 2) - px;
         const int sy = baseY + isoAt(idx) - py;
         if ((ce.occMask & 0xFFFF00u) == 0 && state.flagTiles.frameCount() > 4) {
@@ -283,25 +341,26 @@ void renderMap(Application& app, int centerX, int centerY) {
     std::vector<SpriteDraw> items;
     items.reserve(64);
     auto projectItem = [&](int px, int py, int& sx, int& sy) -> bool {
-        const int cr = (py >> 5) - cellY + kViewHalf;
-        const int cc = (px >> 5) - cellX + kViewHalf;
-        if (cr < 0 || cr > 28 || cc < 0 || cc > 28) {
+        const int cr = (py >> 5) - cellY + kIsoHalf;
+        const int cc = (px >> 5) - cellX + kIsoHalf;
+        if (cr < 0 || cr > 2 * kIsoHalf || cc < 0 || cc > 2 * kIsoHalf) {
             return false;
         }
         int ox = 0;
         int oy = 0;
         isoProject(state, px, py, ox, oy);
-        const int idx = 3364 * dir + 116 * cr + 4 * cc;
+        const int idx = kIsoDirBytes * dir + kIsoRowBytes * cr + 4 * cc;
         sx = baseX + isoAt(idx + 2) - ox;
         sy = baseY + isoAt(idx) - oy;
         return true;
     };
     auto addItem = [&](const UiImage* spr, int frame, int px, int py, int colorIdx, uint16_t id,
                        const UiImage* hitSpr = nullptr, int hitFrame = 0, bool gray = false) {
-        if (!spr || spr->frameCount() <= 0) {
+        // [NEW M4-H 8.4] 允许"仅登记命中、不绘制"（spr 空、hitSpr 非空——无主空地）
+        if ((!spr || spr->frameCount() <= 0) && (!hitSpr || hitSpr->frameCount() <= 0)) {
             return;
         }
-        if (frame < 0 || frame >= spr->frameCount()) {
+        if (spr && (frame < 0 || frame >= spr->frameCount())) {
             frame = 0; // 帧数不足时回退首帧（防越界）
         }
         if (hitSpr && (hitFrame < 0 || hitFrame >= hitSpr->frameCount())) {
@@ -530,23 +589,14 @@ void renderMap(Application& app, int centerX, int centerY) {
         //   重写曾用帧 4（51x51）"体感调整"导致道路/地块边界判定与原版不一致，现对齐原版
         const int pickFrame = (8 - (state.mapRotation + es.dir)) & 1;
         if (es.owner == 0 && es.level == 0) {
-            // [RE 0x40829D/0x409B18] 无主空地：tile=0 不绘制但**仍登记 drawList id=2000+n**，
-            //   rebuildPickBuffer 照写 g_pickMask → 拾取与 highlightBlink 均有效
-            //   （旧注释"无主不写缓冲/hlShape=null"为误读；命运 id1 徵收/山洪归公后
-            //   目标变无主，原版高亮照常 → 曾因 hlShape 缺失导致重写无闪烁）
-            int sx = 0;
-            int sy = 0;
-            if (state.flagTiles.frameCount() > pickFrame && projectItem(es.x, es.y, sx, sy)) {
-                const UiFrameView& pf = state.flagTiles.frame(pickFrame);
-                state.mapHitRegions.push_back(
-                    {sx - pf.offsetX, sy - pf.offsetY, pf.width, pf.height,
-                     static_cast<uint16_t>(2000 + i), &state.flagTiles, pickFrame, sx, sy});
-                GameState::MapHitRegion& hit = state.mapHitRegions.back();
-                hit.hlShape = &state.flagTiles;
-                hit.hlFrame = (8 - (state.mapRotation + es.dir)) & 1;
-                hit.hlAnchorX = sx;
-                hit.hlAnchorY = sy;
-            }
+            // [RE 0x40829D/0x409B18] 无主空地：tile=0 不绘制但**仍登记 drawList id=2000+n**
+            //   （rebuildPickBuffer 照写 g_pickMask → 拾取与 highlightBlink 均有效）。
+            // [NEW M4-H 8.4] 改走 items 通道参与 y 排序：原实现直接 push 使无主地块
+            //   位于"cellEnt 格之后、y 排序精灵之前"，与其上方 2~3 格精灵重叠时拾取
+            //   顺序与原版（同一 y 排序 drawList）不一致；现与有主地块同列（仅登记不绘制，
+            //   hlShape/hlAnchor 由排序后推送循环按 estate 统一设置）。
+            addItem(nullptr, 0, es.x, es.y, -1, static_cast<uint16_t>(2000 + i),
+                    &state.flagTiles, pickFrame);
             continue;
         }
         if (es.level == 0) {
@@ -670,22 +720,25 @@ void renderMap(Application& app, int centerX, int centerY) {
                 hit.hlAnchorY = it.y;
             }
         }
-        if (it.spr->isSprite()) {
-            // [RE 0x40986A] 调色板[255] = 拥有者颜色（0=黑轮廓、1..8=玩家色、-1=原图）
-            if (it.colorIdx < 0) {
-                it.spr->setPaletteEntry(255, it.spr->basePaletteEntry(255));
-            } else if (it.colorIdx == 0) {
-                it.spr->setPaletteEntry(255, 0);
-            } else if (it.colorIdx <= state.playerCount) {
-                it.spr->setPaletteEntry(255, rgb888To555(state.players[it.colorIdx - 1].color));
-            }
-            if (it.gray) {
-                blitSpriteFrameFreezeClipped(dst, *it.spr, it.frame, it.x, it.y, true);
+        if (it.spr) {
+            if (it.spr->isSprite()) {
+                // [RE 0x40986A] 调色板[255] = 拥有者颜色（0=黑轮廓、1..8=玩家色、-1=原图）
+                if (it.colorIdx < 0) {
+                    it.spr->setPaletteEntry(255, it.spr->basePaletteEntry(255));
+                } else if (it.colorIdx == 0) {
+                    it.spr->setPaletteEntry(255, 0);
+                } else if (it.colorIdx <= state.playerCount) {
+                    it.spr->setPaletteEntry(255,
+                                            rgb888To555(state.players[it.colorIdx - 1].color));
+                }
+                if (it.gray) {
+                    blitSpriteFrameFreezeClipped(dst, *it.spr, it.frame, it.x, it.y, true);
+                } else {
+                    blitSpriteFrameClipped(dst, *it.spr, it.frame, it.x, it.y, true);
+                }
             } else {
-                blitSpriteFrameClipped(dst, *it.spr, it.frame, it.x, it.y, true);
+                blitElement(dst, it.spr->frame(it.frame), it.x, it.y, true);
             }
-        } else {
-            blitElement(dst, it.spr->frame(it.frame), it.x, it.y, true);
         }
         if (it.objLife) {
             // [RE 0x4098BD] 炸弹挂身：寿命数字（16 号字，y−60，样式 2）
@@ -698,7 +751,8 @@ void renderMap(Application& app, int centerX, int centerY) {
         }
     }
 
-    setClipRect(0, 0, 640, 480);
+    // [NEW M4-A2/M4-D] 恢复全逻辑画布裁剪（宽画布下原 640 常量会截断右栏/宽地图区）
+    setClipRect(0, 0, uiLogicalWidth(dst), uiLogicalHeight(dst));
 
     // [RE 0x40829D] 移动计步器（剩余步数 dword_48BAF8；定义见 renderMap 头）
     // 说明: sprintf("%d", dword_48BAF8) → dword_48BAD8 帧 (ch-40)，y=400
@@ -728,31 +782,48 @@ void renderMap(Application& app, int centerX, int centerY) {
             const int n =
                 std::max(1, std::min(3, static_cast<int>(state.diceShowCount)));
             const int v6 = (state.players[p].dir + 8 - state.mapRotation) & 7;
-            const int dx = 136 + kDicePosX[v6];
+            // [NEW M4-D 实机] 骰子动画跟随视口中心：宽屏下随地图区中心平移（native shift=0）
+            const int dx = 136 + kDicePosX[v6] + uiMapCenterShiftX(dst);
             const int dy = 48 + kDicePosY[v6];
             if (state.diceAnimActive && state.diceAnim.valid()) {
                 const int w = state.diceAnim.width();
                 const int h = state.diceAnim.height();
                 const uint16_t* src = state.diceAnim.pixels();
-                uint16_t* d = dst.pixels();
-                for (int row = 0; row < h; ++row) {
-                    const int py = dy + row;
-                    if (py < 0 || py >= Surface::kHeight) {
+                // [NEW M4-A2] 逻辑像素展开为设备块（色键"亮绿范围"按源像素判断；
+                //   scale=1 时块=1 像素，逐像素等价）
+                const int dstW = dst.width();
+                const int dstH = dst.height();
+                uint16_t* base = dst.pixels();
+                for (int ly = 0; ly < h; ++ly) {
+                    const int y0 = dst.deviceY(dy + ly);
+                    const int y1 = dst.deviceY(dy + ly + 1);
+                    const int yc0 = y0 < 0 ? 0 : y0;
+                    const int yc1 = y1 < dstH ? y1 : dstH;
+                    if (yc0 >= yc1) {
                         continue;
                     }
-                    for (int col = 0; col < w; ++col) {
-                        const int px = dx + col;
-                        if (px < 0 || px >= Surface::kWidth) {
-                            continue;
-                        }
-                        const uint16_t c = src[static_cast<size_t>(row) * w + col];
+                    const uint16_t* srow = src + static_cast<size_t>(ly) * w;
+                    for (int lx = 0; lx < w; ++lx) {
+                        const uint16_t c = srow[lx];
                         const int cr = (c >> 10) & 0x1F;
                         const int cg = (c >> 5) & 0x1F;
                         const int cb = c & 0x1F;
                         if (cg >= 20 && cr <= 10 && cb <= 10) {
                             continue; // 色键：亮绿透明
                         }
-                        d[static_cast<size_t>(py) * Surface::kWidth + px] = c;
+                        const int x0 = dst.deviceX(dx + lx);
+                        const int x1 = dst.deviceX(dx + lx + 1);
+                        const int xc0 = x0 < 0 ? 0 : x0;
+                        const int xc1 = x1 < dstW ? x1 : dstW;
+                        if (xc0 >= xc1) {
+                            continue;
+                        }
+                        for (int yy = yc0; yy < yc1; ++yy) {
+                            uint16_t* row = base + static_cast<size_t>(yy) * dstW;
+                            for (int xx = xc0; xx < xc1; ++xx) {
+                                row[xx] = c;
+                            }
+                        }
                     }
                 }
             } else if (state.showDice) {
@@ -789,7 +860,8 @@ void blitColorMask(std::vector<uint16_t>& dst, int dstW, int dstH, const UiFrame
 }
 
 // [PORT 0x40829D] 世界像素坐标 → 当前视口屏幕坐标（与 renderMap 内 projectItem 同源公式）
-bool projectMapPoint(const GameState& state, int px, int py, int& sx, int& sy) {
+bool projectMapPoint(const GameState& state, int px, int py, int& sx, int& sy,
+                     const Surface& dst) {
     const int centerX = state.viewX;
     const int centerY = state.viewY;
     const int cellX = centerX >> 5;
@@ -798,11 +870,11 @@ bool projectMapPoint(const GameState& state, int px, int py, int& sx, int& sy) {
     int projX = 0;
     int projY = 0;
     isoProject(state, centerX, centerY, projX, projY);
-    const int baseX = projX + kViewCenterX;
+    const int baseX = projX + uiMapLogicalWidth(dst) / 2; // [NEW M4-D] 宽屏地图区中心
     const int baseY = projY + kViewCenterY;
-    const int cr = (py >> 5) - cellY + kViewHalf;
-    const int cc = (px >> 5) - cellX + kViewHalf;
-    if (cr < 0 || cr > 28 || cc < 0 || cc > 28) {
+    const int cr = (py >> 5) - cellY + kIsoHalf;
+    const int cc = (px >> 5) - cellX + kIsoHalf;
+    if (cr < 0 || cr > 2 * kIsoHalf || cc < 0 || cc > 2 * kIsoHalf) {
         return false;
     }
     const uint8_t* isoBytes = reinterpret_cast<const uint8_t*>(&kIsoProjection[0][0][0][0]);
@@ -812,7 +884,7 @@ bool projectMapPoint(const GameState& state, int px, int py, int& sx, int& sy) {
     int ox = 0;
     int oy = 0;
     isoProject(state, px, py, ox, oy);
-    const int idx = 3364 * dir + 116 * cr + 4 * cc;
+    const int idx = kIsoDirBytes * dir + kIsoRowBytes * cr + 4 * cc;
     sx = baseX + isoAt(idx + 2) - ox;
     sy = baseY + isoAt(idx) - oy;
     return true;
@@ -1063,17 +1135,32 @@ void drawEstateHighlight(Application& app) {
         ++ti;
     }
     const uint8_t* lut = kHlTable[ti];
-    uint16_t* px = app.surface().pixels();
-    auto adjust = [px, lut](int x, int y) {
-        if (x < 0 || y < 0 || x >= Surface::kWidth || y >= Surface::kHeight) {
-            return;
+    Surface& dst = app.surface();
+    // [NEW M4-A2] 逐逻辑像素映射设备矩形变换（scale=1 时单像素等价；地图随画布放大）
+    uint16_t* px = dst.pixels();
+    const int dstW = dst.width();
+    const int dstH = dst.height();
+    auto adjust = [px, lut, dstW, dstH, &dst](int x, int y) {
+        const int x0 = dst.deviceX(x);
+        const int x1 = dst.deviceX(x + 1);
+        const int y0 = dst.deviceY(y);
+        const int y1 = dst.deviceY(y + 1);
+        for (int yy = y0; yy < y1; ++yy) {
+            if (yy < 0 || yy >= dstH) {
+                continue;
+            }
+            uint16_t* row = px + static_cast<size_t>(yy) * dstW;
+            for (int xx = x0; xx < x1; ++xx) {
+                if (xx < 0 || xx >= dstW) {
+                    continue;
+                }
+                const uint16_t c = row[xx];
+                const uint16_t r = lut[(c >> 10) & 0x1F];
+                const uint16_t g = lut[(c >> 5) & 0x1F];
+                const uint16_t b = lut[c & 0x1F];
+                row[xx] = static_cast<uint16_t>((r << 10) | (g << 5) | b);
+            }
         }
-        const size_t o = static_cast<size_t>(y) * Surface::kWidth + x;
-        const uint16_t c = px[o];
-        const uint16_t r = lut[(c >> 10) & 0x1F];
-        const uint16_t g = lut[(c >> 5) & 0x1F];
-        const uint16_t b = lut[c & 0x1F];
-        px[o] = static_cast<uint16_t>((r << 10) | (g << 5) | b);
     };
     for (const auto& hs : state.highlightShapes) {
         const UiFrameView& sf = hs.shape->frame(hs.frame);

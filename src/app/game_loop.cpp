@@ -26,13 +26,18 @@
 #include "game/app/turn_system.h"
 #include "game/application.h"
 #include "game/core/log.h"
+#include "game/app/ui_layout.h"
 #include "game/core/trace.h"
+#include "game/render/blit.h"
 #include "game/render/surface.h"
 
 namespace rich4 {
 
 // [RE 0x417E26] 游戏内整帧绘制（定义见本文件末尾；匿名空间内多处调用，需前置声明）
 void renderGameFrame(Application& app);
+
+// [NEW M4-C2] 分区重绘（定义见本文件末尾；timer 分支局部补画用）
+void renderGameFrameWith(Application& app, uint8_t dirty);
 
 // [NEW] blockingPerf：阻塞演出谓词（声明见 include/game/app/game_loop.h；M4-B 批次 B）
 // 依据: 原版 0x45144F 事件 FLC / 0x418C55 跳伞入场期间 PeekMessage 只取消息不派发
@@ -56,32 +61,18 @@ constexpr int kMiniMapH = 200;
 void drawParachuteFrame(Application& app) {
     GameState& st = app.gameState();
     Surface& dst = app.surface();
+    // [NEW M4-A2] 跳伞 FLC 按画布 scale 缩放叠加于地图区（色键 0 透明；scale=1 逐像素等价）
     const int w = st.parachute.width();
     const int h = st.parachute.height();
     if (w <= 0 || h <= 0) {
         return;
     }
-    const uint16_t* src = st.parachute.pixels();
-    uint16_t* d = dst.pixels();
-    const int ox = (440 - w) / 2;
+    // [NEW M4-D] 宽地图区水平居中（native mapW=440 → 原 (440-w)/2 等价）
+    const int mapW = uiMapLogicalWidth(dst);
+    const int ox = (mapW - w) / 2;
     const int oy = 40 + (440 - h) / 2;
-    for (int row = 0; row < h; ++row) {
-        const int py = oy + row;
-        if (py < 0 || py >= Surface::kHeight) {
-            continue;
-        }
-        for (int col = 0; col < w; ++col) {
-            const int px = ox + col;
-            if (px < 0 || px >= Surface::kWidth) {
-                continue;
-            }
-            const uint16_t c = src[static_cast<size_t>(row) * w + col];
-            if (c == 0) {
-                continue; // 色键 0 透明
-            }
-            d[static_cast<size_t>(py) * Surface::kWidth + px] = c;
-        }
-    }
+    blitScaled(dst, reinterpret_cast<const uint8_t*>(st.parachute.pixels()), w * 2, nullptr, ox,
+               oy, 0, 0, w, h, false, false, 0);
 }
 
 // [RE 0x45144F / 0x4506C7] 事件 FLC 帧叠加到场景（得點券等；透明模式色键 = 调色板索引 0）
@@ -90,31 +81,16 @@ void drawParachuteFrame(Application& app) {
 void drawEventFlcFrame(Application& app) {
     GameState& st = app.gameState();
     Surface& dst = app.surface();
+    // [NEW M4-A2] 事件 FLC 按画布 scale 缩放叠加（色键由 FLC 提供；scale=1 逐像素等价）
     const int w = st.eventFlc.width();
     const int h = st.eventFlc.height();
     if (w <= 0 || h <= 0) {
         return;
     }
-    const uint16_t* src = st.eventFlc.pixels();
-    const uint16_t key = st.eventFlc.colorKey();
-    uint16_t* d = dst.pixels();
-    for (int row = 0; row < h; ++row) {
-        const int py = st.eventFlcY + row;
-        if (py < 0 || py >= Surface::kHeight) {
-            continue;
-        }
-        for (int col = 0; col < w; ++col) {
-            const int px = st.eventFlcX + col;
-            if (px < 0 || px >= Surface::kWidth) {
-                continue;
-            }
-            const uint16_t c = src[static_cast<size_t>(row) * w + col];
-            if (c == key) {
-                continue; // 色键：调色板索引 0 透明
-            }
-            d[static_cast<size_t>(py) * Surface::kWidth + px] = c;
-        }
-    }
+    // [NEW M4-D] 440 宽事件素材在宽地图区内水平居中（native 偏移 0）
+    const int ox = st.eventFlcX + (uiMapLogicalWidth(dst) - 440) / 2;
+    blitScaled(dst, reinterpret_cast<const uint8_t*>(st.eventFlc.pixels()), w * 2, nullptr, ox,
+               st.eventFlcY, 0, 0, w, h, false, false, st.eventFlc.colorKey());
 }
 
 // [NEW] 小地图点击平滑跳转：每 tick 向目标视口中心插值（原版直接跳转）
@@ -153,16 +129,18 @@ int clampInt(int v, int lo, int hi) {
 
 // [RE 0x417E26] WM_MOUSEMOVE 小地图区域命中（返回小地图内坐标）
 // 区域: 布局 1 小地图在 (440,280)；布局 2 在 (440,80)-(640,280)
-bool miniMapHitRegion(const GameState& state, int x, int y, int& mx, int& my) {
+// [NEW M4-D] 右栏起点由布局派生（宽屏右移；native 仍 440）
+bool miniMapHitRegion(const GameState& state, const Surface& dst, int x, int y, int& mx, int& my) {
     const int layout = state.settings[5] & 3;
     const int miniY = kMiniMapY[layout];
     if (miniY == 0) {
         return false;
     }
-    if (x <= 440 || x >= 440 + kMiniMapW || y <= miniY || y >= miniY + kMiniMapH) {
+    const int panelX = uiPanelLogicalX(dst);
+    if (x <= panelX || x >= panelX + kMiniMapW || y <= miniY || y >= miniY + kMiniMapH) {
         return false;
     }
-    mx = x - 440;
+    mx = x - panelX;
     my = y - miniY;
     return true;
 }
@@ -283,6 +261,30 @@ bool tipPerfBlocked(Application& app) {
     return app.events().depth() > 1;
 }
 
+// [NEW M4-C] 空闲帧判定（脏区重绘第一部分）：纯等待输入且无任何演出/动画/滚动/模态——
+//   此状态下场景内容不再变化，可跳过每 tick 的全量重绘（光标由 renderFrame 独立
+//   合成/恢复；GO 闪烁翻转点仍需一次重绘，由调用方补）。
+//   排除项即"画面会自行变化"的全部来源：控制位/AI 行动状态/跳伞·事件 FLC（blockingPerf）/
+//   骰子滚动·停留/剩余步进/视口滚动。模态期间 gameEventHandler 不在栈顶，timer 不派发。
+bool idleFrame(Application& app) {
+    const GameState& st = app.gameState();
+    if (!st.gamePlayerControl || st.viewScrolling) {
+        return false;
+    }
+    if (blockingPerf(app)) {
+        return false;
+    }
+    if (st.diceAnimActive || st.showDice || st.remainingSteps != 0) {
+        return false;
+    }
+    for (int p = 0; p < st.playerCount && p < 9; ++p) {
+        if (st.playerActionState[p] != 0) {
+            return false;
+        }
+    }
+    return true;
+}
+
 // [RE 0x417E26] WM_MOUSEMOVE
 void handleMouseMove(Application& app, int x, int y) {
     GameState& state = app.gameState();
@@ -290,7 +292,7 @@ void handleMouseMove(Application& app, int x, int y) {
     if (state.dragMiniMap) {
         int mx = 0;
         int my = 0;
-        if (!miniMapHitRegion(state, x, y, mx, my)) {
+        if (!miniMapHitRegion(state, app.surface(), x, y, mx, my)) {
             state.dragMiniMap = false;
             return;
         }
@@ -343,7 +345,8 @@ void handleLeftButtonDown(Application& app, int x, int y) {
     // [RE 0x4186BE] 非玩家控制期（AI 回合/掷骰/移动/结算）：仅保留地图区物件提示，
     //   其余点击（工具条/日历/面板）忽略（原版 0x4186BE 在 byte_46CAFD 检查之前）
     if (!state.gamePlayerControl) {
-        if (x < 440 && y >= kTopBarH) {
+        // [NEW M4-D] 地图区加宽后 x<mapW（顶栏仅占 x<440 段）
+        if (x < uiMapLogicalWidth(app.surface()) && (y >= kTopBarH || x >= 440)) {
             showObjectTip(app, x, y);
             renderGameFrame(app);
         }
@@ -352,7 +355,8 @@ void handleLeftButtonDown(Application& app, int x, int y) {
     // [RE 0x417E26] 前进面板命中：panel[8] 字节控件图，ctrl = 像素值 + 10
     //   （13=GO、11=骰子数、12=拖动）；面板矩形 advancePanelX/Y/W/H
     if (state.gamePlayerControl && !state.panel8Mask.empty()) {
-        const int lx = x - state.advancePanelX;
+        // [NEW M4-D 实机] 与 drawAdvancePanel 同源：宽屏下随地图区中心平移
+        const int lx = x - (state.advancePanelX + uiMapCenterShiftX(app.surface()));
         const int ly = y - state.advancePanelY;
         if (lx >= 0 && ly >= 0 && lx < state.advancePanelW && ly < state.advancePanelH) {
             const int ctrl = static_cast<int>(
@@ -387,15 +391,19 @@ void handleLeftButtonDown(Application& app, int x, int y) {
     }
     const int layout = state.settings[5] & 3;
     const int miniY = kMiniMapY[layout];
-    // 小地图箭头（旋转）：(443,miniY+3)-(493,miniY+28)，左/右各 25 像素
-    if (miniY != 0 && x >= 443 && x <= 493 && y >= miniY + 3 && y <= miniY + 28) {
-        state.pendingAction = (x - 443) / 25 + 1; // 1=左旋 / 2=右旋
+    // [NEW M4-D] 布局派生：右栏起点/地图区宽（宽屏右移；native 仍 440）
+    const int panelX = uiPanelLogicalX(app.surface());
+    const int mapW = uiMapLogicalWidth(app.surface());
+    // 小地图箭头（旋转）：(443,miniY+3)-(493,miniY+28)，左/右各 25 像素（相对右栏起点）
+    if (miniY != 0 && x >= panelX + 3 && x <= panelX + 53 && y >= miniY + 3 &&
+        y <= miniY + 28) {
+        state.pendingAction = (x - panelX - 3) / 25 + 1; // 1=左旋 / 2=右旋
         app.audio().playEffect(1); // [RE 0x41867F] 小地图区点击音效（dword_482322）
         renderGameFrame(app);      // 按下态箭头（帧 18/19）
         return;
     }
     // [RE 0x4182FA] 右侧信息面板页签点击（layout≠2；x∈[616,640) y∈[0,280) → tab = y/70）
-    if (layout != 2 && x >= 616 && x < 640 && y >= 0 && y < 280 &&
+    if (layout != 2 && x >= panelX + 176 && x < panelX + 200 && y >= 0 && y < 280 &&
         state.currentPlayer >= 0 && state.currentPlayer < state.playerCount) {
         const int tab = (y / 70) & 3; // [RE 0x41831D] idiv 0x46(70)
         Player& pl = state.players[state.currentPlayer];
@@ -409,7 +417,7 @@ void handleLeftButtonDown(Application& app, int x, int y) {
     // 小地图拖拽 / 点击平滑跳转
     int mx = 0;
     int my = 0;
-    if (miniMapHitRegion(state, x, y, mx, my)) {
+    if (miniMapHitRegion(state, app.surface(), x, y, mx, my)) {
         state.dragMiniMap = true;
         // [NEW] 点击小地图平滑跳转到该处（原版直接跳转）
         startScroll(app, clampInt((761856 * mx) >> 16, 220, 2084),
@@ -419,16 +427,16 @@ void handleLeftButtonDown(Application& app, int x, int y) {
     }
     // [RE 0x417E26] 日历点击切换显示模式（byte_497164）：
     //   原版条件 byte_49715D!=1（有日历的布局）且 y∈[288,314]，
-    //   左箭头 x∈[448,474]→大数字(0)、右箭头 x∈[478,504]→月历网格(1)
+    //   左箭头 x∈[448,474]→大数字(0)、右箭头 x∈[478,504]→月历网格(1)（相对右栏起点）
     if (layout != 1 && y >= 288 && y <= 314) {
-        if (x >= 448 && x <= 474) {
+        if (x >= panelX + 8 && x <= panelX + 34) {
             RICH4_LOGI("calendar click: mode->0 (RE 0x417E26)");
             app.audio().playEffect(1); // [RE 0x4183B7] 日历切换音效（dword_482322）
             state.calendarMode = 0;
             renderGameFrame(app);
             return;
         }
-        if (x >= 478 && x <= 504) {
+        if (x >= panelX + 38 && x <= panelX + 64) {
             RICH4_LOGI("calendar click: mode->1 (RE 0x417E26)");
             app.audio().playEffect(1); // [RE 0x4183FF] 日历切换音效（dword_482322）
             state.calendarMode = 1;
@@ -442,8 +450,9 @@ void handleLeftButtonDown(Application& app, int x, int y) {
         app.audio().playEffect(1); // [RE 0x418482] 工具条/页签点击音效（dword_482322）
         return;
     }
-    // [RE 0x4186BE] 地图区左键按下 → 物件提示（原版 x<440 && y>40 → sub_417559）
-    if (x < 440 && y >= kTopBarH) {
+    // [RE 0x4186BE] 地图区左键按下 → 物件提示（原版 x<440 && y>40 → sub_417559；
+    //   [NEW M4-D] 地图区加宽后 x<mapW，顶栏仅占 x<440 段）
+    if (x < mapW && (y >= kTopBarH || x >= 440)) {
         showObjectTip(app, x, y);
         renderGameFrame(app);
         return;
@@ -489,7 +498,7 @@ void handleRightButtonUp(Application& app, int x, int y) {
     }
     int mx = 0;
     int my = 0;
-    if (!miniMapHitRegion(state, x, y, mx, my)) {
+    if (!miniMapHitRegion(state, app.surface(), x, y, mx, my)) {
         return;
     }
     state.manualView = false;
@@ -567,7 +576,39 @@ bool gameEventHandler(const SDL_Event* event, void* user) {
         // [RE 0x401B9C] idle loop: sub_4192F7(渲染) + sub_40D7C4(状态机)
         updateGameState(app);
         updateScroll(app);
-        renderGameFrame(app);
+        // [NEW M4-C2] 区域脏区（原版 dword_475110 五位）：高频纯动画路径只补画变化区。
+        //   保守清单——只标"绝对确定不变其它区域"的状态；不确定的一律全量，
+        //   保证"该变的必然变"（正确性优先，native 全量路径逐字节不变）。
+        // 宽屏下地图从 y=0 起画（mapTop=0）会覆盖顶栏素材区域 → 地图层补画恒伴随顶栏
+        // （native mapTop=40 时顶栏不被覆盖，重画幂等无害）
+        const uint8_t mapWithBar = kDirtyMap | kDirtyTopBar;
+        uint8_t dirty = 0;
+        if (!blockingPerf(app)) {
+            // ① 视口平滑滚动：地图视口 + 小地图红框（玩家条/日历不动）
+            if (app.gameState().viewScrolling) {
+                dirty |= mapWithBar | kDirtyMiniMap;
+            }
+            // ② 掷骰动画(1)/棋子移动(2)：地图层 + 小地图标记（结算/过天=3 不在此列，全量）
+            const int cur = app.gameState().currentPlayer;
+            if (cur >= 0 && cur < 9) {
+                const int act = app.gameState().playerActionState[cur];
+                if (act == 1 || act == 2) {
+                    dirty |= mapWithBar | kDirtyMiniMap;
+                }
+            }
+        }
+        // [NEW M4-C] 静止帧跳过：纯等待输入且场景无变化时不重绘（GO 闪烁翻转点除外）。
+        //   GO 面板属地图层（180,120 在地图区内）→ 翻转点仅补画地图层（原版增量层语义）。
+        const bool goBlinkTurn = (s_blinkTick == 0);
+        if (goBlinkTurn) {
+            dirty |= mapWithBar;
+        }
+        if (dirty == 0) {
+            dirty = kDirtyAll; // 未标脏的非空闲帧：保守全量（与旧行为一致）
+        }
+        if (goBlinkTurn || !idleFrame(app)) {
+            renderGameFrameWith(app, dirty);
+        }
         return true;
     }
     // [RE 0x418C55/0x45144F] 跳伞入场 / 事件 FLC（得點券/卡片/入狱住院等阻塞播放）期间禁止交互：
@@ -670,11 +711,16 @@ void overlayEventFlcFrame(Application& app) {
     drawEventFlcFrame(app);
 }
 
-// [RE 0x417E26] 游戏内绘制（WM_PAINT 分支；定义见 gameEventHandler）
-// 顶部工具条 + 地图区 + 按 byte_49715D 布局的右侧面板；每 tick 全量重绘
-// 公开供阻塞动画流程（收租联动闪烁 0x451985）主动重绘
-void renderGameFrame(Application& app) {
-    // [NEW] 本函数全量重绘整个表面——光标保存背景作废，跳过陈旧 uncompose 写回
+// [NEW M4-C2] 分区重绘：按 dirty 位补画（kDirtyAll = 全量，与前述逐帧全量路径等价）
+void renderGameFrameWith(Application& app, uint8_t dirty) {
+    // [NEW M4-D] 游戏世界重绘永远按画布逻辑坐标（不受 640 基准模态 origin 影响）——
+    //   模态 handler 内调用本函数重绘游戏画面时（选骰框/交易市场/台词气泡等），
+    //   模态自身绘制经 dispatchModalAware +base 居中，而游戏画面保持宽屏布局。
+    SurfaceOriginGuard ogWorld(app.surface(), 0, 0);
+    // [NEW M4-D 实机] 游戏世界重绘不受"模态绘制边界"约束（宽屏游戏画面保持铺满；
+    //   模态内的面板/过场元素由 dispatchModalAware 的边界裁剪）
+    SurfacePaintClipGuard pcgWorld(app.surface(), -1, -1);
+    // [NEW] 本函数重绘区域内像素全变——光标保存背景作废，跳过陈旧 uncompose 写回
     //   （防演出/移动期间光标处旧背景脏块闪现；见 Cursor::invalidate）
     app.cursor().invalidate();
     GameState& state = app.gameState();
@@ -682,29 +728,41 @@ void renderGameFrame(Application& app) {
     if (tipPerfBlocked(app)) {
         clearObjectTipForPerf(app);
     }
-    if (state.manualView) {
-        // [RE 0x48BE18] dword_48BE18 非 0：用平滑视口中心（原版 dword_48BE1C/BE20）
-        renderMap(app, state.viewSmoothX, state.viewSmoothY);
-    } else {
-        // 否则以当前玩家位置为中心
-        renderMap(app, -1, 0);
+    const bool mapRegion = (dirty & kDirtyMap) != 0;
+    if (mapRegion) {
+        if (state.manualView) {
+            // [RE 0x48BE18] dword_48BE18 非 0：用平滑视口中心（原版 dword_48BE1C/BE20）
+            renderMap(app, state.viewSmoothX, state.viewSmoothY);
+        } else {
+            // 否则以当前玩家位置为中心
+            renderMap(app, -1, 0);
+        }
+        // [RE 0x417559] 右键物件提示框（地图区之上、面板之下）；演出期双保险不画
+        if (!tipPerfBlocked(app)) {
+            drawObjectTip(app);
+        }
     }
-    // [RE 0x417559] 右键物件提示框（地图区之上、面板之下）；演出期双保险不画
-    if (!tipPerfBlocked(app)) {
-        drawObjectTip(app);
-    }
-    renderGamePanel(app);
+    renderGamePanel(app, dirty);
     // [RE 0x45144F/0x451985] 演出叠加层在**面板（含前进 GO 面板 0x417191）之后**——
     //   原版 flcPlay/高亮/跳伞都在完整场景（地图+工具条+右侧/前进面板已画完）的
     //   backbuffer 上 saveBackground 后末层叠加 = 动画盖住 GO（2026-09-29 层级修正；
     //   重排前重写把 GO 画在动画之上，演出动画被 GO 按钮遮挡）
-    if (state.parachuteActive && state.parachute.valid()) {
-        drawParachuteFrame(app);
+    if (mapRegion) {
+        if (state.parachuteActive && state.parachute.valid()) {
+            drawParachuteFrame(app);
+        }
+        if (state.eventFlcActive && state.eventFlc.valid()) {
+            drawEventFlcFrame(app);
+        }
+        drawEstateHighlight(app);
     }
-    if (state.eventFlcActive && state.eventFlc.valid()) {
-        drawEventFlcFrame(app);
-    }
-    drawEstateHighlight(app);
+}
+
+// [RE 0x417E26] 游戏内绘制（WM_PAINT 分支；定义见 gameEventHandler）
+// 顶部工具条 + 地图区 + 按 byte_49715D 布局的右侧面板；全量重绘
+// 公开供阻塞动画流程（收租联动闪烁 0x451985）主动重绘
+void renderGameFrame(Application& app) {
+    renderGameFrameWith(app, kDirtyAll);
 }
 
 void enterGameLoop(Application& app) {
@@ -732,7 +790,8 @@ void enterGameLoop(Application& app) {
     }
     app.audio().setSwitchDays(0);
     initTurnState(app);
-    runModal(app, &gameEventHandler, &app, 16);
+    // [NEW M4-D] centerBase=false：游戏内循环不是 640 基准 UI（地图区/右栏按宽屏布局派生）
+    runModal(app, &gameEventHandler, &app, 16, false, false);
 }
 
 } // namespace rich4

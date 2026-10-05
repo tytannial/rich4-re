@@ -240,7 +240,7 @@ void itemBagDialog(Application& app) {
         s.app = &app;
         s.sheet = &sheet;
         s.cur = cur;
-        const int id = runModal(app, &itemModalHandler, &s);  // [RE 0x447ECD]
+        const int id = runModal(app, &itemModalHandler, &s, 0, true, false);  // [RE 0x447ECD]
         if (id <= 0) {
             break;  // 取消 → 结束
         }

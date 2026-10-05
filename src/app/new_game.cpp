@@ -13,6 +13,7 @@
 #include "game/core/log.h"
 #include "game/core/paths.h"
 #include "game/core/debug_hooks.h"
+#include "game/render/blit.h"
 #include "game/render/raw_bitmap.h"
 #include "game/render/surface.h"
 
@@ -357,8 +358,9 @@ void showLoading(Application& app) {
         RICH4_LOGW("showLoading: Data.mkf[601] not a known RAW size (%zu B)", blob->size());
         return;
     }
-    std::memcpy(app.surface().pixels(), raw.pixels,
-                static_cast<size_t>(raw.width) * raw.height * 2);
+    // [NEW M4-A2] 全屏加载图按画布 scale 缩放绘制（scale=1 时逐像素等价）
+    blitScaled(app.surface(), reinterpret_cast<const uint8_t*>(raw.pixels), raw.width * 2,
+               nullptr, 0, 0, 0, 0, raw.width, raw.height, false, true);
 }
 
 // [RE 0x4080F5] resetSceneForReload：退出游戏/读档/重开局前复位上局残留场景状态。

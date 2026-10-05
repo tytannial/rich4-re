@@ -1,4 +1,5 @@
 #include "game/app/help_dialog.h"
+#include "game/app/ui_layout.h"
 
 #include "game/app/event_stack.h"
 #include "game/application.h"
@@ -464,7 +465,7 @@ void helpDialog(Application& app) {
     state.originY = 240 - uiImage.frame(0).height / 2;
 
     RICH4_LOGI("help dialog at (%d,%d) (RE 0x44EB39)", state.originX, state.originY);
-    runModal(app, &helpEventHandler, &state);
+    runModal(app, &helpEventHandler, &state, 0, true, false);
 }
 
 } // namespace rich4

@@ -1,4 +1,5 @@
 #include "game/app/trade_market.h"
+#include "game/app/ui_layout.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -192,7 +193,7 @@ void tradeTipBlocking(Application& app, const UiImage& sheet, const char* text, 
     s.sheet = &sheet;
     s.text = text;
     s.y = y;
-    runModal(app, &tradeTipEvent, &s, 16);
+    runModal(app, &tradeTipEvent, &s, 16, true, false);
 }
 
 // 挂单价换算（原版 byte_47FDEF/byte_47FEDF 点券价 ×100 × 物價指數）
@@ -1292,7 +1293,7 @@ bool tradeMainEvent(const SDL_Event* event, void* user) {
                         sub.rows.push_back(static_cast<uint8_t>(i));
                     }
                 }
-                runModal(*s.app, &stockOrderEvent, &sub);
+                runModal(*s.app, &stockOrderEvent, &sub, 0, true, false);
             } else if (s.subSel == 2) {
                 LandOrderUi sub;
                 sub.app = s.app;
@@ -1300,7 +1301,7 @@ bool tradeMainEvent(const SDL_Event* event, void* user) {
                 sub.mainSheet = &s.sheet;
                 collectOwnedAssets(st, st.currentPlayer, 0, sub.assets);
                 landUpdatePage(sub);
-                runModal(*s.app, &landOrderEvent, &sub);
+                runModal(*s.app, &landOrderEvent, &sub, 0, true, false);
             } else if (s.subSel == 3) {
                 ItemOrderUi sub;
                 sub.app = s.app;
@@ -1313,13 +1314,13 @@ bool tradeMainEvent(const SDL_Event* event, void* user) {
                     }
                 }
                 RICH4_LOGI("trade: item order dialog (%zu items) (RE 0x4267A4)", sub.ids.size());
-                runModal(*s.app, &itemOrderEvent, &sub);
+                runModal(*s.app, &itemOrderEvent, &sub, 0, true, false);
             } else if (s.subSel == 4) {
                 CardOrderUi sub;
                 sub.app = s.app;
                 sub.sheet = &s.sheet;
                 sub.mainSheet = &s.sheet;
-                runModal(*s.app, &cardOrderEvent, &sub);
+                runModal(*s.app, &cardOrderEvent, &sub, 0, true, false);
             }
             s.subSel = 0;
             redrawTradeMainFull(s);  // 子对话框大于主面板（上探工具栏/下探地图）→ 恢复场景
@@ -1339,7 +1340,7 @@ bool tradeMainEvent(const SDL_Event* event, void* user) {
                 det.sheet = &s.sheet;
                 det.seller = row;
                 det.slot = col;
-                runModal(*s.app, &tradeDetailEvent, &det);
+                runModal(*s.app, &tradeDetailEvent, &det, 0, true, false);
             }
             redrawTradeMainFull(s);  // 详情/嵌套确认框退出后恢复场景
             return true;
@@ -1650,7 +1651,7 @@ void tradeMarketDialog(Application& app) {
     }
     RICH4_LOGI("trade market open (RE 0x4284BE)");
     trace::logf("dialog open name=trade_market");
-    runModal(app, &tradeMainEvent, &s);
+    runModal(app, &tradeMainEvent, &s, 0, true, false);
 }
 
 } // namespace rich4

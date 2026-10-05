@@ -406,31 +406,18 @@ void playSettleFlc(SettleCtx& ui, int mkfIndex, int x, int y) {
     app.consumeSkipInput();
     app.cursor().setHidden(dst, true);
     app.audio().pushMusicPause();
-    ui.flcBg.assign(dst.pixels(), dst.pixels() + static_cast<size_t>(Surface::kWidth) *
-                                                       Surface::kHeight);
+    ui.flcBg.assign(dst.pixels(), dst.pixels() + static_cast<size_t>(dst.width()) *
+                                                       dst.height());
     const int interval = std::max(1, flc.speedMs());
+    // [NEW M4-A2] 帧节拍 = 绝对截止时刻（绘制耗时计入帧间隔）
+    uint64_t deadline = nowMs();
     while (flc.nextFrame()) {
+        deadline += static_cast<uint64_t>(interval);
         std::memcpy(dst.pixels(), ui.flcBg.data(),
-                    sizeof(uint16_t) * Surface::kWidth * Surface::kHeight);
-        const uint16_t* src = flc.pixels();
-        const uint16_t key = flc.colorKey();
-        for (int row = 0; row < flc.height(); ++row) {
-            const int py = y + row;
-            if (py < 0 || py >= Surface::kHeight) {
-                continue;
-            }
-            for (int col = 0; col < flc.width(); ++col) {
-                const int px = x + col;
-                if (px < 0 || px >= Surface::kWidth) {
-                    continue;
-                }
-                const uint16_t c = src[static_cast<size_t>(row) * flc.width() + col];
-                if (c == key) {
-                    continue; // 色键 0 = 调色板索引 0 透明
-                }
-                dst.pixels()[static_cast<size_t>(py) * Surface::kWidth + px] = c;
-            }
-        }
+                    sizeof(uint16_t) * dst.width() * dst.height());
+        // [NEW M4-A2] FLC 当前帧按画布 scale 缩放叠加（色键透明；scale=1 逐像素等价）
+        blitScaled(dst, reinterpret_cast<const uint8_t*>(flc.pixels()), flc.width() * 2, nullptr,
+                   x, y, 0, 0, flc.width(), flc.height(), false, false, flc.colorKey());
         // [NEW] 全量回卷 + 叠加 = 本帧背景已重建，光标保存块作废（防陈旧 uncompose 写回闪块）
         app.cursor().invalidate();
         app.renderFrame();
@@ -438,13 +425,15 @@ void playSettleFlc(SettleCtx& ui, int mkfIndex, int x, int y) {
         // [RE 0x45144F] g_flcInterruptible（flags bit1，本处表值全含）：帧间延时循环检测
         //   打断输入提前结束（停在当前帧，调用方 drawAfterFlc* 照常重铺终态画面）
         bool skipHit = false;
-        for (int t = 0; t < interval; t += 5) {
+        for (;;) {
             if (app.consumeSkipInput()) {
                 skipHit = true;
                 break;
             }
+            if (!frameWaitStep(deadline)) {
+                break;
+            }
             app.audio().update();
-            delayMs(5);
         }
         if (skipHit) {
             trace::logf("flc skip idx=%d (monthSettle RE 0x45144F)", mkfIndex);

@@ -23,14 +23,42 @@ namespace rich4 {
 //       PeekMessageA 主循环 + sub_401815 清理
 class Application {
 public:
-    bool init(const std::string& gameDir, bool headless = false);
+    // [NEW M4-A2] 显示配置（preset 解析结果；默认 = native 640x480 / scale 1.0）：
+    //   canvasWidth/Height：运行期画布尺寸（0 = 按 uiScale 推导 = round(640×s)×round(480×s)）
+    //   uiScale：绘制缩放（逻辑 640x480 → 设备像素）；1.0 = native 恒等
+    //   autoScale（wide/free preset）：画布 = 窗口 drawable 像素、uiScale = 画布高/480、
+    //   并处理 SDL_EVENT_WINDOW_RESIZED 重建画布（此时忽略 canvasWidth/Height/uiScale）
+    struct DisplayConfig {
+        int windowWidth = 1280;
+        int windowHeight = 960;
+        int canvasWidth = 0;
+        int canvasHeight = 0;
+        float uiScale = 1.0f;
+        bool autoScale = false;
+        // [NEW M4-D 实机] 呈现放大过滤（默认线性；1:1 时无差别）
+        bool linearFilter = true;
+        // [NEW M4-F] 垂直同步/全屏（rich4.ini [display]）
+        bool vsync = true;
+        bool fullscreen = false;
+    };
+    bool init(const std::string& gameDir, bool headless = false,
+              const DisplayConfig& display = DisplayConfig{});
     void run();
     void shutdown();
+
+    // [NEW M4-A2] --stats：每 120 帧输出 FPS/帧耗时（定位放大后的性能瓶颈；无原版对应）
+    void setStats(bool on) { m_stats = on; }
 
     // 对应原版 PeekMessageA 消息泵 + WndProc(0x4019DD) 分发
     void pumpEvents();
     // 对应原版 InvalidateRect/WM_PAINT 驱动的表面绘制
     void renderFrame();
+
+    // [NEW M4-D] 640 基准 UI 派发（宽画布水平居中框架）：
+    //   栈顶为 centerBase 层且逻辑画布宽 > 640 时——进入时清两侧、事件鼠标坐标平移、
+    //   绘制原点偏移（SurfaceOriginGuard）包住 handler；否则恒等直通。
+    //   event == nullptr 表示"模态进入/重绘"（原版 PostMessage 0x401）。
+    bool dispatchModalAware(const SDL_Event* event);
 
     bool running() const { return m_running; }
     void quit() { m_running = false; }
@@ -50,8 +78,12 @@ public:
     // [NEW] 媒体目录（音乐/视频）：<gameDir>/Media，回退 <gameDir>/../Media
     const std::string& mediaDir() const { return m_mediaDir; }
 
-    // 鼠标位置（640x480 逻辑坐标，对应原版全屏坐标）
+    // 鼠标位置（设计逻辑坐标 640x480；scale>1 时为设备坐标 / scale）。
+    // [NEW M4-A2] UI 命中/对话框一律用本坐标；地图物件命中（mapHitRegions 设备坐标）
+    //   请先经 surface().logicalToDevice() 或使用 mouseDevicePos
     void mouseLogicalPos(int& x, int& y) const;
+    // [NEW M4-A2] 鼠标设备像素坐标（画布坐标；光标定位用）
+    void mouseDevicePos(int& x, int& y) const;
     // [NEW] headless 合成输入的鼠标覆盖：调试命令 move/click 直投时设定逻辑坐标，
     //   mouseLogicalPos 优先返回它；真实鼠标事件到达（pumpEvents）即清除
     void setMouseOverride(int x, int y) {
@@ -197,6 +229,8 @@ public:
     }
 
 private:
+    // [NEW M4-A2] free/wide：按窗口 drawable 重建画布（resize 事件驱动）
+    void applyWindowResize();
     // 对应原版 DefWindowProcA 分支（无模态处理器时的默认处理）
     void defaultEvent(const SDL_Event& event);
     // [PORT Win32:GetCursorPos] 窗口坐标 → 640x480 逻辑坐标
@@ -209,6 +243,11 @@ private:
     std::string m_gameDir;
     std::string m_mediaDir;
     bool m_headless = false;
+    bool m_autoScale = false;     // [NEW M4-A2] free/wide：画布跟随 drawable + resize
+    bool m_resizePending = false; // [NEW M4-A2] 待重建画布
+    bool m_stats = false;         // [NEW M4-A2] --stats 性能统计
+    int m_statsFrames = 0;
+    uint64_t m_statsWindowUs = 0;
     Window m_window;
     Renderer m_renderer;
     Input m_input;
@@ -220,6 +259,8 @@ private:
     TextRenderer m_text;
     bool m_uiClicked = false;
     bool m_skipInput = false; // [RE 0x4528B9/0x4544F6/0x45144F] 演出打断标志
+    bool m_modalBaseFilled = false; // [NEW M4-D] 640 基准模态两侧已清除（进入时一次）
+    bool m_forceRepaint = false;    // [NEW M4-D] resize 后强制重绘当前模态（tickMs=0 层不自绘）
     bool m_enterSwitchMusic = false; // [RE 0x401CFC/0x401D14] enterGameLoop a1
     std::string m_shotPath;
     int m_shotFrame = 0;

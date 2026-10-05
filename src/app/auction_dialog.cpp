@@ -366,12 +366,8 @@ void tickRoll(AuctionCtx& ui) {
         drawRow(ui, slot, nullptr, false); // [RE 0x43A75E] 清上一气泡
     }
     if (ui.bubbleBg.empty()) {
-        ui.bubbleBg.resize(static_cast<size_t>(142) * 113);
-        for (int r = 0; r < 113; ++r) {
-            std::memcpy(ui.bubbleBg.data() + static_cast<size_t>(r) * 142,
-                        dst.pixels() + static_cast<size_t>(y - 74 + r) * Surface::kWidth + 406,
-                        142 * sizeof(uint16_t));
-        }
+        // [NEW M4-A2] 区域快照走公共 API（逻辑区域按画布 scale 设备化）
+        saveRegion(ui.bubbleBg, dst, 406, y - 74, 142, 113);
         ui.bubbleBgY = y;
     }
     blitElement(dst, ui.sheet.frame(kFrameBubble), 480, y - 15, false);
@@ -400,11 +396,7 @@ void tickRoll(AuctionCtx& ui) {
         ++ui.rollCnt;
         return;
     }
-    for (int r = 0; r < 113; ++r) {
-        std::memcpy(dst.pixels() + static_cast<size_t>(ui.bubbleBgY - 74 + r) * Surface::kWidth +
-                        406,
-                    ui.bubbleBg.data() + static_cast<size_t>(r) * 142, 142 * sizeof(uint16_t));
-    }
+    restoreRegion(dst, ui.bubbleBg, 406, ui.bubbleBgY - 74, 142, 113);
     ui.bubbleBg.clear();
     ui.rollCnt = 0;
     ui.bubble = 0;

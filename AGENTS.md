@@ -158,7 +158,58 @@ pendingSpawnPlayer`，不含视口滚动/模态——原版这两类窗口面板
 `!blockingPerf`）；新命令 `trace.clear`、新场景 **`308_go_panel_surrender`**（`surrender;
 trace.clear` 同帧清窗，**修前 FAIL 75 次 cur=0 → 修后 0 次**）。详见 `m4-plan.md` §14、
 `ui-controls.md` §39 ⑤。验证：L0 **86/86**、L1 **93/93**（94 场景中 `84_ai_marathon` 按约定
-不跑，见 `m4-plan.md` §9.2）、`re_map` 通过。**下一步 = A1 画布运行期尺寸**。
+不跑，见 `m4-plan.md` §9.2）、`re_map` 通过。
+**批次 A1 ✅ 2026-09-30（画布运行期尺寸，scale 恒 1）**：`Surface` 宽高运行期化
+（`create(renderer, w, h)`，默认 native 640×480）、95 处 `Surface::kWidth/kHeight` 全量
+参数化（17 文件）、blit 家族行距/裁剪取自画布、全局裁剪窗口随画布初始化；新增 `--canvas WxH`
+开发入口；L0 新增 4 用例。**修复 blitScrolledMap 高画布越界读**（行数 `min(画布高,480)`——
+`--canvas 800x600` 选人界面崩溃根因）。详见 `m4-plan.md` §15。
+**批次 A2 ✅ 2026-09-30（scale + 缩放 blit + 文本 1:1 光栅化 + preset/resize）**：
+`Surface::scale/logicalToDevice/deviceToLogical` + `SurfaceScaleGuard`；blit 家族
+**逻辑像素→设备块展开**（`blitScaled` 导出供 UI 散点复用；**像素完美**，scale=1 恒等）；
+文本按 `设计字号×scale` 1:1 光栅化（阴影/描边/字距/边距乘 scale）；光标按 scale 放大；
+**鼠标双坐标**（UI 逻辑 / 地图设备）；**free/wide 整幅画面放大**（worldScale=uiScale；
+free 1280×960 = native 干净 2 倍）；**演出帧节拍改绝对截止时刻**（`frameWaitStep`，
+放大后动画不变慢）；新增 `--scale <f>` / `--preset native|wide|free`（free 处理
+`SDL_EVENT_WINDOW_RESIZED`）/ `--stats`（FPS/帧耗时诊断）；`run_tests.py` 新增 `--extra`。
+实机修复（用户反馈）：free 界面错位→整幅放大、光标 SMP 不可见→SMP/SPR 双格式、
+放大拖慢→块展开（free 17→9.8ms / wide 12→8.2ms）+ 动画绝对节拍。详见 `m4-plan.md` §16。
+**下一步 = C 脏区重绘 + UI 布局表 + 命中派生**（D 宽屏视口依赖 C 的布局表）。
+
+**批次 C1 ✅ 2026-09-30（静止帧跳过）**：`game_loop.idleFrame`——纯等待输入且无演出/
+动画/滚动/模态时场景不变，timer 分支跳过每 tick 全量重绘（GO 闪烁翻转点仍重绘；
+光标由 renderFrame 独立合成，不受影响）。性能（`--stats`，headless 静止期）：
+native 5.5→1.5ms、free 9.8→3.5ms；free 空闲截图与全量重绘逐字节 diff=0（无残影）。
+详见 `m4-plan.md` §17。
+
+**批次 D1 ✅ 2026-09-30（宽地图区）**：等距投影表扩 **65×65**（表内原 29×29 逐项保真、
+外圈边界步长外推；`tools/gen_map_tables.py` 生成）；`ui_layout` 布局派生（地图区宽 =
+逻辑画布宽 − 右栏 200；宽屏右栏右移贴右缘）；宽屏走"与视口相交格点双循环"**去表化**
+（地面菱形互不重叠 → 顺序无关），native 保留原 296 项遍历序逐字节保真；
+`Surface` **绘制原点**（`deviceX/deviceY/spanX/spanY` + `SurfaceOriginGuard`）实现右栏
+半径整体平移（右栏函数坐标保持 440 基准）；命中（小地图/箭头/页签/日历/地图区）全部
+布局派生；FLC/跳伞素材在宽地图区水平居中。验证：native 逐字节 diff=0、free 降采样
+2× diff 0.7%、wide 非黑 74%→97%（黑边填满）、冒烟全 PASS、性能 native 1.47 /
+free 3.52 / wide 2.68 ms。详见 `m4-plan.md` §17。
+**批次 C2 + D 收尾 ✅ 2026-10-01（提交 `b7410b7`→`d2bb9af`）**：
+- **640 基准 UI 宽屏居中框架**：`Application::dispatchModalAware`——栈顶 `centerBase` 层且
+  逻辑宽>640 时事件坐标 -base、绘制原点 +base（`SurfaceOriginGuard`）、全屏剧场模态
+  （`fillBars`）进入时两侧填黑；游戏内循环/叠加式模态（设置/询问框/台词等 17 处）
+  保留游戏画面。主菜单/选人/银行/股市等全部模态宽屏居中。
+- **绘制原点全路径修正**：`blitElementRegion`/`blitSpriteFrameClipped`/`blitScrolledMap`/
+  `scaleSurfaceChannels`/`saveRegion`/`restoreRegion`/`fillRect`/`blitSprScaled` 的
+  `scale==1` 快速路径补 origin（`--canvas` 宽画布命中/绘制自洽）；`text.cpp` 落点
+  deviceX 后 blit 侧 origin=0 防二次；`settingsDialog`/`dateDialog` 预绘制残影收口。
+- **区域级脏区（原版 `dword_475110` 五位）**：`renderGamePanel(app, dirty)` +
+  `renderGameFrameWith(app, dirty)` 分区重绘；timer 高频路径（滚动/掷骰/移动 → 地图层+
+  小地图+顶栏；GO 翻转 → 地图层）保守局部，其余全量。**移动期"局部 vs 全量"同帧截图
+  逐字节 IDENTICAL**。
+- **世界锚定坐标派生**：旁白/飘走/飞行/回卷/裁剪全部逻辑画布派生（宽屏不截断）。
+- **debug 合成输入**（click/clickr 等）走模态框架（640 基准 → +base 派发），headless
+  截图与实机一致。
+- 验证：native top/bank/set SHA 逐字节全等；`--canvas 1024x480` 居中+命中；22 场景全 PASS。
+- 详见 `m4-plan.md` §18。**M4 剩余：E 文本高分定点化 / F `rich4.ini` / G 结构重组 /
+  H 追加体验（见 §5~§8）**。
 
 **跨平台 ✅ 2026-09-30**（原 M3-C，Windows x64 + Linux x86-64）：GDI → **FreeType 统一文本渲染**
 （删 366 行 GDI、字体 `resources/Fonts/` 不入库/缺失降级、`kFontSizeScale` 可调）、

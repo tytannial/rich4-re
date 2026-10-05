@@ -183,7 +183,8 @@ int roulettePrompt(Application& app, int theme, const char* arg) {
     RICH4_LOGI("roulette prompt: theme=%d arg=%s human=%d (RE 0x44090E)", t, arg ? arg : "",
                rs.humanCtl ? 1 : 0);
     app.audio().playEffect(52); // [RE 0x475D4C] 转盘音效
-    const int value = runModal(app, rouletteHandler, &rs, kFrameMs);
+    // [NEW M4-D 实机] 轮盘叠加在地图上（rouletteDraw 先重绘游戏画面）→ 不填黑两侧
+    const int value = runModal(app, rouletteHandler, &rs, kFrameMs, true, false);
     RICH4_LOGI("roulette result: cell=%d value=%d (RE 0x43F7C6)", rs.cell, value);
     trace::logf("roulette theme=%d cell=%d value=%d", t, rs.cell, value);
     return value;

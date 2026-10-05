@@ -419,6 +419,7 @@ struct GameState {
     FliDecoder diceAnim;          // 当前掷骰滚动动画（panel[骰子数+3]）
     bool diceAnimActive = false;  // 阶段1 滚动播放中
     bool diceAnimOpened = false;  // 阶段1 已 open（防每 tick 重载；角色保持扔骰末帧）
+    uint64_t diceAnimLastMs = 0;  // [NEW M4-C2] 骰子 FLC 帧节拍：帧延时 = 10*dword_475264[settings[0]]（50/30/20ms）
     uint64_t diceHoldStartMs = 0; // 阶段2 点数停留起始（原版 sub_45285E(500)）
     uint64_t walkAnimLastMs = 0;  // 走路动画换帧计时（限帧率，避免 60fps tick 下偏快）
 

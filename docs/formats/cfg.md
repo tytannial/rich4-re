@@ -76,3 +76,26 @@ BS, TAB, ENTER, CTRL-, ESC, SPACE, PG UP, PG DN, END, HOME,
 - 重映射为可配置快捷键（JSON/TOML），支持键盘 + 手柄
 - 保留默认键位以兼容老玩家习惯
 - 新增宽屏/窗口化/分辨率设置项（原 CFG 仅 16 字节设置区，无显示模式）
+
+
+## 设置字节消费点复核（2026-10-01，IDA xrefs）
+
+| 偏移 | 语义 | 原版消费点 |
+|------|------|-----------|
+| `byte_497158` | 游戏速度档 0..2 | ① `cursorTimer` 0x401FB4：`byte_46CB20[档]`={6,4,2}×20ms 计数 → 置游戏刻度 `byte_46CAFA=1`，WinMain 每刻度跑一次 `playerActionStateMachine`（即状态机节拍 120/80/40ms）；② `rollDice` 0x419600：骰子 FLC flags bit4-7 = `dword_475264[档]`={5,3,2} → 帧延时 = 10×值 = 50/30/20 ms |
+| `byte_497159` | 音效开关 | `attachObject` / 三个小游戏 / 百货 / 乐透 / 魔法屋 / 银行停留 / 月结 / 监禁 / 住院 / 语音相关…（播声前判 0 跳过） |
+| `byte_49715A` | 音乐音量 | `musicPlayScene` / `musicPlayTrack` / `musicStackPopRestore` / `sub_45497B` |
+| `byte_49715B` | 音效音量 | `audioPlayEffectBuffer` / `drawTextSpeak` / `voiceStatus` / `sub_4544F6` 等 |
+| `byte_49715C` | 自动存档开关 | `nextPlayer` 0x419045（为 0 时不写 SAVE0） |
+| `byte_49715D` | 界面布局 0..2 | 0x417E26 面板分派（`&3`） |
+| `byte_49715E` / `15F` | **无任何交叉引用** | 原版从未消费（旧文档"日曆/縮小地圖/組合畫面"的注解不成立） |
+| `byte_497160`+ | **不是设置** | 与游戏全局（日期等）重叠：0x497160 有 45 处引用（`advanceDay`/`drawCalendar`/存档…） |
+
+**重写消费状态**：
+- `settings[1]`（音效）/`[2]`（音乐）/`[3]`（音效音量）/`[4]`（自动存档）/`[5]`（布局）
+  已消费 ✅。
+- `settings[0]`（速度）：**骰子 FLC 帧速已接入**（2026-10-01，`kDiceFlcSpeed`={5,3,2}×10ms）；
+  **状态机/移动节拍为已知差异**——原版状态机按 `settings[0]` 刻度 120/80/40ms 步进，
+  重写为固定 16ms tick + 内部时间门控（行走动画 60ms/帧、移动位移按 `kMoveSpeed` 折算），
+  与原版默认档的节奏已独立校准；如需逐档对齐需另立专项（牵涉状态机全局节奏）。
+- `settings[6..8]`：**原版无消费点**，不实现。

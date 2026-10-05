@@ -7,12 +7,14 @@
 #include "game/game_state.h"
 
 #include "game/core/clock.h"
+#include "game/core/config.h"
 #include "game/core/debug_hooks.h"
 #include "game/core/log.h"
 #include "game/core/paths.h"
 #include "game/core/trace.h"
 
 #include <cstdio>
+#include <cstring>
 #include <cstdlib>
 #include <string>
 #include <utility>
@@ -33,6 +35,15 @@ int main(int argc, char** argv) {
     SetConsoleOutputCP(CP_UTF8);
 #endif
     std::string gameDir = "resources/MultiverseJourney";
+    // [NEW M4-F] 配置系统：先预扫 --game 定位 rich4.ini；载入后 CLI 解析覆盖 ini 值。
+    //   优先级：CLI > rich4.ini > RICH4.CFG > 内置默认；ini 缺失时生成带注释默认文件。
+    for (int ai = 1; ai + 1 < argc; ++ai) {
+        if (std::strcmp(argv[ai], "--game") == 0) {
+            gameDir = argv[ai + 1];
+            ++ai;
+        }
+    }
+    rich4::loadConfig(rich4::writableDataFile(gameDir, "rich4.ini"), true);
     std::string shotPath;
     int shotFrame = 47;
     int shotCursorX = -1;
@@ -83,6 +94,18 @@ std::vector<std::pair<std::string, int>> gameKeys; // [NEW] --game-key "ctrl+5,1
     bool debugMode = false;
     int selftestSlot = -1;
     int loadGameSlot = -1;
+    // [NEW M4-A1] --canvas WxH：运行期画布尺寸（默认 native 640x480）
+    // [NEW M4-F] 下列 CLI 变量的初值 = rich4.ini（CLI 显式给出时覆盖）
+    int canvasW = rich4::config().canvasW;
+    int canvasH = rich4::config().canvasH;
+    // [NEW M4-A2] --scale <f>：绘制缩放（逻辑 640x480 → 设备；1.0 = native）
+    float uiScale = rich4::config().uiScale;
+    // [NEW M4-A2] --preset native|wide|free（显示 preset；wide/free 自动缩放并允许 resize）
+    std::string presetName = rich4::config().preset;
+    // [NEW M4-A2] --stats：每 120 帧输出 FPS/帧耗时（性能诊断）
+    bool statsOn = rich4::config().stats != 0;
+    // [NEW M4-D 实机] --filter nearest|linear：呈现放大过滤（默认 linear 平滑少马赛克）
+    bool linearFilter = rich4::config().filter != "nearest";
     // [NEW] headless 测试钩子（docs/testing.md；无原版对应）
     int testSeed = -1;
     bool headless = false;
@@ -127,6 +150,68 @@ std::vector<std::pair<std::string, int>> gameKeys; // [NEW] --game-key "ctrl+5,1
             selftestSlot = std::atoi(argv[++i]);
         } else if (arg == "--load-game" && i + 1 < argc) {
             loadGameSlot = std::atoi(argv[++i]);
+        } else if (arg == "--canvas" && i + 1 < argc) {
+            // [NEW M4-A1] 画布尺寸 WxH（开发/验证用；默认 640x480 native）
+            if (std::sscanf(argv[++i], "%dx%d", &canvasW, &canvasH) != 2 || canvasW <= 0 ||
+                canvasH <= 0) {
+                canvasW = 0;
+                canvasH = 0;
+            }
+        } else if (arg == "--scale" && i + 1 < argc) {
+            // [NEW M4-A2] 绘制缩放（开发/验证用；默认 1.0 native）
+            uiScale = static_cast<float>(std::atof(argv[++i]));
+            if (!(uiScale > 0.0f)) {
+                uiScale = 1.0f;
+            }
+        } else if (arg == "--preset" && i + 1 < argc) {
+            // [NEW M4-A2] 显示 preset：native（默认 640x480/1.0）/ wide（1280x720）/
+            //   free（窗口 drawable，自动缩放 + resize）
+            presetName = argv[++i];
+        } else if (arg == "--stats") {
+            statsOn = true;
+        } else if (arg == "--set" && i + 1 < argc) {
+            // [NEW M4-F] 通用覆盖：--set section.key=value（写 rich4.ini 配置项；CLI 优先级）
+            const std::string kv = argv[++i];
+            const size_t eq = kv.find('=');
+            std::string key = eq == std::string::npos ? std::string() : kv.substr(0, eq);
+            const std::string val = eq == std::string::npos ? std::string() : kv.substr(eq + 1);
+            for (char& ch : key) {
+                ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+            }
+            const bool known = rich4::setConfigValue(key, val);
+            if (known) {
+                // 同步局部覆盖（CLI 优先于 ini 初值）
+                if (key == "preset" || key == "display.preset") {
+                    presetName = val;
+                } else if (key == "filter" || key == "display.filter") {
+                    linearFilter = val != "nearest";
+                } else if (key == "uiscale" || key == "display.uiscale") {
+                    uiScale = static_cast<float>(std::atof(val.c_str()));
+                    if (!(uiScale > 0.0f)) {
+                        uiScale = 1.0f;
+                    }
+                } else if (key == "canvas" || key == "display.canvas") {
+                    int w = 0;
+                    int h = 0;
+                    if (std::sscanf(val.c_str(), "%dx%d", &w, &h) == 2) {
+                        canvasW = w;
+                        canvasH = h;
+                    }
+                } else if (key == "stats" || key == "debug.stats") {
+                    statsOn = std::atoi(val.c_str()) != 0;
+                }
+            } else {
+                RICH4_LOGW("--set '%s' invalid/unknown key", kv.c_str());
+            }
+        } else if (arg == "--filter" && i + 1 < argc) {
+            const std::string f = argv[++i];
+            if (f == "nearest") {
+                linearFilter = false;
+            } else if (f == "linear") {
+                linearFilter = true;
+            } else {
+                RICH4_LOGW("--filter '%s' unknown (nearest|linear); using linear", f.c_str());
+            }
         } else if (arg == "--shot" && i + 1 < argc) {
             shotPath = argv[++i];
         } else if (arg == "--shot-frame" && i + 1 < argc) {
@@ -234,7 +319,8 @@ std::vector<std::pair<std::string, int>> gameKeys; // [NEW] --game-key "ctrl+5,1
                         "[--game-click4 x,y,frame] [--game-click5 x,y,frame] [--game-drag x1,y1,x2,y2,frame]\n"
                         "  [NEW headless 测试钩子] --debug --seed <n> --headless --test-clock "
                         "--trace --trace-out <file.json> --quickstart <map[,players[,humans]]> "
-                        "--save-selftest <slot> --load-game <slot>\n");
+                        "--save-selftest <slot> --load-game <slot> --canvas <WxH> "
+                        "--scale <f> --preset native|wide|free\n");
             return 0;
         }
     }
@@ -316,10 +402,37 @@ std::vector<std::pair<std::string, int>> gameKeys; // [NEW] --game-key "ctrl+5,1
     if (headless || traceOn) {
         rich4::trace::setEnabled(true);
     }
-    if (!app.init(gameDir, headless)) {
+    // [NEW M4-A2] 显示 preset 组装：原生/宽屏/自由缩放
+    rich4::Application::DisplayConfig displayCfg;
+    if (presetName == "wide") {
+        displayCfg.windowWidth = 1280;
+        displayCfg.windowHeight = 720;
+        displayCfg.autoScale = true;
+        RICH4_LOGI("display preset: wide (1280x720, uiScale=1.5 auto)");
+    } else if (presetName == "free") {
+        displayCfg.windowWidth = 1280;
+        displayCfg.windowHeight = 960;
+        displayCfg.autoScale = true;
+        RICH4_LOGI("display preset: free (drawable auto-scale)");
+    } else {
+        if (presetName != "native") {
+            RICH4_LOGW("unknown --preset '%s'; using native", presetName.c_str());
+        }
+        displayCfg.canvasWidth = canvasW;
+        displayCfg.canvasHeight = canvasH;
+        displayCfg.uiScale = uiScale;
+    }
+    if (displayCfg.autoScale && (canvasW > 0 || uiScale != 1.0f)) {
+        RICH4_LOGW("--canvas/--scale ignored with --preset wide|free");
+    }
+    displayCfg.linearFilter = linearFilter;
+    displayCfg.vsync = rich4::config().vsync != 0;
+    displayCfg.fullscreen = rich4::config().fullscreen != 0;
+    if (!app.init(gameDir, headless, displayCfg)) {
         RICH4_LOGE("Application init failed");
         return 1;
     }
+    app.setStats(statsOn);
     // [NEW] 调试模式（--debug）：启用 Ctrl+1..8 测试热键
     app.gameState().debugMode = debugMode;
     // [NEW] 装载 headless 测试脚本（docs/testing.md）

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""从 rich4.exe 提取 LZHUF 静态表，生成 src/resource/lzhuf_tables.cpp。
+"""从 rich4.exe 提取 LZHUF 静态表，生成 src/gen/lzhuf_tables.cpp。
 
 表位置（DGROUP 段）:
     unk_483630 : 4492 字节自适应树初始工作区 (freq/son/prnt/sym2node)
@@ -37,7 +37,7 @@ def _format(data: bytes, name: str) -> str:
 
 def main(argv: list[str]) -> int:
     exe_path = Path(argv[1]) if len(argv) > 1 else Path("resources/MultiverseJourney/rich4.exe")
-    out_path = Path(argv[2]) if len(argv) > 2 else Path("src/resource/lzhuf_tables.cpp")
+    out_path = Path(argv[2]) if len(argv) > 2 else Path("src/gen/lzhuf_tables.cpp")
 
     exe = exe_path.read_bytes()
     init = exe[va_to_raw(INIT_VA):va_to_raw(INIT_VA) + INIT_LEN]

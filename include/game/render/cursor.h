@@ -40,8 +40,8 @@ public:
     // 迁移: GetCursorPos（屏幕坐标）→ 由调用方传入 640x480 逻辑坐标
     void update(Surface& dst, int mouseX, int mouseY);
 
-    // [RE 0x4024C0] sub_4024C0 光标包围矩形（裁剪到 640x480）
-    void getRect(int mouseX, int mouseY, int outRect[4]) const;
+    // [RE 0x4024C0] sub_4024C0 光标包围矩形（裁剪到运行期画布尺寸）
+    void getRect(const Surface& dst, int mouseX, int mouseY, int outRect[4]) const;
 
     // [NEW] 背景作废：调用方已/即将全量重绘整个表面，m_saved 陈旧——
     //   下一轮 update/compose 不做 uncompose 写回（防"旧背景脏块闪现"，
@@ -67,6 +67,9 @@ public:
 private:
     const UiFrameView* currentFrame() const;
 
+    // [NEW M4-A2] 光标帧按画布 scale 放大后的设备化绘制（目标设备坐标；索引 0 透明）
+    void blitFrameDevice(Surface& dst, const UiFrameView& frame, int devX, int devY) const;
+
     UiImage m_image;
     bool m_initialized = false;
     int m_cursorIndex = 0;  // dword_48A0F4 对应组索引（41 = 默认箭头）
@@ -83,6 +86,7 @@ private:
     int m_saveW = 0;
     int m_saveH = 0;
     std::vector<uint16_t> m_saved; // dword_48A0E8 背景元素像素
+    int m_saveStride = kSize;      // [NEW M4-A2] 保存缓冲设备行距（= 设备保存宽）
 };
 
 } // namespace rich4

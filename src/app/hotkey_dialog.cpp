@@ -1,4 +1,5 @@
 #include "game/app/hotkey_dialog.h"
+#include "game/app/ui_layout.h"
 
 #include "game/app/event_stack.h"
 #include "game/app/new_game_tables.h"
@@ -371,7 +372,7 @@ void hotkeyDialog(Application& app) {
 
     RICH4_LOGI("hotkey dialog at (%d,%d) (RE 0x411A86)", state.originX, state.originY);
     // [RE 0x4018E7] runModal(sub_411122)；[RE 0x411122] SetTimer(0xFA=250ms) 驱动编辑闪烁
-    runModal(app, &hotkeyEventHandler, &state, 250);
+    runModal(app, &hotkeyEventHandler, &state, 250, true, false);
 }
 
 } // namespace rich4

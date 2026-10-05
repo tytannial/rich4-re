@@ -80,7 +80,7 @@ void showMessage(Application& app, const char* text, int ms) {
     st.ms = ms;
     RICH4_LOGI("showMessage: %s (%dms, RE 0x440CAC)", text, ms);
     trace::logf("msg text=\"%s\" ms=%d", text, ms);
-    runModal(app, &messageEventHandler, &st, 16);
+    runModal(app, &messageEventHandler, &st, 16, true, false);
 }
 
 } // namespace rich4

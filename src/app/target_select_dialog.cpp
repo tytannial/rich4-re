@@ -204,6 +204,9 @@ struct TargetSelCtx {
     // [RE 0x445E4D WM_USER+1] 进入时 PostMessage(WM_MOUSEMOVE) 初始判定（重写等价：
     //   首次绘制后以当前鼠标位置拾取一次）
     bool hoverInit = false;
+    // [NEW M4-H 8.2] 悬停预览高亮：目标 id 变化才重置闪烁；帧事件按 50ms 推进
+    uint16_t lastHlId = 0;
+    uint64_t lastHlFrameMs = 0;
 };
 
 // 拾取 id 规范化函数定义见文件顶部（导出供 AI 预选使用）
@@ -215,10 +218,30 @@ void setCursor(TargetSelCtx& c, int type, int frames, int delay) {
     }
 }
 
+// [NEW M4-H 8.2] 悬停预览高亮：把拾取目标的"拾取形状"写入全局高亮快照
+//   （drawEstateHighlight 纯渲染；与 captureHighlightShapes 同源换算）
+void setHoverHighlight(GameState& st, uint16_t v) {
+    for (const auto& it : st.mapHitRegions) {
+        if (it.id != v || it.hlShape == nullptr || it.hlFrame < 0 ||
+            it.hlShape->frameCount() <= it.hlFrame) {
+            continue;
+        }
+        const UiFrameView& sf = it.hlShape->frame(it.hlFrame);
+        st.highlightShapes.clear();
+        st.highlightShapes.push_back({it.hlShape, it.hlFrame, it.hlAnchorX - sf.offsetX,
+                                      it.hlAnchorY - sf.offsetY});
+        st.highlightFrame = 0;
+        return;
+    }
+    st.highlightShapes.clear();
+    st.highlightFrame = -1;
+}
+
 // [RE 0x445E4D LABEL_53..LABEL_140] 悬停判定：拾取 → 筛选 → 记录选中 + 光标
 // （模态进入初始判定与 WM_MOUSEMOVE 共用；原版 WM_USER+1 用 PostMessage(0x200) 触发一次）
 void updateTargetHover(TargetSelCtx& c, int mx, int my) {
     GameState& st = c.app->gameState();
+    // [NEW M4-A2] 入参/命中统一为设计逻辑坐标（mapHitRegions 逻辑；绘制随画布 scale）
     const uint16_t v = pickMapObject(st, mx, my);  // [RE 0x40A9D7]
     // [RE 0x445E4D] BYTE1 非 0 → 高字节过滤**取代**低 flags 判定（原版 v14 被清 0）
     bool allowed = (c.filter != 0) ? byte1FilterPass(st, v, c.filter)
@@ -231,9 +254,18 @@ void updateTargetHover(TargetSelCtx& c, int mx, int my) {
         //   卡牌选目标 = 0x0E→15 帧动画光标、延时 10ms）
         c.selected = normalizeHitId(v);
         setCursor(c, c.cursorType, c.cursorFrames, 10);
+        // [NEW M4-H 8.2] 悬停预览高亮（目标变化才重置闪烁相位）
+        if (c.lastHlId != v) {
+            setHoverHighlight(st, v);
+            c.lastHlId = v;
+        }
     } else {
         c.selected = 0;
         setCursor(c, 5, 1, 0);  // 默认指针
+        if (c.lastHlId != 0) {
+            setHoverHighlight(st, 0);
+            c.lastHlId = 0;
+        }
     }
 }
 
@@ -260,6 +292,20 @@ bool targetSelHandler(const SDL_Event* event, void* user) {
     }
     // [RE 0x445E4D WM_TIMER 0x113] 滚动：50ms 节流，speed +4（上限 64），
     //   v7 = (mapRotation + 2*edgeDir - 2) & 7，视口中心按 16.16 向量位移，clamp [220,2084]
+    if (event->type == kModalFrameEvent) {
+        // [NEW M4-H 8.2] 渲染帧：悬停高亮闪烁驱动（16 帧闪烁 + 16=400ms 停留；≈50ms/帧）
+        if (st.highlightFrame >= 0) {
+            const uint64_t now = nowMs();
+            if (now - c.lastHlFrameMs >= 50) {
+                c.lastHlFrameMs = now;
+                if (++st.highlightFrame > 16) {
+                    st.highlightFrame = 0;
+                }
+            }
+        }
+        drawTargetSel(c);
+        return true;
+    }
     if (event->type == kModalTimerEvent) {
         if (c.scrollMode && c.edgeDir != 0) {
             const uint64_t now = nowMs();
@@ -379,11 +425,16 @@ int selectTargetDialog(Application& app, int mode, bool allowEmptyLand) {
         st.viewScrolling = false;
     }
     app.cursor().select(5, 1, 0);
-    const int r = runModal(app, &targetSelHandler, &c, 16);
+    // [NEW M4-D 实机] 目标选择 = 游戏世界交互（命中为画布坐标 mapHitRegions）→
+    //   不做 640 基准偏移（centerBase=false），也不填黑两侧
+    const int r = runModal(app, &targetSelHandler, &c, 16, false, false);
     st.manualView = c.savedManualView;
     st.viewSmoothX = c.savedViewX;
     st.viewSmoothY = c.savedViewY;
     st.viewScrolling = false;
+    // [NEW M4-H 8.2] 退出清除悬停预览高亮（全局快照是单份）
+    st.highlightShapes.clear();
+    st.highlightFrame = -1;
     app.cursor().select(41, 1, 0);
     return r;
 }

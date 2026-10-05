@@ -83,13 +83,57 @@ bool blitSprScaled(Surface& dst, const UiImage& spr, int frame, int x, int y, ui
     const int dy = y - f.offsetY;
     const int sw = static_cast<int>((scale * f.width) >> 16);
     const int sh = static_cast<int>((scale * f.height) >> 16);
-    if (dx >= Surface::kWidth || dy >= Surface::kHeight || sw <= 0 || sh <= 0) {
+    if (sw <= 0 || sh <= 0) {
+        return false;
+    }
+    // [NEW M4-A2] 画布 scale != 1：逻辑目标设备化 + SPR 16.16 与画布缩放复合为一次
+    //   nearest 采样（scale == 1 走下方原定点路径，逐字节一致）
+    // [NEW M4-D] scale==1 且原点非 0（宽画布模态）同样设备化
+    // [NEW M4-D 实机] 模态绘制边界启用时同样设备化
+    if (dst.scale() != 1.0f || dst.originX() != 0 || dst.originY() != 0 ||
+        dst.paintClipEnabled()) {
+        const int dxDev = dst.deviceX(dx);
+        const int dyDev = dst.deviceY(dy);
+        const int dw = dst.logicalToDevice(sw);
+        const int dh = dst.logicalToDevice(sh);
+        if (dw <= 0 || dh <= 0) {
+            return false;
+        }
+        for (int vy = 0; vy < dh; ++vy) {
+            const int py = dyDev + vy;
+            if (py < 0 || py >= dst.height()) {
+                continue;
+            }
+            const int sy = vy * f.height / dh;
+            if (sy >= f.height) {
+                continue;
+            }
+            const uint8_t* srow = src + static_cast<size_t>(sy) * f.width;
+            uint16_t* d = dst.pixels() + static_cast<size_t>(py) * dst.width();
+            for (int vx = 0; vx < dw; ++vx) {
+                const int px = dxDev + vx;
+                if (px < 0 || px >= dst.width()) {
+                    continue;
+                }
+                const int sxi = vx * f.width / dw;
+                if (sxi >= f.width) {
+                    continue;
+                }
+                const uint8_t idx = srow[sxi];
+                if (idx != 0) {
+                    d[px] = palette[idx];
+                }
+            }
+        }
+        return true;
+    }
+    if (dx >= dst.width() || dy >= dst.height() || sw <= 0 || sh <= 0) {
         return false;
     }
     const uint32_t step = static_cast<uint32_t>(0x100000000ULL / scale);
     for (int row = 0; row < sh; ++row) {
         const int py = dy + row;
-        if (py < 0 || py >= Surface::kHeight) {
+        if (py < 0 || py >= dst.height()) {
             continue;
         }
         const int sy = static_cast<int>((static_cast<uint64_t>(row) * step) >> 16);
@@ -97,11 +141,11 @@ bool blitSprScaled(Surface& dst, const UiImage& spr, int frame, int x, int y, ui
             continue;
         }
         const uint8_t* srow = src + static_cast<size_t>(sy) * f.width;
-        uint16_t* d = dst.pixels() + static_cast<size_t>(py) * Surface::kWidth;
+        uint16_t* d = dst.pixels() + static_cast<size_t>(py) * dst.width();
         uint32_t sxAcc = 0;
         for (int col = 0; col < sw; ++col) {
             const int px = dx + col;
-            if (px >= 0 && px < Surface::kWidth) {
+            if (px >= 0 && px < dst.width()) {
                 const int sxi = static_cast<int>(sxAcc >> 16);
                 if (sxi < f.width) {
                     const uint8_t idx = srow[sxi];
@@ -145,25 +189,9 @@ void blitFlcFrame(Surface& dst, const FliDecoder& flc, int x, int y, bool transp
     if (!flc.valid()) {
         return;
     }
-    const uint16_t key = flc.colorKey();
-    const uint16_t* src = flc.pixels();
-    for (int row = 0; row < flc.height(); ++row) {
-        const int py = y + row;
-        if (py < 0 || py >= Surface::kHeight) {
-            continue;
-        }
-        for (int col = 0; col < flc.width(); ++col) {
-            const int px = x + col;
-            if (px < 0 || px >= Surface::kWidth) {
-                continue;
-            }
-            const uint16_t c = src[static_cast<size_t>(row) * flc.width() + col];
-            if (transparent && c == key) {
-                continue;
-            }
-            dst.pixels()[static_cast<size_t>(py) * Surface::kWidth + px] = c;
-        }
-    }
+    // [NEW M4-A2] FLC 当前帧按画布 scale 缩放叠加（色键透明；scale=1 逐像素等价）
+    blitScaled(dst, reinterpret_cast<const uint8_t*>(flc.pixels()), flc.width() * 2, nullptr, x,
+               y, 0, 0, flc.width(), flc.height(), false, !transparent, flc.colorKey());
 }
 
 // HUD 小数字（panel[79] 帧 0..9）：原版 blitElementFullscreen(0x4563F5) = **不透明**
@@ -208,6 +236,7 @@ constexpr int kDigIntro = 10;       // [RE 0x41534B]
 
 struct DigCtx {
     Application* app = nullptr;
+    float subTick = 0.0f; // [NEW M4-H] tick 间插值相位（0..1；frame 事件更新）
     UiImage digits;     // panel[79]
     UiImage board;      // panel[80]：0 背景/1 站立/2 黑化/3 冰屋/4..8 宝物堆/9 洞
     UiImage walk;       // panel[82] 8 方向×4 帧
@@ -464,9 +493,13 @@ void drawDig(DigCtx& ui) {
     const int cellY = kDigCells[cr][cc].y;
     switch (ui.state) {
     case 2: {
+        // [NEW M4-H] 位置插值（phase + subTick）平滑行走；动画帧仍用整数 phase
         const int p = ui.phase;
-        const int x = cellX + p * ((kDigCells[nr][nc].x - cellX) >> 2);
-        const int y = cellY + p * ((kDigCells[nr][nc].y - cellY) >> 2);
+        const float pf = static_cast<float>(p) + ui.subTick;
+        const int x = cellX + static_cast<int>(
+                                  pf * static_cast<float>(kDigCells[nr][nc].x - cellX) / 4.0f);
+        const int y = cellY + static_cast<int>(
+                                  pf * static_cast<float>(kDigCells[nr][nc].y - cellY) / 4.0f);
         blitSpriteFrame(dst, ui.walk, 4 * ui.dir + p, x, y);
         break;
     }
@@ -552,7 +585,12 @@ bool digHandler(const SDL_Event* event, void* user) {
         return true;
     }
     switch (event->type) {
+    case kModalFrameEvent: // [NEW M4-H] 渲染帧：只重绘（tick 间插值）
+        ui.subTick = std::min(1.0f, static_cast<float>(event->user.code) / 100.0f);
+        drawDig(ui);
+        return true;
     case kModalTimerEvent:  // [RE 0x414904 0x113]
+        ui.subTick = 0.0f;
         if (ui.uiState == 0) {
             if (--ui.intro <= 0) {
                 ui.uiState = 1;
@@ -683,12 +721,14 @@ constexpr int kMoneyIntro = 10;
 struct MoneyBag {
     int16_t x = 0;     // 0=空槽
     int16_t y = 0;
+    int16_t prevY = 0; // [NEW M4-H] 上一 tick 起点（插值用；"画后更新"修正重影）
     int16_t flags = 0; // 低 nibble 类型、bit4-6 旋转帧、高字节 摆幅（有符号）
     int16_t vy = 0;
 };
 
 struct MoneyCtx {
     Application* app = nullptr;
+    float subTick = 0.0f; // [NEW M4-H] tick 间插值相位（0..1；frame 事件更新）
     UiImage digits;
     UiImage rich;    // panel[93] 财神
     UiImage cloud;   // panel[94] 云
@@ -745,6 +785,9 @@ void moneySpawn(MoneyCtx& ui, int x, bool fromCloud) {
     MoneyBag& b = ui.bags[i];
     b.x = static_cast<int16_t>(x);
     b.y = 100;
+    // [NEW M4-H 实机] 生成时同步插值起点：槽是复用的，旧 prevY 可能停在屏幕底部
+    //   （上一袋子落地处），不重置会让第一帧插值"从底部滑到顶部"（实机"从底部抛出"感）
+    b.prevY = 100;
     b.flags = static_cast<int16_t>(type | ((sway & 0xFF) << 8));
     b.vy = -16;
 }
@@ -795,8 +838,18 @@ void moneyTick(MoneyCtx& ui, bool runLogic) {
         }
         const uint32_t scale = static_cast<uint32_t>(32768.0 * (1.0 + v1 / 250.0));
         const int rot = (b.flags >> 4) & 7;
-        blitSprScaled(dst, ui.bag[type], rot, bx, b.y, scale);
+        // [NEW M4-H 实机] 下落插值 = prevY → y 回插：本函数"先画后更新"，timer 帧
+        //   （subTick=0）画更新前的 b.y；frame 帧（timer 后，b.y 已更新）从 prevY 平滑到 b.y。
+        //   此前"超前 1 tick"（b.y + step*t）会让 frame 帧越过下一格、timer 帧又跳回，
+        //   每 50ms 弹跳一次（实机"宝物重影"）。
+        int by = b.y;
+        if (ui.subTick > 0.0f) {
+            by = static_cast<int>(static_cast<float>(b.prevY) +
+                                  static_cast<float>(b.y - b.prevY) * ui.subTick);
+        }
+        blitSprScaled(dst, ui.bag[type], rot, bx, by, scale);
         if (runLogic) {
+            b.prevY = b.y; // [NEW M4-H] 插值起点（本 tick 更新前）
             b.flags = static_cast<int16_t>((b.flags & ~0xF0) | ((((b.flags >> 4) + 1) & 7) << 4));
             if (b.y >= 130) {
                 b.y = static_cast<int16_t>(b.y + kMoneyFallSpeed[type]);
@@ -840,7 +893,13 @@ void moneyTick(MoneyCtx& ui, bool runLogic) {
     }
     const int df = ui.dollDir != 0 ? ui.dollWalk + ui.dollHalf * (ui.dollDir - 1) + 5
                                    : ui.dollExpr;
-    blitSpriteFrame(dst, ui.doll, df < ui.doll.frameCount() ? df : ui.dollExpr, ui.dollX, 380);
+    // [NEW M4-H] 娃娃步进插值（dir 1=左移 / 2=右移，步长 10）
+    int dollDrawX = ui.dollX;
+    if (ui.subTick > 0.0f && ui.dollDir != 0) {
+        const int step = ui.dollDir == 1 ? -10 : 10;
+        dollDrawX += static_cast<int>(static_cast<float>(step) * ui.subTick);
+    }
+    blitSpriteFrame(dst, ui.doll, df < ui.doll.frameCount() ? df : ui.dollExpr, dollDrawX, 380);
     if (!runLogic) {
         return;
     }
@@ -933,7 +992,8 @@ int moneyScore(const MoneyCtx& ui) {
 void drawMoney(MoneyCtx& ui, bool runLogic) {
     Surface& dst = ui.app->surface();
     if (ui.bgRaw.size() >= 640u * 480u * 2u) {  // [RE 0x4132A1] RAW 背景
-        std::memcpy(dst.pixels(), ui.bgRaw.data(), 640u * 480u * 2u);
+        // [NEW M4-A2] 全屏 RAW 背景按画布 scale 缩放绘制（scale=1 逐像素等价）
+        blitScaled(dst, ui.bgRaw.data(), 640 * 2, nullptr, 0, 0, 0, 0, 640, 480, false, true);
     }
     moneyTick(ui, runLogic);
     char buf[8];
@@ -986,7 +1046,12 @@ bool moneyHandler(const SDL_Event* event, void* user) {
         return true;
     }
     switch (event->type) {
+    case kModalFrameEvent: // [NEW M4-H] 渲染帧：只重绘（tick 间插值）
+        ui.subTick = std::min(1.0f, static_cast<float>(event->user.code) / 50.0f);
+        drawMoney(ui, false);
+        return true;
     case kModalTimerEvent:  // [RE 0x415068 0x113]
+        ui.subTick = 0.0f;
         if (ui.uiState == 0) {
             if (--ui.intro <= 0) {
                 ui.uiState = 1;
@@ -1115,6 +1180,7 @@ struct BalloonCtx {
     int slowdown = 0;
     int wind = 0;
     uint64_t settleMs = 0;
+    float subTick = 0.0f; // [NEW M4-H] tick 间插值相位（0..1；frame 事件更新）
 };
 
 // [RE 0x412F6F] 气球移动/生成
@@ -1246,14 +1312,25 @@ void drawBalloon(BalloonCtx& ui) {
             continue;
         }
         const UiFrameView& fr = ui.scene.frame((b.type & 0xF) + 1);
-        const int top = b.y - fr.offsetY;
+        // [NEW M4-H] 上升插值（tick 间平滑；风/减速档与逻辑同式）
+        int by = b.y;
+        if (ui.subTick > 0.0f && (b.type & 0xF0) == 0 && ui.slowdown == 0) {
+            int sp = kBalloonSpeed[b.type & 0xF];
+            if (ui.wind == -1) {
+                sp *= 2;
+            } else if (ui.wind == 1) {
+                sp >>= 1;
+            }
+            by -= static_cast<int>(static_cast<float>(sp) * ui.subTick);
+        }
+        const int top = by - fr.offsetY;
         if (top >= 387) {
             anyAlive = true;  // 还在面板后面升起，不可见但存活
             continue;
         }
         const int hh = top < 0 ? fr.height + top : (387 - top < fr.height ? 387 - top : fr.height);
         if (hh > 0 &&
-            blitElementRegion(dst, fr, b.x, b.y, 0, top < 0 ? -top : 0, fr.width, hh, false)) {
+            blitElementRegion(dst, fr, b.x, by, 0, top < 0 ? -top : 0, fr.width, hh, false)) {
             anyAlive = true;
         } else if (top + fr.height <= 0) {
             b.x = 0;  // 完全飞出顶部
@@ -1294,7 +1371,12 @@ bool balloonHandler(const SDL_Event* event, void* user) {
         return true;
     }
     switch (event->type) {
+    case kModalFrameEvent: // [NEW M4-H] 渲染帧：只重绘（tick 间插值）
+        ui.subTick = std::min(1.0f, static_cast<float>(event->user.code) / 100.0f);
+        drawBalloon(ui);
+        return true;
     case kModalTimerEvent:
+        ui.subTick = 0.0f;
         if (ui.state == 0) {
             if (--ui.intro <= 0) {
                 ui.state = 1;

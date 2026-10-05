@@ -59,11 +59,14 @@ def parse_scenario(path: Path) -> dict:
     }
 
 
-def run_scenario(sc: dict, exe: str, game: str, seed: int, wall_cap: int = 0) -> dict:
+def run_scenario(sc: dict, exe: str, game: str, seed: int, wall_cap: int = 0,
+                 extra: str = "") -> dict:
     cmd = [
         exe, "--game", game, "--headless", "--seed", str(seed),
         "--quickstart", sc["quickstart"], "--script", str(sc["file"]),
     ]
+    if extra:
+        cmd += extra.split()
     t0 = time.time()
     cap = sc["wall_timeout"]
     if wall_cap > 0:
@@ -144,6 +147,8 @@ def main() -> int:
     ap.add_argument("--no-ctest", action="store_true")
     ap.add_argument("--wall-cap", type=int, default=0,
                     help="每场景墙钟秒数上限（0=仅按 # timeout 推算）；定位挂死用如 90")
+    ap.add_argument("--extra", default="",
+                    help="附加给每个场景的 rich4 参数（如 --canvas 1024x768，M4 宽屏回归）")
     args = ap.parse_args()
 
     scripts = sorted(SCEN_DIR.glob("*.txt")) if SCEN_DIR.exists() else []
@@ -158,7 +163,8 @@ def main() -> int:
             print(f"  [SKIP] {sc['id']:<28} {sc['skip']}")
             continue
         for rep in range(args.repeat):
-            r = run_scenario(sc, args.exe, args.game, args.seed + rep, args.wall_cap)
+            r = run_scenario(sc, args.exe, args.game, args.seed + rep, args.wall_cap,
+                             args.extra)
             r["rep"] = rep
             results.append(r)
             flag = "PASS" if r["ok"] else "FAIL"

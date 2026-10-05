@@ -1,4 +1,5 @@
 #include "game/app/map_objects.h"
+#include "game/app/ui_layout.h"
 
 #include <SDL3/SDL.h>
 
@@ -506,7 +507,8 @@ void showGodNarration(Application& app, const char* text) {
     clearObjectTipForPerf(app);
     Surface& dst = app.surface();
     app.text().setFont(28, 0xFFFFFF, 0x101010, kTextStyleShadow, 0);
-    app.text().drawText(dst, text, 220, 460, 7);
+    // [NEW M4-D] 旁白居中于地图区（native 220 = 440/2；宽屏随地图区中心）
+    app.text().drawText(dst, text, uiMapLogicalWidth(dst) / 2, 460, 7);
     app.renderFrame();
     // [RE 0x4528B9] 清进入前残留的打断输入（上一次按钮点击不应秒跳过旁白）
     app.consumeSkipInput();
@@ -552,32 +554,37 @@ void attachEnd(Application& app, int p) {
     st.cellTable[off + 3] = 0;
     int sx = 0;
     int sy = 0;
-    if (!projectMapPoint(st, pl.spriteX, pl.spriteY, sx, sy)) {
-        sx = 220;
+    if (!projectMapPoint(st, pl.spriteX, pl.spriteY, sx, sy, app.surface())) {
+        // [NEW M4-D] 兜底=地图区中心（native 220 = 440/2；宽屏随地图区中心）
+        sx = uiMapLogicalWidth(app.surface()) / 2;
         sy = 260;
     }
     UiImage& img = (type >= 1 && type <= 20) ? st.cellTypeSprites[type] : st.cellTypeSprites[0];
     app.audio().playEffectSlot(19);  // [RE dword_4823E2]
     int frame = (pl.dir + 8 - st.mapRotation) & 7;
-    setClipRect(0, 40, 440, 480);
+    // [NEW M4-D] 裁剪=地图区全宽（native 440 恒等；宽屏动画不被右缘截断）
+    setClipRect(0, kTopBarH, uiMapLogicalWidth(app.surface()), 480);
     Surface& dst = app.surface();
+    // [NEW M4-A2] 地图层演出：绘制随画布 scale（裁剪为设计逻辑坐标，blit 内设备化）；
+    //   帧节拍为绝对截止时刻（60ms/帧，绘制耗时计入——放大后不拖慢动画）
+    uint64_t deadline = nowMs();
     for (int i = 0; i < 24; ++i) {
         sy -= 10;
         frame = (frame + 1) & 7;
         if (sy < 40) {
             break;
         }
+        deadline += 60;
         renderGameFrame(app);
         blitSpriteFrameClipped(dst, img, frame, sx, sy, true);
         app.renderFrame();
         app.pumpEvents();
-        const uint64_t end = nowMs() + 60;
-        while (static_cast<int64_t>(nowMs() - end) < 0) {
+        while (frameWaitStep(deadline)) {
             app.audio().update();
-            delayMs(5);
         }
     }
-    setClipRect(0, 0, 640, 480);
+    // [NEW M4-D] 恢复全逻辑画布裁剪（宽画布下原 640 会截断右栏/宽地图区）
+    setClipRect(0, 0, uiLogicalWidth(dst), uiLogicalHeight(dst));
     app.audio().stopEffectSlot(19);
     st.cellTable[off + 2] = static_cast<uint8_t>(savedEnt & 0xFF);
     st.cellTable[off + 3] = static_cast<uint8_t>(savedEnt >> 8);
@@ -1001,6 +1008,7 @@ void flyObjectSprite(Application& app, int objId, int fromX, int fromY, int toX,
     trace::logf("fly obj=%d from=(%d,%d) to=(%d,%d) hold=%d", objId, fromX, fromY, toX, toY,
                 holdMs);
     Surface& dst = app.surface();
+    // [NEW M4-A2] 地图层演出：绘制随画布 scale（快照区域在下方设备化）
     int dir = 0;
     UiImage* img = nullptr;
     if (objId != 0) {
@@ -1018,11 +1026,11 @@ void flyObjectSprite(Application& app, int objId, int fromX, int fromY, int toX,
     int y0 = 0;
     int x1 = 0;
     int y1 = 0;
-    if (!projectMapPoint(st, fromX, fromY, x0, y0)) {
+    if (!projectMapPoint(st, fromX, fromY, x0, y0, dst)) {
         x0 = 0;
         y0 = 0;  // [RE 0x409A9D] 视口外 → (0,0)（原版语义）
     }
-    if (!projectMapPoint(st, toX, toY, x1, y1)) {
+    if (!projectMapPoint(st, toX, toY, x1, y1, dst)) {
         x1 = 0;
         y1 = 0;
     }
@@ -1040,35 +1048,44 @@ void flyObjectSprite(Application& app, int objId, int fromX, int fromY, int toX,
     // [RE 0x451A97 saveBackground] 地图区 (0,40)-(440,480) 像素快照
     constexpr int kSnapX = 0;
     constexpr int kSnapY = 40;
-    constexpr int kSnapW = 440;
+    // [NEW M4-D] 快照宽取地图区全宽（native 440 恒等；宽屏覆盖扩充后的地图区，
+    //   否则精灵飞经 x>440 段会被裁剪丢失）
+    const int kSnapW = uiMapLogicalWidth(dst);
     constexpr int kSnapH = 440;
-    std::vector<uint16_t> background(static_cast<size_t>(kSnapW) * kSnapH);
-    for (int r = 0; r < kSnapH; ++r) {
-        std::memcpy(background.data() + static_cast<size_t>(r) * kSnapW,
-                    dst.pixels() + static_cast<size_t>(kSnapY + r) * Surface::kWidth + kSnapX,
-                    static_cast<size_t>(kSnapW) * sizeof(uint16_t));
+    // [NEW M4-A2] 逻辑区域 → 设备区域快照（scale=1 恒等）
+    const int kSnapXd = dst.deviceX(kSnapX);
+    const int kSnapYd = dst.deviceY(kSnapY);
+    const int kSnapWd = dst.spanX(kSnapX, kSnapW);
+    const int kSnapHd = dst.spanY(kSnapY, kSnapH);
+    std::vector<uint16_t> background(static_cast<size_t>(kSnapWd) * kSnapHd);
+    for (int r = 0; r < kSnapHd; ++r) {
+        std::memcpy(background.data() + static_cast<size_t>(r) * kSnapWd,
+                    dst.pixels() + static_cast<size_t>(kSnapYd + r) * dst.width() + kSnapXd,
+                    static_cast<size_t>(kSnapWd) * sizeof(uint16_t));
     }
     double px = x0;
     double py = y0;
     setClipRect(kSnapX, kSnapY, kSnapX + kSnapW, kSnapY + kSnapH);
+    // [NEW M4-A2] 帧节拍 = 绝对截止时刻（24ms/帧，绘制耗时计入）
+    uint64_t deadline = nowMs();
     for (int i = 0; i < frames; ++i) {
         px += stepX;
         py += stepY;
-        const uint64_t end = nowMs() + 24;
+        deadline += 24;
         // [RE 0x456469] 恢复背景（整区；原版只恢复上一帧精灵矩形，背景不变故等价）
-        for (int r = 0; r < kSnapH; ++r) {
-            std::memcpy(dst.pixels() + static_cast<size_t>(kSnapY + r) * Surface::kWidth + kSnapX,
-                        background.data() + static_cast<size_t>(r) * kSnapW,
-                        static_cast<size_t>(kSnapW) * sizeof(uint16_t));
+        for (int r = 0; r < kSnapHd; ++r) {
+            std::memcpy(dst.pixels() + static_cast<size_t>(kSnapYd + r) * dst.width() + kSnapXd,
+                        background.data() + static_cast<size_t>(r) * kSnapWd,
+                        static_cast<size_t>(kSnapWd) * sizeof(uint16_t));
         }
         blitSpriteFrameClipped(dst, *img, dir, static_cast<int>(px), static_cast<int>(py), true);
         app.renderFrame();
-        while (static_cast<int64_t>(nowMs() - end) < 0) {
+        while (frameWaitStep(deadline)) {
             app.audio().update();
-            delayMs(2);
         }
     }
-    setClipRect(0, 0, 640, 480);
+    // [NEW M4-D] 恢复全逻辑画布裁剪
+    setClipRect(0, 0, uiLogicalWidth(dst), uiLogicalHeight(dst));
     // [RE 0x45285E] 末帧停留；末帧精灵保留屏上（原版 a1!=0 不清屏，等调用方全屏重绘
     //   才显示目标格物件）——屏幕即时模式必须显式冻结末帧
     for (int t = 0; t < holdMs; t += 5) {
